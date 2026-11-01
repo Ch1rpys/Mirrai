@@ -15,7 +15,7 @@
 
 上传聊天记录，AI 重建 TA 的数字分身 — 用 TA 的语气回你消息，用 TA 的方式撒娇，知道 TA 什么时候会突然变冷漠。
 
-所有数据本地存储，12 家 LLM 提供商即插即用，还有一个同类产品没有的东西：**毕业机制** — 它不是让你留下，是帮你好好告别。
+所有数据本地存储，14 家 LLM 提供商即插即用，还有一个同类产品没有的东西：**毕业机制** — 它不是让你留下，是帮你好好告别。
 
 ---
 
@@ -114,7 +114,7 @@ Mirrai 之前只重建了**那个人**。但很多人打开它的理由恰恰是
 - **上次联系** — 一个正经的数字。多久没说话了，就写多少天。
 - **TA 会先开口吗** — 默认是从不。开启后，TA 会在你们很久没说话时先发一条消息。主动说话的次数得是你自己买的。
 
-### 7. 12 家 LLM 提供商即插即用
+### 7. 14 家 LLM 提供商即插即用
 
 | 提供商 | 协议 | 默认模型 |
 |--------|------|---------|
@@ -123,6 +123,8 @@ Mirrai 之前只重建了**那个人**。但很多人打开它的理由恰恰是
 | Cheaper Inference | OpenAI 兼容 | gpt-5.4-mini |
 | Claude | REST | claude-sonnet-4-6 |
 | DeepSeek | OpenAI 兼容 | deepseek-chat |
+| Groq | OpenAI 兼容 | llama-3.3-70b-versatile |
+| Mistral AI | OpenAI 兼容 | mistral-large-latest |
 | Kimi (月之暗面) | OpenAI 兼容 | moonshot-v1-8k |
 | 通义千问 | OpenAI 兼容 | qwen-turbo |
 | 豆包 | OpenAI 兼容 | 自定义 |
@@ -453,7 +455,7 @@ Redis 是可选的：不装也能跑，限流会退回进程内计数。想让�
 - [x] 多阶段性格蒸馏 pipeline
 - [x] 6 态情感状态机 + 亲密度系统
 - [x] 毕业机制（告别信 + 休眠/唤醒）
-- [x] 12 家 LLM 提供商接入
+- [x] 14 家 LLM 提供商接入
 - [x] 微信机器人集成
 - [x] 对话日记 / 记忆节点 / 数据分析 / TTS 语音
 - [x] 流式对话（SSE 逐 token 输出）
@@ -588,7 +590,7 @@ letters             -- 信 (写给分身 / 等 TA 回来再说), 回信是延迟
 
 | 变量 | 说明 |
 |------|------|
-| `DEFAULT_LLM_PROVIDER` | 默认提供商名称 (`openai` / `atlas` / `cheaperinference` / `claude` / `deepseek` / `kimi` / `ollama` / `dify` / `xunfei` / `tongyi` / `doubao` / `302ai`) |
+| `DEFAULT_LLM_PROVIDER` | 默认提供商名称 (`openai` / `atlas` / `cheaperinference` / `claude` / `deepseek` / `groq` / `mistral` / `kimi` / `ollama` / `dify` / `xunfei` / `tongyi` / `doubao` / `302ai`) |
 | `OPENAI_API_KEY` | OpenAI API Key |
 | `OPENAI_BASE_URL` | OpenAI 接口地址 (默认 `https://api.openai.com/v1`) |
 | `OPENAI_MODEL` | 模型名称 (默认 `gpt-4o`) |
@@ -601,6 +603,12 @@ letters             -- 信 (写给分身 / 等 TA 回来再说), 回信是延迟
 | `CLAUDE_API_KEY` | Anthropic API Key |
 | `CLAUDE_MODEL` | Claude 模型 (默认 `claude-sonnet-4-6`) |
 | `DEEPSEEK_API_KEY` | DeepSeek API Key |
+| `GROQ_API_KEY` | Groq API Key |
+| `GROQ_BASE_URL` | Groq 接口地址 (默认 `https://api.groq.com/openai/v1`) |
+| `GROQ_MODEL` | Groq 模型名称 (默认 `llama-3.3-70b-versatile`) |
+| `MISTRAL_API_KEY` | Mistral AI API Key |
+| `MISTRAL_BASE_URL` | Mistral 接口地址 (默认 `https://api.mistral.ai/v1`) |
+| `MISTRAL_MODEL` | Mistral 模型名称 (默认 `mistral-large-latest`) |
 | `KIMI_API_KEY` | 月之暗面 API Key |
 | `OLLAMA_URL` | Ollama 地址 (默认 `http://localhost:11434`) |
 | `OLLAMA_MODEL` | Ollama 模型 (默认 `llama3`) |
