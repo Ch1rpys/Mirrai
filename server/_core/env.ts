@@ -193,6 +193,10 @@ export const ENV = {
   deepseekBaseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
   deepseekModel: process.env.DEEPSEEK_MODEL ?? "deepseek-chat",
 
+  groqApiKey: process.env.GROQ_API_KEY ?? "",
+  groqBaseUrl: process.env.GROQ_BASE_URL ?? "https://api.groq.com/openai/v1",
+  groqModel: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
+
   kimiApiKey: process.env.KIMI_API_KEY ?? "",
   kimiBaseUrl: process.env.KIMI_BASE_URL ?? "https://api.moonshot.cn/v1",
   kimiModel: process.env.KIMI_MODEL ?? "moonshot-v1-8k",
