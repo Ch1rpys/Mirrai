@@ -2,9 +2,30 @@ import { existsSync, readFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
+const INSECURE_JWT_PLACEHOLDERS = new Set([
+  "dev-secret-change-me",
+  "your-secret-key-change-me",
+]);
+
 function resolveJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
-  if (secret && secret.trim().length > 0) return secret;
+  const raw = process.env.JWT_SECRET;
+  const secret = raw?.trim() ?? "";
+  if (secret) {
+    if (process.env.NODE_ENV === "production") {
+      if (INSECURE_JWT_PLACEHOLDERS.has(secret)) {
+        throw new Error(
+          "JWT_SECRET must not be a known placeholder in production. Generate a strong key with: " +
+            'node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+        );
+      }
+      if (secret.length < 16) {
+        throw new Error(
+          "JWT_SECRET is too short for production use (minimum 16 characters required)."
+        );
+      }
+    }
+    return secret;
+  }
   if (process.env.NODE_ENV === "production") {
     throw new Error(
       "JWT_SECRET is required in production. Generate one with: " +
