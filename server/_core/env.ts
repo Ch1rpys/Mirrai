@@ -197,6 +197,10 @@ export const ENV = {
   groqBaseUrl: process.env.GROQ_BASE_URL ?? "https://api.groq.com/openai/v1",
   groqModel: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
 
+  mistralApiKey: process.env.MISTRAL_API_KEY ?? "",
+  mistralBaseUrl: process.env.MISTRAL_BASE_URL ?? "https://api.mistral.ai/v1",
+  mistralModel: process.env.MISTRAL_MODEL ?? "mistral-large-latest",
+
   kimiApiKey: process.env.KIMI_API_KEY ?? "",
   kimiBaseUrl: process.env.KIMI_BASE_URL ?? "https://api.moonshot.cn/v1",
   kimiModel: process.env.KIMI_MODEL ?? "moonshot-v1-8k",

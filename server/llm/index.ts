@@ -136,6 +136,23 @@ registry.registerFactory(
   },
 );
 
+registry.registerFactory(
+  "Mistral",
+  (cfg) =>
+    new OpenAIProvider(
+      "Mistral",
+      cfg.apiKey ?? "",
+      cfg.baseUrl ?? "https://api.mistral.ai/v1",
+      cfg.model ?? "mistral-large-latest",
+      cfg.systemMessage,
+    ),
+  {
+    apiKey: ENV.mistralApiKey,
+    baseUrl: ENV.mistralBaseUrl,
+    model: ENV.mistralModel,
+  },
+);
+
 /** Volcengine's Ark endpoint — Doubao's official home. */
 const DEFAULT_DOUBAO_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
 
