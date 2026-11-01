@@ -21,9 +21,10 @@ describe("the day in the machine's own calendar", () => {
   });
 
   it("is not the UTC day when the clock is not on UTC", () => {
-    const moment = new Date("2026-01-01T16:00:00.000Z");
     const offsetMinutes = new Date().getTimezoneOffset();
     if (offsetMinutes === 0) return; // The machine is on UTC; the two agree.
+    const isoString = offsetMinutes < 0 ? "2026-01-01T23:30:00.000Z" : "2026-01-01T00:30:00.000Z";
+    const moment = new Date(isoString);
     expect(localDateKey(moment)).not.toBe(moment.toISOString().slice(0, 10));
   });
 

@@ -140,6 +140,27 @@ async function loadRecords(): Promise<EvalSourceMessage[]> {
     .filter((message) => message.content.trim().length > 0);
 }
 
+if (args.includes("--help") || args.includes("-h")) {
+  console.log("Usage: pnpm eval -- --persona <id> --user <id> [options]");
+  console.log("  --variant <default|withoutRules>");
+  console.log("  --cases        (only cut the evaluation cases)");
+  console.log("  --save         (persist the evaluation run)");
+  console.log("  --gate         (compare with baseline and exit non-zero on regression)");
+  console.log("  --compare      (A/B test prompt variations)");
+  console.log("  --calibrate    (measure baseline run spread)");
+  process.exit(0);
+}
+
+if (!personaId || Number.isNaN(personaId) || !userId || Number.isNaN(userId)) {
+  console.error("Usage: pnpm eval -- --persona <id> --user <id> [options]");
+  console.error("  --variant <default|withoutRules>");
+  console.error("  --cases        (only cut the evaluation cases)");
+  console.error("  --save         (persist the evaluation run)");
+  console.error("  --gate         (compare with baseline and exit non-zero on regression)");
+  console.error("  --compare      (A/B test prompt variations)");
+  process.exit(1);
+}
+
 const records = await loadRecords();
 if (!records.length) {
   console.error("No collected records for this persona. Import the chat logs first.");
