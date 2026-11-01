@@ -1,15 +1,21 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 const invoke = vi.fn();
+const invokeWithProvider = vi.fn();
 
 vi.mock("./llm", () => ({
-  llmService: { invoke: (...args: unknown[]) => invoke(...args) },
+  llmService: {
+    invoke: (...args: unknown[]) => invoke(...args),
+    invokeWithProvider: (...args: unknown[]) => invokeWithProvider(...args),
+  },
 }));
 
 import { inferEmotionalState, isEmotionalState, EMOTIONAL_STATES } from "./_core/emotion";
+import type { LLMProvider } from "./llm/types";
 
 beforeEach(() => {
   invoke.mockReset();
+  invokeWithProvider.mockReset();
 });
 
 afterEach(() => {
@@ -127,5 +133,48 @@ describe("inferEmotionalState", () => {
       currentState: "warm",
     });
     expect(isEmotionalState(result.state)).toBe(true);
+  });
+
+  it("routes through invokeWithProvider when providerInstance is passed", async () => {
+    const mockProvider: LLMProvider = {
+      name: "Custom",
+      capabilities: { streaming: false, vision: false, tools: false, jsonMode: false },
+      isConfigured: () => true,
+      invoke: vi.fn(),
+    };
+    invokeWithProvider.mockResolvedValue('{"state":"playful"}');
+    const result = await inferEmotionalState({
+      userMessage: "Hey",
+      assistantReply: "Hi",
+      currentState: "warm",
+      providerInstance: mockProvider,
+    });
+    expect(result.state).toBe("playful");
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("truncates reasons longer than 60 characters", async () => {
+    const longReason = "a".repeat(100);
+    invoke.mockResolvedValue(JSON.stringify({ state: "warm", reason: longReason }));
+    const result = await inferEmotionalState({
+      userMessage: "hello",
+      assistantReply: "world",
+      currentState: "warm",
+    });
+    expect(result.reason?.length).toBe(60);
+  });
+
+  it("uses English prompts and heuristic fallback when locale is en", async () => {
+    invoke.mockRejectedValue(new Error("provider down"));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const result = await inferEmotionalState({
+      userMessage: "I miss you so much",
+      assistantReply: "I miss you too",
+      currentState: "warm",
+      locale: "en",
+    });
+    expect(result.source).toBe("heuristic");
+    expect(result.state).toBe("nostalgic");
   });
 });
