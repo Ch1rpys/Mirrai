@@ -2,12 +2,12 @@ import { existsSync, readFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const INSECURE_JWT_PLACEHOLDERS = new Set([
+export const INSECURE_JWT_PLACEHOLDERS = new Set([
   "dev-secret-change-me",
   "your-secret-key-change-me",
 ]);
 
-function resolveJwtSecret(): string {
+export function resolveJwtSecret(): string {
   const raw = process.env.JWT_SECRET;
   const secret = raw?.trim() ?? "";
   if (secret) {
