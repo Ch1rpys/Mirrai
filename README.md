@@ -3,8 +3,8 @@
 > 「不在身边的时候，TA 还在这里。」
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![CI](https://github.com/Ch1rpy2613/Mirrai/actions/workflows/ci.yml/badge.svg)](https://github.com/Ch1rpy2613/Mirrai/actions/workflows/ci.yml)
-[![GitHub Stars](https://img.shields.io/github/stars/Ch1rpy2613/Mirrai?style=social)](https://github.com/Ch1rpy2613/Mirrai/stargazers)
+[![CI](https://github.com/Ch1rpys/Mirrai/actions/workflows/ci.yml/badge.svg)](https://github.com/Ch1rpys/Mirrai/actions/workflows/ci.yml)
+[![GitHub Stars](https://img.shields.io/github/stars/Ch1rpys/Mirrai?style=social)](https://github.com/Ch1rpys/Mirrai/stargazers)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6.svg)](https://typescriptlang.org)
 [![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev)
 [![Node.js](https://img.shields.io/badge/Node.js-24+-339933.svg)](https://nodejs.org)
@@ -332,7 +332,7 @@ jsonb 还在不在、Layer 0 那条底线还在不在。几秒钟跑完，不花
 ### 方式一：Docker（推荐）
 
 ```bash
-git clone https://github.com/Ch1rpy2613/Mirrai.git
+git clone https://github.com/Ch1rpys/Mirrai.git
 cd Mirrai
 cp .env.example .env   # 编辑 .env，填入 JWT_SECRET 和至少一个 LLM API Key
 docker compose up -d
@@ -346,7 +346,7 @@ docker compose up -d
 
 ```bash
 # 1. 克隆
-git clone https://github.com/Ch1rpy2613/Mirrai.git
+git clone https://github.com/Ch1rpys/Mirrai.git
 cd Mirrai
 
 # 2. 安装依赖
@@ -375,13 +375,13 @@ Redis 是可选的：不装也能跑，限流会退回进程内计数。想让�
 
 ### 方式三：macOS 一键安装
 
-从 [Releases](https://github.com/Ch1rpy2613/Mirrai/releases) 下载 `Mirrai-macOS-arm64.dmg`，拖入 Applications 即可。内置 Node.js 和 PostgreSQL，双击启动，无需任何依赖（Apple Silicon，macOS 13+）。
+从 [Releases](https://github.com/Ch1rpys/Mirrai/releases) 下载 `Mirrai-macOS-arm64.dmg`，拖入 Applications 即可。内置 Node.js 和 PostgreSQL，双击启动，无需任何依赖（Apple Silicon，macOS 13+）。
 
 如需自行构建 DMG：`bash scripts/build-macos-app.sh`，详见 [docs/macos-build-guide.md](docs/macos-build-guide.md)。
 
 ### 方式四：Windows 一键安装
 
-从 [Releases](https://github.com/Ch1rpy2613/Mirrai/releases) 下载 `Mirrai-Setup-x64.exe`，双击安装即可。内置 Node.js 和 PostgreSQL —— 不用装数据库、不用管理员权限、不写注册表（Windows x64）。
+从 [Releases](https://github.com/Ch1rpys/Mirrai/releases) 下载 `Mirrai-Setup-x64.exe`，双击安装即可。内置 Node.js 和 PostgreSQL —— 不用装数据库、不用管理员权限、不写注册表（Windows x64）。
 
 装完后在开始菜单（或桌面）双击 `Mirrai` 启动。启动时会弹一个**带进度条的窗口**，实时显示「正在初始化数据库 → 正在同步表结构 → 正在启动服务 → 已就绪」，首次启动要一两分钟，所以不会看着像卡死了。数据放在 `%APPDATA%\Mirrai`，卸载走「应用和功能」。
 
@@ -842,8 +842,8 @@ pnpm audit:i18n   # 扫出服务端还剩下的、没有英文对应的中文
 
 ## 社区
 
-- 🐛 [报告 Bug / 提功能建议](https://github.com/Ch1rpy2613/Mirrai/issues)
-- 💬 [GitHub Discussions](https://github.com/Ch1rpy2613/Mirrai/discussions)
+- 🐛 [报告 Bug / 提功能建议](https://github.com/Ch1rpys/Mirrai/issues)
+- 💬 [GitHub Discussions](https://github.com/Ch1rpys/Mirrai/discussions)
 - 🔒 安全漏洞请私下报告，见 [SECURITY.md](SECURITY.md)
 
 ## 注意事项
@@ -856,4 +856,4 @@ pnpm audit:i18n   # 扫出服务端还剩下的、没有英文对应的中文
 
 ## License
 
-[MIT](LICENSE) © 2026 Ch1rpy2613
+[MIT](LICENSE) © 2026 Ch1rpys

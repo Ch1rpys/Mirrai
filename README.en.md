@@ -3,8 +3,8 @@
 > *"When they're not beside you, they're still here."*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![CI](https://github.com/Ch1rpy2613/Mirrai/actions/workflows/ci.yml/badge.svg)](https://github.com/Ch1rpy2613/Mirrai/actions/workflows/ci.yml)
-[![GitHub Stars](https://img.shields.io/github/stars/Ch1rpy2613/Mirrai?style=social)](https://github.com/Ch1rpy2613/Mirrai/stargazers)
+[![CI](https://github.com/Ch1rpys/Mirrai/actions/workflows/ci.yml/badge.svg)](https://github.com/Ch1rpys/Mirrai/actions/workflows/ci.yml)
+[![GitHub Stars](https://img.shields.io/github/stars/Ch1rpys/Mirrai?style=social)](https://github.com/Ch1rpys/Mirrai/stargazers)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6.svg)](https://typescriptlang.org)
 [![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev)
 [![Node.js](https://img.shields.io/badge/Node.js-24+-339933.svg)](https://nodejs.org)
@@ -47,7 +47,7 @@ Mirrai is an open-source, self-hosted AI companion that rebuilds a person's digi
 ### Docker (recommended)
 
 ```bash
-git clone https://github.com/Ch1rpy2613/Mirrai.git
+git clone https://github.com/Ch1rpys/Mirrai.git
 cd Mirrai
 cp .env.example .env   # set JWT_SECRET and at least one LLM API key
 docker compose up -d
@@ -60,7 +60,7 @@ Then open http://localhost:3000 — PostgreSQL is included.
 Requirements: Node.js 24+, pnpm, PostgreSQL 14+, Python 3.9+ (optional, for the distillation engine)
 
 ```bash
-git clone https://github.com/Ch1rpy2613/Mirrai.git
+git clone https://github.com/Ch1rpys/Mirrai.git
 cd Mirrai
 pnpm install
 pip3 install -r skill-engine/requirements.txt   # optional
@@ -76,11 +76,11 @@ and the app takes care of the rest.
 
 ### macOS one-click
 
-Download `Mirrai-macOS-arm64.dmg` from [Releases](https://github.com/Ch1rpy2613/Mirrai/releases) — Node.js and PostgreSQL bundled, zero dependencies (Apple Silicon, macOS 13+).
+Download `Mirrai-macOS-arm64.dmg` from [Releases](https://github.com/Ch1rpys/Mirrai/releases) — Node.js and PostgreSQL bundled, zero dependencies (Apple Silicon, macOS 13+).
 
 ### Windows one-click
 
-Download `Mirrai-Setup-x64.exe` from [Releases](https://github.com/Ch1rpy2613/Mirrai/releases) and run the installer — Node.js and PostgreSQL are bundled, so there is no database to install, no administrator rights needed, and nothing is written to the registry (Windows x64).
+Download `Mirrai-Setup-x64.exe` from [Releases](https://github.com/Ch1rpys/Mirrai/releases) and run the installer — Node.js and PostgreSQL are bundled, so there is no database to install, no administrator rights needed, and nothing is written to the registry (Windows x64).
 
 After the install, start Mirrai from the Start menu (or the desktop). A window with a **progress bar** shows what is happening — "initialising the database", "synchronising the schema", "starting the server", "ready" — so the first launch, which does take a minute or two, never looks like it has hung. Data lives in `%APPDATA%\Mirrai`; uninstalling goes through "Apps & features".
 
@@ -200,4 +200,4 @@ Issues and PRs are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). For secur
 
 ## License
 
-[MIT](LICENSE) © 2026 Ch1rpy2613
+[MIT](LICENSE) © 2026 Ch1rpys

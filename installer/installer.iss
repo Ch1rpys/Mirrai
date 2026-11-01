@@ -13,8 +13,8 @@
 #ifndef MyAppVersion
   #define MyAppVersion "1.3.0"
 #endif
-#define MyAppPublisher "Ch1rpy2613"
-#define MyAppURL "https://github.com/Ch1rpy2613/Mirrai"
+#define MyAppPublisher "Ch1rpys"
+#define MyAppURL "https://github.com/Ch1rpys/Mirrai"
 #define MyAppExeName "Mirrai.exe"
 ; The command script is always in the bundle. It is what starts the app
 ; when the GUI launcher could not be built — the build needs the .NET SDK

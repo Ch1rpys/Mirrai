@@ -7,11 +7,11 @@
   "packageManager": "pnpm@10.33.3",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Ch1rpy2613/Mirrai.git"
+    "url": "git+https://github.com/Ch1rpys/Mirrai.git"
   },
-  "homepage": "https://github.com/Ch1rpy2613/Mirrai#readme",
+  "homepage": "https://github.com/Ch1rpys/Mirrai#readme",
   "bugs": {
-    "url": "https://github.com/Ch1rpy2613/Mirrai/issues"
+    "url": "https://github.com/Ch1rpys/Mirrai/issues"
   },
   "keywords": [
     "ai-companion",

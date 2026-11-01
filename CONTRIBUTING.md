@@ -5,7 +5,7 @@
 ## 开始之前
 
 - 请先阅读 [README](README.md) 了解项目定位，特别是[伦理与边界](README.md#伦理与边界)一节
-- 查看 [Issues](https://github.com/Ch1rpy2613/Mirrai/issues)，标注了 `good first issue` 的是适合新手的任务
+- 查看 [Issues](https://github.com/Ch1rpys/Mirrai/issues)，标注了 `good first issue` 的是适合新手的任务
 
 ## 开发环境搭建
 

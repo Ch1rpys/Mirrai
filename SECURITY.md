@@ -4,7 +4,7 @@
 
 如果你发现了安全漏洞，请**不要**在公开 issue 中报告。
 
-请通过 [GitHub 私密安全报告](https://github.com/Ch1rpy2613/Mirrai/security/advisories/new) 提交，或发邮件至仓库所有者的 GitHub 私信。
+请通过 [GitHub 私密安全报告](https://github.com/Ch1rpys/Mirrai/security/advisories/new) 提交，或发邮件至仓库所有者的 GitHub 私信。
 
 请在报告中包含：
 
