@@ -79,11 +79,30 @@ pnpm eval -- --persona <id> --user <id> --pairs
 
 ## 六、一次盲测的完整记录
 
-跑完之后，把这份表填出来，放进 `baseline.md`：
+跑完之后，**不要**把聊天原文贴进仓库。结果写成 `docs/eval/blind/` 下的单独文件，一份记录一个文件。
 
-| 日期 | 分身 | 被试 | 组数 | 命中率 | 主要误判原因 |
-|---|---|---|---|---|---|
-| | | | | | |
+文件名：`YYYY-MM-DD-<persona-id-or-slug>.md`
+
+```yaml
+---
+date: 2026-11-15
+persona: 3
+subjects: 4
+groups: 12
+hitRate: 0.42
+knewThemWell: true
+---
+```
+
+正文只记编号和理由，不记 `real` / `said` 的原文：
+
+| 组 | 被试 | 判定 | 秒 | 理由原文 |
+|---|---|---|---|---|
+| 0 | A | 分身 / 真话 / 猜不出 | 3 | 他不会用这个词 |
+
+还没有认识 TA 的被试时，写明这一点。仓库里的 [`blind/none-yet.md`](blind/none-yet.md) 就是这种记录——空表不再被当成已经测过。
+
+`baseline.md` 可以链到最近一次文件，但不再是唯一的存放处。
 
 ## 七、注意事项
 

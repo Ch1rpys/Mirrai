@@ -13,15 +13,19 @@ import { translate } from "@/i18n";
  * is what says the six boxes are really there.
  */
 const save = vi.fn();
+const reviewDefaults = vi.fn();
 
 let stored: any[] = [];
 let merged: any[] = [];
+let productWritten: string[] = [];
+let reviewed = true;
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     imperfection: {
-      get: { useQuery: () => ({ data: { stored, merged }, refetch: vi.fn() }) },
+      get: { useQuery: () => ({ data: { stored, merged, productWritten, reviewed }, refetch: vi.fn() }) },
       save: { useMutation: () => ({ mutate: save, isPending: false }) },
+      reviewDefaults: { useMutation: () => ({ mutate: reviewDefaults, isPending: false }) },
     },
   },
 }));
@@ -58,6 +62,8 @@ describe("the imperfection, per state", () => {
     vi.clearAllMocks();
     stored = [];
     merged = fullProfile();
+    productWritten = [];
+    reviewed = true;
   });
 
   it("says that the defaults are not applied yet", () => {
@@ -146,5 +152,15 @@ describe("the imperfection, per state", () => {
 
     // The gap is filled with the generic default.
     expect(screen.getByDisplayValue(/短句/)).toBeInTheDocument();
+  });
+
+  it("asks whether to keep the product-written sentences", async () => {
+    stored = [{ state: "distant", deviations: ["极短句"] }];
+    productWritten = ["warm"];
+    reviewed = false;
+    render(<ImperfectionEditor personaId={1} />);
+    expect(screen.getByText(translate("zh", "imperfection.productWritten"))).toBeInTheDocument();
+    await userEvent.click(screen.getByText(translate("zh", "imperfection.clearDefaults")));
+    expect(reviewDefaults).toHaveBeenCalledWith({ personaId: 1, keep: false, locale: "zh" });
   });
 });

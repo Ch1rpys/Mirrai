@@ -20,15 +20,32 @@
 import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { buildSystemPrompt } from "../_core/persona-utils";
-import { retrieveMemories, formatMemoriesForPrompt, formatAnchorsForPrompt } from "./retrieval";
 import { llmService, type LLMProvider } from "../llm";
 import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 import { buildUserContextBlock, isUserMood } from "@shared/user-side";
 import { zonedHour, zonedOffsetHours } from "@shared/timezone";
 import { mayReachOut, type Presence } from "@shared/graduation-mode";
-import { sampleProactiveDelayMs, type BehaviorProfile } from "@shared/behavior-profile";
+import type { BehaviorProfile } from "@shared/behavior-profile";
 import { seededRandom } from "../_core/behavior-profile";
 import { copy } from "@shared/copy";
+import {
+  decideProactiveWindow,
+  parseQuietHours,
+  resolveProactiveDeliverAt,
+  type QuietHoursSpec,
+} from "@shared/proactive-decision";
+import {
+  hasOpeningDistribution,
+  normalizeOpeningProfile,
+  openingRateForWindow,
+  sampleOpening,
+} from "@shared/opening-profile";
+import { inProgressLife, normalizeLifeEvents, openLoops } from "@shared/life-events";
+import {
+  isProactiveOpening,
+  renderOpeningInstruction,
+  type ProactiveOpening,
+} from "@shared/speech-acts";
 
 /**
  * The longest a proactive message may be. A first word is not a letter.
@@ -57,6 +74,9 @@ export interface ProactiveContext {
   userMood: string | null;
   /** Whether the relationship has ended. */
   relationshipEnded: boolean;
+  opening?: ProactiveOpening | null;
+  fact?: string | null;
+  recentOpenings?: ProactiveOpening[];
 }
 
 /**
@@ -112,12 +132,24 @@ export function buildProactiveInstruction(
   locale: "zh" | "en" = "zh",
 ): string {
   const parts: string[] = [];
-
-  parts.push(copy(locale, "prompts.proactiveOpening"));
-  if (context.daysSinceLastChat >= 3) {
+  if (context.opening) {
+    parts.push(renderOpeningInstruction(context.opening, locale));
+  } else {
+    parts.push(copy(locale, "prompts.proactiveOpening"));
+  }
+  if (context.fact) {
+    parts.push(copy(locale, "prompt.proactiveOneFact", { fact: context.fact }));
+    parts.push(copy(locale, "prompt.proactiveNoSecondFact"));
+  }
+  const colourOk =
+    context.opening === "checkin" || context.opening === "affection";
+  const recent = context.recentOpenings ?? [];
+  const lastWasColour =
+    recent[0] === "checkin" || recent[0] === "affection";
+  if (colourOk && !lastWasColour && context.daysSinceLastChat >= 3) {
     parts.push(copy(locale, "prompts.proactiveDaysSince", { days: context.daysSinceLastChat }));
   }
-  if (context.hoursApart !== null && Math.abs(context.hoursApart) >= 1) {
+  if (colourOk && context.hoursApart !== null && Math.abs(context.hoursApart) >= 1) {
     const hours = Math.abs(Math.round(context.hoursApart));
     parts.push(
       copy(locale, "prompts.proactiveClock", {
@@ -126,7 +158,7 @@ export function buildProactiveInstruction(
       }),
     );
   }
-  if (context.userMood) {
+  if (colourOk && context.userMood) {
     parts.push(copy(locale, "prompts.proactiveMood"));
   }
   if (context.relationshipEnded) {
@@ -134,6 +166,99 @@ export function buildProactiveInstruction(
   }
   parts.push(copy(locale, "prompts.proactiveLength"));
   return parts.join("\n");
+}
+
+async function pickProactiveMaterial(params: {
+  persona: Persona;
+  userId: number;
+  relationshipEnded: boolean;
+}): Promise<{
+  opening: ProactiveOpening | null;
+  fact: string;
+  factId: number | null;
+  memory: { category: string; title: string; description?: string | null } | null;
+  recentOpenings: ProactiveOpening[];
+} | null> {
+  const data = (params.persona.personaData as any) ?? {};
+  const events = normalizeLifeEvents(data.lifeEvents);
+  const loops = openLoops(events);
+  const lives = inProgressLife(events);
+  const openingProfile = normalizeOpeningProfile(data.openingProfile);
+  const recent = await db.getMessagesByPersonaId(params.persona.id, params.userId, 40).catch(() => []);
+  const recentOpenings = recent
+    .filter((row) => row.origin === "proactive" && row.role === "assistant")
+    .slice(0, 3)
+    .map((row) => {
+      const opening = (row.metadata as { opening?: string } | null)?.opening;
+      return isProactiveOpening(opening) ? opening : null;
+    })
+    .filter((item): item is ProactiveOpening => Boolean(item));
+  const usedMemoryIds = new Set(
+    recent
+      .filter((row) => row.origin === "proactive")
+      .slice(0, 3)
+      .map((row) => (row.metadata as { factId?: number } | null)?.factId)
+      .filter((id): id is number => typeof id === "number"),
+  );
+
+  const forbidden = new Set<ProactiveOpening>(recentOpenings.slice(0, 3));
+  if (params.relationshipEnded) forbidden.add("logistics");
+  if (!lives.length) forbidden.add("share");
+
+  let opening: ProactiveOpening | null = null;
+  if (hasOpeningDistribution(openingProfile) && openingProfile) {
+    opening = sampleOpening(openingProfile, Math.random, forbidden);
+    if (opening === "share" && !lives.length) opening = sampleOpening(openingProfile, Math.random, new Set([...forbidden, "share"]));
+  }
+
+  const loop = loops[0];
+  const life = lives[0];
+  const memories = await db.getMemoriesByPersonaId(params.persona.id, params.userId).catch(() => []);
+  const unusedMemory = memories.find(
+    (row) =>
+      row.status !== "superseded" &&
+      !usedMemoryIds.has(row.id) &&
+      (row.description || row.title),
+  );
+  const fromMemory = !loop && !life ? unusedMemory : null;
+  const factSource = loop ?? life ?? (fromMemory
+    ? { title: fromMemory.title, detail: fromMemory.description ?? fromMemory.title, id: fromMemory.id }
+    : null);
+
+  if (!factSource) {
+    const canFragment = opening === "fragment" || opening === "affection"
+      || (!openingProfile && false)
+      || (openingProfile && ((openingProfile.counts.fragment ?? 0) > 0 || (openingProfile.counts.affection ?? 0) > 0));
+    if (!canFragment) return null;
+    if (!opening) {
+      opening = (openingProfile?.counts.affection ?? 0) > (openingProfile?.counts.fragment ?? 0)
+        ? "affection"
+        : "fragment";
+    }
+    return {
+      opening,
+      fact: "",
+      factId: null,
+      memory: null,
+      recentOpenings,
+    };
+  }
+
+  if (!opening) {
+    opening = loop ? "callback" : life ? "share" : "checkin";
+    if (forbidden.has(opening)) {
+      opening = (["tease", "fragment", "affection", "checkin"] as ProactiveOpening[])
+        .find((item) => !forbidden.has(item)) ?? "fragment";
+    }
+  }
+
+  return {
+    opening,
+    fact: `${factSource.title}${factSource.detail ? `：${factSource.detail}` : ""}`.slice(0, 240),
+    factId: "id" in factSource && typeof factSource.id === "number" ? factSource.id : fromMemory?.id ?? null,
+    memory: fromMemory ?? null,
+    recentOpenings,
+  };
 }
 
 /**
@@ -144,7 +269,7 @@ export async function composeProactiveMessage(params: {
   userId: number;
   locale?: "zh" | "en";
   now?: Date;
-}): Promise<string | null> {
+}): Promise<{ text: string; opening: ProactiveOpening | null; factId: number | null } | null> {
   const { persona } = params;
   const locale = params.locale ?? "zh";
   const now = params.now ?? new Date();
@@ -155,14 +280,15 @@ export async function composeProactiveMessage(params: {
     now,
   });
 
-  const memories = await retrieveMemories({
-    personaId: persona.id,
+  const picked = await pickProactiveMaterial({
+    persona,
     userId: params.userId,
-    userMessage: buildProactiveInstruction(context, locale),
-    locale,
-  }).catch(() => []);
-  const anchors = memories.filter((m) => m.category === "anchor");
-  const ordinary = memories.filter((m) => m.category !== "anchor");
+    relationshipEnded: context.relationshipEnded,
+  });
+  if (!picked) return null;
+  context.opening = picked.opening;
+  context.fact = picked.fact;
+  context.recentOpenings = picked.recentOpenings;
 
   const user = await db.getUserById(params.userId).catch(() => null);
   const userContext = buildUserContextBlock(
@@ -183,8 +309,8 @@ export async function composeProactiveMessage(params: {
   );
 
   const systemPrompt = buildSystemPrompt(persona, {
-    anchorSection: formatAnchorsForPrompt(anchors, locale),
-    memorySection: formatMemoriesForPrompt(ordinary, locale),
+    anchorSection: "",
+    memorySection: "",
     userContext,
     locale,
     now,
@@ -237,7 +363,11 @@ export async function composeProactiveMessage(params: {
   // It used to be cut at four times the length, so a proactive message
   // could be four times longer than the limit it was given — and the
   // prompt asks for twenty to eighty characters.
-  return trimmed.slice(0, MAX_PROACTIVE_LENGTH);
+  return {
+    text: trimmed.slice(0, MAX_PROACTIVE_LENGTH),
+    opening: picked.opening,
+    factId: picked.factId,
+  };
 }
 
 /**
@@ -315,43 +445,62 @@ export function resolveProactiveDeadline(params: {
   frequencyHours: number;
   lastChatAt: Date | null;
   behaviorProfile?: BehaviorProfile | null;
+  openingRate?: number | null;
+  presence?: string;
+  reachability?: string | null;
+  personaTimeZone?: string | null;
+  quietHours?: QuietHoursSpec | null;
+  userTimeZone?: string | null;
+  windowIndex?: number;
 }): ProactiveDeadline | null {
   if (!params.lastChatAt || !params.frequencyHours || params.frequencyHours <= 0) {
     return null;
   }
 
-  const silenceStart = new Date(params.lastChatAt).getTime();
-  if (Number.isNaN(silenceStart)) return null;
-
-  const windowMs = params.frequencyHours * 3_600_000;
-  const eligibleAt = silenceStart + windowMs;
+  const silenceStart = new Date(params.lastChatAt);
+  if (Number.isNaN(silenceStart.getTime())) return null;
+  const windowIndex = Math.max(1, params.windowIndex ?? 1);
   const profile = params.behaviorProfile ?? null;
-
-  if (!profile) {
-    return { eligibleAt: new Date(eligibleAt), at: new Date(eligibleAt), sampled: false };
+  const openingRate = params.openingRate !== undefined
+    ? params.openingRate
+    : profile?.proactiveCounted
+      ? profile.proactiveRate
+      : null;
+  const decision = decideProactiveWindow({
+    frequencyHours: params.frequencyHours,
+    silenceStart,
+    openingRate,
+    presence: params.presence ?? "active",
+    reachability: params.reachability,
+    windowIndex,
+    rng: seededRandom(`${params.personaId}:${silenceStart.getTime()}:${params.frequencyHours}:${windowIndex}`),
+  });
+  if (!decision.eligibleAt) return null;
+  if (!decision.used) {
+    return { eligibleAt: decision.eligibleAt, at: decision.eligibleAt, sampled: false };
   }
 
-  const key = `${params.personaId}:${silenceStart}`;
+  const key = `${params.personaId}:${silenceStart.getTime()}:${windowIndex}`;
   const drawn = sampledDeadlines.get(key);
   if (drawn !== undefined) {
-    return { eligibleAt: new Date(eligibleAt), at: new Date(drawn), sampled: true };
+    return { eligibleAt: decision.eligibleAt, at: new Date(drawn), sampled: Boolean(profile?.activeHours?.length) };
   }
 
-  // The silence the draw is made against is the silence at the moment
-  // the persona became allowed to speak — which is the bought window
-  // itself, and is the same number every time the silence is asked
-  // about. That is what makes the deadline reproducible.
-  const waitMs = sampleProactiveDelayMs(
-    profile,
-    windowMs,
-    seededRandom(`${key}:${profile.replyGapMedianSec}:${profile.replyGapLogSigma}`),
-  );
-  const at = eligibleAt + waitMs;
-
-  sampledDeadlines.set(key, at);
+  const at = resolveProactiveDeliverAt({
+    eligibleAt: decision.eligibleAt,
+    activeHours: profile?.activeHours ?? [],
+    personaTimeZone: params.personaTimeZone,
+    quietHours: params.quietHours,
+    userTimeZone: params.userTimeZone,
+    rng: seededRandom(`${key}:deliver`),
+  });
+  sampledDeadlines.set(key, at.getTime());
   pruneDeadlines();
-
-  return { eligibleAt: new Date(eligibleAt), at: new Date(at), sampled: true };
+  return {
+    eligibleAt: decision.eligibleAt,
+    at,
+    sampled: Boolean(profile?.activeHours?.length),
+  };
 }
 
 /**
@@ -377,19 +526,49 @@ export function isProactiveDue(params: {
   behaviorProfile?: BehaviorProfile | null;
   /** Which persona it is — part of the seed of the draw. */
   personaId?: number;
+  openingRate?: number | null;
+  reachability?: string | null;
+  personaTimeZone?: string | null;
+  quietHours?: QuietHoursSpec | null;
+  userTimeZone?: string | null;
 }): boolean {
   const now = params.now ?? new Date();
   if (!params.frequencyHours || params.frequencyHours <= 0) return false;
   if (!mayReachOut(params.presence as Presence)) return false;
   if (!params.lastChatAt) return true;
 
+  const windowMs = params.frequencyHours * 3_600_000;
+  const elapsed = now.getTime() - new Date(params.lastChatAt).getTime();
+  const windowIndex = Math.max(1, Math.floor(elapsed / windowMs));
+  if (elapsed < windowMs) return false;
+
   const deadline = resolveProactiveDeadline({
     personaId: params.personaId ?? 0,
     frequencyHours: params.frequencyHours,
     lastChatAt: params.lastChatAt,
     behaviorProfile: params.behaviorProfile ?? null,
+    openingRate: params.openingRate,
+    presence: params.presence,
+    reachability: params.reachability,
+    personaTimeZone: params.personaTimeZone,
+    quietHours: params.quietHours,
+    userTimeZone: params.userTimeZone,
+    windowIndex,
   });
   if (!deadline) return false;
-
+  const decision = decideProactiveWindow({
+    frequencyHours: params.frequencyHours,
+    silenceStart: new Date(params.lastChatAt),
+    openingRate: params.openingRate !== undefined
+      ? params.openingRate
+      : params.behaviorProfile?.proactiveCounted
+        ? params.behaviorProfile.proactiveRate
+        : null,
+    presence: params.presence,
+    reachability: params.reachability,
+    windowIndex,
+    rng: seededRandom(`${params.personaId ?? 0}:${new Date(params.lastChatAt).getTime()}:${params.frequencyHours}:${windowIndex}`),
+  });
+  if (!decision.used) return false;
   return now.getTime() >= deadline.at.getTime();
 }

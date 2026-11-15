@@ -5,11 +5,12 @@ import { buildReachabilityNote, type Reachability } from "@shared/user-side";
 import { copy, type CopyKey } from "@shared/copy";
 import { renderMicroRules, type MicroRule } from "@shared/micro-rules";
 import {
-  mergeImperfectionDefaults,
   renderImperfection,
   selectImperfection,
   type ImperfectionEntry,
 } from "@shared/imperfection";
+import { renderSuppressions, type Suppression } from "@shared/suppressions";
+import { renderActInstruction, type SpeechAct } from "@shared/speech-acts";
 import { normalizePersonaData } from "./persona-schema";
 
 export { INTIMACY_LEVELS, normalizeIntimacyLevel };
@@ -240,6 +241,28 @@ export interface SystemPromptOptions {
    * It defaults to the persona's own current state.
    */
   emotionalState?: string | null;
+  /**
+   * The subtractions this person is under.
+   *
+   * `null` turns them off without touching the persona, the same way
+   * the discriminative rules do.
+   */
+  suppressions?: Suppression[] | null;
+  /**
+   * The one action this turn is doing.
+   *
+   * This is an instruction, not material: it sits outside the fence.
+   * Two actions must never appear together.
+   */
+  sampledAct?: SpeechAct | null;
+  /**
+   * Past replies of theirs, already formatted and fenced by the caller.
+   */
+  exemplarSection?: string | null;
+  /**
+   * A note that two memories of the same fact do not agree.
+   */
+  memoryConflictSection?: string | null;
 }
 
 export function buildSystemPrompt(persona: any, sceneOverlay?: string | null): string;
@@ -392,30 +415,41 @@ export function buildSystemPrompt(
         );
 
   /**
+   * The subtractions, next to the discriminative rules.
+   *
+   * Unconfirmed candidates stay out. The wording is a constraint, and
+   * the block is fenced because the user can read the original words.
+   */
+  const suppressionsSection =
+    options.suppressions === null
+      ? ""
+      : renderSuppressions(
+          options.suppressions ?? ((p.suppressions as Suppression[]) || []),
+          locale,
+        );
+
+  const actInstruction = options.sampledAct
+    ? renderActInstruction(options.sampledAct, locale)
+    : "";
+
+  /**
    * How this persona is imperfect, right now.
    *
    * The imperfection is a function of the state, so it is looked up for
    * the state the persona is actually in — not for all six at once.
+   *
+   * Only the states that were actually stored are used. The editor still
+   * shows the product's generic sentences as placeholders; a placeholder
+   * that was never written down does not belong in the prompt. Filling
+   * the other five moods with the same six sentences every persona ships
+   * with is how a distant person started sounding warm.
    */
   const imperfectionProfile =
     options.imperfectionProfile === null
       ? null
       : (options.imperfectionProfile ??
         ((p.imperfectionProfile as ImperfectionEntry[]) || []));
-  /**
-   * The profile the prompt uses is the *merged* one — the same six
-   * states the interface shows the user.
-   *
-   * A persona who has opted in gets a conservative default for every
-   * state they have not written out; a persona who never opted in gets
-   * nothing at all. The distinction matters: a persona built before
-   * this field existed must not quietly gain a personality nobody
-   * chose for it, and a persona whose user did opt in must not be
-   * imperfect in one mood and perfect in the other five.
-   */
-  const appliedImperfection = imperfectionProfile?.length
-    ? mergeImperfectionDefaults(imperfectionProfile, locale)
-    : imperfectionProfile;
+  const appliedImperfection = imperfectionProfile;
   /**
    * The imperfection notes are the user's own writing, and they are
    * fenced.
@@ -470,6 +504,9 @@ export function buildSystemPrompt(
       : "",
     // These already carry their own heading.
     microRulesSection ? asMaterial(microRulesSection) : "",
+    // Subtractions sit next to the discriminative rules, still fenced.
+    suppressionsSection ? asMaterial(suppressionsSection) : "",
+    actInstruction,
     options.userContext ? asMaterial(options.userContext) : "",
     options.quotedSection ? asMaterial(options.quotedSection) : "",
     options.relationshipEvents ? asMaterial(options.relationshipEvents) : "",
@@ -479,6 +516,8 @@ export function buildSystemPrompt(
     ),
     options.anchorSection ? asMaterial(options.anchorSection) : "",
     options.memorySection ? asMaterial(options.memorySection) : "",
+    options.exemplarSection ? asMaterial(options.exemplarSection) : "",
+    options.memoryConflictSection ? asMaterial(options.memoryConflictSection) : "",
     options.summarySection ? asMaterial(options.summarySection) : "",
     p.memories ? asMaterial(copy(locale, "prompt.memoriesHeading"), p.memories) : "",
     p.attachmentStyle

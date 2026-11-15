@@ -206,14 +206,37 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
                 {t("fidelity.behavior.proactive")}
               </dt>
               <dd className="text-sm mt-1">
-                {Math.round(profile.proactiveRate * 100)}%
+                {profile.proactiveCounted === true || (profile.proactiveCounted !== false && profile.proactiveRate > 0)
+                  ? `${Math.round(profile.proactiveRate * 100)}%`
+                  : t("v5.uncounted")}
               </dd>
+              {!(profile.proactiveCounted === true || (profile.proactiveCounted !== false && profile.proactiveRate > 0)) ? (
+                <dd className="text-[11px] text-muted-subtle mt-1">{t("v5.uncountedHint")}</dd>
+              ) : null}
             </div>
             <div className="rounded-md border border-border/70 p-3">
               <dt className="text-[11px] text-muted-foreground">
                 {t("fidelity.behavior.samples")}
               </dt>
               <dd className="text-sm mt-1">{profile.samples}</dd>
+            </div>
+            <div className="rounded-md border border-border/70 p-3">
+              <dt className="text-[11px] text-muted-foreground">{t("v5.medianChars")}</dt>
+              <dd className="text-sm mt-1">
+                {profile.medianReplyChars != null ? profile.medianReplyChars : t("v5.uncounted")}
+              </dd>
+            </div>
+            <div className="rounded-md border border-border/70 p-3">
+              <dt className="text-[11px] text-muted-foreground">{t("v5.newlineRate")}</dt>
+              <dd className="text-sm mt-1">
+                {profile.newlineRate != null ? `${Math.round(profile.newlineRate * 100)}%` : t("v5.uncounted")}
+              </dd>
+            </div>
+            <div className="rounded-md border border-border/70 p-3">
+              <dt className="text-[11px] text-muted-foreground">{t("v5.questionEndingRate")}</dt>
+              <dd className="text-sm mt-1">
+                {profile.questionEndingRate != null ? `${Math.round(profile.questionEndingRate * 100)}%` : t("v5.uncounted")}
+              </dd>
             </div>
           </dl>
         ) : (

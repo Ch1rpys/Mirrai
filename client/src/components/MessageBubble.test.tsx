@@ -18,11 +18,24 @@ import { translate } from "@/i18n";
  * editing hands back the new text and can be abandoned, and that the
  * persona's side can be repeated while the user's side cannot.
  */
+const markUnlike = vi.fn();
+
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     chat: {
       tts: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
       voices: { useQuery: () => ({ data: { voices: [] } }) },
+    },
+    fidelity: {
+      mark: {
+        useMutation: (opts?: any) => ({
+          mutate: (input: any) => {
+            markUnlike(input);
+            opts?.onSuccess?.({ id: 1 });
+          },
+          isPending: false,
+        }),
+      },
     },
   },
 }));
@@ -415,5 +428,34 @@ describe("the message bubble", () => {
       />,
     );
     expect(screen.queryByLabelText(translate("zh", "chat.delete"))).toBeNull();
+  });
+
+  it("lets the reader mark a reply as unlike them", async () => {
+    const user = userEvent.setup();
+    render(
+      <MessageBubble
+        msg={makeMessage({ id: 9, role: "assistant" })}
+        personaName="小A"
+        showMood={false}
+        personaId={3}
+      />,
+    );
+    await user.click(screen.getByLabelText(translate("zh", "chat.unlike")));
+    await user.click(screen.getByRole("menuitem", { name: translate("zh", "chat.unlikeReasons.word") }));
+    expect(markUnlike).toHaveBeenCalledWith({ personaId: 3, messageId: 9, reason: "word" });
+  });
+
+  it("does not treat a system notice as something they said", () => {
+    render(
+      <MessageBubble
+        msg={makeMessage({ origin: "system-notice", content: "TA 这会儿没回" })}
+        personaName="小A"
+        showMood={false}
+        personaId={3}
+        onRegenerate={vi.fn()}
+      />,
+    );
+    expect(screen.queryByLabelText(translate("zh", "chat.unlike"))).toBeNull();
+    expect(screen.queryByLabelText(translate("zh", "chat.regenerate"))).toBeNull();
   });
 });

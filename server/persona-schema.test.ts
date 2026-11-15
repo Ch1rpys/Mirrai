@@ -22,6 +22,13 @@ describe("normalizePersonaData", () => {
       relationshipPhase: "initial",
       microRules: [],
       imperfectionProfile: [],
+      suppressions: [],
+      actProfile: null,
+      openingProfile: null,
+      lifeEvents: [],
+      periods: [],
+      rejectedFeedbackKeys: [],
+      imperfectionDefaultsReviewed: false,
     });
   });
 
@@ -78,19 +85,26 @@ describe("normalizePersonaData", () => {
   it("always returns the same set of keys", () => {
     const result = normalizePersonaData({ personality: "x" }, { name: "小A" });
     expect(Object.keys(result).sort()).toEqual([
+      "actProfile",
       "attachmentStyle",
       "catchphrases",
       "conflictStyle",
+      "imperfectionDefaultsReviewed",
       "imperfectionProfile",
+      "lifeEvents",
       "loveLanguage",
       "memories",
       "microRules",
       "nickname",
+      "openingProfile",
+      "periods",
       "personality",
       "realismLevel",
+      "rejectedFeedbackKeys",
       "relationshipPhase",
       "speakingStyle",
       "summary",
+      "suppressions",
       "touchingMoments",
     ]);
   });
@@ -164,12 +178,12 @@ describe("normalizePersonaData", () => {
     expect(result.imperfectionProfile![0].deviations).toEqual(["极短句"]);
   });
 
-  it("fills an empty state with the default for that state", () => {
+  it("does not fill an empty state with the product's sentence", () => {
     const result = normalizePersonaData(
       { imperfectionProfile: [{ state: "happy", deviations: [] }] },
       { name: "小A" },
     );
-    expect(result.imperfectionProfile![0].deviations.length).toBeGreaterThan(0);
+    expect(result.imperfectionProfile ?? []).toEqual([]);
   });
 
   it("keeps an explicit realism level and relationship phase", () => {

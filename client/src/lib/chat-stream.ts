@@ -44,6 +44,10 @@ export interface StreamDoneInfo {
 export interface StreamChatCallbacks {
   /** Called for every chunk of the reply. */
   onDelta: (text: string) => void;
+  onThinking?: (notice: string) => void;
+  onDelay?: (ms: number) => void | Promise<void>;
+  onSilence?: (notice: string) => void;
+  onBurst?: (texts: string[]) => void;
   onEmotion?: (state: string, reason?: string) => void;
   onDone?: (info: StreamDoneInfo) => void;
   onError?: (message: string, partial: boolean) => void;
@@ -61,6 +65,7 @@ export interface StreamChatOptions {
    * long conversation becomes impossible to follow.
    */
   replyToId?: number;
+  periodId?: string;
   signal?: AbortSignal;
   callbacks: StreamChatCallbacks;
 }
@@ -139,7 +144,7 @@ async function readErrorMessage(response: Response): Promise<string> {
 }
 
 export async function streamChat(options: StreamChatOptions): Promise<void> {
-  const { personaId, message, replyToId, signal, callbacks } = options;
+  const { personaId, message, replyToId, periodId, signal, callbacks } = options;
   /**
    * The interface's language.
    *
@@ -153,7 +158,7 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ personaId, message, locale, replyToId }),
+    body: JSON.stringify({ personaId, message, locale, replyToId, periodId }),
     signal,
   });
 
@@ -207,7 +212,7 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
         const parsed = parseFrame(frame);
         if (!parsed) continue;
         if (parsed.event === "done" || parsed.event === "error") settled = true;
-        handleEvent(parsed, callbacks, locale);
+        await handleEvent(parsed, callbacks, locale);
       }
     }
 
@@ -217,7 +222,7 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
       const parsed = parseFrame(tail);
       if (parsed) {
         if (parsed.event === "done" || parsed.event === "error") settled = true;
-        handleEvent(parsed, callbacks, locale);
+        await handleEvent(parsed, callbacks, locale);
       }
     }
 
@@ -248,11 +253,11 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
   }
 }
 
-function handleEvent(
+async function handleEvent(
   parsed: { event: string; data: unknown },
   callbacks: StreamChatCallbacks,
   locale: Locale,
-): void {
+): Promise<void> {
   const data = parsed.data as Record<string, any>;
 
   switch (parsed.event) {
@@ -260,6 +265,18 @@ function handleEvent(
       if (typeof data?.text === "string" && data.text) {
         callbacks.onDelta(data.text);
       }
+      break;
+    case "thinking":
+      callbacks.onThinking?.(typeof data?.notice === "string" ? data.notice : "");
+      break;
+    case "delay":
+      if (typeof data?.ms === "number") await callbacks.onDelay?.(data.ms);
+      break;
+    case "silence":
+      callbacks.onSilence?.(typeof data?.notice === "string" ? data.notice : "");
+      break;
+    case "burst":
+      if (Array.isArray(data?.texts)) callbacks.onBurst?.(data.texts.filter((item: unknown) => typeof item === "string"));
       break;
     case "emotion":
       callbacks.onEmotion?.(data?.state, data?.reason);

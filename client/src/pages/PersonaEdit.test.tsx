@@ -46,6 +46,7 @@ vi.mock("@/lib/trpc", () => ({
       import: { useMutation: () => ({ mutate: importCard, isPending: false }) },
     },
     llmConfig: { listProviders: { useQuery: () => ({ data: [] }) } },
+    behavior: { get: { useQuery: () => ({ data: { profile: null }, isLoading: false }) } },
   },
 }));
 
@@ -85,6 +86,9 @@ vi.mock("@/components/MicroRulesEditor", () => ({
 }));
 vi.mock("@/components/ImperfectionEditor", () => ({
   default: () => <div data-testid="imperfection-editor" />,
+}));
+vi.mock("@/components/V5FidelityEditors", () => ({
+  default: () => <div data-testid="v5-editors" />,
 }));
 
 import PersonaEdit from "./PersonaEdit";
@@ -262,5 +266,20 @@ describe("editing a persona", () => {
     await user.click(screen.getByText(translate("zh", "presence.holdBack")));
 
     expect(update).toHaveBeenCalledWith({ id: 1, presence: "active" });
+  });
+
+  it("names the first-word cap as a cap, not a timetable", () => {
+    render(<PersonaEdit />);
+    expect(screen.getByText(translate("zh", "proactive.daily"))).toBeInTheDocument();
+    expect(screen.getByText(translate("zh", "proactive.skipNote"))).toBeInTheDocument();
+    expect(screen.queryByText("每天一次")).toBeNull();
+  });
+
+  it("saves the rerank switch", async () => {
+    const user = userEvent.setup();
+    render(<PersonaEdit />);
+    await user.click(screen.getByText(translate("zh", "personaEdit.rerank")));
+    await user.click(screen.getByText(translate("zh", "personaEdit.saveBasic")));
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ rerankEnabled: true }));
   });
 });

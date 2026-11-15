@@ -13,6 +13,8 @@ import { resolvePresence } from "@shared/graduation-mode";
 import { getChannelAdapter } from "../channels";
 import { isQuietHour } from "../scheduler/reminders";
 import { ENV } from "../_core/env";
+import { openingRateForWindow, normalizeOpeningProfile } from "@shared/opening-profile";
+import { parseQuietHours } from "@shared/proactive-decision";
 
 /**
  * Sends the message on whichever channel is bound.
@@ -83,6 +85,7 @@ async function deliverProactive(params: {
  * restart clearing it is fine.
  */
 const failedAttempts = new Map<number, number>();
+const emptyWindows = new Set<string>();
 
 /** How long a persona waits after a failed attempt. */
 const FAILURE_BACKOFF_MS = 60 * 60 * 1000;
@@ -190,6 +193,8 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
         // it the old fixed window applies and nothing changes.
         personaId: row.id,
         behaviorProfile: loadBehaviorProfile(row),
+        quietHours: parseQuietHours(ENV.reminderQuietHours),
+        userTimeZone: undefined,
       })) {
         continue;
       }
@@ -247,14 +252,40 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
        */
       const persona = await db.getPersonaById(row.id, row.userId);
       if (!persona) continue;
+      if ((persona as { reachability?: string }).reachability === "unreachable") continue;
+      const openingRate = openingRateForWindow(
+        normalizeOpeningProfile((persona.personaData as any)?.openingProfile),
+      );
+      if (!isProactiveDue({
+        frequencyHours: row.proactiveFrequencyHours,
+        lastChatAt: silenceStart(row),
+        presence,
+        now,
+        personaId: row.id,
+        behaviorProfile: loadBehaviorProfile(row),
+        openingRate,
+        reachability: (persona as { reachability?: string }).reachability,
+        personaTimeZone: (persona as { timezone?: string | null }).timezone,
+        quietHours: parseQuietHours(ENV.reminderQuietHours),
+        userTimeZone: settings.timezone,
+      })) {
+        continue;
+      }
 
-      const text = await composeProactiveMessage({
+      const windowKey = `${persona.id}:${silenceStart(row)?.getTime() ?? 0}`;
+      if (emptyWindows.has(windowKey)) continue;
+
+      const composed = await composeProactiveMessage({
         persona,
         userId: row.userId,
         locale: settings.locale,
         now,
       });
-      if (!text) continue;
+      if (!composed) {
+        emptyWindows.add(windowKey);
+        continue;
+      }
+      const text = composed.text;
 
       /**
        * The message is stored before it is sent.
@@ -276,6 +307,7 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
         // It spoke first. The label is what makes the difference
         // between "they messaged me" and "the app told me something".
         origin: "proactive",
+        metadata: { opening: composed.opening, factId: composed.factId },
       });
       // The clock starts again: the user has been written to.
       await db.updatePersona(persona.id, row.userId, { lastChatAt: now });

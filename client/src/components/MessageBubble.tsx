@@ -3,7 +3,7 @@ import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { createPortal } from "react-dom";
 import {
   ChevronDown, Trash2, Loader2, Play, Pause, Volume2,
-  Copy, Pencil, RefreshCw, CornerUpLeft, Mail, Sparkles, X,
+  Copy, Pencil, RefreshCw, CornerUpLeft, Mail, Sparkles, X, Flag,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ import { EMOTIONS, type EmotionDefinition } from "@/lib/emotions";
 import { SAFE_REHYPE_PLUGINS } from "@/lib/safe-markdown";
 import { formatTimeInZone } from "@/lib/dates";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { FEEDBACK_REASONS } from "@shared/speech-acts";
 
 /**
  * A message in the conversation.
@@ -46,7 +47,7 @@ export interface Message {
    * "letter" — the answer to a letter the user wrote.
    * "proactive" — the persona spoke first.
    */
-  origin?: "letter" | "proactive" | null;
+  origin?: "letter" | "proactive" | "system-notice" | null;
 }
 /** The state of a message, or `null` when it is not a known state. */
 export function emotionOf(state: string | null | undefined): EmotionDefinition | null {
@@ -259,10 +260,18 @@ function TTSButton({ text }: { text: string }) {
     </span>
   );
 }
+function numericMessageId(id: Message["id"]): number | null {
+  if (typeof id === "number" && Number.isFinite(id)) return id;
+  if (typeof id !== "string") return null;
+  const match = /^ai-(\d+)$/.exec(id);
+  return match ? Number(match[1]) : null;
+}
+
 export function MessageBubble({
   msg,
   personaName,
   showMood,
+  personaId,
   onRegenerate,
   onEdit,
   onDelete,
@@ -272,6 +281,7 @@ export function MessageBubble({
   msg: Message;
   personaName: string;
   showMood: boolean;
+  personaId?: number;
   onRegenerate?: (msg: Message) => void;
   /**
    * Saves an edit.
@@ -296,6 +306,17 @@ export function MessageBubble({
   onQuote?: (msg: Message) => void;
 }) {
   const { t, locale } = useLocale();
+  const [unlikeOpen, setUnlikeOpen] = useState(false);
+  const unlikeRef = useRef<HTMLSpanElement>(null);
+  const markUnlike = trpc.fidelity.mark.useMutation({
+    onSuccess: () => {
+      toast.success(t("chat.unlikeMarked"));
+      setUnlikeOpen(false);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const messageId = numericMessageId(msg.id);
+  const isNotice = msg.origin === "system-notice";
   /**
    * The user's own clock.
    *
@@ -306,6 +327,22 @@ export function MessageBubble({
   const { user } = useAuth();
   const timezone = (user as any)?.timezone ?? null;
   const isUser = msg.role === "user";
+  const canUnlike = Boolean(
+    !isUser &&
+    !isNotice &&
+    !msg.isStreaming &&
+    personaId &&
+    messageId,
+  );
+
+  useEffect(() => {
+    if (!unlikeOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!unlikeRef.current?.contains(event.target as Node)) setUnlikeOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [unlikeOpen]);
   const mood = emotionOf(msg.emotionalState);
   const [imgExpanded, setImgExpanded] = useState(false);
   /**
@@ -424,6 +461,7 @@ export function MessageBubble({
       return <span>{msg.content}<span className="inline-block w-1 h-4 bg-primary/40 ml-0.5 animate-pulse" /></span>;
     }
     if (isUser) return <span>{msg.content}</span>;
+    if (isNotice) return <span className="text-muted-foreground">{msg.content}</span>;
     return (
       <Streamdown
         className="letter-prose letter-prose--chat"
@@ -618,7 +656,7 @@ export function MessageBubble({
                     <Pencil className="w-3 h-3" />
                   </button>
                 )}
-                {!isUser && onRegenerate && (
+                {!isUser && !isNotice && onRegenerate && (
                   <button
                     type="button"
                     onClick={() => onRegenerate(msg)}
@@ -628,6 +666,42 @@ export function MessageBubble({
                   >
                     <RefreshCw className="w-3 h-3" />
                   </button>
+                )}
+                {canUnlike && (
+                  <span ref={unlikeRef} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setUnlikeOpen((open) => !open)}
+                      title={t("chat.unlike")}
+                      aria-label={t("chat.unlike")}
+                      aria-expanded={unlikeOpen}
+                      className="text-muted-subtle hover:text-muted-foreground transition-colors p-0.5"
+                    >
+                      <Flag className="w-3 h-3" />
+                    </button>
+                    {unlikeOpen && (
+                      <div
+                        role="menu"
+                        className="absolute bottom-full right-0 mb-1 z-20 min-w-[10rem] rounded-md border border-border bg-card p-1 shadow-md"
+                      >
+                        {FEEDBACK_REASONS.map((reason) => (
+                          <button
+                            key={reason}
+                            type="button"
+                            role="menuitem"
+                            disabled={markUnlike.isPending}
+                            onClick={() => {
+                              if (!personaId || !messageId) return;
+                              markUnlike.mutate({ personaId, messageId, reason });
+                            }}
+                            className="block w-full text-left text-xs px-2.5 py-1.5 rounded-sm hover:bg-muted/60 disabled:opacity-50"
+                          >
+                            {t(`chat.unlikeReasons.${reason}` as "chat.unlikeReasons.act")}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </span>
                 )}
                 {onDelete && (
                   <button

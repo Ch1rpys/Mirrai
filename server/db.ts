@@ -9,7 +9,7 @@ import {
   channelBindings, channelStates, channelDefaultPersonas, personaTemplates, personaQuestionnaireAnswers,
   reminderDeliveries, researchProfiles, collectedMessages, collectionSources,
   collectionJobs,
-  evalCases, evalRuns, outboundLetters,
+  evalCases, evalRuns, outboundLetters, fidelityFeedback,
   InsertPersona, InsertPersonaFile, InsertMessage,
   InsertWechatBinding, InsertSkillJob, InsertLlmConfig,
   InsertMemory, InsertEmotionSnapshot, InsertDiaryEntry, InsertScene,
@@ -17,7 +17,7 @@ import {
   InsertPersonaTemplate, InsertPersonaQuestionnaireAnswer,
   InsertResearchProfile, InsertCollectedMessage,
   InsertCollectionJob,
-  InsertEvalCase, InsertEvalRun, InsertOutboundLetter,
+  InsertEvalCase, InsertEvalRun, InsertOutboundLetter, InsertFidelityFeedback,
   userMoods, relationshipEvents, letters, memoryExtractions,
   InsertUserMood, InsertRelationshipEvent, InsertLetter,
 } from "../drizzle/schema";
@@ -1062,6 +1062,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(emotionSnapshots).where(eq(emotionSnapshots.userId, id));
     await tx.delete(evalCases).where(eq(evalCases.userId, id));
     await tx.delete(evalRuns).where(eq(evalRuns.userId, id));
+    await tx.delete(fidelityFeedback).where(eq(fidelityFeedback.userId, id));
     await tx.delete(graduationAssessments).where(eq(graduationAssessments.userId, id));
     await tx.delete(llmConfigs).where(eq(llmConfigs.userId, id));
     await tx.delete(letters).where(eq(letters.userId, id));
@@ -1376,6 +1377,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(emotionSnapshots).where(and(eq(emotionSnapshots.personaId, id), eq(emotionSnapshots.userId, userId)));
     await tx.delete(evalCases).where(and(eq(evalCases.personaId, id), eq(evalCases.userId, userId)));
     await tx.delete(evalRuns).where(and(eq(evalRuns.personaId, id), eq(evalRuns.userId, userId)));
+    await tx.delete(fidelityFeedback).where(and(eq(fidelityFeedback.personaId, id), eq(fidelityFeedback.userId, userId)));
     await tx.delete(graduationAssessments).where(and(eq(graduationAssessments.personaId, id), eq(graduationAssessments.userId, userId)));
     await tx.delete(memories).where(and(eq(memories.personaId, id), eq(memories.userId, userId)));
     await tx.delete(memoryExtractions).where(and(eq(memoryExtractions.personaId, id), eq(memoryExtractions.userId, userId)));
@@ -1585,6 +1587,43 @@ export async function createMessage(data: InsertMessage) {
   if (!db) throw new Error("DB not available");
   const [result] = await db.insert(messages).values(data).returning({ id: messages.id });
   return result.id;
+}
+
+export async function createFidelityFeedback(data: InsertFidelityFeedback) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [result] = await db.insert(fidelityFeedback).values(data).returning();
+  return result;
+}
+
+export async function listFidelityFeedbackForMessage(
+  messageId: number,
+  userId: number,
+  personaId: number,
+) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(fidelityFeedback)
+    .where(
+      and(
+        eq(fidelityFeedback.messageId, messageId),
+        eq(fidelityFeedback.userId, userId),
+        eq(fidelityFeedback.personaId, personaId),
+      ),
+    )
+    .orderBy(desc(fidelityFeedback.createdAt));
+}
+
+export async function listFidelityFeedbackForPersona(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(fidelityFeedback)
+    .where(and(eq(fidelityFeedback.personaId, personaId), eq(fidelityFeedback.userId, userId)))
+    .orderBy(desc(fidelityFeedback.createdAt));
 }
 
 /**
@@ -2378,6 +2417,46 @@ export async function getMemoriesByPersonaId(
 
 /** How many memories the list returns at once. */
 export const MEMORY_LIST_LIMIT = 200;
+
+export async function getMemoriesByFactKey(
+  personaId: number,
+  userId: number,
+  factKey: string,
+) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(memories)
+    .where(
+      and(
+        eq(memories.personaId, personaId),
+        eq(memories.userId, userId),
+        eq(memories.factKey, factKey),
+      ),
+    )
+    .orderBy(desc(memories.createdAt));
+}
+
+export async function supersedeMemory(params: {
+  loserId: number;
+  winnerId: number;
+  personaId: number;
+  userId: number;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(memories)
+    .set({ status: "superseded", supersededBy: params.winnerId })
+    .where(
+      and(
+        eq(memories.id, params.loserId),
+        eq(memories.personaId, params.personaId),
+        eq(memories.userId, params.userId),
+      ),
+    );
+}
 
 
 /**
@@ -4824,6 +4903,8 @@ export async function saveEvalCases(
     context: unknown;
     expected: unknown;
     expectedState?: string | null;
+    expectedAct?: string | null;
+    expectedActSource?: string | null;
     source?: string;
     occurredAt?: Date | null;
   }>,
@@ -4851,6 +4932,8 @@ export async function saveEvalCases(
       contextJson: c.context,
       expectedJson: c.expected,
       expectedState: c.expectedState ?? null,
+      expectedAct: c.expectedAct ?? null,
+      expectedActSource: c.expectedActSource ?? null,
       source: c.source ?? "collected",
       occurredAt: c.occurredAt ?? null,
     })));

@@ -230,6 +230,20 @@ export const personas = pgTable("personas", {
    */
   proactiveFrequencyHours: integer("proactiveFrequencyHours").default(0).notNull(),
   /**
+   * Whether this turn picks among four candidates.
+   *
+   * Default off: it is about four times the reply cost. Evaluation may
+   * treat it as on even when the persona has it off.
+   */
+  rerankEnabled: boolean("rerankEnabled").default(false).notNull(),
+  /**
+   * Whether replies wait and split the way this person did.
+   *
+   * Default off, and separate from rerank. Off, phases 1–3 only change
+   * the words.
+   */
+  timingEnabled: boolean("timingEnabled").default(false).notNull(),
+  /**
    * This persona's own graduation mode. Null means "inherit the user's
    * instance default", so changing the default still reaches it.
    */
@@ -318,6 +332,12 @@ export const messages = pgTable("messages", {
    * "proactive" — the persona spoke first.
    */
   origin: varchar("origin", { length: 16 }),
+  /**
+   * Per-turn notes that are not the message: the period that was
+   * selected, the action that was drawn, which exemplars were used.
+   * Evaluation reads this to reproduce a turn.
+   */
+  metadata: jsonb("metadata"),
   channel: channelEnum().default("web").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => ({
@@ -487,6 +507,15 @@ export const memories = pgTable("memories", {
   lastRecalledAt: timestamp("lastRecalledAt"),
   /** Structured fact key for anchor memories (e.g. `birthday`). */
   factKey: varchar("factKey", { length: 120 }),
+  /**
+   * Whether this memory still counts.
+   *
+   * A conflict is not merged. The losing row is marked superseded
+   * rather than deleted, so the record of what was said remains.
+   */
+  status: varchar("status", { length: 16 }).default("active").notNull(),
+  /** The memory that won, when this one lost a conflict. */
+  supersededBy: integer("supersededBy"),
   /**
    * Whose memory this is.
    *
@@ -1299,6 +1328,10 @@ export const evalCases = pgTable("eval_cases", {
   expectedJson: jsonb("expectedJson").notNull(),
   /** The emotion the real reply carried, for the per-state buckets. */
   expectedState: varchar("expectedState", { length: 32 }),
+  /** The speech act of the held-out line, cached so evaluation does not relabel. */
+  expectedAct: varchar("expectedAct", { length: 32 }),
+  /** `rule` or `model` — where the cached act came from. */
+  expectedActSource: varchar("expectedActSource", { length: 16 }),
   /** Where the case came from, so a case can be traced back to the record. */
   source: varchar("source", { length: 32 }).default("collected").notNull(),
   /** The timestamp of the held-out reply in the original conversation. */
@@ -1400,3 +1433,26 @@ export const outboundLetters = pgTable("outbound_letters", {
 
 export type OutboundLetter = typeof outboundLetters.$inferSelect;
 export type InsertOutboundLetter = typeof outboundLetters.$inferInsert;
+
+/**
+ * A reply the user marked as not sounding like them.
+ *
+ * The reason is a closed set: the action was wrong, it was too
+ * complete, it asked, it used a word they would not, it invented, the
+ * mood was off, or the timing was. Free text is not collected — a
+ * reason that cannot be aggregated cannot be fed back.
+ */
+export const fidelityFeedback = pgTable("fidelity_feedback", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  messageId: integer("messageId").notNull(),
+  reason: varchar("reason", { length: 16 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  personaUserIdx: index("fidelity_feedback_persona_user_idx").on(table.personaId, table.userId),
+  messageIdx: index("fidelity_feedback_message_idx").on(table.messageId),
+}));
+
+export type FidelityFeedback = typeof fidelityFeedback.$inferSelect;
+export type InsertFidelityFeedback = typeof fidelityFeedback.$inferInsert;

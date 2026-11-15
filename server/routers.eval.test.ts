@@ -37,6 +37,10 @@ vi.mock("./eval/run", () => ({
   runEval: (...a: unknown[]) => runEval(...a),
 }));
 
+vi.mock("./eval/act-labels", () => ({
+  labelEvalCases: async (cases: unknown) => cases,
+}));
+
 /** The cases the run has to measure. */
 let evalCases: any[] = [{ context: "在吗", expected: "在的", expectedState: "warm" }];
 
@@ -109,8 +113,9 @@ describe("the fidelity evaluation", () => {
     await expect(second).rejects.toThrow();
     await first;
 
-    // One run, one bill.
+    // One run, one bill. Evaluation treats rerank as on.
     expect(runEval).toHaveBeenCalledTimes(1);
+    expect(runEval.mock.calls[0][0]).toEqual(expect.objectContaining({ rerank: true }));
   });
 
   it("lets a run start again once the first one is finished", async () => {

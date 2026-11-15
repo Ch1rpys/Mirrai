@@ -60,6 +60,13 @@ export async function handleChannelChat(params: ChannelChatParams): Promise<stri
     })) {
       if (event.type === "delta") {
         reply = (reply ?? "") + event.text;
+      } else if (event.type === "delay") {
+        const wait = Math.min(Math.max(0, event.ms), 90_000);
+        if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+      } else if (event.type === "silence") {
+        reply = event.notice;
+      } else if (event.type === "burst") {
+        reply = event.texts.join("\n\n");
       } else if (event.type === "error") {
         /**
          * A failure is a failure.

@@ -46,6 +46,11 @@ const MAX_PER_RUN = 20;
  * "第一次见面" and "初次见面" and "我们第一次约会" are one memory
  * written three ways.
  */
+export function factKeyFromTitle(title: string): string {
+  const key = normalizeMemoryTitle(title).slice(0, 80);
+  return key || "fact";
+}
+
 export function normalizeMemoryTitle(title: string): string {
   return title
     .trim()
@@ -286,7 +291,7 @@ async function runExtraction(params: {
    */
   const chatText = asMaterial(
     fresh
-      .map((m) => `${speakerName(m.role, persona.name, locale)}: ${m.content}`)
+      .map((m, index) => `[${index + 1}] ${speakerName(m.role, persona.name, locale)}: ${m.content}`)
       .join("\n"),
     locale,
   );
@@ -400,17 +405,24 @@ async function runExtraction(params: {
       category?: string;
       subject?: string;
       date?: string;
+      line?: number;
+      sourceId?: number;
     };
     const title = (item.title || "").trim();
     if (!title) continue;
 
+    const factKey = factKeyFromTitle(title);
+    const sameClaim = (other: { title: string; description?: string | null }) =>
+      normalizeMemoryTitle(other.title) === normalizeMemoryTitle(title)
+      && (other.description ?? "").trim() === (item.description ?? "").trim();
+
     // The same run may produce the same memory twice.
-    if (isDuplicateMemory({ title, description: item.description }, seen)) {
+    if (seen.some(sameClaim)) {
       skipped += 1;
       continue;
     }
-    // And it may produce one that is already held.
-    if (isDuplicateMemory({ title, description: item.description }, existing as any)) {
+    const existingExact = (existing as Array<{ title: string; description?: string | null }>).some(sameClaim);
+    if (existingExact) {
       skipped += 1;
       continue;
     }
@@ -420,6 +432,10 @@ async function runExtraction(params: {
       ? item.category!
       : "memory";
     const subject = item.subject === "me" ? "me" : "them";
+    const lineIndex = Number(item.line ?? item.sourceId);
+    const source = Number.isInteger(lineIndex) && lineIndex >= 1 && lineIndex <= fresh.length
+      ? fresh[lineIndex - 1]
+      : fresh[fresh.length - 1];
 
     const id = await db.createMemory({
       personaId: persona.id,
@@ -430,6 +446,9 @@ async function runExtraction(params: {
       subject,
       date: item.date ?? null,
       importance: category === "anchor" ? 5 : category === "milestone" ? 3 : 1,
+      messageId: typeof source?.id === "number" ? source.id : null,
+      factKey,
+      status: "active",
     } as any);
 
     added.push({ id, title: title.slice(0, 200), subject });

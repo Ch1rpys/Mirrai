@@ -21,8 +21,10 @@ import {
   buildEvalCases,
   casesFromRows,
   trainingTexts,
+  type EvalCaseData,
   type EvalSourceMessage,
 } from "../server/eval/dataset";
+import { labelEvalCases } from "../server/eval/act-labels";
 import { runEval } from "../server/eval/run";
 import {
   evaluateGate,
@@ -48,7 +50,13 @@ function numberOrUndefined(value: string | undefined): number | undefined {
 
 const personaId = Number(flag("persona"));
 const userId = Number(flag("user"));
-const variant = (flag("variant") ?? "default") as "default" | "withoutRules";
+const variant = (flag("variant") ?? "default") as
+  | "default"
+  | "withoutRules"
+  | "withRulesOnly"
+  | "withoutAct"
+  | "withoutRerank";
+const rerank = !args.includes("--no-rerank") && variant !== "withoutRerank";
 const onlyCases = args.includes("--cases");
 const save = args.includes("--save");
 /**
@@ -116,7 +124,7 @@ const tolerances = {
 
 if (!Number.isFinite(personaId) || !Number.isFinite(userId)) {
   console.error(
-    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n]",
+    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n]",
   );
   process.exit(1);
 }
@@ -151,9 +159,25 @@ if (!records.length) {
 // comparison with the baseline would be between two different things,
 // which is the one thing a gate must never be.
 const stored = casesFromRows(await db.getEvalCases(personaId, userId));
-const cases = stored.length
+const cut = stored.length
   ? stored
   : buildEvalCases(records, { maxCases, locale });
+const cases = await labelEvalCases(cut, { userId, locale });
+if (!stored.length || cut.some((item) => !item.expectedAct)) {
+  await db.saveEvalCases(
+    personaId,
+    userId,
+    cases.map((item: EvalCaseData) => ({
+      context: item.context,
+      expected: item.expected,
+      expectedState: item.expectedState,
+      expectedAct: item.expectedAct ?? null,
+      expectedActSource: item.expectedActSource ?? null,
+      source: "collected",
+      occurredAt: item.expected.timestamp ?? null,
+    })),
+  );
+}
 console.log(
   `[eval] ${records.length} records → ${cases.length} held-out cases` +
     (stored.length ? " (the stored ones)" : ""),
@@ -186,6 +210,8 @@ if (pairs) {
     trainingTexts: training,
     variant,
     locale,
+    rerank,
+    sampleAct: variant !== "withoutAct",
   });
   console.log("");
   console.log("[eval] the pairs for the blind test:");
@@ -228,6 +254,7 @@ if (compare) {
     variant: "default",
     locale,
     temperature,
+    rerank,
   });
   const withoutThem = await runEval({
     persona,
@@ -237,6 +264,27 @@ if (compare) {
     variant: "withoutRules",
     locale,
     temperature,
+    rerank: false,
+  });
+  const withoutAct = await runEval({
+    persona,
+    userId,
+    cases,
+    trainingTexts: training,
+    variant: "withoutAct",
+    locale,
+    temperature,
+    rerank,
+  });
+  const withoutRerank = await runEval({
+    persona,
+    userId,
+    cases,
+    trainingTexts: training,
+    variant: "withoutRerank",
+    locale,
+    temperature,
+    rerank: false,
   });
 
   const row = (label: string, a: number, b: number, better: "higher" | "closer") => {
@@ -254,6 +302,19 @@ if (compare) {
   row("overlap", withThem.overlap, withoutThem.overlap, "higher");
   row("likelihood", withThem.likelihoodGap, withoutThem.likelihoodGap, "closer");
   row("emotion", withThem.emotionAccuracy, withoutThem.emotionAccuracy, "higher");
+  row("actMatch", withThem.actMatch ?? 0, withoutThem.actMatch ?? 0, "higher");
+  row("residue", withThem.residueRate ?? 0, withoutThem.residueRate ?? 0, "closer");
+  console.log("");
+  console.log("[eval] action sampling on vs off:");
+  row("actMatch", withThem.actMatch ?? 0, withoutAct.actMatch ?? 0, "higher");
+  row("likelihood", withThem.likelihoodGap, withoutAct.likelihoodGap, "closer");
+  console.log("");
+  console.log("[eval] rerank on vs off:");
+  row("actMatch", withThem.actMatch ?? 0, withoutRerank.actMatch ?? 0, "higher");
+  row("likelihood", withThem.likelihoodGap, withoutRerank.likelihoodGap, "closer");
+  if (withThem.variant?.includes("picked")) {
+    console.log(`[eval] why it won   : ${withThem.variant}`);
+  }
 
   const benefit = evaluateRuleBenefit(withThem, withoutThem);
   console.log("");
@@ -304,6 +365,8 @@ if (calibrate) {
         variant,
         locale,
         temperature,
+        rerank,
+        sampleAct: variant !== "withoutAct",
       }),
     );
   }
@@ -339,6 +402,8 @@ const metrics = await runEval({
   variant,
   locale,
   temperature,
+  rerank,
+  sampleAct: variant !== "withoutAct",
 });
 
 console.log("");
@@ -348,6 +413,11 @@ console.log(`[eval] overlap      : ${metrics.overlap.toFixed(4)}  (higher is clo
 console.log(`[eval] likelihood   : ${metrics.likelihoodGap.toFixed(4)}  (zero means indistinguishable)`);
 console.log(`[eval] length dist  : ${metrics.lengthDistance.toFixed(2)} characters`);
 console.log(`[eval] emotion      : ${(metrics.emotionAccuracy * 100).toFixed(1)}% agreement`);
+console.log(`[eval] actMatch     : ${((metrics.actMatch ?? 0) * 100).toFixed(1)}%`);
+console.log(`[eval] residue      : ${((metrics.residueRate ?? 0) * 100).toFixed(1)}%`);
+if (metrics.variant?.includes("picked")) {
+  console.log(`[eval] why it won   : ${metrics.variant}`);
+}
 
 if (Object.keys(metrics.perState).length) {
   console.log("[eval] per state (words, then the shape of the line):");

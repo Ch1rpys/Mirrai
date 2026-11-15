@@ -148,6 +148,20 @@ describe("the ruler and the timing", () => {
     expect(screen.getByText("30")).toBeInTheDocument();
   });
 
+  it("does not treat an uncounted first-word rate as zero", () => {
+    profile = {
+      replyGapMedianSec: 45,
+      replyGapLogSigma: 0.6,
+      burstSizes: [1],
+      proactiveRate: 0,
+      proactiveCounted: false,
+      samples: 12,
+    };
+    render(<FidelityPanel personaId={1} />);
+    expect(screen.getAllByText(translate("zh", "v5.uncounted")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("0%")).toBeNull();
+  });
+
   it("measures the timing again on request", async () => {
     render(<FidelityPanel personaId={1} />);
     await userEvent.click(screen.getByText(translate("zh", "fidelity.behavior.measure")));

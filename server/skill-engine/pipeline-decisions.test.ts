@@ -149,26 +149,90 @@ describe("a re-run of the distillation", () => {
     expect(merged.microRules).toEqual([]);
   });
 
-  it("writes the default imperfection in Chinese when no language is named", () => {
+  it("does not write the product's default into an empty state", () => {
     const merged = mergeUserDecisions(
       fresh,
       { imperfectionProfile: [{ state: "distant", deviations: [] }] },
       [],
     );
-
-    // The user asked for imperfection in that state but wrote none, so
-    // the default for that state stands in.
-    expect(merged.imperfectionProfile?.[0].deviations[0]).toBe("极短句");
+    expect(merged.imperfectionProfile ?? []).toEqual([]);
   });
 
-  it("writes the default imperfection in the language it was given", () => {
+  it("keeps a state the user actually wrote, in the language they wrote it", () => {
     const merged = mergeUserDecisions(
       fresh,
-      { imperfectionProfile: [{ state: "distant", deviations: [] }] },
+      { imperfectionProfile: [{ state: "distant", deviations: ["very short sentences"] }] },
       [],
       "en",
     );
-
     expect(merged.imperfectionProfile?.[0].deviations[0]).toBe("very short sentences");
+  });
+
+  it("keeps confirmed subtractions, life events and edited action counts", () => {
+    const merged = mergeUserDecisions(
+      fresh,
+      {
+        suppressions: [{
+          id: "s1",
+          pattern: "句末不问",
+          kind: "no_question_ending",
+          confidence: 1,
+          source: "manual",
+          verified: true,
+          evidence: [{ snippet: "嗯" }],
+        }],
+        lifeEvents: [{
+          id: "e1",
+          kind: "open_loop",
+          title: "说好下周见",
+          detail: "",
+          whoSaid: "them",
+          closed: false,
+          source: "manual",
+          verified: true,
+          evidence: [],
+        }],
+        actProfile: {
+          samples: 80,
+          unconditional: { tease: 12 },
+          buckets: [],
+          edited: true,
+        },
+        rejectedFeedbackKeys: ["word:9"],
+      },
+      [],
+      "zh",
+      {
+        suppressions: [{
+          id: "auto-s",
+          pattern: "句末不问",
+          kind: "no_question_ending",
+          confidence: 0.4,
+          source: "auto",
+          verified: false,
+          evidence: [{ snippet: "好" }],
+        }],
+        lifeEvents: [{
+          id: "auto-e",
+          kind: "open_loop",
+          title: "说好下周见",
+          detail: "auto",
+          whoSaid: "",
+          closed: false,
+          source: "auto",
+          verified: false,
+          evidence: [{ snippet: "改天" }],
+        }],
+        actProfile: {
+          samples: 80,
+          unconditional: { answer: 40 },
+          buckets: [],
+        },
+      },
+    );
+    expect(merged.suppressions?.map((row) => row.id)).toEqual(["s1"]);
+    expect(merged.lifeEvents?.map((row) => row.id)).toEqual(["e1"]);
+    expect(merged.actProfile?.unconditional.tease).toBe(12);
+    expect(merged.rejectedFeedbackKeys).toEqual(["word:9"]);
   });
 });

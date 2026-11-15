@@ -63,6 +63,7 @@ function snippetEnvironment(
      * is where the chat logs and the credentials live.
      */
     PYTHONUTF8: "1",
+    PYTHONWARNINGS: "ignore",
     ...overrides,
   };
 }

@@ -27,6 +27,13 @@ const conversation: EvalSourceMessage[] = [
 ];
 
 describe("cutting the cases", () => {
+  it("caches a rule-labelled act on the held-out line", () => {
+    const cases = buildEvalCases(conversation, { maxCases: 100, maxHoldoutFraction: 1 });
+    const hmm = cases.find((item) => item.expected.content === "嗯嗯");
+    expect(hmm?.expectedAct).toBe("acknowledge");
+    expect(hmm?.expectedActSource).toBe("rule");
+  });
+
   it("holds out the other person's lines", () => {
     const cases = buildEvalCases(conversation);
     expect(cases.length).toBeGreaterThan(0);

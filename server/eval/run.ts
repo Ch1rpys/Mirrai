@@ -21,6 +21,13 @@ import {
   type EvalMetrics,
 } from "./metrics";
 import type { EvalCaseData } from "./dataset";
+import { dayPartFromHour, normalizeActProfile, sampleAct } from "@shared/act-profile";
+import { isUserAsking } from "@shared/speech-acts";
+import { pickRerankWinner } from "../chat/rerank";
+import { retrieveExemplars } from "../chat/exemplars";
+import * as db from "../db";
+import { zonedHour } from "@shared/timezone";
+import { seededRandom } from "../_core/behavior-profile";
 
 /**
  * Which version of the persona to measure.
@@ -31,7 +38,12 @@ import type { EvalCaseData } from "./dataset";
  * ways — and if the rules do not move the numbers, they do not belong
  * in the prompt.
  */
-export type EvalVariant = "default" | "withoutRules" | "withRulesOnly";
+export type EvalVariant =
+  | "default"
+  | "withoutRules"
+  | "withRulesOnly"
+  | "withoutAct"
+  | "withoutRerank";
 
 /**
  * What each variant turns on and off.
@@ -45,10 +57,22 @@ export type EvalVariant = "default" | "withoutRules" | "withRulesOnly";
 function variantSwitches(variant: EvalVariant): {
   rules: "on" | "off";
   imperfection: "on" | "off";
+  act: "on" | "off";
+  rerank: "on" | "off";
 } {
-  if (variant === "withoutRules") return { rules: "off", imperfection: "off" };
-  if (variant === "withRulesOnly") return { rules: "on", imperfection: "off" };
-  return { rules: "on", imperfection: "on" };
+  if (variant === "withoutRules") {
+    return { rules: "off", imperfection: "off", act: "off", rerank: "off" };
+  }
+  if (variant === "withRulesOnly") {
+    return { rules: "on", imperfection: "off", act: "on", rerank: "on" };
+  }
+  if (variant === "withoutAct") {
+    return { rules: "on", imperfection: "on", act: "off", rerank: "on" };
+  }
+  if (variant === "withoutRerank") {
+    return { rules: "on", imperfection: "on", act: "on", rerank: "off" };
+  }
+  return { rules: "on", imperfection: "on", act: "on", rerank: "on" };
 }
 
 export interface EvalRunOptions {
@@ -63,6 +87,15 @@ export interface EvalRunOptions {
   temperature?: number;
   /** Called after each case, so a long run can show progress. */
   onProgress?: (done: number, total: number) => void;
+  /**
+   * Whether four candidates are generated and picked.
+   *
+   * The CLI treats this as on. Unit tests keep one call, so they pass
+   * false.
+   */
+  rerank?: boolean;
+  /** Whether an action is sampled into the prompt. */
+  sampleAct?: boolean;
 }
 
 /**
@@ -101,40 +134,80 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
   }
 
   const switches = variantSwitches(variant);
-  const systemPrompt = await buildPromptForPersona({
-    persona: options.persona,
-    userId: options.userId,
-    locale,
-    microRules: switches.rules === "off" ? null : undefined,
-    imperfectionProfile: switches.imperfection === "off" ? null : undefined,
-    /**
-     * The run is not a conversation.
-     *
-     * Looking at the prompt is a read, and a read does not make a
-     * memory recalled — so the user's own pinned memories and anchors
-     * kept losing half their weight every time an evaluation ran.
-     */
-    markRecalled: false,
-  });
-
+  const useRerank = options.rerank ?? false;
+  const useAct = options.sampleAct ?? (switches.act === "on");
+  const actProfile = normalizeActProfile((options.persona.personaData as any)?.actProfile);
   const model = buildCharNgramModel(options.trainingTexts);
   const scores = [];
+  const whyWon: string[] = [];
 
   for (let i = 0; i < options.cases.length; i++) {
     const caseData = options.cases[i];
+    const lastUser = [...caseData.context].reverse().find((m) => m.role === "user");
+    const sampled = useAct && actProfile
+      ? sampleAct(
+          actProfile,
+          {
+            asking: isUserAsking(lastUser?.content),
+            emotion: options.persona.emotionalState ?? "warm",
+            dayPart: dayPartFromHour(zonedHour(new Date(), (options.persona as any).timezone)),
+            relationshipPhase: (options.persona.personaData as any)?.relationshipPhase ?? "initial",
+          },
+          {
+            dropSilence: true,
+            rng: seededRandom(`eval:${options.persona.id}:${i}:${caseData.expected.content}`),
+          },
+        )
+      : null;
+
+    const systemPrompt = await buildPromptForPersona({
+      persona: options.persona,
+      userId: options.userId,
+      locale,
+      userMessage: lastUser?.content,
+      microRules: switches.rules === "off" ? null : undefined,
+      imperfectionProfile: switches.imperfection === "off" ? null : undefined,
+      sampledAct: sampled && sampled.act !== "silence" ? sampled.act : null,
+      excludeExemplarIds: caseData.expected.id ? [caseData.expected.id] : undefined,
+      excludeExemplarTexts: [caseData.expected.content],
+      markRecalled: false,
+    });
+
     let generated = "";
+    let winnerNote = "";
     try {
-      // A provider that answers with nothing is a provider that
-      // misbehaved, not a reason to lose the whole run: the case is
-      // skipped and the others are still scored.
-      const answer = await llmService.invokeWithProvider(provider, {
-        messages: messagesForCase(systemPrompt, caseData),
-        options: {
-          maxTokens: options.maxTokens ?? 200,
-          temperature: options.temperature ?? 0.7,
-        },
-      });
-      generated = typeof answer === "string" ? answer : "";
+      const invoke = async () => {
+        const answer = await llmService.invokeWithProvider(provider, {
+          messages: messagesForCase(systemPrompt, caseData),
+          options: {
+            maxTokens: options.maxTokens ?? 200,
+            temperature: options.temperature ?? 0.7,
+          },
+        });
+        return typeof answer === "string" ? answer : "";
+      };
+      if (useRerank && switches.rerank === "on") {
+        const texts = await Promise.all(Array.from({ length: 4 }, () => invoke().catch(() => "")));
+        const records = await db
+          .getCollectedMessagesForPersona(options.persona.id, options.userId)
+          .catch(() => []);
+        const exemplars = retrieveExemplars({
+          userMessage: lastUser?.content ?? "",
+          records: records as any,
+          excludeTexts: [caseData.expected.content],
+          excludeIds: caseData.expected.id ? [caseData.expected.id] : [],
+        });
+        const picked = pickRerankWinner({
+          candidates: texts.map((text) => ({ text })),
+          trainingTexts: options.trainingTexts.filter((text) => text !== caseData.expected.content),
+          exemplars: exemplars.map((item) => item.content),
+        });
+        generated = picked?.text ?? texts.find(Boolean) ?? "";
+        const winner = picked?.scores.find((row) => row.index === picked.index);
+        winnerNote = `case ${i} picked #${picked?.index ?? 0} distance=${winner?.distanceToMedian?.toFixed(3) ?? "n/a"} discarded=${picked?.scores.filter((s) => s.discarded).length}`;
+      } else {
+        generated = await invoke();
+      }
     } catch (error) {
       console.warn(
         `[Eval] Case ${caseData.expected.content.slice(0, 30)} failed: ${
@@ -146,6 +219,7 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
       options.onProgress?.(i + 1, options.cases.length);
       continue;
     }
+    if (winnerNote) whyWon.push(winnerNote);
     scores.push(
       scoreCase({
         caseId: i,
@@ -153,14 +227,18 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
         generated,
         model,
         declaredState: caseData.expectedState ?? null,
-        // The emotion is read in the language the words are in. Reading
-        // an English line with the Chinese trigger table finds nothing,
-        // and every number that depends on it is then quietly wrong.
         locale,
+        expectedAct: caseData.expectedAct ?? null,
+        sampledAct: sampled?.act ?? null,
+        previousUser: lastUser?.content ?? null,
       }),
     );
     options.onProgress?.(i + 1, options.cases.length);
   }
 
-  return aggregateScores(scores);
+  const aggregated = aggregateScores(scores);
+  if (whyWon.length) {
+    aggregated.variant = `${variant}; ${whyWon.join(" | ")}`;
+  }
+  return aggregated;
 }

@@ -168,6 +168,7 @@ an empty database — use `db:push` there.
 
 - [docs/roadmap-v2.md](docs/roadmap-v2.md) — the acceptance checklist for the second stage (making the *user* and the *relationship* first-class citizens)
 - [docs/roadmap-v4.md](docs/roadmap-v4.md) — the gap analysis for the fourth stage (giving a relationship its own time)
+- [docs/roadmap-v5.md](docs/roadmap-v5.md) — the construction plan for the fifth stage (the next line should match what they would *do*)
 - [docs/open-items.md](docs/open-items.md) — what is still unfinished, why, and how much work it would be
 - [docs/product-concept.md](docs/product-concept.md) — the product concept and its principles
 - [docs/creation-story.md](docs/creation-story.md) — the story behind it (in Chinese)

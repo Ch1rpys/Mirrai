@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  clearProductWrittenImperfection,
   defaultImperfectionProfile,
   IMPERFECTION_STATES,
+  isProductDefaultEntry,
   mergeImperfectionDefaults,
   normalizeImperfectionProfile,
+  persistableImperfection,
+  productWrittenStates,
   renderImperfection,
   selectImperfection,
 } from "./imperfection";
@@ -53,9 +57,9 @@ describe("normalising what was stored", () => {
     expect(profile[0].state).toBe("distant");
   });
 
-  it("fills an empty state with the default for that state", () => {
+  it("drops an empty state rather than filling it with the product's sentence", () => {
     const profile = normalizeImperfectionProfile([{ state: "happy", deviations: [] }]);
-    expect(profile[0].deviations.length).toBeGreaterThan(0);
+    expect(profile).toEqual([]);
   });
 
   it("keeps what the user wrote", () => {
@@ -115,6 +119,32 @@ describe("showing the whole picture", () => {
     expect(merged).toHaveLength(IMPERFECTION_STATES.length);
     const distant = merged.find((e) => e.state === "distant");
     expect(distant?.deviations).toEqual(["极短句"]);
+  });
+});
+
+describe("what is actually stored", () => {
+  it("does not write an unmodified placeholder", () => {
+    const defaults = defaultImperfectionProfile("zh");
+    const stored = [{ state: "distant" as const, deviations: ["极短句"] }];
+    const persisted = persistableImperfection(defaults.map((entry) => (
+      entry.state === "distant" ? stored[0] : entry
+    )), stored, "zh");
+    expect(persisted.map((entry) => entry.state)).toEqual(["distant"]);
+  });
+
+  it("keeps a state the user already stored, even when it matches the product", () => {
+    const defaults = defaultImperfectionProfile("zh");
+    const melancholy = defaults.find((entry) => entry.state === "melancholy")!;
+    const stored = [melancholy];
+    const persisted = persistableImperfection(defaults, stored, "zh");
+    expect(persisted.some((entry) => entry.state === "melancholy")).toBe(true);
+  });
+
+  it("can point at the states the product wrote", () => {
+    const defaults = defaultImperfectionProfile("zh");
+    expect(isProductDefaultEntry(defaults[0], "zh")).toBe(true);
+    expect(productWrittenStates(defaults, "zh")).toHaveLength(IMPERFECTION_STATES.length);
+    expect(clearProductWrittenImperfection(defaults, "zh")).toEqual([]);
   });
 });
 

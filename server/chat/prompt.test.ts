@@ -13,12 +13,16 @@ const getLatestChatSummary = vi.fn();
 const getUserById = vi.fn();
 const getRecentUserMood = vi.fn();
 const getRelationshipEvents = vi.fn();
+const getMemoriesByPersonaId = vi.fn();
+const getCollectedMessagesForPersona = vi.fn();
 
 vi.mock("../db", () => ({
   getLatestChatSummary: (...a: unknown[]) => getLatestChatSummary(...a),
   getUserById: (...a: unknown[]) => getUserById(...a),
   getRecentUserMood: (...a: unknown[]) => getRecentUserMood(...a),
   getRelationshipEvents: (...a: unknown[]) => getRelationshipEvents(...a),
+  getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
+  getCollectedMessagesForPersona: (...a: unknown[]) => getCollectedMessagesForPersona(...a),
 }));
 
 // The retrieval is the part that reaches into the database; the
@@ -32,7 +36,7 @@ vi.mock("./retrieval", async (importOriginal) => {
   };
 });
 
-import { buildPromptForPersona } from "./prompt";
+import { actProfileForTurn, buildPromptForPersona } from "./prompt";
 import { buildSystemPrompt } from "../_core/persona-utils";
 
 const persona = {
@@ -55,6 +59,8 @@ describe("the prompt the persona is given", () => {
     getUserById.mockResolvedValue({ name: "小李", timezone: "Asia/Shanghai" });
     getRecentUserMood.mockResolvedValue(null);
     getRelationshipEvents.mockResolvedValue([]);
+    getMemoriesByPersonaId.mockResolvedValue([]);
+    getCollectedMessagesForPersona.mockResolvedValue([]);
   });
 
   it("is the same prompt the preview shows", async () => {
@@ -162,5 +168,47 @@ describe("the prompt the persona is given", () => {
     });
     expect(built).toContain("【当前场景】");
     expect(built).toContain("你们在一家旧书店里。");
+  });
+
+  it("puts both sides of a memory conflict in the prompt and does not force a mention", async () => {
+    getMemoriesByPersonaId.mockResolvedValue([
+      { id: 1, title: "那家店", description: "在海边", factKey: "那家店", status: "active" },
+      { id: 2, title: "那家店", description: "在山上", factKey: "那家店", status: "active" },
+    ]);
+    const built = await buildPromptForPersona({ persona, userId: 1, locale: "zh" });
+    expect(built).toContain("这两条对不上");
+    expect(built).toContain("在海边");
+    expect(built).toContain("在山上");
+    expect(built).toContain("不是每轮都要说");
+  });
+
+  it("does not mention a conflict that has already been decided", async () => {
+    getMemoriesByPersonaId.mockResolvedValue([
+      { id: 1, title: "那家店", description: "在海边", factKey: "那家店", status: "active" },
+      { id: 2, title: "那家店", description: "在山上", factKey: "那家店", status: "superseded" },
+    ]);
+    const built = await buildPromptForPersona({ persona, userId: 1, locale: "zh" });
+    expect(built).not.toContain("这两条对不上");
+  });
+});
+
+describe("a stretch of the same person", () => {
+  it("uses that stretch's action counts, not the current ones", () => {
+    const early = { samples: 40, unconditional: { acknowledge: 30 }, buckets: [] };
+    const late = { samples: 40, unconditional: { logistics: 30 }, buckets: [] };
+    const withPeriods = {
+      ...persona,
+      personaData: {
+        actProfile: late,
+        periods: [
+          { id: "period-1", from: "2025-01-01", to: "2025-02-01", actProfileDelta: early },
+          { id: "period-2", from: "2025-03-01", to: "2025-04-01", actProfileDelta: late },
+        ],
+      },
+    };
+
+    expect(actProfileForTurn(withPeriods, "period-1")).toEqual(early);
+    expect(actProfileForTurn(withPeriods, "period-2")).toEqual(late);
+    expect(actProfileForTurn(withPeriods, null)).toEqual(late);
   });
 });

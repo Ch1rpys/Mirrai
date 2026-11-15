@@ -118,7 +118,7 @@ describe("a persona whose timing has been measured", () => {
 
     // The window the user bought is still the floor; the persona's own
     // history decides what happens on top of it.
-    expect(deadline.sampled).toBe(true);
+    expect(deadline.sampled).toBe(Boolean(measured.activeHours?.length));
     expect(deadline.at.getTime()).toBeGreaterThanOrEqual(deadline.eligibleAt.getTime());
     expect(
       isProactiveDue({
@@ -191,6 +191,7 @@ describe("buildProactiveInstruction", () => {
       hoursApart: null,
       userMood: null,
       relationshipEnded: false,
+      opening: "checkin",
     });
     expect(instruction).toContain("先开口");
     expect(instruction).toContain("5 天");
@@ -204,6 +205,7 @@ describe("buildProactiveInstruction", () => {
       hoursApart: null,
       userMood: "down",
       relationshipEnded: false,
+      opening: "checkin",
     });
     expect(instruction).toContain("状态");
     expect(instruction).toContain("不要把这件事说出来");
@@ -220,8 +222,23 @@ describe("buildProactiveInstruction", () => {
       hoursApart: 6,
       userMood: null,
       relationshipEnded: false,
+      opening: "affection",
     });
     expect(instruction).toContain("6 个小时");
+  });
+
+  it("does not dye a fragment with how many days it has been", () => {
+    const instruction = buildProactiveInstruction({
+      daysSinceLastChat: 5,
+      userHour: 3,
+      personaHour: 3,
+      hoursApart: 6,
+      userMood: "down",
+      relationshipEnded: false,
+      opening: "fragment",
+    });
+    expect(instruction).not.toContain("5 天");
+    expect(instruction).not.toContain("6 个小时");
   });
 
   it("writes the English instruction in English", () => {

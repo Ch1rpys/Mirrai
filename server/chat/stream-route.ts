@@ -30,6 +30,7 @@ const inputSchema = z.object({
   // The message being replied to, so the persona answers the thing that
   // was actually said rather than whatever came last.
   replyToId: z.number().optional(),
+  periodId: z.string().max(64).optional(),
 });
 
 function writeEvent(res: Response, event: string, data: unknown): void {
@@ -181,12 +182,21 @@ async function handleChatStream(req: Request, res: Response): Promise<void> {
         mode: "stream",
         locale: parsed.data.locale,
         replyToId: parsed.data.replyToId,
+        periodId: parsed.data.periodId,
         signal: controller.signal,
       })) {
         if (controller.signal.aborted) break;
 
         if (event.type === "delta") {
           writeEvent(res, "delta", { text: event.text });
+        } else if (event.type === "thinking") {
+          writeEvent(res, "thinking", { notice: copy(parsed.data.locale, "prompt.thinking") });
+        } else if (event.type === "delay") {
+          writeEvent(res, "delay", { ms: event.ms });
+        } else if (event.type === "silence") {
+          writeEvent(res, "silence", { notice: event.notice });
+        } else if (event.type === "burst") {
+          writeEvent(res, "burst", { texts: event.texts });
         } else if (event.type === "emotion") {
           writeEvent(res, "emotion", { state: event.state, reason: event.reason });
         } else if (event.type === "done") {

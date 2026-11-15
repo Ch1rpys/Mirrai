@@ -33,6 +33,7 @@ import { SAFETY } from "./safety";
 import { SCENES_COPY, BUILTIN_SCENE_SLUGS, BUILTIN_SCENE_DEFINITIONS } from "./scenes";
 import { USER_SIDE } from "./user-side";
 import { FIDELITY } from "./fidelity";
+import { V5 } from "./v5";
 /**
  * The skill prompts, for their keys.
  *
@@ -76,6 +77,7 @@ export const COPY = {
   ...SCENES_COPY,
   ...USER_SIDE,
   ...FIDELITY,
+  ...V5,
 } as const satisfies CopyTable;
 
 export type CopyKey = keyof typeof COPY | keyof typeof SKILL_PROMPTS;

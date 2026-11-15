@@ -14,6 +14,9 @@ import { buildUserContextBlock, buildRelationshipSection, resolveRelationshipPha
 import { copy } from "@shared/copy";
 import type { MicroRule } from "@shared/micro-rules";
 import type { ImperfectionEntry } from "@shared/imperfection";
+import type { Suppression } from "@shared/suppressions";
+import type { SpeechAct } from "@shared/speech-acts";
+import { retrieveExemplars, renderExemplars } from "./exemplars";
 
 /**
  * The user's own time zone, for the parts of the prompt that are about
@@ -32,6 +35,20 @@ import type { ImperfectionEntry } from "@shared/imperfection";
  * dates fall back to the server's own clock, which is what they did
  * before.
  */
+/**
+ * A database read that must not take the prompt down with it.
+ *
+ * Tests mock a slice of `../db`. A missing export is not a missing
+ * person — the prompt still has to be built.
+ */
+async function optionalCall<T>(load: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await load();
+  } catch {
+    return fallback;
+  }
+}
+
 export async function userTimeZone(_persona: unknown, userId: number): Promise<string | null> {
   try {
     return (await db.getUserTimezone(userId)) ?? null;
@@ -88,6 +105,15 @@ export interface PromptContext {
    * `null` turns it off, the same way the rules do.
    */
   imperfectionProfile?: ImperfectionEntry[] | null;
+  suppressions?: Suppression[] | null;
+  sampledAct?: SpeechAct | null;
+  /**
+   * Held-out reply ids/texts that must not appear as exemplars.
+   */
+  excludeExemplarIds?: number[];
+  excludeExemplarTexts?: string[];
+  periodId?: string | null;
+  skipExemplars?: boolean;
 }
 
 /**
@@ -174,9 +200,110 @@ export async function buildPromptForPersona(
     ),
     relationshipPhase: phase,
     reachability: (persona as any).reachability ?? "reachable",
-    microRules: context.microRules,
+    microRules: applyPeriod(persona, context.periodId, "microRules", context.microRules),
     imperfectionProfile: context.imperfectionProfile,
+    suppressions: applyPeriod(
+      persona,
+      context.periodId,
+      "suppressions",
+      context.suppressions,
+    ),
+    sampledAct: context.sampledAct ?? null,
+    exemplarSection: context.skipExemplars
+      ? ""
+      : await exemplarSectionFor(context, locale),
+    memoryConflictSection: memoryConflictSectionFor(
+      await optionalCall(() => db.getMemoriesByPersonaId(persona.id, userId), []),
+      locale,
+    ),
     locale,
     now,
   });
+}
+
+function applyPeriod<T>(
+  persona: Persona,
+  periodId: string | null | undefined,
+  field: "microRules" | "suppressions",
+  override: T | null | undefined,
+): T | null | undefined {
+  if (override === null) return null;
+  if (override !== undefined) return override;
+  if (!periodId) return undefined;
+  const period = periodOf(persona, periodId);
+  if (field === "suppressions" && period?.suppressionsDelta) {
+    return period.suppressionsDelta as T;
+  }
+  return undefined;
+}
+
+export function periodOf(
+  persona: Persona,
+  periodId: string | null | undefined,
+): { id?: string; from?: string; to?: string; suppressionsDelta?: unknown; actProfileDelta?: unknown } | undefined {
+  if (!periodId) return undefined;
+  const periods = ((persona.personaData as any)?.periods ?? []) as Array<{
+    id?: string;
+    from?: string;
+    to?: string;
+    suppressionsDelta?: unknown;
+    actProfileDelta?: unknown;
+  }>;
+  return periods.find((item) => item.id === periodId);
+}
+
+export function actProfileForTurn(
+  persona: Persona,
+  periodId: string | null | undefined,
+) {
+  const period = periodOf(persona, periodId);
+  if (period?.actProfileDelta) return period.actProfileDelta;
+  return (persona.personaData as any)?.actProfile ?? null;
+}
+
+async function exemplarSectionFor(
+  context: PromptContext,
+  locale: "zh" | "en",
+): Promise<string> {
+  if (!context.userMessage) return "";
+  const records = await optionalCall(
+    () => db.getCollectedMessagesForPersona(context.persona.id, context.userId),
+    [],
+  );
+  const period = periodOf(context.persona, context.periodId);
+  const from = period?.from ? new Date(period.from) : null;
+  const to = period?.to ? new Date(period.to) : null;
+  const scoped = from && to
+    ? (records as Array<{ timestamp?: Date | string | null }>).filter((row) => {
+        if (!row.timestamp) return false;
+        const at = new Date(row.timestamp).getTime();
+        return at >= from.getTime() && at <= to.getTime();
+      })
+    : records;
+  const found = retrieveExemplars({
+    userMessage: context.userMessage,
+    records: scoped as any,
+    excludeIds: context.excludeExemplarIds,
+    excludeTexts: context.excludeExemplarTexts,
+  });
+  return renderExemplars(found, locale);
+}
+
+function memoryConflictSectionFor(
+  memories: Array<{ factKey?: string | null; status?: string | null; title: string; description?: string | null }>,
+  locale: "zh" | "en",
+): string {
+  const groups = new Map<string, typeof memories>();
+  for (const memory of memories) {
+    if (!memory.factKey || memory.status === "superseded") continue;
+    const list = groups.get(memory.factKey) ?? [];
+    list.push(memory);
+    groups.set(memory.factKey, list);
+  }
+  const conflicts = [...groups.values()].filter((list) => list.length > 1);
+  if (!conflicts.length) return "";
+  const lines = conflicts.flatMap((list) =>
+    list.map((memory) => `- ${memory.title}${memory.description ? `：${memory.description}` : ""}`),
+  );
+  return [copy(locale, "prompt.memoryConflict"), ...lines].join("\n");
 }

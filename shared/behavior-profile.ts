@@ -29,6 +29,19 @@ export interface BehaviorProfile {
   burstSizes: number[];
   /** How often the persona speaks first, 0–1. */
   proactiveRate: number;
+  /**
+   * Whether `proactiveRate` was counted from first-word flags.
+   *
+   * A missing flag used to be stored as 0, and that 0 was then read as
+   * "they never speak first". Uncounted stays uncounted.
+   */
+  proactiveCounted?: boolean;
+  /** Median length of their replies, in characters. */
+  medianReplyChars?: number | null;
+  /** How often their replies contain a newline. */
+  newlineRate?: number | null;
+  /** How often their replies end on a question. */
+  questionEndingRate?: number | null;
   /** The hours of day the persona is most active, 0–23. */
   activeHours: number[];
   /** How many exchanges this was fitted from. */
@@ -47,6 +60,12 @@ export interface BehaviorSample {
   hour?: number;
   /** Whether the persona spoke first in this exchange. */
   personaSpokeFirst?: boolean;
+  /** How long the reply was, in characters. */
+  replyChars?: number;
+  /** Whether the reply contained a newline. */
+  hadNewline?: boolean;
+  /** Whether the reply ended on a question. */
+  questionEnding?: boolean;
 }
 
 /** Below this many samples the fit is not worth trusting. */
@@ -97,10 +116,20 @@ export function normalizeBehaviorProfile(value: unknown): BehaviorProfile | null
     replyGapLogSigma: Math.max(0, Math.min(2, finite(record.replyGapLogSigma, 0.6))),
     burstSizes: burstSizes.length ? burstSizes : [1],
     proactiveRate: Math.max(0, Math.min(1, finite(record.proactiveRate, 0))),
+    proactiveCounted: record.proactiveCounted === true,
+    medianReplyChars: optionalRate(record.medianReplyChars),
+    newlineRate: optionalRate(record.newlineRate),
+    questionEndingRate: optionalRate(record.questionEndingRate),
     activeHours: activeHours.length ? activeHours : [],
     samples,
     ...(measuredAt ? { measuredAt } : {}),
   };
+}
+
+function optionalRate(value: unknown): number | null {
+  if (value == null) return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 function median(values: number[]): number {
@@ -138,9 +167,13 @@ export function fitBehaviorProfile(
     .filter((n) => n > 0);
 
   const proactiveFlags = samples.filter((s) => typeof s.personaSpokeFirst === "boolean");
-  const proactiveRate = proactiveFlags.length
+  const proactiveCounted = proactiveFlags.length > 0;
+  const proactiveRate = proactiveCounted
     ? proactiveFlags.filter((s) => s.personaSpokeFirst).length / proactiveFlags.length
     : 0;
+  const charSamples = samples.map((s) => s.replyChars).filter((n): n is number => Number.isFinite(n) && (n ?? 0) > 0);
+  const newlineFlags = samples.filter((s) => typeof s.hadNewline === "boolean");
+  const questionFlags = samples.filter((s) => typeof s.questionEnding === "boolean");
 
   const hourCounts = new Map<number, number>();
   for (const sample of samples) {
@@ -161,6 +194,14 @@ export function fitBehaviorProfile(
     replyGapLogSigma: Math.max(0, Math.min(2, Math.sqrt(variance))),
     burstSizes: burstSizes.length ? burstSizes : [1],
     proactiveRate: Math.max(0, Math.min(1, proactiveRate)),
+    proactiveCounted,
+    medianReplyChars: charSamples.length ? median(charSamples) : null,
+    newlineRate: newlineFlags.length
+      ? newlineFlags.filter((s) => s.hadNewline).length / newlineFlags.length
+      : null,
+    questionEndingRate: questionFlags.length
+      ? questionFlags.filter((s) => s.questionEnding).length / questionFlags.length
+      : null,
     activeHours,
     samples: samples.length,
     measuredAt: now.toISOString(),

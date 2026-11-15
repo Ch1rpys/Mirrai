@@ -26,6 +26,26 @@ import {
   normalizeImperfectionProfile,
   type ImperfectionEntry,
 } from "@shared/imperfection";
+import {
+  normalizeSuppressions,
+  type Suppression,
+} from "@shared/suppressions";
+import {
+  normalizeActProfile,
+  type ActProfile,
+} from "@shared/act-profile";
+import {
+  normalizeLifeEvents,
+  type LifeEvent,
+} from "@shared/life-events";
+import {
+  normalizePeriods,
+  type PersonaPeriod,
+} from "@shared/periods";
+import {
+  normalizeOpeningProfile,
+  type OpeningProfile,
+} from "@shared/opening-profile";
 
 export interface PersonaData {
   personality: string;
@@ -64,6 +84,20 @@ export interface PersonaData {
    * because nobody is imperfect at a constant rate.
    */
   imperfectionProfile?: ImperfectionEntry[];
+  /** The things this person does not do. Unconfirmed candidates stay out of the prompt. */
+  suppressions?: Suppression[];
+  /** How often each kind of turn happens. Missing means the prompt is unchanged. */
+  actProfile?: ActProfile | null;
+  /** How they open when they speak first. Distinct from a counted rate of zero. */
+  openingProfile?: OpeningProfile | null;
+  /** What is going on, and what was left unfinished. */
+  lifeEvents?: LifeEvent[];
+  /** Deltas across a long silence in the records. Absent means one stretch. */
+  periods?: PersonaPeriod[];
+  /** Candidate keys the user refused, so a later aggregation does not revive them. */
+  rejectedFeedbackKeys?: string[];
+  /** Whether the user has already been asked about product-written imperfections. */
+  imperfectionDefaultsReviewed?: boolean;
 }
 
 /** The stages a relationship can be in. */
@@ -90,6 +124,13 @@ export const PERSONA_DATA_FIELDS: Array<keyof PersonaData> = [
   "relationshipPhase",
   "microRules",
   "imperfectionProfile",
+  "suppressions",
+  "actProfile",
+  "openingProfile",
+  "lifeEvents",
+  "periods",
+  "rejectedFeedbackKeys",
+  "imperfectionDefaultsReviewed",
 ];
 
 /**
@@ -127,6 +168,13 @@ export const PERSONA_DOCUMENT_EXCLUDED_FIELDS: Array<keyof PersonaData> = [
   "relationshipPhase",
   "microRules",
   "imperfectionProfile",
+  "suppressions",
+  "actProfile",
+  "openingProfile",
+  "lifeEvents",
+  "periods",
+  "rejectedFeedbackKeys",
+  "imperfectionDefaultsReviewed",
 ];
 
 /** The default realism level: noticeably imperfect, but not a mess. */
@@ -260,6 +308,17 @@ export function normalizePersonaData(
     source.imperfectionProfile ?? fallback.imperfectionProfile,
     locale,
   );
+  const suppressions = normalizeSuppressions(source.suppressions ?? fallback.suppressions);
+  const actProfile = normalizeActProfile(source.actProfile ?? fallback.actProfile);
+  const openingProfile = normalizeOpeningProfile(source.openingProfile ?? fallback.openingProfile);
+  const lifeEvents = normalizeLifeEvents(source.lifeEvents ?? fallback.lifeEvents);
+  const periods = normalizePeriods(source.periods ?? fallback.periods);
+  const rejectedFeedbackKeys = toStringList(
+    source.rejectedFeedbackKeys ?? fallback.rejectedFeedbackKeys,
+  );
+  const imperfectionDefaultsReviewed =
+    source.imperfectionDefaultsReviewed === true ||
+    fallback.imperfectionDefaultsReviewed === true;
 
   return {
     personality,
@@ -276,5 +335,12 @@ export function normalizePersonaData(
     relationshipPhase,
     microRules,
     imperfectionProfile,
+    suppressions,
+    actProfile,
+    openingProfile,
+    lifeEvents,
+    periods,
+    rejectedFeedbackKeys,
+    imperfectionDefaultsReviewed,
   };
 }

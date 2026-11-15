@@ -19,6 +19,7 @@ import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { toast } from "sonner";
 import GraduationModal from "@/components/GraduationModal";
 import { streamChat, isStreamingUnsupported } from "@/lib/chat-stream";
+import { normalizePeriods } from "@shared/periods";
 import { careBannerText } from "@/lib/care-note";
 import { resolveStarterQuestions } from "@/lib/scene-starters";
 import { useLocale } from "@/contexts/LocaleContext";
@@ -152,6 +153,7 @@ export default function Chat() {
   const [sceneOverlay, setSceneOverlay] = useState("");
   const [sceneStarters, setSceneStarters] = useState("");
   const [sceneState, setSceneState] = useState<EmotionKey>("warm");
+  const [periodId, setPeriodId] = useState("");
   const [showGraduation, setShowGraduation] = useState(false);
   /** The farewell the user starts themselves, rather than one the app offers. */
   const [showManualGraduation, setShowManualGraduation] = useState(false);
@@ -263,6 +265,10 @@ export default function Chat() {
   } = trpc.persona.get.useQuery(
     { id: personaId },
     { enabled: isAuthenticated && hasPersonaId }
+  );
+  const periods = useMemo(
+    () => normalizePeriods((persona as { personaData?: { periods?: unknown } } | undefined)?.personaData?.periods),
+    [persona],
   );
 
   /**
@@ -689,6 +695,7 @@ export default function Chat() {
      * true only in the comment: every interrupted reply was thrown away.
      */
     let received = "";
+    let thinking = false;
 
     const appendDelta = (chunk: string) => {
       received += chunk;
@@ -702,9 +709,57 @@ export default function Chat() {
           message: text,
           locale: locale === "en" ? "en" : "zh",
           replyToId: serverMessageId(replyTo?.id),
+          periodId: periodId || undefined,
           signal: controller.signal,
           callbacks: {
-            onDelta: appendDelta,
+            onDelta: (chunk) => {
+              if (thinking) {
+                thinking = false;
+                received = chunk;
+                setMessages(prev => prev.map(m => m.id === streamId ? { ...m, content: chunk } : m));
+                return;
+              }
+              appendDelta(chunk);
+            },
+            onThinking: (notice) => {
+              thinking = true;
+              setMessages(prev => prev.map(m => m.id === streamId
+                ? { ...m, content: notice || t("chat.thinking"), isStreaming: true }
+                : m));
+            },
+            onDelay: (ms) => new Promise((resolve) => {
+              const wait = Math.min(Math.max(0, ms), 90_000);
+              const timer = setTimeout(resolve, wait);
+              controller.signal.addEventListener("abort", () => {
+                clearTimeout(timer);
+                resolve();
+              }, { once: true });
+            }),
+            onSilence: (notice) => {
+              setMessages(prev => prev.map(m => m.id === streamId
+                ? {
+                    ...m,
+                    content: notice || t("chat.didNotReply"),
+                    origin: "system-notice",
+                    isStreaming: false,
+                  }
+                : m));
+            },
+            onBurst: (texts) => {
+              const now = Date.now();
+              setMessages(prev => {
+                const others = prev.filter((m) => m.id !== streamId);
+                const bubbles = texts.map((part, index) => ({
+                  id: index === texts.length - 1 ? streamId : `burst-${now}-${index}`,
+                  role: "assistant" as const,
+                  content: part,
+                  isStreaming: index === texts.length - 1,
+                  emotionalState: currentState,
+                  createdAt: new Date(now + index),
+                }));
+                return [...others, ...bubbles];
+              });
+            },
             onEmotion: (state) => {
               setCurrentState(state);
               setMessages(prev => prev.map(m => m.id === streamId ? { ...m, emotionalState: state } : m));
@@ -750,6 +805,7 @@ export default function Chat() {
             message: text,
             locale: locale === "en" ? "en" : "zh",
             replyToId: serverMessageId(replyTo?.id),
+            periodId: periodId || undefined,
           },
           controller.signal,
         ) as any;
@@ -1062,6 +1118,17 @@ export default function Chat() {
       }, 2200);
     }, 60);
   }, [t]);
+
+  const jumpedHash = useRef(false);
+  useEffect(() => {
+    if (jumpedHash.current) return;
+    const match = /^#m-(\d+)$/.exec(window.location.hash);
+    if (!match) return;
+    const id = Number(match[1]);
+    if (!messages.some((m) => m.id === id || m.id === `ai-${id}`)) return;
+    jumpedHash.current = true;
+    jumpToMessage(id);
+  }, [messages, jumpToMessage]);
 
   /** Stops an in-flight streaming reply. */
   const handleStopStreaming = useCallback(() => {
@@ -1841,6 +1908,7 @@ export default function Chat() {
                 msg={msg}
                 personaName={persona?.name || "?"}
                 showMood={showMood}
+                personaId={personaId}
                 onRegenerate={handleRegenerate}
                 onEdit={handleEditMessage}
                 onDelete={handleDeleteMessage}
@@ -1938,6 +2006,24 @@ export default function Chat() {
                   <Moon className="w-3 h-3" /> {t("chat.theyAreAsleep")}
                 </p>
               )}
+              {periods.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="chat-period" className="text-[0.625rem] text-muted-subtle">{t("chat.period")}</Label>
+                  <select
+                    id="chat-period"
+                    value={periodId}
+                    onChange={(e) => setPeriodId(e.target.value)}
+                    className="h-7 rounded-md border border-input bg-card px-2 text-xs"
+                  >
+                    <option value="">{t("chat.periodCurrent")}</option>
+                    {periods.map((period) => (
+                      <option key={period.id} value={period.id}>
+                        {period.from} – {period.to}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="flex gap-2 items-end">
               <div className="relative flex-shrink-0">
@@ -2002,7 +2088,7 @@ export default function Chat() {
         </div>
       </div>
 
-      {showTimeline && <MemoryTimeline personaId={personaId} onClose={() => setShowTimeline(false)} />}
+      {showTimeline && <MemoryTimeline personaId={personaId} onClose={() => setShowTimeline(false)} onJumpTo={jumpToMessage} />}
       {showEmotionReport && <EmotionReport personaId={personaId} personaName={persona?.name || "?"} onClose={() => setShowEmotionReport(false)} />}
       <GraduationModal personaId={personaId} personaName={persona?.name || "?"} open={showGraduation} onClose={() => setShowGraduation(false)} />
       <GraduationModal personaId={personaId} personaName={persona?.name || "?"} open={showManualGraduation}
@@ -2151,7 +2237,7 @@ const CATEGORY_LABELS: Record<string, { labelKey: "chat.memory.categories.memory
   anchor: { labelKey: "chat.memory.categories.anchor", dot: "bg-chart-4", chip: "bg-chart-4/10 text-chart-4" },
 };
 
-function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: () => void }) {
+function MemoryTimeline({ personaId, onClose, onJumpTo }: { personaId: number; onClose: () => void; onJumpTo?: (messageId: number) => void }) {
   const { t, locale } = useLocale();
   const confirm = useConfirm();
   const { data: memories, refetch, isError: memoriesFailed, isLoading: memoriesLoading } =
@@ -2177,6 +2263,10 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
      field and the retrieval have always been there; there was just no
      way to set it. */
   const updateMutation = trpc.memory.update.useMutation({
+    onSuccess: () => refetch(),
+    onError: (e: any) => toast.error(e.message),
+  });
+  const adjudicateMutation = trpc.memory.adjudicate.useMutation({
     onSuccess: () => refetch(),
     onError: (e: any) => toast.error(e.message),
   });
@@ -2278,6 +2368,9 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
             )}
             {memoryItems?.map((m: any) => {
               const cat = CATEGORY_LABELS[m.category] || CATEGORY_LABELS.memory;
+              const rivals = m.factKey && m.status !== "superseded"
+                ? memoryItems.filter((other: any) => other.factKey === m.factKey && other.id !== m.id && other.status !== "superseded")
+                : [];
               return (
                 <div key={m.id} className="relative pl-8 pb-6 group">
                   <div className={`absolute left-1.5 top-1 w-3 h-3 rounded-full ${cat.dot} ring-2 ring-card`} />
@@ -2298,6 +2391,34 @@ function MemoryTimeline({ personaId, onClose }: { personaId: number; onClose: ()
                       )}
                       <p className="text-sm font-medium text-foreground mt-1">{m.title}</p>
                       {m.description && <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>}
+                      {m.messageId ? (
+                        <button
+                          type="button"
+                          className="text-[11px] text-cinnabar mt-1 underline underline-offset-2"
+                          onClick={() => { onJumpTo?.(m.messageId); onClose(); }}
+                        >
+                          {t("chat.memory.source")}
+                        </button>
+                      ) : (
+                        <p className="text-[11px] text-muted-subtle mt-1">{t("chat.memory.writtenLater")}</p>
+                      )}
+                      {rivals.length > 0 && (
+                        <div className="mt-1.5 space-y-1">
+                          <p className="text-[11px] text-muted-foreground">{t("chat.memory.conflict")}</p>
+                          <button
+                            type="button"
+                            className="text-[11px] underline underline-offset-2"
+                            disabled={adjudicateMutation.isPending}
+                            onClick={() => adjudicateMutation.mutate({
+                              personaId,
+                              winnerId: m.id,
+                              loserId: rivals[0].id,
+                            })}
+                          >
+                            {t("chat.memory.keepThis")}
+                          </button>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button

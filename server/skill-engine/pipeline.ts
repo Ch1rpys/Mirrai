@@ -35,6 +35,17 @@ import {
 } from "../_core/persona-schema";
 import { normalizeMicroRules, type MicroRule } from "@shared/micro-rules";
 import { normalizeImperfectionProfile } from "@shared/imperfection";
+import { normalizeSuppressions, type Suppression } from "@shared/suppressions";
+import { normalizeActProfile, type ActProfile } from "@shared/act-profile";
+import { normalizeLifeEvents, type LifeEvent } from "@shared/life-events";
+import { normalizeOpeningProfile, type OpeningProfile } from "@shared/opening-profile";
+import { normalizePeriods, type PersonaPeriod } from "@shared/periods";
+import { mineSuppressions, mineForgetStyles } from "./suppressions";
+import { mineOpenLoops } from "./open-loops";
+import { minePeriods } from "./periods";
+import { buildActProfile } from "./acts";
+import { buildOpeningProfile } from "./openings";
+import { exchangesFromRecords } from "../_core/behavior-profile";
 import { ENV } from "../_core/env";
 import { safeErrorMessage } from "../_core/safe-error";
 import { withPersonaDataLock } from "../_core/lock";
@@ -211,11 +222,20 @@ function researchStage(stage: CelebrityResearchStage): SkillJobStage {
  * over. The mined *candidates* are not: they are read off the records
  * again, and a fresh reading is a better reading.
  */
+export interface MinedV5 {
+  suppressions?: Suppression[];
+  lifeEvents?: LifeEvent[];
+  actProfile?: ActProfile | null;
+  openingProfile?: OpeningProfile | null;
+  periods?: PersonaPeriod[];
+}
+
 export function mergeUserDecisions(
   fresh: PersonaData,
   previous: Partial<PersonaData>,
   minedRules: MicroRule[],
   locale: "zh" | "en" = "zh",
+  mined: MinedV5 = {},
 ): PersonaData {
   const confirmed = normalizeMicroRules(previous.microRules).filter(
     (rule) => rule.verified,
@@ -231,10 +251,47 @@ export function mergeUserDecisions(
   const uncovered = minedRules.filter(
     (rule) => !covered.has(rule.trigger.join("|")),
   );
+
+  const confirmedSuppressions = normalizeSuppressions(previous.suppressions).filter(
+    (row) => row.verified,
+  );
+  const suppressionKeys = new Set(
+    confirmedSuppressions.map((row) => `${row.kind}:${row.pattern}`),
+  );
+  const freshSuppressions = normalizeSuppressions(mined.suppressions).filter(
+    (row) => !suppressionKeys.has(`${row.kind}:${row.pattern}`),
+  );
+
+  const keptEvents = normalizeLifeEvents(previous.lifeEvents).filter(
+    (event) => event.verified || event.source === "manual",
+  );
+  const eventKeys = new Set(keptEvents.map((event) => event.id));
+  const eventTitles = new Set(keptEvents.map((event) => event.title));
+  const freshEvents = normalizeLifeEvents(mined.lifeEvents).filter(
+    (event) => !eventKeys.has(event.id) && !eventTitles.has(event.title),
+  );
+
   return {
     ...fresh,
     microRules: [...confirmed, ...uncovered],
     imperfectionProfile,
+    suppressions: [...confirmedSuppressions, ...freshSuppressions],
+    lifeEvents: [...keptEvents, ...freshEvents],
+    actProfile: previous.actProfile
+      ? normalizeActProfile(previous.actProfile)
+      : mined.actProfile ?? normalizeActProfile(fresh.actProfile),
+    openingProfile: previous.openingProfile
+      ? normalizeOpeningProfile(previous.openingProfile)
+      : mined.openingProfile ?? normalizeOpeningProfile(fresh.openingProfile),
+    periods: normalizePeriods(previous.periods).length
+      ? normalizePeriods(previous.periods)
+      : mined.periods ?? normalizePeriods(fresh.periods),
+    rejectedFeedbackKeys: Array.isArray(previous.rejectedFeedbackKeys)
+      ? previous.rejectedFeedbackKeys.filter((key): key is string => typeof key === "string")
+      : fresh.rejectedFeedbackKeys,
+    imperfectionDefaultsReviewed: Boolean(
+      previous.imperfectionDefaultsReviewed ?? fresh.imperfectionDefaultsReviewed,
+    ),
   };
 }
 
@@ -1316,6 +1373,48 @@ async function runSkillPipelineOnce(
         : copy(locale, "labels.microRules.minedNone"),
     );
 
+    const transcriptRows = parseTranscriptMessages(chatContent, { personaName: name }).map(
+      (row) => ({
+        role: row.role === "assistant" || row.role === "user" ? row.role : row.role || "user",
+        content: row.content,
+        timestamp: row.timestamp ?? null,
+      }),
+    );
+    const minedSuppressions = [
+      ...mineSuppressions({ messages: transcriptRows, locale }),
+      ...mineForgetStyles({ messages: transcriptRows, locale }),
+    ];
+    const minedLifeEvents = mineOpenLoops({ messages: transcriptRows });
+    const minedActProfile = await buildActProfile({
+      messages: transcriptRows,
+      userId,
+      locale,
+      relationshipPhase: enrichedData.relationshipPhase,
+    }).catch(() => null);
+    const exchanges = exchangesFromRecords(
+      transcriptRows.map((row) => ({
+        role: row.role,
+        content: row.content,
+        timestamp: row.timestamp instanceof Date ? row.timestamp : row.timestamp ? new Date(row.timestamp) : null,
+      })),
+    );
+    const minedOpeningProfile = buildOpeningProfile({
+      messages: transcriptRows,
+      exchangesCounted: exchanges.length,
+      spokeFirstCount: exchanges.filter((item) => item.personaSpokeFirst).length,
+    });
+    const minedPeriods = minePeriods({
+      messages: transcriptRows.map((row) => ({
+        role: row.role,
+        content: row.content,
+        timestamp: row.timestamp instanceof Date
+          ? row.timestamp
+          : row.timestamp
+            ? new Date(row.timestamp)
+            : null,
+      })),
+    });
+
     /**
      * The facts in the upload become memories.
      *
@@ -1431,7 +1530,13 @@ async function runSkillPipelineOnce(
               }
             })()),
           }
-        : mergeUserDecisions(enrichedData, previous, microRules, locale)) as PersonaData;
+        : mergeUserDecisions(enrichedData, previous, microRules, locale, {
+            suppressions: minedSuppressions,
+            lifeEvents: minedLifeEvents,
+            actProfile: minedActProfile,
+            openingProfile: minedOpeningProfile,
+            periods: minedPeriods,
+          })) as PersonaData;
 
       if (changedWhileRunning) {
         console.warn(

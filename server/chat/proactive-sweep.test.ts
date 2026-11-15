@@ -30,6 +30,7 @@ vi.mock("../db", () => ({
   getUserMessageCountForPersonaSince: (...a: unknown[]) => getUserMessageCountForPersonaSince(...a),
   getUserLocale: (...a: unknown[]) => getUserLocale(...a),
   getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
+  getMessagesByPersonaId: async () => [],
 }));
 
 const getUserLocale = vi.fn();
@@ -76,7 +77,19 @@ const persona = {
   presence: "active",
   graduationStatus: null,
   timezone: "Europe/London",
-  personaData: {},
+  personaData: {
+    lifeEvents: [{
+      id: "loop-1",
+      kind: "open_loop",
+      title: "说好见面",
+      detail: "改天一起吃饭",
+      whoSaid: "me",
+      closed: false,
+      source: "manual",
+      verified: true,
+      evidence: [{ snippet: "改天一起吃饭" }],
+    }],
+  },
 } as any;
 
 describe("the sweep that lets the persona speak first", () => {

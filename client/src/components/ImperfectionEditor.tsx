@@ -49,6 +49,10 @@ export default function ImperfectionEditor({ personaId }: { personaId: number })
     },
     onError: (e: any) => toast.error(e.message),
   });
+  const reviewMutation = trpc.imperfection.reviewDefaults.useMutation({
+    onSuccess: () => refetch(),
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const [draft, setDraft] = useState<ImperfectionEntry[]>([]);
   /**
@@ -131,6 +135,27 @@ export default function ImperfectionEditor({ personaId }: { personaId: number })
           <p className="text-[11px] text-muted-subtle">
             {t("imperfection.notAppliedYet")}
           </p>
+        ) : null}
+        {data?.productWritten?.length && !data.reviewed ? (
+          <div className="rounded-md border border-border bg-muted/40 p-3 space-y-2">
+            <p className="text-xs text-muted-foreground">{t("imperfection.productWritten")}</p>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" disabled={reviewMutation.isPending} onClick={() => reviewMutation.mutate({
+                personaId,
+                keep: true,
+                locale: locale === "en" ? "en" : "zh",
+              })}>
+                {t("imperfection.keepDefaults")}
+              </Button>
+              <Button size="sm" variant="outline" disabled={reviewMutation.isPending} onClick={() => reviewMutation.mutate({
+                personaId,
+                keep: false,
+                locale: locale === "en" ? "en" : "zh",
+              })}>
+                {t("imperfection.clearDefaults")}
+              </Button>
+            </div>
+          </div>
         ) : null}
       </header>
 

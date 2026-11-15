@@ -22,6 +22,7 @@ import {
   type BehaviorProfile,
   type BehaviorSample,
 } from "@shared/behavior-profile";
+import { residueFlags } from "@shared/assistant-residue";
 import { zonedHour } from "@shared/timezone";
 import * as db from "../db";
 
@@ -44,6 +45,8 @@ export interface RecordExchange {
   hour: number;
   /** Whether the persona spoke first after this silence. */
   personaSpokeFirst: boolean;
+  /** The text of that reply, for rhythm. */
+  content?: string;
 }
 
 /**
@@ -70,12 +73,13 @@ export function exchangesFromRecords(
     .map((row) => ({
       role: row.role,
       at: row.timestamp as Date,
+      content: row.content,
     }))
     .sort((a, b) => a.at.getTime() - b.at.getTime());
 
   const exchanges: RecordExchange[] = [];
   let lastUserAt: Date | null = null;
-  let burst: { at: Date; count: number } | null = null;
+  let burst: { at: Date; count: number; content: string } | null = null;
 
   const flush = (): void => {
     if (!burst) return;
@@ -89,6 +93,7 @@ export function exchangesFromRecords(
       burstSize: burst.count,
       hour: zonedHour(personaAt, timezone),
       personaSpokeFirst: lastUserAt === null,
+      content: burst.content,
     });
     burst = null;
   };
@@ -101,8 +106,10 @@ export function exchangesFromRecords(
       lastUserAt = row.at;
       continue;
     }
-    if (burst) burst.count += 1;
-    else burst = { at: row.at, count: 1 };
+    if (burst) {
+      burst.count += 1;
+      burst.content = `${burst.content}\n${row.content}`.trim();
+    } else burst = { at: row.at, count: 1, content: row.content };
   }
   flush();
 
@@ -122,14 +129,20 @@ export function measureBehaviorProfile(params: {
 }): BehaviorProfile | null {
   const now = params.now ?? new Date();
 
-  const samples: BehaviorSample[] = params.exchanges.map((exchange) => ({
-    gapSeconds: exchange.personaSpokeFirst
-      ? 0
-      : Math.max(0, (exchange.personaAt.getTime() - exchange.userAt.getTime()) / 1000),
-    burstSize: exchange.burstSize,
-    hour: exchange.hour,
-    personaSpokeFirst: exchange.personaSpokeFirst,
-  }));
+  const samples: BehaviorSample[] = params.exchanges.map((exchange) => {
+    const content = exchange.content ?? "";
+    return {
+      gapSeconds: exchange.personaSpokeFirst
+        ? 0
+        : Math.max(0, (exchange.personaAt.getTime() - exchange.userAt.getTime()) / 1000),
+      burstSize: exchange.burstSize,
+      hour: exchange.hour,
+      personaSpokeFirst: exchange.personaSpokeFirst,
+      replyChars: content.trim().length || undefined,
+      hadNewline: content.includes("\n"),
+      questionEnding: residueFlags(content).questionEnding,
+    };
+  });
 
   return fitBehaviorProfile(samples, now);
 }

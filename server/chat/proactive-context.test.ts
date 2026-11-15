@@ -12,15 +12,37 @@ const getUserById = vi.fn();
 const getLastMessageAt = vi.fn();
 const getLastUserMessageAt = vi.fn();
 const getRecentUserMood = vi.fn();
+const getMessagesByPersonaId = vi.fn();
+const getMemoriesByPersonaId = vi.fn();
+const invokeWithProvider = vi.fn();
 
 vi.mock("../db", () => ({
   getUserById: (...a: unknown[]) => getUserById(...a),
   getLastMessageAt: (...a: unknown[]) => getLastMessageAt(...a),
   getLastUserMessageAt: (...a: unknown[]) => getLastUserMessageAt(...a),
   getRecentUserMood: (...a: unknown[]) => getRecentUserMood(...a),
+  getMessagesByPersonaId: (...a: unknown[]) => getMessagesByPersonaId(...a),
+  getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
 }));
 
-import { collectProactiveContext } from "./proactive";
+vi.mock("../llm", () => ({
+  llmService: {
+    invoke: vi.fn(),
+    invokeWithProvider: (...a: unknown[]) => invokeWithProvider(...a),
+    streamWithProvider: () => {
+      throw new Error("not used");
+    },
+  },
+}));
+
+vi.mock("../llm/user-provider", () => ({
+  resolveProviderForUserWithOwnership: async () => ({
+    provider: { name: "Test" },
+    owned: true,
+  }),
+}));
+
+import { collectProactiveContext, composeProactiveMessage } from "./proactive";
 
 const persona = {
   id: 1,
@@ -116,5 +138,57 @@ describe("the context behind a proactive message", () => {
       now: new Date("2026-06-02T12:00:00Z"),
     });
     expect(context.relationshipEnded).toBe(true);
+  });
+});
+
+describe("what a first word is allowed to be about", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getUserById.mockResolvedValue({ timezone: "Asia/Shanghai" });
+    getLastUserMessageAt.mockResolvedValue(new Date("2026-05-30T12:00:00Z"));
+    getRecentUserMood.mockResolvedValue(null);
+    getMessagesByPersonaId.mockResolvedValue([]);
+    getMemoriesByPersonaId.mockResolvedValue([]);
+    invokeWithProvider.mockResolvedValue("在吗");
+  });
+
+  it("skips the window when there is nothing to say and no fragment in the openings", async () => {
+    const result = await composeProactiveMessage({
+      persona: {
+        ...persona,
+        personaData: {
+          lifeEvents: [],
+          openingProfile: {
+            samples: 20,
+            counts: { checkin: 20 },
+            rate: 0.4,
+            measuredAt: "2026-01-01T00:00:00Z",
+          },
+        },
+      },
+      userId: 1,
+    });
+    expect(result).toBeNull();
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+  });
+
+  it("may send a fragment when that is how they actually start", async () => {
+    const result = await composeProactiveMessage({
+      persona: {
+        ...persona,
+        personaData: {
+          lifeEvents: [],
+          openingProfile: {
+            samples: 20,
+            counts: { fragment: 20 },
+            rate: 0.4,
+            measuredAt: "2026-01-01T00:00:00Z",
+          },
+        },
+      },
+      userId: 1,
+    });
+    expect(result?.opening).toBe("fragment");
+    expect(invokeWithProvider).toHaveBeenCalled();
   });
 });

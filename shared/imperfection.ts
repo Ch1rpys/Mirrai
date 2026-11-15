@@ -60,9 +60,9 @@ function isState(value: unknown): value is ImperfectionState {
  * Entries for unknown states are dropped rather than kept — a rule for a
  * state the persona can never be in is dead weight in every prompt.
  *
- * A state that is present but empty falls back to the default for that
- * state: the user asked for imperfection in that state, so giving them
- * none would be worse than giving them the generic one.
+ * A state that is present but empty is dropped. An empty box in the
+ * editor is a placeholder, not a request to fill the prompt with the
+ * product's generic sentence for that mood.
  *
  * A persona with *no* profile at all stays empty. That is deliberate —
  * it means every persona that was built before this field existed keeps
@@ -71,12 +71,11 @@ function isState(value: unknown): value is ImperfectionState {
  */
 export function normalizeImperfectionProfile(
   value: unknown,
-  locale: "zh" | "en" = "zh",
+  _locale: "zh" | "en" = "zh",
 ): ImperfectionEntry[] {
   if (!Array.isArray(value)) return [];
   const out: ImperfectionEntry[] = [];
   const seen = new Set<string>();
-  const defaults = new Map(defaultImperfectionProfile(locale).map((e) => [e.state, e.deviations]));
   for (const item of value) {
     if (!item || typeof item !== "object") continue;
     const record = item as Record<string, unknown>;
@@ -88,11 +87,9 @@ export function normalizeImperfectionProfile(
           .split(/[；;\n]/)
           .map((v) => v.trim())
           .filter(Boolean);
+    if (!deviations.length) continue;
     seen.add(state);
-    out.push({
-      state,
-      deviations: deviations.length ? deviations : (defaults.get(state) ?? []),
-    });
+    out.push({ state, deviations });
   }
   return out;
 }
@@ -114,6 +111,66 @@ export function mergeImperfectionDefaults(
     const existing = byState.get(fallback.state);
     return existing && existing.deviations.length ? existing : fallback;
   });
+}
+
+function joined(deviations: string[]): string {
+  return deviations.map((d) => d.trim()).filter(Boolean).join("|");
+}
+
+/** True when this state's words are the product's generic sentence. */
+export function isProductDefaultEntry(
+  entry: ImperfectionEntry,
+  locale: "zh" | "en" = "zh",
+): boolean {
+  const fallback = defaultImperfectionProfile(locale).find((item) => item.state === entry.state);
+  if (!fallback) return false;
+  return joined(entry.deviations) === joined(fallback.deviations);
+}
+
+/** The stored states whose words are still the product's. */
+export function productWrittenStates(
+  profile: ImperfectionEntry[],
+  locale: "zh" | "en" = "zh",
+): ImperfectionState[] {
+  return profile.filter((entry) => isProductDefaultEntry(entry, locale)).map((entry) => entry.state);
+}
+
+/**
+ * What actually gets written back.
+ *
+ * The editor shows grey placeholders for the states the user has not
+ * touched. Those placeholders must not be stored: a stored default
+ * would then reach the prompt as if the user had written it.
+ *
+ * A state that was already stored keeps being stored, even when its
+ * words still match the product — old personas had the defaults written
+ * in for them, and silently deleting those is the other wrong answer.
+ * Clearing them is a separate, one-time choice.
+ */
+export function persistableImperfection(
+  draft: ImperfectionEntry[],
+  stored: ImperfectionEntry[],
+  locale: "zh" | "en" = "zh",
+): ImperfectionEntry[] {
+  const storedByState = new Map(stored.map((entry) => [entry.state, entry]));
+  const out: ImperfectionEntry[] = [];
+  const seen = new Set<ImperfectionState>();
+  for (const entry of draft) {
+    if (!entry.deviations.length || seen.has(entry.state)) continue;
+    const wasStored = storedByState.has(entry.state);
+    if (!wasStored && isProductDefaultEntry(entry, locale)) continue;
+    seen.add(entry.state);
+    out.push(entry);
+  }
+  return out;
+}
+
+/** Drops the product's own sentences, keeps what the user wrote. */
+export function clearProductWrittenImperfection(
+  profile: ImperfectionEntry[],
+  locale: "zh" | "en" = "zh",
+): ImperfectionEntry[] {
+  return profile.filter((entry) => !isProductDefaultEntry(entry, locale));
 }
 
 /**

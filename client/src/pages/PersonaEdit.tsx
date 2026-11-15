@@ -22,7 +22,9 @@ import RelationshipTimeline from "@/components/RelationshipTimeline";
 import LetterBox from "@/components/LetterBox";
 import MicroRulesEditor from "@/components/MicroRulesEditor";
 import ImperfectionEditor from "@/components/ImperfectionEditor";
+import V5FidelityEditors from "@/components/V5FidelityEditors";
 import { useLocale } from "@/contexts/LocaleContext";
+import { copy } from "@shared/copy";
 
 /**
  * The largest character card the app will import.
@@ -151,7 +153,7 @@ export default function PersonaEdit() {
   const hasPersonaId = Number.isInteger(personaId) && personaId > 0;
   const [, navigate] = useLocation();
   const { isAuthenticated, loading: authLoading } = useAuth({ redirectOnUnauthenticated: true });
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
 
   const { data: persona, refetch, isError, error, isLoading } = trpc.persona.get.useQuery(
     { id: personaId }, { enabled: isAuthenticated && hasPersonaId }
@@ -160,6 +162,11 @@ export default function PersonaEdit() {
     { id: personaId }, { enabled: isAuthenticated && hasPersonaId }
   );
   const providers = trpc.llmConfig.listProviders.useQuery();
+  const { data: behavior, isLoading: behaviorLoading } = trpc.behavior.get.useQuery(
+    { personaId },
+    { enabled: isAuthenticated && hasPersonaId },
+  );
+  const hasRhythm = Boolean(behavior?.profile);
 
   const updateMutation = trpc.persona.update.useMutation({
     onSuccess: () => { toast.success(t("personaEdit.basicSaved")); refetch(); },
@@ -241,6 +248,8 @@ export default function PersonaEdit() {
   const [presence, setPresence] = useState<Presence>("active");
   const [reachability, setReachability] = useState<Reachability>("reachable");
   const [proactiveHours, setProactiveHours] = useState(0);
+  const [rerankEnabled, setRerankEnabled] = useState(false);
+  const [timingEnabled, setTimingEnabled] = useState(false);
   /** How much the persona writes like a person typing. */
   const [realismLevel, setRealismLevel] = useState(70);
   const [timezone, setTimezone] = useState("");
@@ -351,6 +360,8 @@ export default function PersonaEdit() {
     setPresence(isPresence(persona.presence) ? persona.presence : "active");
     setReachability(isReachability(persona.reachability) ? persona.reachability : "reachable");
     setProactiveHours((persona as any).proactiveFrequencyHours ?? 0);
+    setRerankEnabled(Boolean((persona as any).rerankEnabled));
+    setTimingEnabled(Boolean((persona as any).timingEnabled));
     setRealismLevel(((persona.personaData as any)?.realismLevel ?? 70));
     setTimezone(persona.timezone ?? "");
     const p = (persona.personaData as any) || {};
@@ -404,6 +415,8 @@ export default function PersonaEdit() {
     presence,
     reachability,
     proactiveFrequencyHours: proactiveHours,
+    rerankEnabled,
+    timingEnabled: behaviorLoading ? timingEnabled : timingEnabled && hasRhythm,
     timezone: timezone || null,
     });
   };
@@ -573,6 +586,39 @@ export default function PersonaEdit() {
             <p className="text-xs text-muted-foreground leading-relaxed">
               {t("proactive.note")}
             </p>
+            <p className="text-xs text-muted-subtle leading-relaxed">
+              {t("proactive.skipNote")}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={rerankEnabled}
+                onChange={(e) => setRerankEnabled(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="block">{t("personaEdit.rerank")}</span>
+                <span className="block text-xs text-muted-foreground leading-relaxed">{t("personaEdit.rerankNote")}</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={timingEnabled && hasRhythm}
+                disabled={!hasRhythm}
+                onChange={(e) => setTimingEnabled(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="block">{t("personaEdit.timing")}</span>
+                <span className="block text-xs text-muted-foreground leading-relaxed">
+                  {t("personaEdit.timingNote")}
+                  {!hasRhythm ? ` ${copy(locale === "en" ? "en" : "zh", "prompt.rhythmUnknown")}` : ""}
+                </span>
+              </span>
+            </label>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="persona-reachability" className="text-xs text-muted-foreground">{t("reachability.label")}</Label>
@@ -801,6 +847,8 @@ export default function PersonaEdit() {
             <MicroRulesEditor personaId={personaId} />
             <hr className="rule" />
             <ImperfectionEditor personaId={personaId} />
+            <hr className="rule" />
+            <V5FidelityEditors personaId={personaId} />
           </section>
         )}
 

@@ -124,10 +124,10 @@ describe("the imperfection in the prompt", () => {
     expect(prompt).not.toContain("极短句");
   });
 
-  it("gives a state the user never wrote a conservative default", () => {
-    // The interface shows six states, each with something in it. The
-    // prompt has to use those same six — a persona that is imperfect in
-    // one mood and perfect in the other five is not a person.
+  it("does not fill a state the user never wrote with the product's sentence", () => {
+    // The editor still shows six boxes. The prompt only uses what was
+    // actually stored — a distant persona must not pick up the generic
+    // melancholy line every other persona ships with.
     const prompt = buildSystemPrompt(
       {
         ...persona,
@@ -141,10 +141,7 @@ describe("the imperfection in the prompt", () => {
       },
       { locale: "zh" },
     );
-    // The default for "melancholy" is applied even though the user only
-    // ever wrote about "distant".
-    expect(prompt).toContain("不解释自己");
-    // And the state the user did write about keeps their own words.
+    expect(prompt).not.toContain("不解释自己");
     const distant = buildSystemPrompt(
       {
         ...persona,
@@ -187,6 +184,50 @@ describe("the imperfection in the prompt", () => {
     });
     expect(prompt).toContain("会连着发三条");
     expect(prompt).not.toContain("极短句");
+  });
+
+  it("puts a confirmed subtraction next to the rules and not an unconfirmed one", () => {
+    const withBan = {
+      ...persona,
+      personaData: {
+        ...persona.personaData,
+        suppressions: [
+          {
+            id: "s1",
+            pattern: "句末不问",
+            kind: "no_question_ending",
+            confidence: 0.9,
+            source: "manual",
+            verified: true,
+            evidence: [{ snippet: "嗯" }],
+          },
+          {
+            id: "s2",
+            pattern: "我理解你",
+            kind: "no_phrase",
+            confidence: 0.6,
+            source: "auto",
+            verified: false,
+            evidence: [{ snippet: "好" }],
+          },
+        ],
+      },
+    };
+    const prompt = buildSystemPrompt(withBan, { locale: "zh" });
+    expect(prompt).toContain("不要以问句收尾");
+    expect(prompt).not.toContain("我理解你");
+    const speaking = prompt.indexOf("慢慢说");
+    const rules = prompt.indexOf("随便你");
+    const subtraction = prompt.indexOf("不要以问句收尾");
+    expect(subtraction).toBeGreaterThan(speaking);
+    expect(subtraction).toBeGreaterThan(rules);
+  });
+
+  it("names one action in the instruction zone", () => {
+    const prompt = buildSystemPrompt(persona, { locale: "zh", sampledAct: "tease" });
+    expect(prompt).toContain("开玩笑、损一下");
+    expect(prompt).not.toContain("安慰");
+    expect(prompt).toContain("这一轮只做这件事");
   });
 
   it("says nothing for a persona that was distilled before it existed", () => {

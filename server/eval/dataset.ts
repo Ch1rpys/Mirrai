@@ -16,6 +16,7 @@
  * nothing.
  */
 import { matchEmotionTrigger, type EmotionTriggerState } from "@shared/emotion-triggers";
+import { isSpeechAct, labelSpeechActByRule, type SpeechAct } from "@shared/speech-acts";
 
 /** A message as the records store it. */
 export interface EvalSourceMessage {
@@ -31,6 +32,9 @@ export interface EvalCaseData {
   expected: EvalSourceMessage;
   /** The emotion the real line carried, read from the trigger words. */
   expectedState: EmotionTriggerState | null;
+  /** The speech act of the held-out line. Cached; evaluation does not relabel. */
+  expectedAct?: SpeechAct | null;
+  expectedActSource?: "rule" | "model" | null;
 }
 
 export interface EvalCaseOptions {
@@ -154,10 +158,14 @@ export function buildEvalCases(
     // well it continues a monologue.
     if (!window.some((m) => m.role === "user")) continue;
 
+    const previousUser = [...window].reverse().find((m) => m.role === "user")?.content ?? null;
+    const expectedAct = labelSpeechActByRule(message.content, previousUser);
     candidates.push({
       context: window,
       expected: message,
       expectedState: matchEmotionTrigger(message.content, locale),
+      expectedAct,
+      expectedActSource: expectedAct ? "rule" : null,
     });
   }
 
@@ -192,7 +200,13 @@ export function buildEvalCases(
  * cannot be read is a row that is skipped rather than a crash.
  */
 export function casesFromRows(
-  rows: Array<{ contextJson: unknown; expectedJson: unknown; expectedState?: string | null }>,
+  rows: Array<{
+    contextJson: unknown;
+    expectedJson: unknown;
+    expectedState?: string | null;
+    expectedAct?: string | null;
+    expectedActSource?: string | null;
+  }>,
 ): EvalCaseData[] {
   const out: EvalCaseData[] = [];
   for (const row of rows) {
@@ -202,10 +216,14 @@ export function casesFromRows(
       ? row.contextJson.map(toMessage).filter((m): m is EvalSourceMessage => m !== null)
       : [];
     if (!context.length) continue;
+    const previousUser = [...context].reverse().find((m) => m.role === "user")?.content ?? null;
+    const storedAct = row.expectedAct && isSpeechAct(row.expectedAct) ? row.expectedAct : null;
     out.push({
       context,
       expected,
       expectedState: (row.expectedState as EmotionTriggerState | null) ?? null,
+      expectedAct: storedAct ?? labelSpeechActByRule(expected.content, previousUser),
+      expectedActSource: (row.expectedActSource as EvalCaseData["expectedActSource"]) ?? (storedAct ? "rule" : null),
     });
   }
   return out;

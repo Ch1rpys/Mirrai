@@ -35,11 +35,15 @@ vi.mock("./db", () => ({
   getRelationshipEvents: (...a: unknown[]) => getRelationshipEvents(...a),
 }));
 
-vi.mock("./chat/retrieval", () => ({
-  retrieveMemories: (...a: unknown[]) => retrieveMemories(...a),
-  formatMemoriesForPrompt: () => "",
-  formatAnchorsForPrompt: () => "",
-}));
+vi.mock("./chat/retrieval", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./chat/retrieval")>();
+  return {
+    ...actual,
+    retrieveMemories: (...a: unknown[]) => retrieveMemories(...a),
+    formatMemoriesForPrompt: () => "",
+    formatAnchorsForPrompt: () => "",
+  };
+});
 
 import { composeMessages } from "./chat/service";
 import { appRouter } from "./routers";

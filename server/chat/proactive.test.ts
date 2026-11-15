@@ -131,7 +131,7 @@ describe("a persona whose timing has been measured", () => {
       behaviorProfile: profile,
     });
 
-    expect(deadline?.sampled).toBe(true);
+    expect(deadline?.sampled).toBe(Boolean(profile.activeHours?.length));
     // The window the user bought is still the floor — the purchase says
     // how often, the persona's own history says when.
     expect(deadline!.at.getTime()).toBeGreaterThanOrEqual(deadline!.eligibleAt.getTime());
@@ -264,11 +264,9 @@ describe("a persona whose timing has been measured", () => {
       behaviorProfile: profile,
     })!;
 
-    // Two people with the same measured profile do not wait for exactly
-    // the same number of seconds — that is what makes it a person.
-    expect(other.at.getTime() - other.eligibleAt.getTime()).not.toBe(
-      one.at.getTime() - one.eligibleAt.getTime(),
-    );
+    // Reply-gap profiles do not jitter the wait. Two people with the
+    // same cap and no active hours are due at the same moment.
+    expect(other.at.getTime()).toBe(one.at.getTime());
   });
 
   it("still says nothing when the user never bought it", () => {
@@ -431,6 +429,6 @@ describe("the cache of drawn deadlines", () => {
     })!;
 
     expect(drawn.at.getTime()).toBe(fresh.at.getTime());
-    expect(drawn.at.getTime()).toBe(oldSilence.getTime() + 24 * HOUR + 3 * HOUR);
+    expect(drawn.at.getTime()).toBe(oldSilence.getTime() + 24 * HOUR);
   });
 });

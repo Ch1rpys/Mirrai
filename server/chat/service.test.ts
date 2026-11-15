@@ -838,6 +838,21 @@ describe("composeMessages", () => {
     expect(String(messages[0].content)).toContain("小A");
   });
 
+  it("does not hand a system notice back to the model as something they said", async () => {
+    getMessagesByPersonaId.mockResolvedValue([
+      { id: 1, role: "user", content: "在吗", origin: null },
+      { id: 2, role: "assistant", content: "TA 这会儿没回", origin: "system-notice" },
+    ]);
+    const { messages } = await composeMessages({
+      persona: persona(),
+      userId: 1,
+      userMessage: "那你呢",
+      contextLimit: 20,
+    });
+    const spoken = messages.filter((row) => row.role !== "system").map((row) => String(row.content)).join("\n");
+    expect(spoken).not.toContain("TA 这会儿没回");
+  });
+
   it("includes the retrieved memories", async () => {
     getMemoriesByPersonaId.mockResolvedValue([
       {

@@ -25,6 +25,9 @@
  * repetitive, not more like itself.
  */
 import { matchEmotionTrigger, type EmotionTriggerState } from "@shared/emotion-triggers";
+import { ngramOverlap as sharedNgramOverlap } from "@shared/ngram";
+import { labelSpeechActByRule, type SpeechAct } from "@shared/speech-acts";
+import { scoreResidue, type ResidueScore } from "@shared/assistant-residue";
 
 /** One held-out exchange, and what the rebuilt persona said instead. */
 export interface EvalCaseScore {
@@ -59,6 +62,11 @@ export interface EvalCaseScore {
    */
   expectedText?: string;
   generatedText?: string;
+  expectedAct?: SpeechAct | null;
+  generatedAct?: SpeechAct | null;
+  sampledAct?: SpeechAct | null;
+  actMatch?: boolean;
+  residue?: ResidueScore;
 }
 
 /** The aggregate of a run. */
@@ -101,6 +109,10 @@ export interface EvalMetrics {
    * stored with the run for exactly that reason.
    */
   variant?: string;
+  /** How often the generated (or sampled) act matches the held-out line's. */
+  actMatch?: number;
+  /** How often the assistant-shaped tells fired, 0–1. */
+  residueRate?: number;
 }
 
 /**
@@ -253,22 +265,7 @@ export function buildCharNgramModel(
  * precision. Dice punishes that, which is the behaviour we want.
  */
 export function ngramOverlap(expected: string, generated: string, n = 3): number {
-  const grams = (text: string): Set<string> => {
-    const clean = normaliseForModel(text).replace(/\s+/g, "");
-    const out = new Set<string>();
-    if (clean.length < n) {
-      if (clean) out.add(clean);
-      return out;
-    }
-    for (let i = 0; i <= clean.length - n; i++) out.add(clean.slice(i, i + n));
-    return out;
-  };
-  const a = grams(expected);
-  const b = grams(generated);
-  if (!a.size || !b.size) return 0;
-  let shared = 0;
-  for (const gram of a) if (b.has(gram)) shared++;
-  return (2 * shared) / (a.size + b.size);
+  return sharedNgramOverlap(expected, generated, n);
 }
 
 /**
@@ -308,6 +305,10 @@ export function scoreCase(params: {
    * every number it produced afterwards was quietly wrong.
    */
   locale?: "zh" | "en";
+  expectedAct?: SpeechAct | null;
+  sampledAct?: SpeechAct | null;
+  previousUser?: string | null;
+  lengthCeiling?: number | null;
 }): EvalCaseScore {
   const locale = params.locale ?? "zh";
   const expectedState = matchEmotionTrigger(params.expected, locale);
@@ -328,7 +329,26 @@ export function scoreCase(params: {
     declaredState: params.declaredState ?? null,
     expectedText: params.expected,
     generatedText: params.generated,
+    expectedAct: params.expectedAct ?? labelSpeechActByRule(params.expected, params.previousUser),
+    generatedAct: labelSpeechActByRule(params.generated, params.previousUser),
+    sampledAct: params.sampledAct ?? null,
+    actMatch: matchAct(params),
+    residue: scoreResidue(params.generated, { ceiling: params.lengthCeiling }),
   };
+}
+
+function matchAct(params: {
+  expectedAct?: SpeechAct | null;
+  sampledAct?: SpeechAct | null;
+  expected: string;
+  generated: string;
+  previousUser?: string | null;
+}): boolean {
+  const expected = params.expectedAct ?? labelSpeechActByRule(params.expected, params.previousUser);
+  if (!expected) return false;
+  if (params.sampledAct) return params.sampledAct === expected;
+  const generated = labelSpeechActByRule(params.generated, params.previousUser);
+  return generated === expected;
 }
 
 /** Aggregates the cases into the run's numbers. */
@@ -344,6 +364,8 @@ export function aggregateScores(scores: EvalCaseScore[]): EvalMetrics {
       emotionMatrix: {},
       perState: {},
       scores: [],
+      actMatch: 0,
+      residueRate: 0,
     };
   }
   const mean = (values: number[]) => values.reduce((a, b) => a + b, 0) / values.length;
@@ -407,6 +429,12 @@ export function aggregateScores(scores: EvalCaseScore[]): EvalMetrics {
     emotionMatrix[score.expectedState] = row;
   }
 
+  const actDenom = scores.filter((s) => s.expectedAct).length;
+  const actHits = scores.filter((s) => s.actMatch).length;
+  const residueRate = scores.filter((s) => s.residue).length
+    ? scores.reduce((sum, s) => sum + (s.residue?.rate ?? 0), 0) / scores.length
+    : 0;
+
   return {
     cases: n,
     overlap,
@@ -416,6 +444,8 @@ export function aggregateScores(scores: EvalCaseScore[]): EvalMetrics {
     emotionMatrix,
     perState,
     scores,
+    actMatch: actDenom ? actHits / actDenom : 0,
+    residueRate,
   };
 }
 

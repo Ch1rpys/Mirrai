@@ -27,7 +27,15 @@ import { mayReachOut } from "@shared/graduation-mode";
 import { copy, localizeScene } from "@shared/copy";
 import { asMaterial } from "../_core/material";
 import { buildPromptForPersona } from "./prompt";
-import { localDateKey, zonedDateKey, zonedDayStart } from "@shared/timezone";
+import { dayPartFromHour, normalizeActProfile, sampleAct } from "@shared/act-profile";
+import { actProfileForTurn } from "./prompt";
+import { isUserAsking } from "@shared/speech-acts";
+import { pickRerankWinner } from "./rerank";
+import { retrieveExemplars } from "./exemplars";
+import { splitBurst } from "./burst";
+import { loadBehaviorProfile, seededRandom } from "../_core/behavior-profile";
+import { sampleBurstSize, sampleReplyDelayMs } from "@shared/behavior-profile";
+import { localDateKey, zonedDateKey, zonedDayStart, zonedHour } from "@shared/timezone";
 import { extractMemories, isExtractionDue } from "./memory-extract";
 import { storageToDataUrl } from "../storage";
 
@@ -44,6 +52,10 @@ const TRAJECTORY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export type ChatEvent =
   | { type: "delta"; text: string }
+  | { type: "thinking" }
+  | { type: "delay"; ms: number }
+  | { type: "silence"; notice: string }
+  | { type: "burst"; texts: string[] }
   | { type: "emotion"; state: string; reason?: string }
   | {
       type: "done";
@@ -202,6 +214,8 @@ export interface ConversationOptions {
   /** Cancels the model call when the client goes away. */
   signal?: AbortSignal;
   now?: Date;
+  /** Which stretch of them this turn is speaking from. */
+  periodId?: string | null;
 }
 
 /**
@@ -405,6 +419,8 @@ export async function composeMessages(params: {
   extraConfig?: Record<string, any>;
   /** The message this turn replies to. */
   replyToId?: number | null;
+  sampledAct?: import("@shared/speech-acts").SpeechAct | null;
+  periodId?: string | null;
 }): Promise<{
   messages: LLMMessage[];
   recalled: Array<{ id: number; title: string; subject: string }>;
@@ -412,7 +428,8 @@ export async function composeMessages(params: {
   const now = params.now ?? new Date();
   const locale = params.locale ?? "zh";
   const contextLimit = Math.max(4, params.contextLimit);
-  const history = await db.getMessagesByPersonaId(params.persona.id, params.userId, 200);
+  const history = (await db.getMessagesByPersonaId(params.persona.id, params.userId, 200))
+    .filter((row) => row.origin !== "system-notice");
 
   const scene = params.persona.activeSceneId
     ? await db.getSceneById(params.persona.activeSceneId, params.userId)
@@ -489,6 +506,8 @@ export async function composeMessages(params: {
       : "",
     memories: retrieved as any,
     quotedSection,
+    sampledAct: params.sampledAct ?? null,
+    periodId: params.periodId ?? null,
   });
 
   const recent = await Promise.all(
@@ -780,6 +799,50 @@ async function* runConversationTurn(
     }
   }
 
+  const timingEnabled = Boolean((persona as any).timingEnabled) && Boolean(loadBehaviorProfile(persona));
+  const rerankEnabled = Boolean((persona as any).rerankEnabled);
+  const behavior = loadBehaviorProfile(persona);
+  const actProfile = normalizeActProfile(
+    actProfileForTurn(persona, options.periodId ?? null),
+  );
+  const rng = seededRandom(`turn:${persona.id}:${now.getTime()}:${message.slice(0, 40)}`);
+  const sampled = actProfile
+    ? sampleAct(
+        actProfile,
+        {
+          asking: isUserAsking(message),
+          emotion: persona.emotionalState ?? "warm",
+          dayPart: dayPartFromHour(zonedHour(now, (persona as any).timezone)),
+          relationshipPhase: (persona.personaData as any)?.relationshipPhase ?? "initial",
+        },
+        { dropSilence: !timingEnabled, rng },
+      )
+    : null;
+
+  if (sampled?.act === "silence" && timingEnabled) {
+    const notice = copy(locale, "prompt.didNotReply");
+    const messageId = await db.createMessage({
+      personaId: persona.id,
+      userId,
+      role: "assistant",
+      content: notice,
+      emotionalState: persona.emotionalState,
+      channel: options.channel ?? "web",
+      origin: "system-notice",
+      metadata: { sampledAct: "silence", periodId: options.periodId ?? null },
+    });
+    yield { type: "silence", notice };
+    yield {
+      type: "done",
+      messageId,
+      emotionalState: persona.emotionalState,
+      graduationSuggested: false,
+      careNote: null,
+      crisis: false,
+    };
+    return;
+  }
+
   const { messages: llmMessages, recalled } = await composeMessages({
     persona,
     userId,
@@ -790,6 +853,8 @@ async function* runConversationTurn(
     now,
     replyToId: options.replyToId,
     extraConfig,
+    sampledAct: sampled?.act === "silence" ? null : sampled?.act ?? null,
+    periodId: options.periodId ?? null,
   });
 
   const provider = await resolveProviderForUser({
@@ -807,31 +872,76 @@ async function* runConversationTurn(
   let failureMessage = "";
 
   try {
-    if (options.mode === "stream" && provider.stream && provider.capabilities.streaming) {
+    const invokeOptions = {
+      provider: options.providerName,
+      temperature: extraConfig.temperature,
+      maxTokens: extraConfig.maxTokens,
+      signal: options.signal,
+    };
+    if (rerankEnabled) {
+      yield { type: "thinking" };
+      const texts = await Promise.all(
+        Array.from({ length: 4 }, async () => {
+          try {
+            const answer = await llmService.invokeWithProvider(provider, {
+              messages: llmMessages,
+              options: invokeOptions,
+            });
+            return typeof answer === "string" ? answer : "";
+          } catch {
+            return "";
+          }
+        }),
+      );
+      let records: Array<{ role: string; content: string }> = [];
+      try {
+        records = await db.getCollectedMessagesForPersona(persona.id, userId);
+      } catch {
+        records = [];
+      }
+      const exemplars = retrieveExemplars({
+        userMessage: message,
+        records: records as any,
+      });
+      const training = records
+        .filter((row) => row.role === "assistant")
+        .map((row) => row.content)
+        .slice(-80);
+      const picked = pickRerankWinner({
+        candidates: texts.map((text) => ({ text })),
+        trainingTexts: training,
+        exemplars: exemplars.map((item) => item.content),
+      });
+      const surviving = texts.filter(Boolean);
+      if (!picked && !surviving.length) {
+        throw new Error("rerank produced no candidates");
+      }
+      replyText = picked?.text || surviving[0] || copy(locale, "prompt.silence");
+      console.info(
+        "[Rerank]",
+        JSON.stringify({
+          sampledAct: sampled?.act ?? null,
+          exemplarIds: exemplars.map((item) => item.id),
+          scores: picked?.scores ?? [],
+          picked: picked?.index ?? null,
+        }),
+      );
+      if (!timingEnabled) yield { type: "delta", text: replyText };
+    } else if (options.mode === "stream" && provider.stream && provider.capabilities.streaming) {
       for await (const chunk of llmService.streamWithProvider(provider, {
         messages: llmMessages,
-        options: {
-          provider: options.providerName,
-          temperature: extraConfig.temperature,
-          maxTokens: extraConfig.maxTokens,
-          signal: options.signal,
-        },
+        options: invokeOptions,
       })) {
         replyText += chunk.text;
-        yield { type: "delta", text: chunk.text };
+        if (!timingEnabled) yield { type: "delta", text: chunk.text };
       }
     } else {
       replyText = await llmService.invokeWithProvider(provider, {
         messages: llmMessages,
-        options: {
-          provider: options.providerName,
-          temperature: extraConfig.temperature,
-          maxTokens: extraConfig.maxTokens,
-          signal: options.signal,
-        },
+        options: invokeOptions,
       });
       replyText = replyText || copy(locale, "prompt.silence");
-      yield { type: "delta", text: replyText };
+      if (!timingEnabled) yield { type: "delta", text: replyText };
     }
   } catch (e) {
     failed = true;
@@ -1077,6 +1187,11 @@ async function* runConversationTurn(
   }
   const finalText = appended.length > 0 ? `${baseText}\n\n${appended.join("\n\n")}` : baseText;
 
+  if (timingEnabled && behavior) {
+    const delayMs = sampleReplyDelayMs(behavior, rng);
+    yield { type: "delay", ms: delayMs };
+  }
+
   // The emotional state is inferred *before* the reply is stored. It used
   // to be stored with the persona's previous state and inferred
   // afterwards, so the message showed the new mood live and the old one
@@ -1104,17 +1219,31 @@ async function* runConversationTurn(
   });
   const newEmotionalState = emotion.state;
 
-  const messageId = await db.createMessage({
-    personaId: persona.id,
-    userId,
-    role: "assistant",
-    content: finalText,
-    emotionalState: newEmotionalState,
-    channel: options.channel ?? "web",
-    // Which memories went into this turn, so the answer to "did it
-    // recall that, or invent it?" survives a reload.
-    recalledMemoryIds: recalled.length > 0 ? JSON.stringify(recalled.map((m) => m.id)) : null,
-  });
+  const turnMeta = {
+    sampledAct: sampled?.act ?? null,
+    periodId: options.periodId ?? null,
+  };
+  let parts = [finalText];
+  if (timingEnabled && behavior) {
+    parts = splitBurst(finalText, sampleBurstSize(behavior, rng));
+    if (parts.length > 1) yield { type: "burst", texts: parts };
+    else if (parts[0]) yield { type: "delta", text: parts[0] };
+  }
+  let messageId = 0;
+  for (const part of parts) {
+    messageId = await db.createMessage({
+      personaId: persona.id,
+      userId,
+      role: "assistant",
+      content: part,
+      emotionalState: newEmotionalState,
+      channel: options.channel ?? "web",
+      // Which memories went into this turn, so the answer to "did it
+      // recall that, or invent it?" survives a reload.
+      recalledMemoryIds: recalled.length > 0 ? JSON.stringify(recalled.map((m) => m.id)) : null,
+      metadata: turnMeta,
+    });
+  }
 
   yield { type: "emotion", state: newEmotionalState, reason: emotion.reason };
 

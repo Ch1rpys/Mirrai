@@ -35,6 +35,8 @@ import {
   getUserById, bumpUserTokenVersion, updateUserGraduationMode, updateUserTrajectoryAssessment,
   getUserTimezone,
   createMemory, getMemoriesByPersonaId, countMemories, getMemoryTitles, deleteMemory, updateMemory,
+  createFidelityFeedback, listFidelityFeedbackForMessage, listFidelityFeedbackForPersona,
+  getMemoriesByFactKey, supersedeMemory, getMessageById,
   countDiaryEntries,
   getFileSummaryTitles,
   setUserLocale, getUserLocale,  createEmotionSnapshot, getEmotionSnapshots, getEmotionReport, getTodaySnapshot,
@@ -91,16 +93,32 @@ import { resolveRelationshipPhase, parseRecalledIds } from "@shared/user-side";
 import { copy, localizeScene } from "@shared/copy";
 import { asMaterial } from "./_core/material";
 import { buildEvalCases, casesFromRows, trainingTexts } from "./eval/dataset";
+import { labelEvalCases } from "./eval/act-labels";
 import { runEval } from "./eval/run";
 import { collectOutboundCandidates } from "./chat/outbound";
-import { measureAndSaveBehaviorProfile } from "./_core/behavior-profile";
+import { loadBehaviorProfile, measureAndSaveBehaviorProfile } from "./_core/behavior-profile";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
 import { normalizeMicroRules } from "@shared/micro-rules";
 import {
   normalizeImperfectionProfile,
   mergeImperfectionDefaults,
+  persistableImperfection,
+  productWrittenStates,
+  clearProductWrittenImperfection,
 } from "@shared/imperfection";
+import { SPEECH_ACTS, type SpeechAct } from "@shared/speech-acts";
+import { normalizeSuppressions } from "@shared/suppressions";
+import { correctActCount, normalizeActProfile } from "@shared/act-profile";
+import { normalizeLifeEvents } from "@shared/life-events";
+import { mineForgetStyles, mineSuppressions } from "./skill-engine/suppressions";
+import { mineOpenLoops } from "./skill-engine/open-loops";
+import {
+  aggregateFidelityFeedback,
+  confirmedSuppressionFromUnlike,
+  inventedMemoryDraft,
+  sampledActFromMetadata,
+} from "./skill-engine/feedback-aggregate";
 import { mayReachOut } from "@shared/graduation-mode";
 import { hashPassword, verifyPassword } from "./_core/password";
 import { extractJsonArray, extractJsonObject } from "./_core/json";
@@ -1092,6 +1110,8 @@ export const appRouter = router({
          * app that speaks first is something the user has to buy.
          */
         proactiveFrequencyHours: z.number().int().min(0).max(720).optional(),
+        rerankEnabled: z.boolean().optional(),
+        timingEnabled: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { id, ...rest } = input;
@@ -1122,6 +1142,19 @@ export const appRouter = router({
         if (rest.isPinned !== undefined) data.isPinned = rest.isPinned;
         if (rest.proactiveFrequencyHours !== undefined) {
           data.proactiveFrequencyHours = rest.proactiveFrequencyHours;
+        }
+        if (rest.rerankEnabled !== undefined) data.rerankEnabled = rest.rerankEnabled;
+        if (rest.timingEnabled !== undefined) {
+          if (rest.timingEnabled) {
+            const current = await getPersonaById(id, ctx.user.id);
+            if (!current || !loadBehaviorProfile(current)) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: copy(ctx.locale, "prompt.rhythmUnknown"),
+              });
+            }
+          }
+          data.timingEnabled = rest.timingEnabled;
         }
         /**
          * Did anything happen?
@@ -1871,6 +1904,8 @@ export const appRouter = router({
             turnHeld: true,
           })) {
             if (event.type === "delta") reply += event.text;
+            else if (event.type === "silence") reply = event.notice;
+            else if (event.type === "burst") reply = event.texts.join("\n\n");
             else if (event.type === "emotion") emotionalState = event.state;
             else if (event.type === "error") failure = event.message;
             else if (event.type === "done") crisis = event.crisis === true;
@@ -1963,6 +1998,7 @@ export const appRouter = router({
          * and a long conversation becomes impossible to follow.
          */
         replyToId: z.number().optional(),
+        periodId: z.string().max(64).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
@@ -2002,11 +2038,14 @@ export const appRouter = router({
             mode: "once",
             locale: input.locale,
             replyToId: input.replyToId,
+            periodId: input.periodId,
             // Pressing "stop" has to stop the model too, not just the
             // waiting.
             signal: requestAbortSignal(ctx.req, ctx.res),
           })) {
             if (event.type === "delta") reply += event.text;
+            else if (event.type === "silence") reply = event.notice;
+            else if (event.type === "burst") reply = event.texts.join("\n\n");
             else if (event.type === "emotion") emotionalState = event.state;
             else if (event.type === "error") {
               failure = event.message;
@@ -2148,6 +2187,8 @@ export const appRouter = router({
           signal: requestAbortSignal(ctx.req, ctx.res),
         })) {
           if (event.type === "delta") reply += event.text;
+          else if (event.type === "silence") reply = event.notice;
+          else if (event.type === "burst") reply = event.texts.join("\n\n");
           else if (event.type === "emotion") emotionalState = event.state;
           else if (event.type === "error") failure = event.message;
           else if (event.type === "done") {
@@ -2267,6 +2308,8 @@ export const appRouter = router({
           signal: requestAbortSignal(ctx.req, ctx.res),
         })) {
           if (event.type === "delta") reply += event.text;
+          else if (event.type === "silence") reply = event.notice;
+          else if (event.type === "burst") reply = event.texts.join("\n\n");
           else if (event.type === "emotion") emotionalState = event.state;
           else if (event.type === "error") failure = event.message;
           else if (event.type === "done") {
@@ -3797,7 +3840,13 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        const id = await createMemory({ ...input, userId: ctx.user.id });
+        const id = await createMemory({
+          ...input,
+          userId: ctx.user.id,
+          messageId: null,
+          factKey: input.factKey,
+          status: "active",
+        });
         return { id };
       }),
 
@@ -3834,6 +3883,24 @@ export const appRouter = router({
         // The memory was removed, or there was nothing there to remove.
         const removed = await deleteMemory(input.id, ctx.user.id);
         if (!removed) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true };
+      }),
+
+    adjudicate: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        winnerId: z.number(),
+        loserId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        await supersedeMemory({
+          loserId: input.loserId,
+          winnerId: input.winnerId,
+          personaId: input.personaId,
+          userId: ctx.user.id,
+        });
         return { success: true };
       }),
 
@@ -4479,7 +4546,10 @@ export const appRouter = router({
           timestamp: row.timestamp ?? null,
         }));
         // The emotion is read in the language the records are in.
-        const cases = buildEvalCases(messages, { locale: input.locale });
+        const cases = await labelEvalCases(
+          buildEvalCases(messages, { locale: input.locale }),
+          { userId: ctx.user.id, locale: input.locale },
+        );
         const saved = await saveEvalCases(
           input.personaId,
           ctx.user.id,
@@ -4487,6 +4557,8 @@ export const appRouter = router({
             context: item.context,
             expected: item.expected,
             expectedState: item.expectedState,
+            expectedAct: item.expectedAct ?? null,
+            expectedActSource: item.expectedActSource ?? null,
             source: "collected",
             occurredAt: item.expected.timestamp ?? null,
           })),
@@ -4566,18 +4638,21 @@ export const appRouter = router({
           // time, and the comparison with the last run would be between
           // two different things.
           const stored = casesFromRows(await getEvalCases(input.personaId, ctx.user.id));
-          const cases = stored.length
+          const cut = stored.length
             ? stored
             : buildEvalCases(messages, { locale: input.locale });
+          const cases = await labelEvalCases(cut, { userId: ctx.user.id, locale: input.locale });
           if (!cases.length) {
             throw new TRPCError({
               code: "PRECONDITION_FAILED",
               message: copy(input.locale, "labels.eval.noCases"),
             });
           }
-          if (!stored.length) {
-            // There were none stored, so these are new; they are kept, so
-            // that the next run measures the same lines.
+          const unlabeledBefore = cut.some((item) => !item.expectedAct);
+          if (!stored.length || unlabeledBefore) {
+            // There were none stored, or the stored ones had no cached
+            // act yet. They are kept labelled, so the next run measures
+            // the same lines and does not ask the model again.
             await saveEvalCases(
               input.personaId,
               ctx.user.id,
@@ -4585,6 +4660,8 @@ export const appRouter = router({
                 context: item.context,
                 expected: item.expected,
                 expectedState: item.expectedState,
+                expectedAct: item.expectedAct ?? null,
+                expectedActSource: item.expectedActSource ?? null,
                 source: "collected",
                 occurredAt: item.expected.timestamp ?? null,
               })),
@@ -4598,6 +4675,7 @@ export const appRouter = router({
             trainingTexts: trainingTexts(messages, cases),
             variant: input.variant,
             locale: input.locale,
+            rerank: true,
           });
           // The run is always kept. The comparison with the last run is
           // only meaningful if there is a last run — and the variant is
@@ -4785,6 +4863,8 @@ export const appRouter = router({
         return {
           stored,
           merged: mergeImperfectionDefaults(stored, input.locale),
+          productWritten: productWrittenStates(stored, input.locale),
+          reviewed: Boolean((persona.personaData as any)?.imperfectionDefaultsReviewed),
         };
       }),
 
@@ -4807,12 +4887,346 @@ export const appRouter = router({
           // The fallback for a state the user left empty is written in the
           // app's language — which is the user's language, not the app
           // default's.
-          const profile = normalizeImperfectionProfile(input.profile, ctx.locale);
+          const stored = normalizeImperfectionProfile(
+            (persona.personaData as any)?.imperfectionProfile,
+            ctx.locale,
+          );
+          const profile = persistableImperfection(
+            normalizeImperfectionProfile(input.profile, ctx.locale),
+            stored,
+            ctx.locale,
+          );
           const merged = {
             ...((persona.personaData as any) || {}),
             imperfectionProfile: profile,
           };
           await updatePersona(input.personaId, ctx.user.id, { personaData: merged });
+          return { profile };
+        });
+      }),
+
+    reviewDefaults: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        keep: z.boolean(),
+        locale: z.enum(["zh", "en"]).default("zh"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const stored = normalizeImperfectionProfile(
+            (persona.personaData as any)?.imperfectionProfile,
+            input.locale,
+          );
+          const profile = input.keep
+            ? stored
+            : clearProductWrittenImperfection(stored, input.locale);
+          const merged = {
+            ...((persona.personaData as any) || {}),
+            imperfectionProfile: profile,
+            imperfectionDefaultsReviewed: true,
+          };
+          await updatePersona(input.personaId, ctx.user.id, { personaData: merged });
+          return { profile };
+        });
+      }),
+  }),
+
+  fidelity: router({
+    mark: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        messageId: z.number(),
+        reason: z.enum(["act", "complete", "ask", "word", "invented", "mood", "timing"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const message = await getMessageById(input.messageId, ctx.user.id, input.personaId);
+        if (!message) throw new TRPCError({ code: "NOT_FOUND" });
+        const row = await createFidelityFeedback({
+          userId: ctx.user.id,
+          personaId: input.personaId,
+          messageId: input.messageId,
+          reason: input.reason,
+        });
+        return { id: row.id };
+      }),
+
+    listForMessage: protectedProcedure
+      .input(z.object({ personaId: z.number(), messageId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        return listFidelityFeedbackForMessage(input.messageId, ctx.user.id, input.personaId);
+      }),
+
+    candidates: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const rows = await listFidelityFeedbackForPersona(input.personaId, ctx.user.id);
+        const rejected = ((persona.personaData as any)?.rejectedFeedbackKeys ?? []) as string[];
+        const items = aggregateFidelityFeedback({ rows, rejectedKeys: rejected });
+        return {
+          items: await Promise.all(items.map(async (item) => {
+            const message = await getMessageById(item.messageId, ctx.user.id, input.personaId);
+            return {
+              ...item,
+              snippet: String(message?.content ?? "").slice(0, 240),
+              sampledAct: sampledActFromMetadata(message?.metadata),
+            };
+          })),
+        };
+      }),
+
+    reject: protectedProcedure
+      .input(z.object({ personaId: z.number(), key: z.string().max(80) }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const existing = Array.isArray((persona.personaData as any)?.rejectedFeedbackKeys)
+            ? [...(persona.personaData as any).rejectedFeedbackKeys]
+            : [];
+          if (!existing.includes(input.key)) existing.push(input.key);
+          await updatePersona(input.personaId, ctx.user.id, {
+            personaData: { ...((persona.personaData as any) || {}), rejectedFeedbackKeys: existing },
+          });
+          return { keys: existing };
+        });
+      }),
+
+    /**
+     * Confirm a candidate into the thing it is for.
+     *
+     * word / ask / complete write a verified subtraction.
+     * act decrements the sampled (or chosen) action count.
+     * invented writes a later-written memory so G2 can show a conflict.
+     * mood / timing only consume the key.
+     *
+     * The key is consumed the same way as a refusal, so it does not
+     * come back on the next aggregation.
+     */
+    confirm: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        key: z.string().max(80),
+        act: z.enum(SPEECH_ACTS as unknown as [SpeechAct, ...SpeechAct[]]).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const rows = await listFidelityFeedbackForPersona(input.personaId, ctx.user.id);
+          const data = ((persona.personaData as Record<string, unknown>) || {});
+          const rejected = Array.isArray(data.rejectedFeedbackKeys)
+            ? [...(data.rejectedFeedbackKeys as string[])]
+            : [];
+          const candidate = aggregateFidelityFeedback({
+            rows,
+            rejectedKeys: rejected,
+          }).find((item) => item.key === input.key);
+          if (!candidate) throw new TRPCError({ code: "NOT_FOUND" });
+
+          const message = await getMessageById(candidate.messageId, ctx.user.id, input.personaId);
+          const snippet = String(message?.content ?? "").slice(0, 240);
+          const sampledAct = sampledActFromMetadata(message?.metadata);
+          const next: Record<string, unknown> = { ...data };
+          if (!rejected.includes(input.key)) rejected.push(input.key);
+          next.rejectedFeedbackKeys = rejected;
+
+          if (candidate.kind === "suppression") {
+            const rule = confirmedSuppressionFromUnlike({
+              key: input.key,
+              reason: candidate.reason,
+              snippet,
+            });
+            if (rule) {
+              const existing = normalizeSuppressions(data.suppressions);
+              const known = new Set(existing.map((row) => `${row.kind}:${row.pattern}`));
+              if (!known.has(`${rule.kind}:${rule.pattern}`)) {
+                next.suppressions = normalizeSuppressions([...existing, rule]);
+              }
+            }
+          } else if (candidate.kind === "act") {
+            const profile = normalizeActProfile(data.actProfile);
+            const wrong = input.act ?? sampledAct;
+            if (profile && wrong) next.actProfile = correctActCount(profile, wrong);
+          } else if (candidate.kind === "memory" && snippet.trim()) {
+            const draft = inventedMemoryDraft(snippet, ctx.locale);
+            await createMemory({
+              personaId: input.personaId,
+              userId: ctx.user.id,
+              title: draft.title,
+              description: draft.description,
+              category: "memory",
+              subject: "them",
+              messageId: null,
+              factKey: draft.factKey,
+              status: "active",
+            });
+          }
+
+          await updatePersona(input.personaId, ctx.user.id, { personaData: next });
+          return { key: input.key, kind: candidate.kind };
+        });
+      }),
+  }),
+
+  suppression: router({
+    list: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const rows = normalizeSuppressions((persona.personaData as any)?.suppressions);
+        return {
+          rules: rows,
+          hint: rows.length ? undefined : copy(ctx.locale, "labels.suppressions.minedNone"),
+        };
+      }),
+    mine: protectedProcedure
+      .input(z.object({ personaId: z.number(), locale: z.enum(["zh", "en"]).default("zh") }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id);
+          const mined = [
+            ...mineSuppressions({ messages: rows, locale: input.locale }),
+            ...mineForgetStyles({ messages: rows, locale: input.locale }),
+          ];
+          if (!mined.length) {
+            return { rules: [], hint: copy(input.locale, "prompt.samplesTooThin") };
+          }
+          const existing = normalizeSuppressions((persona.personaData as any)?.suppressions);
+          const known = new Set(existing.map((row) => `${row.kind}:${row.pattern}`));
+          const fresh = mined.filter((row) => !known.has(`${row.kind}:${row.pattern}`));
+          const rules = normalizeSuppressions([...existing, ...fresh]);
+          await updatePersona(input.personaId, ctx.user.id, {
+            personaData: { ...((persona.personaData as any) || {}), suppressions: rules },
+          });
+          return { rules: fresh, hint: copy(input.locale, "labels.suppressions.mine") };
+        });
+      }),
+    save: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        rules: z.array(z.object({
+          id: z.string().max(64).optional(),
+          pattern: z.string().min(1).max(200),
+          kind: z.enum([
+            "no_question_ending", "no_phrase", "no_advice", "no_subclause",
+            "no_word_class", "avoid_topic", "forget_admit", "forget_wrong", "forget_deflect",
+          ]),
+          confidence: z.number().min(0).max(1).default(0.5),
+          source: z.enum(["auto", "manual"]).default("manual"),
+          verified: z.boolean().default(true),
+          evidence: z.array(z.object({
+            at: z.string().max(40).optional(),
+            snippet: z.string().max(1000),
+          })).max(20).default([]),
+        })).max(200),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const rules = normalizeSuppressions(input.rules);
+          await updatePersona(input.personaId, ctx.user.id, {
+            personaData: { ...((persona.personaData as any) || {}), suppressions: rules },
+          });
+          return { rules };
+        });
+      }),
+  }),
+
+  lifeEvent: router({
+    list: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const events = normalizeLifeEvents((persona.personaData as any)?.lifeEvents);
+        return {
+          events,
+          hint: events.length ? undefined : copy(ctx.locale, "labels.lifeEvents.empty"),
+        };
+      }),
+    mine: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id);
+          const mined = mineOpenLoops({ messages: rows });
+          const existing = normalizeLifeEvents((persona.personaData as any)?.lifeEvents);
+          const known = new Set(existing.map((event) => event.title));
+          const fresh = mined.filter((event) => !known.has(event.title));
+          const events = normalizeLifeEvents([...existing, ...fresh]);
+          await updatePersona(input.personaId, ctx.user.id, {
+            personaData: { ...((persona.personaData as any) || {}), lifeEvents: events },
+          });
+          return { events: fresh };
+        });
+      }),
+    save: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        events: z.array(z.object({
+          id: z.string().max(64).optional(),
+          kind: z.enum(["life", "open_loop"]),
+          title: z.string().min(1).max(80),
+          detail: z.string().max(400).default(""),
+          whoSaid: z.string().max(40).default(""),
+          endsAt: z.string().max(40).optional(),
+          closed: z.boolean().default(false),
+          source: z.enum(["auto", "manual"]).default("manual"),
+          verified: z.boolean().default(true),
+          evidence: z.array(z.object({
+            at: z.string().max(40).optional(),
+            snippet: z.string().max(1000),
+          })).max(20).default([]),
+        })).max(200),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const events = normalizeLifeEvents(input.events);
+          await updatePersona(input.personaId, ctx.user.id, {
+            personaData: { ...((persona.personaData as any) || {}), lifeEvents: events },
+          });
+          return { events };
+        });
+      }),
+  }),
+
+  actProfile: router({
+    get: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        return { profile: normalizeActProfile((persona.personaData as any)?.actProfile) };
+      }),
+    save: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        profile: z.unknown(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const profile = normalizeActProfile(input.profile);
+          await updatePersona(input.personaId, ctx.user.id, {
+            personaData: { ...((persona.personaData as any) || {}), actProfile: profile },
+          });
           return { profile };
         });
       }),

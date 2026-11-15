@@ -92,6 +92,41 @@ describe("streamChat", () => {
     });
   });
 
+  it("hands thinking, silence and burst events to the caller", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      mockSseResponse([
+        'event: thinking\ndata: {"notice":"在想"}\n\n',
+        'event: delay\ndata: {"ms":0}\n\n',
+        'event: burst\ndata: {"texts":["嗯","在"]}\n\n',
+        'event: silence\ndata: {"notice":"TA 这会儿没回"}\n\n',
+        'event: done\ndata: {"messageId":8,"emotionalState":"warm","graduationSuggested":false,"careNote":null,"crisis":false}\n\n',
+      ]),
+    );
+    globalThis.fetch = fetchMock as any;
+
+    const thinking: string[] = [];
+    const bursts: string[][] = [];
+    const silences: string[] = [];
+    const delays: number[] = [];
+    await streamChat({
+      personaId: 1,
+      message: "在吗",
+      periodId: "period-1",
+      callbacks: {
+        onDelta: () => {},
+        onThinking: (notice) => thinking.push(notice),
+        onDelay: (ms) => { delays.push(ms); },
+        onBurst: (texts) => bursts.push(texts),
+        onSilence: (notice) => silences.push(notice),
+      },
+    });
+    expect(thinking).toEqual(["在想"]);
+    expect(delays).toEqual([0]);
+    expect(bursts).toEqual([["嗯", "在"]]);
+    expect(silences).toEqual(["TA 这会儿没回"]);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).periodId).toBe("period-1");
+  });
+
   it("reassembles a frame that arrives split across chunks", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       mockSseResponse([
