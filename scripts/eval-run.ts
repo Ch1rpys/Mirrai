@@ -13,6 +13,7 @@
  * Usage:
  *   pnpm eval -- --persona 1 --user 1            # score one persona
  *   pnpm eval -- --persona 1 --user 1 --variant withoutRules
+ *   pnpm eval -- --persona 1 --user 1 --without act,rerank
  *   pnpm eval -- --persona 1 --user 1 --cases    # only cut the cases
  *   pnpm eval -- --persona 1 --user 1 --save     # store the run
  */
@@ -57,6 +58,10 @@ const variant = (flag("variant") ?? "default") as
   | "withoutAct"
   | "withoutRerank";
 const rerank = !args.includes("--no-rerank") && variant !== "withoutRerank";
+const without = (flag("without") ?? "")
+  .split(",")
+  .map((name) => name.trim())
+  .filter(Boolean);
 const onlyCases = args.includes("--cases");
 const save = args.includes("--save");
 /**
@@ -124,7 +129,7 @@ const tolerances = {
 
 if (!Number.isFinite(personaId) || !Number.isFinite(userId)) {
   console.error(
-    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n]",
+    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n]",
   );
   process.exit(1);
 }
@@ -209,6 +214,7 @@ if (pairs) {
     cases,
     trainingTexts: training,
     variant,
+    without,
     locale,
     rerank,
     sampleAct: variant !== "withoutAct",
@@ -252,6 +258,7 @@ if (compare) {
     cases,
     trainingTexts: training,
     variant: "default",
+    without,
     locale,
     temperature,
     rerank,
@@ -262,6 +269,7 @@ if (compare) {
     cases,
     trainingTexts: training,
     variant: "withoutRules",
+    without,
     locale,
     temperature,
     rerank: false,
@@ -272,6 +280,7 @@ if (compare) {
     cases,
     trainingTexts: training,
     variant: "withoutAct",
+    without,
     locale,
     temperature,
     rerank,
@@ -282,6 +291,7 @@ if (compare) {
     cases,
     trainingTexts: training,
     variant: "withoutRerank",
+    without,
     locale,
     temperature,
     rerank: false,
@@ -363,6 +373,7 @@ if (calibrate) {
         cases,
         trainingTexts: training,
         variant,
+        without,
         locale,
         temperature,
         rerank,
@@ -400,6 +411,7 @@ const metrics = await runEval({
   cases,
   trainingTexts: training,
   variant,
+  without,
   locale,
   temperature,
   rerank,

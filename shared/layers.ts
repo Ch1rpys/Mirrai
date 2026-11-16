@@ -35,6 +35,10 @@ export const LAYERS = [
 
 export type LayerId = (typeof LAYERS)[number];
 
+export function isLayerId(value: string): value is LayerId {
+  return (LAYERS as readonly string[]).includes(value);
+}
+
 /** Settings keys that are not evaluation layers. */
 export const USER_ONLY_LAYER_KEYS = [
   "stickers",

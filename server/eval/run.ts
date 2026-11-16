@@ -6,14 +6,12 @@
  * rebuilt persona to say it again, and score the two against each other.
  *
  * The persona is prompted through exactly the same path the chat uses —
- * `buildPromptForPersona` — because a measurement taken against a
+ * `planTurn` and `executePlan` — because a measurement taken against a
  * different prompt would be measuring a different product.
  */
 import type { Persona } from "../../drizzle/schema";
-import { llmService } from "../llm";
 import { resolveProviderForUser } from "../llm/user-provider";
-import { buildPromptForPersona } from "../chat/prompt";
-import type { LLMMessage } from "../llm/types";
+import { executePlan, planTurn } from "../chat/generate";
 import {
   aggregateScores,
   buildCharNgramModel,
@@ -21,13 +19,8 @@ import {
   type EvalMetrics,
 } from "./metrics";
 import type { EvalCaseData } from "./dataset";
-import { dayPartFromHour, normalizeActProfile, sampleAct } from "@shared/act-profile";
-import { isUserAsking } from "@shared/speech-acts";
-import { pickRerankWinner } from "../chat/rerank";
-import { retrieveExemplars } from "../chat/exemplars";
-import * as db from "../db";
-import { zonedHour } from "@shared/timezone";
-import { seededRandom } from "../_core/behavior-profile";
+import { isLayerId, type LayerId } from "@shared/layers";
+import type { SpeechAct } from "@shared/speech-acts";
 
 /**
  * Which version of the persona to measure.
@@ -75,6 +68,25 @@ function variantSwitches(variant: EvalVariant): {
   return { rules: "on", imperfection: "on", act: "on", rerank: "on" };
 }
 
+/** `--variant` aliases, plus `--without a,b`. */
+export function layerOverridesForEval(options: {
+  variant?: EvalVariant;
+  without?: string[];
+  sampleAct?: boolean;
+}): Partial<Record<LayerId, boolean>> {
+  const switches = variantSwitches(options.variant ?? "default");
+  const overrides: Partial<Record<LayerId, boolean>> = {
+    rules: switches.rules === "on",
+    imperfection: switches.imperfection === "on",
+    act: options.sampleAct ?? switches.act === "on",
+    rerank: switches.rerank === "on",
+  };
+  for (const name of options.without ?? []) {
+    if (isLayerId(name)) overrides[name] = false;
+  }
+  return overrides;
+}
+
 export interface EvalRunOptions {
   persona: Persona;
   userId: number;
@@ -83,6 +95,8 @@ export interface EvalRunOptions {
   trainingTexts: string[];
   locale?: "zh" | "en";
   variant?: EvalVariant;
+  /** Extra layers to turn off, from `--without a,b`. */
+  without?: string[];
   maxTokens?: number;
   temperature?: number;
   /** Called after each case, so a long run can show progress. */
@@ -96,26 +110,8 @@ export interface EvalRunOptions {
   rerank?: boolean;
   /** Whether an action is sampled into the prompt. */
   sampleAct?: boolean;
-}
-
-/**
- * The conversation, as the model sees it.
- *
- * The held-out line is not in it. The context is the real conversation,
- * in the real order, with the roles the real conversation had.
- */
-function messagesForCase(
-  systemPrompt: string,
-  caseData: EvalCaseData,
-): LLMMessage[] {
-  const messages: LLMMessage[] = [{ role: "system", content: systemPrompt }];
-  for (const message of caseData.context) {
-    messages.push({
-      role: message.role === "user" ? "user" : "assistant",
-      content: message.content,
-    });
-  }
-  return messages;
+  /** The clock the turn is planned against. Defaults to now, per case. */
+  now?: Date;
 }
 
 /**
@@ -135,8 +131,12 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
 
   const switches = variantSwitches(variant);
   const useRerank = options.rerank ?? false;
-  const useAct = options.sampleAct ?? (switches.act === "on");
-  const actProfile = normalizeActProfile((options.persona.personaData as any)?.actProfile);
+  const layerOverrides = layerOverridesForEval({
+    variant,
+    without: options.without,
+    sampleAct: options.sampleAct ?? (switches.act === "on"),
+  });
+  if (useRerank === false) layerOverrides.rerank = false;
   const model = buildCharNgramModel(options.trainingTexts);
   const scores = [];
   const whyWon: string[] = [];
@@ -144,69 +144,53 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
   for (let i = 0; i < options.cases.length; i++) {
     const caseData = options.cases[i];
     const lastUser = [...caseData.context].reverse().find((m) => m.role === "user");
-    const sampled = useAct && actProfile
-      ? sampleAct(
-          actProfile,
-          {
-            asking: isUserAsking(lastUser?.content),
-            emotion: options.persona.emotionalState ?? "warm",
-            dayPart: dayPartFromHour(zonedHour(new Date(), (options.persona as any).timezone)),
-            relationshipPhase: (options.persona.personaData as any)?.relationshipPhase ?? "initial",
-          },
-          {
-            dropSilence: true,
-            rng: seededRandom(`eval:${options.persona.id}:${i}:${caseData.expected.content}`),
-          },
-        )
-      : null;
-
-    const systemPrompt = await buildPromptForPersona({
+    const now = options.now ?? new Date();
+    const seed = `eval:${options.persona.id}:${i}:${caseData.expected.content}`;
+    const turnInput = {
       persona: options.persona,
       userId: options.userId,
+      userMessage: lastUser?.content ?? "",
+      history: caseData.context.map((row) => ({
+        role: row.role === "user" ? ("user" as const) : ("assistant" as const),
+        content: row.content,
+      })),
+      now,
       locale,
-      userMessage: lastUser?.content,
-      microRules: switches.rules === "off" ? null : undefined,
-      imperfectionProfile: switches.imperfection === "off" ? null : undefined,
-      sampledAct: sampled && sampled.act !== "silence" ? sampled.act : null,
-      excludeExemplarIds: caseData.expected.id ? [caseData.expected.id] : undefined,
-      excludeExemplarTexts: [caseData.expected.content],
-      markRecalled: false,
-    });
+      seed,
+      layerOverrides,
+      exclude: {
+        recordIds: caseData.expected.id ? [caseData.expected.id] : undefined,
+        texts: [caseData.expected.content],
+      },
+    };
 
     let generated = "";
     let winnerNote = "";
+    let sampledAct: SpeechAct | null = null;
     try {
-      const invoke = async () => {
-        const answer = await llmService.invokeWithProvider(provider, {
-          messages: messagesForCase(systemPrompt, caseData),
-          options: {
-            maxTokens: options.maxTokens ?? 200,
-            temperature: options.temperature ?? 0.7,
-          },
-        });
-        return typeof answer === "string" ? answer : "";
-      };
-      if (useRerank && switches.rerank === "on") {
-        const texts = await Promise.all(Array.from({ length: 4 }, () => invoke().catch(() => "")));
-        const records = await db
-          .getCollectedMessagesForPersona(options.persona.id, options.userId)
-          .catch(() => []);
-        const exemplars = retrieveExemplars({
-          userMessage: lastUser?.content ?? "",
-          records: records as any,
-          excludeTexts: [caseData.expected.content],
-          excludeIds: caseData.expected.id ? [caseData.expected.id] : [],
-        });
-        const picked = pickRerankWinner({
-          candidates: texts.map((text) => ({ text })),
-          trainingTexts: options.trainingTexts.filter((text) => text !== caseData.expected.content),
-          exemplars: exemplars.map((item) => item.content),
-        });
-        generated = picked?.text ?? texts.find(Boolean) ?? "";
-        const winner = picked?.scores.find((row) => row.index === picked.index);
-        winnerNote = `case ${i} picked #${picked?.index ?? 0} distance=${winner?.distanceToMedian?.toFixed(3) ?? "n/a"} discarded=${picked?.scores.filter((s) => s.discarded).length}`;
-      } else {
-        generated = await invoke();
+      const plan = await planTurn(turnInput);
+      sampledAct = plan.sampledAct;
+      for await (const event of executePlan(plan, turnInput, {
+        provider,
+        mode: "once",
+        rerank: useRerank && layerOverrides.rerank !== false,
+        options: {
+          maxTokens: options.maxTokens ?? 200,
+          temperature: options.temperature ?? 0.7,
+        },
+        emitDeltas: false,
+        emptyAsSilence: false,
+        trainingTexts: options.trainingTexts.filter(
+          (text) => text !== caseData.expected.content,
+        ),
+      })) {
+        if (event.type !== "final") continue;
+        generated = typeof event.text === "string" ? event.text : "";
+        const picked = event.rerank;
+        if (picked) {
+          const winner = picked.scores.find((row) => row.index === picked.index);
+          winnerNote = `case ${i} picked #${picked.index ?? 0} distance=${winner?.distanceToMedian?.toFixed(3) ?? "n/a"} discarded=${picked.scores.filter((s) => s.discarded).length}`;
+        }
       }
     } catch (error) {
       console.warn(
@@ -229,7 +213,7 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
         declaredState: caseData.expectedState ?? null,
         locale,
         expectedAct: caseData.expectedAct ?? null,
-        sampledAct: sampled?.act ?? null,
+        sampledAct,
         previousUser: lastUser?.content ?? null,
       }),
     );

@@ -19,7 +19,7 @@ import { loadBehaviorProfile, seededRandom } from "../_core/behavior-profile";
 import { zonedHour } from "@shared/timezone";
 import { pickRerankWinner, type RerankResult } from "./rerank";
 import { retrieveExemplars } from "./exemplars";
-import { buildPromptForPersona, actProfileForTurn } from "./prompt";
+import { buildPromptForPersona } from "./prompt";
 import * as db from "../db";
 import {
   applyLayerOverrides,
@@ -71,6 +71,18 @@ export interface TurnPlan {
   rng: () => number;
 }
 
+function actProfileForTurn(
+  persona: Persona,
+  periodId: string | null | undefined,
+) {
+  if (periodId) {
+    const periods = ((persona.personaData as { periods?: Array<{ id?: string; actProfileDelta?: unknown }> } | null)?.periods) ?? [];
+    const period = periods.find((item) => item.id === periodId);
+    if (period?.actProfileDelta) return period.actProfileDelta;
+  }
+  return (persona.personaData as { actProfile?: unknown } | null)?.actProfile ?? null;
+}
+
 export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   const layers = applyLayerOverrides(layersFromSettings(input.persona), input.layerOverrides);
   const layersUsed = enabledLayerIds(layers);
@@ -79,12 +91,9 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     Boolean((input.persona as { timingEnabled?: boolean }).timingEnabled) &&
     Boolean(loadBehaviorProfile(input.persona));
   const dropSilence = Boolean(input.exclude) || !timingEnabled;
-  // Evaluation tests mock `../chat/prompt` with only `buildPromptForPersona`.
-  // Chat loads the real module, so the period-aware helper is used there.
-  const rawProfile = typeof actProfileForTurn === "function"
-    ? actProfileForTurn(input.persona, input.periodId ?? null)
-    : (input.persona.personaData as { actProfile?: unknown } | null)?.actProfile ?? null;
-  const actProfile = layers.act ? normalizeActProfile(rawProfile) : null;
+  const actProfile = layers.act
+    ? normalizeActProfile(actProfileForTurn(input.persona, input.periodId ?? null))
+    : null;
   const sampled = actProfile
     ? sampleAct(
         actProfile,
@@ -189,6 +198,8 @@ export async function* executePlan(
     options: { temperature?: number; maxTokens?: number; provider?: string };
     emitDeltas?: boolean;
     trainingTexts?: string[];
+    /** Chat fills an empty answer with the silence copy. Evaluation leaves it empty so the case is skipped. */
+    emptyAsSilence?: boolean;
   },
 ): AsyncGenerator<
   | { type: "thinking" }
@@ -290,7 +301,11 @@ export async function* executePlan(
     messages: plan.messages,
     options: invokeOptions,
   });
-  replyText = replyText || copy(locale, "prompt.silence");
+  if (io.emptyAsSilence === false) {
+    replyText = typeof replyText === "string" ? replyText : "";
+  } else {
+    replyText = replyText || copy(locale, "prompt.silence");
+  }
   if (io.emitDeltas) yield { type: "delta", text: replyText };
   yield { type: "final", text: replyText, projection: [] };
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyLayerOverrides,
   enabledLayerIds,
+  isLayerId,
   LAYERS,
   layersFromSettings,
   USER_ONLY_LAYER_KEYS,
@@ -41,5 +42,10 @@ describe("layersFromSettings", () => {
     expect(next.act).toBe(false);
     expect(base.act).toBe(true);
     expect(enabledLayerIds(next)).not.toContain("act");
+  });
+
+  it("recognises the closed set of layer ids", () => {
+    expect(isLayerId("act")).toBe(true);
+    expect(isLayerId("stickers")).toBe(false);
   });
 });
