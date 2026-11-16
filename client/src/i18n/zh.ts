@@ -1128,6 +1128,8 @@ export const zh = {
     startAnalysis: "开始 AI 解析，生成数字分身",
     gapsTitle: "还可以补的素材",
     gapsNote: "解析之前先看看还缺什么，补上之后重新解析会更准。",
+    backfillBanner: "这个分身有 {{count}} 个以前上传的文件还没有整理成记录。整理之后，示范、节奏和「像不像」的测量才用得上它们。",
+    backfillNow: "现在整理",
     tipsTitle: "上传建议",
     tipsKicker: "提示",
     tips: [

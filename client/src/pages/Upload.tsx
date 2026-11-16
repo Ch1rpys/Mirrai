@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DistillationModePicker from "@/components/DistillationModePicker";
+import BackfillBanner from "@/components/v6/BackfillBanner";
+import { isUnparsedChatUpload } from "@shared/records";
 import { resolveIntakeGaps } from "@/lib/intake-gaps";
 import { toast } from "sonner";
 import { useLocale } from "@/contexts/LocaleContext";
@@ -314,6 +316,14 @@ export default function Upload() {
     if (saved) setMode(saved as DistillationMode);
   }, [persona?.distillationMode]);
 
+  const backfillMutation = trpc.import.backfill.useMutation({
+    onSuccess: () => {
+      void refetchFiles();
+    },
+    onError: (error) => {
+      toast.error(error.message || t("upload.uploadError", { message: error.message }));
+    },
+  });
   const uploadMutation = trpc.file.upload.useMutation({
     onError: (e) => toast.error(t("upload.uploadError", { message: e.message })),
   });
@@ -437,6 +447,7 @@ export default function Upload() {
   const isAnalyzing = analysisStatus?.status === "analyzing";
   const isReady = analysisStatus?.status === "ready";
   const hasFiles = (files?.length || 0) > 0;
+  const pendingBackfill = (files ?? []).filter(isUnparsedChatUpload).length;
   const hasCollected = (collected?.total || 0) > 0;
   const hasMaterial = hasFiles || hasCollected;
   /**
@@ -521,6 +532,12 @@ export default function Upload() {
           </p>
           <hr className="rule w-16 mt-6" />
         </div>
+
+        <BackfillBanner
+          count={pendingBackfill}
+          pending={backfillMutation.isPending}
+          onBackfill={() => backfillMutation.mutate({ personaId })}
+        />
 
         {/* Analysis Status · Ready */}
         {isReady && (

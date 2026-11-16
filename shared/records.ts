@@ -102,6 +102,21 @@ export function renderRecordContent(
   return row.content;
 }
 
+/**
+ * Whether an uploaded chat file still needs to be turned into records.
+ *
+ * Empty `parseStatus` is the upgrade case: files stored before the
+ * import path existed. A file that already ran (done, failed, or
+ * waiting for a role) is not counted again.
+ */
+export function isUnparsedChatUpload(file: {
+  fileType: string;
+  parseStatus?: string | null;
+}): boolean {
+  if (file.fileType !== "chat_txt" && file.fileType !== "chat_csv") return false;
+  return file.parseStatus == null || file.parseStatus === "";
+}
+
 /** The register a stored row belongs to. Missing means private. */
 export function recordRegister(
   row: { meta?: Record<string, unknown> | null },

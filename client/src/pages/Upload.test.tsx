@@ -32,6 +32,9 @@ vi.mock("@/lib/trpc", () => ({
       list: { useQuery: () => ({ data: [], refetch: refetchFiles, isLoading: false, isError: false }) },
       upload: { useMutation: () => ({ mutateAsync: upload, isPending: false }) },
     },
+    import: {
+      backfill: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     collector: {
       preview: { useQuery: () => ({ data: { total: 0 } }) },
     },

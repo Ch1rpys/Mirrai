@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isTextRecord,
+  isUnparsedChatUpload,
   RECORD_KINDS,
   recordRegister,
   recordText,
@@ -78,5 +79,14 @@ describe("recordRegister", () => {
   it("reads an explicit register", () => {
     expect(recordRegister({ meta: { register: "group" } })).toBe("group");
     expect(recordRegister({ meta: { register: "written" } })).toBe("written");
+  });
+});
+
+describe("isUnparsedChatUpload", () => {
+  it("is true only for chat files that have never been parsed", () => {
+    expect(isUnparsedChatUpload({ fileType: "chat_txt", parseStatus: null })).toBe(true);
+    expect(isUnparsedChatUpload({ fileType: "chat_csv" })).toBe(true);
+    expect(isUnparsedChatUpload({ fileType: "chat_txt", parseStatus: "done" })).toBe(false);
+    expect(isUnparsedChatUpload({ fileType: "image", parseStatus: null })).toBe(false);
   });
 });

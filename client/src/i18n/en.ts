@@ -1133,6 +1133,8 @@ export const en = {
     startAnalysis: "Start the AI analysis and build the persona",
     gapsTitle: "Material you could still add",
     gapsNote: "See what is missing before the run, and add it — the second run will be better.",
+    backfillBanner: "This persona has {{count}} previously uploaded files that have not been turned into records. Exemplars, rhythm, and the likeness measurements can only use them after they are organised.",
+    backfillNow: "Organise them now",
     tipsTitle: "Upload tips",
     tipsKicker: "Tips",
     tips: [

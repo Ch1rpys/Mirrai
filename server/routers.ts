@@ -102,6 +102,7 @@ import { loadBehaviorProfile, measureAndSaveBehaviorProfile } from "./_core/beha
 import { mergePersonaSettings, normalizePersonaSettings } from "@shared/persona-settings";
 import { personaSettingsPatchSchema } from "./routers-v6/persona-settings-patch";
 import { styleRouter } from "./routers-v6/style";
+import { importRouter } from "./routers-v6/import";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
 import { normalizeMicroRules } from "@shared/micro-rules";
@@ -5506,6 +5507,7 @@ export const appRouter = router({
   }),
 
   style: styleRouter,
+  import: importRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {
