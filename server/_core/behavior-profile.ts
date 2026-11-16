@@ -191,7 +191,7 @@ export async function measureAndSaveBehaviorProfile(params: {
   personaTimezone?: string | null;
 }): Promise<BehaviorProfile | null> {
   const rows = await db
-    .getCollectedMessagesForPersona(params.personaId, params.userId)
+    .getCollectedMessagesForPersona(params.personaId, params.userId, { newest: true })
     .catch(() => []);
 
   const exchanges = exchangesFromRecords(rows, {

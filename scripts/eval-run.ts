@@ -142,7 +142,7 @@ if (!Number.isFinite(personaId) || !Number.isFinite(userId)) {
  * measure nothing.
  */
 async function loadRecords(): Promise<EvalSourceMessage[]> {
-  const rows = await db.getCollectedMessagesForPersona(personaId, userId);
+  const rows = await db.getCollectedMessagesForPersona(personaId, userId, { newest: true });
   return rows
     .map((row) => ({
       id: row.id,

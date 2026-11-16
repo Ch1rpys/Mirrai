@@ -239,7 +239,7 @@ export async function* executePlan(
     );
     let records: Array<{ role: string; content: string; id?: number }> = [];
     try {
-      records = await db.getCollectedMessagesForPersona(input.persona.id, input.userId);
+      records = await db.getCollectedMessagesForPersona(input.persona.id, input.userId, { newest: true });
     } catch {
       records = [];
     }

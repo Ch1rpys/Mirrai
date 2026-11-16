@@ -303,7 +303,7 @@ async function readDistillationMaterial(
   const files = await getFilesByPersonaId(personaId, userId, {
     withExtractedMemory: true,
   });
-  const collected = await getCollectedMessagesForPersona(personaId, userId);
+  const collected = await getCollectedMessagesForPersona(personaId, userId, { newest: true });
   return { files, collected };
 }
 
@@ -4587,7 +4587,7 @@ export const appRouter = router({
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
 
-        const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id);
+        const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id, { newest: true });
         const messages = rows.map((row) => ({
           id: row.id,
           role: row.role === "assistant" ? ("assistant" as const) : ("user" as const),
@@ -4674,7 +4674,7 @@ export const appRouter = router({
          */
         runningEvals.add(runKey);
         try {
-          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id);
+          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id, { newest: true });
           const messages = rows.map((row) => ({
             id: row.id,
             role: row.role === "assistant" ? ("assistant" as const) : ("user" as const),
@@ -4822,7 +4822,7 @@ export const appRouter = router({
           const persona = await getPersonaById(input.personaId, ctx.user.id);
           if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
 
-          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id);
+          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id, { newest: true });
           const mined = await mineMicroRules({
             userId: ctx.user.id,
             locale: input.locale,
@@ -5143,7 +5143,7 @@ export const appRouter = router({
         return await withPersonaDataLock(input.personaId, async () => {
           const persona = await getPersonaById(input.personaId, ctx.user.id);
           if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id);
+          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id, { newest: true });
           const mined = [
             ...mineSuppressions({ messages: rows, locale: input.locale }),
             ...mineForgetStyles({ messages: rows, locale: input.locale }),
@@ -5211,7 +5211,7 @@ export const appRouter = router({
         return await withPersonaDataLock(input.personaId, async () => {
           const persona = await getPersonaById(input.personaId, ctx.user.id);
           if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id);
+          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id, { newest: true });
           const mined = mineOpenLoops({ messages: rows });
           const existing = normalizeLifeEvents((persona.personaData as any)?.lifeEvents);
           const known = new Set(existing.map((event) => event.title));

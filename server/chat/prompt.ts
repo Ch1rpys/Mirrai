@@ -267,7 +267,7 @@ async function exemplarSectionFor(
 ): Promise<string> {
   if (!context.userMessage) return "";
   const records = await optionalCall(
-    () => db.getCollectedMessagesForPersona(context.persona.id, context.userId),
+    () => db.getCollectedMessagesForPersona(context.persona.id, context.userId, { newest: true }),
     [],
   );
   const period = periodOf(context.persona, context.periodId);
