@@ -41,7 +41,7 @@ export { parseGenericLine } from "./formats/generic-line";
 export { detectFormat, pickDetectedFormat } from "./detect";
 export { IMPORTERS, importerById } from "./registry";
 export { assignRoles, guessRoles } from "./roles";
-export type { ParseResult, ParseReport, ImportFormatId } from "./types";
+export type { ParseResult, ParseReport, ImportFormatId, ColumnMap } from "./types";
 
 /** File types that should be parsed into records after upload. */
 export const CHAT_IMPORT_FILE_TYPES = [
@@ -393,4 +393,181 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
     }
     return fail(copy(locale, "errors.importFailed"), withRoles);
   }
+}
+
+export interface ImportStatus {
+  fileId: number;
+  personaId: number;
+  parseStatus: string | null;
+  parseReport: ParseReport | null;
+  originalName: string;
+  fileType: string;
+  fileSize: number;
+}
+
+export async function getImportStatus(
+  fileId: number,
+  userId: number,
+): Promise<ImportStatus | null> {
+  const file = await getPersonaFileById(fileId, userId);
+  if (!file) return null;
+  return {
+    fileId: file.id,
+    personaId: file.personaId,
+    parseStatus: file.parseStatus ?? null,
+    parseReport: (file.parseReport as ParseReport | null) ?? null,
+    originalName: file.originalName,
+    fileType: file.fileType,
+    fileSize: file.fileSize,
+  };
+}
+
+export async function cancelImport(
+  fileId: number,
+  userId: number,
+  locale: Locale | string = "zh",
+): Promise<{ status: string } | null> {
+  const file = await getPersonaFileById(fileId, userId);
+  if (!file) return null;
+  const lang: Locale = locale === "en" ? "en" : "zh";
+  const reason = copy(lang, "errors.importCancelled");
+  await updatePersonaFile(file.id, userId, {
+    parseStatus: "failed",
+    parseReport: reportOf({
+      ...((file.parseReport as ParseReport | null) ?? {}),
+      failedReason: reason,
+      progress: 0,
+    }),
+  });
+  return { status: "failed" };
+}
+
+export interface PreviewRow {
+  timestamp: string | null;
+  speaker: string;
+  content: string;
+  kind: string;
+  lineNo: number;
+}
+
+export interface PreviewResult {
+  status: string;
+  records: PreviewRow[];
+  total: number;
+  report: ParseReport;
+}
+
+function previewRowsOf(records: Array<{ timestamp: Date | null; speaker: string; content: string; kind: string; lineNo: number }>): PreviewRow[] {
+  return records.slice(0, 20).map((row) => ({
+    timestamp: row.timestamp ? row.timestamp.toISOString() : null,
+    speaker: row.speaker,
+    content: row.content,
+    kind: row.kind,
+    lineNo: row.lineNo,
+  }));
+}
+
+/**
+ * Parses a file the way startImport does, without writing records or
+ * touching parseStatus.
+ */
+export async function previewImport(input: StartImportInput): Promise<PreviewResult | null> {
+  const locale: Locale = input.locale === "en" ? "en" : "zh";
+  const file = await getPersonaFileById(input.fileId, input.userId);
+  if (!file) return null;
+
+  let source: ImportSource | null = null;
+  let archiveReport: ParseReport = {};
+
+  if (file.fileType === "archive") {
+    const fromZip = await sourceFromArchive(file, input);
+    archiveReport = fromZip.report;
+    if (fromZip.status !== "ok") {
+      return {
+        status: fromZip.status,
+        records: [],
+        total: 0,
+        report: fromZip.report,
+      };
+    }
+    source = fromZip.source;
+  } else {
+    source = await loadSource(file, input);
+  }
+
+  if (!source) {
+    return {
+      status: "failed",
+      records: [],
+      total: 0,
+      report: { ...archiveReport, failedReason: copy(locale, "errors.importFailed") },
+    };
+  }
+
+  const detected = detectFormat(source);
+  const picked = input.format
+    ? { id: input.format, confidence: 1 }
+    : pickDetectedFormat(detected);
+
+  if (!picked || picked === "ambiguous") {
+    return {
+      status: "needs_format",
+      records: [],
+      total: 0,
+      report: {
+        ...archiveReport,
+        format: detected[0]?.id,
+        confidence: detected[0]?.confidence,
+      },
+    };
+  }
+
+  const importer = importerById(picked.id);
+  if (!importer) {
+    return {
+      status: "needs_format",
+      records: [],
+      total: 0,
+      report: { ...archiveReport, format: picked.id, confidence: picked.confidence },
+    };
+  }
+
+  const parsed = await importer.parse(source, {
+    timeZone: (await getUserTimezone(input.userId)) ?? undefined,
+    chatId: input.chatId,
+    columnMap: input.columnMap,
+  });
+  const times = parsed.records
+    .map((row) => row.timestamp)
+    .filter((value): value is Date => value instanceof Date);
+  const report: ParseReport = {
+    ...archiveReport,
+    format: importer.id,
+    confidence: picked.confidence,
+    speakers: parsed.speakers,
+    timeRange: {
+      firstAt: asIso(times.length ? new Date(Math.min(...times.map((d) => d.getTime()))) : undefined),
+      lastAt: asIso(times.length ? new Date(Math.max(...times.map((d) => d.getTime()))) : undefined),
+    },
+    skipped: (archiveReport.skipped ?? 0) + parsed.skipped,
+    warnings: cappedWarnings([...(archiveReport.warnings ?? []), ...parsed.warnings]),
+    kindCounts: countBy(parsed.records.map((row) => row.kind)),
+    chats: parsed.chats ?? archiveReport.chats,
+  };
+
+  if (parsed.chats && parsed.chats.length > 1 && !input.chatId) {
+    return { status: "needs_chat", records: [], total: parsed.records.length, report };
+  }
+
+  if (input.me && input.them && input.me.length > 0 && input.them.length > 0) {
+    const assigned = assignRoles(parsed.records, { me: input.me, them: input.them });
+    report.roleCounts = countBy(assigned.map((row) => row.role));
+  }
+
+  return {
+    status: "ok",
+    records: previewRowsOf(parsed.records),
+    total: parsed.records.length,
+    report,
+  };
 }

@@ -36,6 +36,14 @@ export const V6 = {
     zh: "这份文件是空的。",
     en: "That file is empty.",
   },
+  "errors.importCancelled": {
+    zh: "这次导入已经取消。",
+    en: "That import was cancelled.",
+  },
+  "errors.importRolesRequired": {
+    zh: "先指出哪一边是你、哪一边是 TA。",
+    en: "Say which side is you and which side is them first.",
+  },
   "import.format.genericLine": {
     zh: "一行一条的聊天记录",
     en: "One message per line",
