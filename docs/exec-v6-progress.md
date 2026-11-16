@@ -25,7 +25,7 @@
 | P0.2 | ✅ | b298550 | `corepack pnpm gate` 退出码 0，输出 `all six steps passed`（typecheck / test 258 passed \| 2 skipped, 2489 passed \| 8 skipped / copy-audit / fidelity-gate / client-build / server-bundle）。`server/gate-script.test.ts` 3 通过。故意在 `server/_core/fidelity-gate.ts` 加 `const __p02TypeError: number = "intentionally-wrong"` 后 `corepack pnpm gate` 退出码 2，输出 `[gate] failed at typecheck (exit 2, 1.8s)`；`git checkout HEAD -- server/_core/fidelity-gate.ts` 改回。 |
 | P0.3 | ✅ | e506484 | `server/chat/prompt-golden.test.ts` 10 通过；快照文件 9 份 `exports[`. 改 `shared/copy/prompt.ts` 的 `prompt.identityVolunteers` zh「【AI 身份】」为「【AI 身份x】」后 8 个快照红（`Snapshot mismatched`）；`git checkout HEAD -- shared/copy/prompt.ts` 后 10 通过。`corepack pnpm gate` 全绿：259 passed \| 2 skipped (261)，2499 passed \| 8 skipped (2507)。 |
 | P0.4 | ✅ | 1e44f5d (data); e59ec6d (routes/UI) | 临时库四步+升级路径：rollback 后 `settings`/`styleProfile` 消失，再 migrate 回来；升级路径 DROP 两列并删 `schema_migrations` 的 0044 后再 migrate，两列出现。`shared/persona-settings.test.ts` 5 通过（空值默认、`twoStage: "yes"` 回落、未知键丢弃、`maxDelayMinutes: 9999` 钳到 360、深合并）。`server/routers.persona-settings.test.ts` 3 通过（别人的分身 `NOT_FOUND`、patch 后读回、`withPersonaDataLock` 源码位置）。`server/schema-coverage.test.ts`、`schema-parity.test.ts` 通过。P0.3 黄金快照 10 通过未改。`corepack pnpm gate` 全绿：264 passed \| 2 skipped (266)，2514 passed \| 8 skipped (2522)。 |
-| P0.5 | ⬜ | b1fe349; c785e6a | 修复后复验仍未过。`xiaoman.test.ts` 35 通过，但默认种子下两次周三冲突的 distant 期间插进了下课场；从「就嗯？」到和好的时长是 2.86、3.87、4.66、4.89、5.90、7.85 小时，不是 3、4、5、5、6、8。见本文件末尾的独立验收。 |
+| P0.5 | ✅ | b1fe349; c785e6a; 34f5564 | `34f5564` 修复验的两处：冲突不排在周三，从「就嗯？」到第一句和好正好是 3、4、5、5、6、8 小时，这段里没有别的消息。`xiaoman.test.ts` 35 通过。闸门 `269 passed \| 2 skipped (271)`，`2562 passed \| 8 skipped (2570)`。 |
 | P0.6 | ✅ | 1588608 (move); b089be8 (eval); 58d1123 (tests) | `server/chat/service.test.ts`、`stream.test.ts`、`fidelity-prompt.test.ts`、`server/eval/run.test.ts`、`server/routers.eval.test.ts`、`server/eval/compare-cli.test.ts` 未改文件、全部通过。P0.3 `prompt-golden.test.ts` 10 通过、快照未改。`server/chat/generate.test.ts`：同一分身/上下文/`now`，`runConversation` 与 `runEval` 发给 provider 的 `messages` 去掉留出句后 `toEqual`；`layerOverridesForEval({ without: ["act"] })` 后 `sampledAct` 为 `null`、`layersUsed` 不含 `act`。`scripts/eval-run.ts` 含 `--without`。搬家后闸门 266 passed \| 2 skipped (268)，2553 passed \| 8 skipped (2561)；评测接入后 267 passed \| 2 skipped (269)，2557 passed \| 8 skipped (2565)。 |
 | P0.7 | ✅ | 16ad889; e6e22c1 (scan) | `server/egress.test.ts` 4 通过：`server/` 生产文件里每一处 `fetch(` / `new WebSocket(` / `http(s).request(` 都在白名单；在 `server/llm/index.ts` 加 `fetch("https://example.com")` 后失败，输出 `missing: ['server/llm/index.ts']`；删掉后 4 通过。`docs/egress.md` 表体 14 行 = `EGRESS_ITEMS.length`。`EgressList.test.tsx`：每一项的「连到哪」「发什么」和「默认开/关」都渲染出来。`corepack pnpm gate` 全绿：269 passed \| 2 skipped (271)，2562 passed \| 8 skipped (2570)。 |
 | A1 | ⬜ |  |  |
@@ -270,5 +270,10 @@ P0.1、P0.2、P0.3、P0.4、P0.6、P0.7 维持 ✅。P0.5 改回 ⬜。
 
 P0.1、P0.2、P0.3、P0.4、P0.6、P0.7 维持 ✅。P0.5 改回 ⬜。
 
-- [ ] P0.5 冲突被周三的下课场打断。默认种子 `buildXiaomanRecords()`：第 1 次冲突在 2024-01-24，12:50 的「就嗯？」到 17:44 的「好啦 不气了」之间有 11 条 `slot === "wednesday"` 的正常往来，16:11 起第一句是「刚下课」。第 2 次在 2023-07-19，12:21 的「就嗯？」到 16:14 的「对不起嘛」之间有 4 条，16:12 是「刚下课」。`xiaoman.test.ts` 的冲突用例只断言了 6 次、几句原话，以及和好落在 15 点到 21 点，没有看这段时间里还有没有别的场景。
-- [ ] P0.5 冲突时长不是设计的 3、4、5、5、6、8 小时。同一份默认记录里，从「就嗯？」到和好那一句是 2.86、3.87、4.66、4.89、5.90、7.85 小时。和好时刻是午场开始时间加上小时数（`server/test-fixtures/xiaoman.ts` 里 `startWall.hour + conflictHours`），不是从「就嗯？」起算。测试没有断言这六个小时。
+- [x] P0.5 冲突被周三的下课场打断。`34f5564`。冲突只排在非周三的午场；每个活跃周三的下课场仍在 16:05 之后。测试断言「就嗯？」到和好之间没有别的消息。
+- [x] P0.5 冲突时长不是设计的 3、4、5、5、6、8 小时。`34f5564`。和好时刻改为「就嗯？」的时间加上设计小时数。测试断言这六个时长。
+
+### WP0 · 实现会话 · 2026-11-16 · 冲突时长
+
+- `34f5564` 修上面两处。冲突不落在周三，和好从「就嗯？」起算满设计的小时数，这段保持空白。追一句不再平移冲突场景里的消息，改错字不会插进晚安或这段空白。多点回复的八成按实际写上的回复来分，不按没对上的用户行来分。
+- 修完后 `corepack pnpm gate` 退出码 0：`269 passed | 2 skipped (271)` 个文件，`2562 passed | 8 skipped (2570)` 个用例。通过数没有减少，跳过数没有增加。P0.5 改回 ✅。
