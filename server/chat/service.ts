@@ -27,15 +27,11 @@ import { mayReachOut } from "@shared/graduation-mode";
 import { copy, localizeScene } from "@shared/copy";
 import { asMaterial } from "../_core/material";
 import { buildPromptForPersona } from "./prompt";
-import { dayPartFromHour, normalizeActProfile, sampleAct } from "@shared/act-profile";
-import { actProfileForTurn } from "./prompt";
-import { isUserAsking } from "@shared/speech-acts";
-import { pickRerankWinner } from "./rerank";
-import { retrieveExemplars } from "./exemplars";
 import { splitBurst } from "./burst";
-import { loadBehaviorProfile, seededRandom } from "../_core/behavior-profile";
+import { loadBehaviorProfile } from "../_core/behavior-profile";
+import { planTurn, executePlan } from "./generate";
 import { sampleBurstSize, sampleReplyDelayMs } from "@shared/behavior-profile";
-import { localDateKey, zonedDateKey, zonedDayStart, zonedHour } from "@shared/timezone";
+import { localDateKey, zonedDateKey, zonedDayStart } from "@shared/timezone";
 import { extractMemories, isExtractionDue } from "./memory-extract";
 import { storageToDataUrl } from "../storage";
 
@@ -802,24 +798,30 @@ async function* runConversationTurn(
   const timingEnabled = Boolean((persona as any).timingEnabled) && Boolean(loadBehaviorProfile(persona));
   const rerankEnabled = Boolean((persona as any).rerankEnabled);
   const behavior = loadBehaviorProfile(persona);
-  const actProfile = normalizeActProfile(
-    actProfileForTurn(persona, options.periodId ?? null),
-  );
-  const rng = seededRandom(`turn:${persona.id}:${now.getTime()}:${message.slice(0, 40)}`);
-  const sampled = actProfile
-    ? sampleAct(
-        actProfile,
-        {
-          asking: isUserAsking(message),
-          emotion: persona.emotionalState ?? "warm",
-          dayPart: dayPartFromHour(zonedHour(now, (persona as any).timezone)),
-          relationshipPhase: (persona.personaData as any)?.relationshipPhase ?? "initial",
-        },
-        { dropSilence: !timingEnabled, rng },
-      )
-    : null;
+  const turnInput = {
+    persona,
+    userId,
+    userMessage: message,
+    history: [] as Array<{ role: "user" | "assistant"; content: string }>,
+    now,
+    locale,
+    periodId: options.periodId ?? null,
+    seed: `turn:${persona.id}:${now.getTime()}:${message.slice(0, 40)}`,
+    contextLimit,
+    providerName: options.providerName,
+    extraConfig,
+    replyToId: options.replyToId,
+  };
+  const plan = await planTurn(turnInput);
+  const rng = plan.rng;
+  const sampled = plan.kind === "silence"
+    ? { act: "silence" as const }
+    : plan.sampledAct
+      ? { act: plan.sampledAct }
+      : null;
+  const recalled = plan.recalled;
 
-  if (sampled?.act === "silence" && timingEnabled) {
+  if (plan.kind === "silence") {
     const notice = copy(locale, "prompt.didNotReply");
     const messageId = await db.createMessage({
       personaId: persona.id,
@@ -843,20 +845,6 @@ async function* runConversationTurn(
     return;
   }
 
-  const { messages: llmMessages, recalled } = await composeMessages({
-    persona,
-    userId,
-    userMessage: message,
-    contextLimit,
-    providerName: options.providerName,
-    locale,
-    now,
-    replyToId: options.replyToId,
-    extraConfig,
-    sampledAct: sampled?.act === "silence" ? null : sampled?.act ?? null,
-    periodId: options.periodId ?? null,
-  });
-
   const provider = await resolveProviderForUser({
     userId,
     providerName: options.providerName,
@@ -872,76 +860,24 @@ async function* runConversationTurn(
   let failureMessage = "";
 
   try {
-    const invokeOptions = {
-      provider: options.providerName,
-      temperature: extraConfig.temperature,
-      maxTokens: extraConfig.maxTokens,
+    for await (const event of executePlan(plan, turnInput, {
+      provider,
+      mode: options.mode,
+      rerank: rerankEnabled,
       signal: options.signal,
-    };
-    if (rerankEnabled) {
-      yield { type: "thinking" };
-      const texts = await Promise.all(
-        Array.from({ length: 4 }, async () => {
-          try {
-            const answer = await llmService.invokeWithProvider(provider, {
-              messages: llmMessages,
-              options: invokeOptions,
-            });
-            return typeof answer === "string" ? answer : "";
-          } catch {
-            return "";
-          }
-        }),
-      );
-      let records: Array<{ role: string; content: string }> = [];
-      try {
-        records = await db.getCollectedMessagesForPersona(persona.id, userId);
-      } catch {
-        records = [];
+      options: {
+        temperature: extraConfig.temperature,
+        maxTokens: extraConfig.maxTokens,
+        provider: options.providerName,
+      },
+      emitDeltas: !timingEnabled,
+    })) {
+      if (event.type === "thinking") yield { type: "thinking" };
+      if (event.type === "delta") {
+        replyText += event.text;
+        if (!timingEnabled) yield { type: "delta", text: event.text };
       }
-      const exemplars = retrieveExemplars({
-        userMessage: message,
-        records: records as any,
-      });
-      const training = records
-        .filter((row) => row.role === "assistant")
-        .map((row) => row.content)
-        .slice(-80);
-      const picked = pickRerankWinner({
-        candidates: texts.map((text) => ({ text })),
-        trainingTexts: training,
-        exemplars: exemplars.map((item) => item.content),
-      });
-      const surviving = texts.filter(Boolean);
-      if (!picked && !surviving.length) {
-        throw new Error("rerank produced no candidates");
-      }
-      replyText = picked?.text || surviving[0] || copy(locale, "prompt.silence");
-      console.info(
-        "[Rerank]",
-        JSON.stringify({
-          sampledAct: sampled?.act ?? null,
-          exemplarIds: exemplars.map((item) => item.id),
-          scores: picked?.scores ?? [],
-          picked: picked?.index ?? null,
-        }),
-      );
-      if (!timingEnabled) yield { type: "delta", text: replyText };
-    } else if (options.mode === "stream" && provider.stream && provider.capabilities.streaming) {
-      for await (const chunk of llmService.streamWithProvider(provider, {
-        messages: llmMessages,
-        options: invokeOptions,
-      })) {
-        replyText += chunk.text;
-        if (!timingEnabled) yield { type: "delta", text: chunk.text };
-      }
-    } else {
-      replyText = await llmService.invokeWithProvider(provider, {
-        messages: llmMessages,
-        options: invokeOptions,
-      });
-      replyText = replyText || copy(locale, "prompt.silence");
-      if (!timingEnabled) yield { type: "delta", text: replyText };
+      if (event.type === "final") replyText = event.text || replyText;
     }
   } catch (e) {
     failed = true;
