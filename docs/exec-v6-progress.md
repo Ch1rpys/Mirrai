@@ -26,8 +26,8 @@
 | P0.3 | ✅ | e506484 | `server/chat/prompt-golden.test.ts` 10 通过；快照文件 9 份 `exports[`. 改 `shared/copy/prompt.ts` 的 `prompt.identityVolunteers` zh「【AI 身份】」为「【AI 身份x】」后 8 个快照红（`Snapshot mismatched`）；`git checkout HEAD -- shared/copy/prompt.ts` 后 10 通过。`corepack pnpm gate` 全绿：259 passed \| 2 skipped (261)，2499 passed \| 8 skipped (2507)。 |
 | P0.4 | ✅ | 1e44f5d (data); e59ec6d (routes/UI) | 临时库四步+升级路径：rollback 后 `settings`/`styleProfile` 消失，再 migrate 回来；升级路径 DROP 两列并删 `schema_migrations` 的 0044 后再 migrate，两列出现。`shared/persona-settings.test.ts` 5 通过（空值默认、`twoStage: "yes"` 回落、未知键丢弃、`maxDelayMinutes: 9999` 钳到 360、深合并）。`server/routers.persona-settings.test.ts` 3 通过（别人的分身 `NOT_FOUND`、patch 后读回、`withPersonaDataLock` 源码位置）。`server/schema-coverage.test.ts`、`schema-parity.test.ts` 通过。P0.3 黄金快照 10 通过未改。`corepack pnpm gate` 全绿：264 passed \| 2 skipped (266)，2514 passed \| 8 skipped (2522)。 |
 | P0.5 | ✅ | b1fe349 | `xiaoman.test.ts` 35 通过：设计值表每一行至少一条断言；同一 seed `toEqual`、不同 seed 不同；`buildXiaomanRecords({ seed: "speed" })` 6ms < 500ms；`renderFixture(..., "generic-line")` 交给 `parseTranscriptMessages(..., { personaName: "小满" })` 条数等于文本类记录、TA 角色 `persona`。`corepack pnpm gate` 全绿：265 passed \| 2 skipped (267)，2549 passed \| 8 skipped (2557)。 |
-| P0.6 | ⬜ |  |  |
-| P0.7 | ⬜ |  |  |
+| P0.6 | ✅ | 1588608 (move); b089be8 (eval) | `server/chat/service.test.ts`、`stream.test.ts`、`fidelity-prompt.test.ts`、`server/eval/run.test.ts`、`server/routers.eval.test.ts`、`server/eval/compare-cli.test.ts` 未改文件、全部通过。P0.3 `prompt-golden.test.ts` 10 通过、快照未改。`server/chat/generate.test.ts`：同一分身/上下文/`now`，`runConversation` 与 `runEval` 发给 provider 的 `messages` 去掉留出句后 `toEqual`；`layerOverridesForEval({ without: ["act"] })` 后 `sampledAct` 为 `null`、`layersUsed` 不含 `act`。`scripts/eval-run.ts` 含 `--without`。搬家后闸门 266 passed \| 2 skipped (268)，2553 passed \| 8 skipped (2561)；评测接入后 267 passed \| 2 skipped (269)，2557 passed \| 8 skipped (2565)。 |
+| P0.7 | ✅ | 16ad889 | `server/egress.test.ts` 4 通过：`server/` 生产文件里每一处 `fetch(` / `new WebSocket(` / `http(s).request(` 都在白名单；在 `server/llm/index.ts` 加 `fetch("https://example.com")` 后失败，输出 `missing: ['server/llm/index.ts']`；删掉后 4 通过。`docs/egress.md` 表体 14 行 = `EGRESS_ITEMS.length`。`EgressList.test.tsx`：每一项的「连到哪」「发什么」和「默认开/关」都渲染出来。`corepack pnpm gate` 全绿：269 passed \| 2 skipped (271)，2562 passed \| 8 skipped (2570)。 |
 | A1 | ⬜ |  |  |
 | A2 | ⬜ |  |  |
 | A3 | ⬜ |  |  |
@@ -211,6 +211,13 @@
 | 7 | P0.5 | 时间戳全部精确到秒 | `Date` 保留毫秒，`generic-line` 渲染到秒 | 连发间隔是「后一条字数 × 200 毫秒」，整秒会把短句的间隔抹掉。 |
 | 8 | P0.5 | 晚间占七成、中午占两成 | 按每日主场景（evening/noon/afternoon）计，不含早场和周三加场 | 「每日一个场景」之外另有早场和周三下课场；若算进分母，晚间会远低于七成。 |
 | 9 | P0.5 | 从不用「呢」 | 追一句「人呢」保留「呢」；其余 TA 文本不含「呢」 | 设计值表同一张里既写了从不用「呢」，又写了追一句 70% 是「人呢」。 |
+| 10 | P0.6 | 把 `composeMessages` 里拼系统提示词和历史的部分搬进 `planTurn` | `composeMessages` 仍在 `service.ts`；聊天路径由 `planTurn` 动态 `import("./service")` 再调用它 | 静态互引会成环；评测走 `exclude` 分支自己拼 `history`，聊天仍从库读历史，行为与搬家前一致。 |
+| 11 | P0.6 | `TurnPlan` / `executePlan` 的 io 只有手册 3.6 节列出的字段 | 另有 `recalled`、`rng`、`emptyAsSilence`、`trainingTexts`、`emitDeltas`；`TurnInput` 另有 `contextLimit` 等聊天字段 | 不改聊天落库、连发抽样和评测跳过空回答的行为。 |
+| 12 | P0.6 | 抽动作用 `prompt.ts` 的 `actProfileForTurn` | `generate.ts` 里复写了同一段（先看时期 delta，再回落到 `personaData.actProfile`） | `server/eval/run.test.ts` 一行不改地 mock 了整个 `../chat/prompt`，只导出 `buildPromptForPersona`；具名导入 `actProfileForTurn` 会在访问时被 vitest 抛错。 |
+| 13 | P0.6 | 第 3.6 节 `--compare <层>` | CLI 的 `--compare` 仍是原来的四路对比开关；新增的是 `--without a,b` | P0.6「做法」第 3 步只要求 `--without` 和旧 `--variant` 别名；`compare-cli.test.ts` 不许改。 |
+| 14 | P0.7 | `server/` 下每一处 `fetch(` 都登记 | 扫描跳过 `*.test.ts` / `*.test.tsx` | 测试里的 `fetch` 打的是本机监听端口，或出现在夹具字符串里，不算出站。 |
+| 15 | P0.7 | 文档「行数」和条目数一致 | 断言的是表体行数（`| id |` 且 id 含连字符）等于 `EGRESS_ITEMS.length`（14） | 文件还有标题和表头，整文件行数对不上条目数。 |
+| 16 | P0.7 | 名人研究流程若发请求则登记 | `celebrity.ts` 只走已配置的 LLM provider，不自己 `fetch` | 写在 `docs/egress.md` 表前说明，不单列一行，避免把「没有出站」登记成出站。 |
 
 ## 未验证清单
 
@@ -233,3 +240,6 @@
 - P0.3：`e506484`（`server/chat/prompt-golden.test.ts` 与快照）。闸门 261 文件 / 2507 用例（+1 文件、+10 用例）。
 - P0.4：`1e44f5d` 数据层，`e59ec6d` 路由和界面。闸门 266 文件 / 2522 用例。`--replay` 现为 42 条（含 0044）。
 - P0.5：`b1fe349`（`server/test-fixtures/xiaoman.ts`、`xiaoman.test.ts`、`render.ts`、`seed-db.ts`）。闸门 267 文件 / 2557 用例（+1 文件、+35 用例）。
+- P0.6：`1588608` 搬家（`server/chat/generate.ts`、`service.ts`、`shared/layers.ts`）；`b089be8` 评测接入（`server/eval/run.ts`、`scripts/eval-run.ts`、`generate.test.ts`）。闸门 269 文件 / 2565 用例。
+- P0.7：`16ad889`（`shared/egress.ts`、`docs/egress.md`、`server/egress.test.ts`、`EgressList`、设置页挂载）。闸门 271 文件 / 2570 用例（相对 P0.5：+4 文件、+13 用例；相对本会话开工时的 P0.5 闸门 267/2557）。
+- WP0 可做条目全部完成。独立验收另开会话。未验证清单、待用户决定仍空。
