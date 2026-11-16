@@ -186,3 +186,22 @@ Read with Node's `node:sqlite`. Not a text format, so the Xiaoman
 roundtrip is a dedicated SQLite test rather than `renderFixture`.
 
 - Sample (synthetic): `server/test-fixtures/exports/imessage-db/chat.db`.
+
+## column-map
+
+Any comma / tab / semicolon table. The wizard names the time, speaker,
+and content columns (optional: a from-me column and the value that means
+yes). A file whose headers are already `Time` / `Speaker` / `Content`
+(or the usual aliases) is guessed without a map. WeChat CSV (`IsSender`)
+is left to `wechat-csv`.
+
+- Sample (synthetic): `server/test-fixtures/exports/column-map/sample.csv`.
+
+## Not listed
+
+`wechat-html` is named in the handbook. Checked 2026-11-16: WeChatMsg's
+HTML export injects messages as JavaScript objects into a viewer shell,
+not a static table
+([HTML Export](https://deepwiki.com/amtech/tool-WeChatMsg/5.1-html-export)).
+There is no stable static schema, so it is not in the registry and the
+wizard does not offer it.

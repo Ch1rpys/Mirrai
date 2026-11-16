@@ -15,7 +15,8 @@ export type ImportFormatId =
   | "meta-json"
   | "discord-json"
   | "sms-xml"
-  | "imessage-db";
+  | "imessage-db"
+  | "column-map";
 
 export type ImportSourceName =
   | "wechat_export"

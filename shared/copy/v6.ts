@@ -72,4 +72,8 @@ export const V6 = {
     zh: "Mac 信息的 chat.db",
     en: "Mac Messages chat.db",
   },
+  "import.format.columnMap": {
+    zh: "按列对应的表格",
+    en: "Table by column map",
+  },
 } as const satisfies CopyTable;

@@ -33,7 +33,12 @@ function splitTimestamp(line: string): { at?: string; rest: string } {
 function hasSpeaker(line: string): boolean {
   const { rest } = splitTimestamp(line);
   const match = rest.match(SPEAKER);
-  return !!match && !match[2].startsWith("//");
+  if (!match || match[2].startsWith("//")) return false;
+  // `2022-03-01 20:00:00,小满,在吗` would otherwise take `2022-03-01` or
+  // `20` as the speaker because of the colon in the clock.
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(match[1])) return false;
+  if (/^\d+$/.test(match[1])) return false;
+  return true;
 }
 
 export function isGenericLineHeader(line: string): boolean {

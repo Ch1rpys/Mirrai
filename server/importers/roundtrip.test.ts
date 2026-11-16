@@ -32,6 +32,7 @@ const TEXT_FORMATS: Array<{ id: ImportFormatId & FixtureFormat; time: "second" |
   { id: "meta-json", time: "second" },
   { id: "discord-json", time: "second" },
   { id: "sms-xml", time: "second" },
+  { id: "column-map", time: "second" },
 ];
 
 describe("importer roundtrip", () => {

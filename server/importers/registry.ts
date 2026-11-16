@@ -13,6 +13,7 @@ import { metaJsonImporter } from "./formats/meta-json";
 import { discordJsonImporter } from "./formats/discord-json";
 import { smsXmlImporter } from "./formats/sms-xml";
 import { imessageDbImporter } from "./formats/imessage-db";
+import { columnMapImporter } from "./formats/column-map";
 import type { ImportFormatId, Importer } from "./types";
 
 /**
@@ -37,6 +38,7 @@ export const IMPORTERS: Importer[] = [
   discordJsonImporter,
   smsXmlImporter,
   imessageDbImporter,
+  columnMapImporter,
 ];
 
 export function importerById(id: ImportFormatId | string): Importer | undefined {

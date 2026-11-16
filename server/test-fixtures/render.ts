@@ -21,7 +21,8 @@ export type FixtureFormat =
   | "kakao-txt"
   | "meta-json"
   | "discord-json"
-  | "sms-xml";
+  | "sms-xml"
+  | "column-map";
 
 function textRows(records: FixtureRecord[]): FixtureRecord[] {
   return records.filter((row) => row.kind === "text" && row.content.trim());
@@ -43,6 +44,14 @@ function renderWechatTxtParen(records: FixtureRecord[]): string {
   return textRows(records)
     .map((row) => `${row.speaker} (${formatShanghai(row.timestamp)}): ${row.content.trim()}`)
     .join("\n\n");
+}
+
+function renderColumnMap(records: FixtureRecord[]): string {
+  const header = "Time,Speaker,Content";
+  const lines = textRows(records).map((row) =>
+    [csvCell(formatShanghai(row.timestamp)), csvCell(row.speaker), csvCell(row.content.trim())].join(","),
+  );
+  return [header, ...lines].join("\n");
 }
 
 function csvCell(value: string): string {
@@ -250,6 +259,8 @@ export function renderFixture(records: FixtureRecord[], format: FixtureFormat | 
       return renderDiscordJson(records);
     case "sms-xml":
       return renderSmsXml(records);
+    case "column-map":
+      return renderColumnMap(records);
     default:
       throw new Error(`renderFixture: format "${format}" is not implemented yet (C1.1)`);
   }
