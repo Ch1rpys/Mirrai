@@ -14,7 +14,8 @@ export type ImportFormatId =
   | "kakao-txt"
   | "meta-json"
   | "discord-json"
-  | "sms-xml";
+  | "sms-xml"
+  | "imessage-db";
 
 export type ImportSourceName =
   | "wechat_export"

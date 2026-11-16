@@ -174,3 +174,15 @@ Each `<sms>` is a self-closing tag: `address`, `date` (Unix ms), `type`
 are skipped. Newlines in `body` are `&#10;`.
 
 - Sample (synthetic): `server/test-fixtures/exports/sms-xml/sample.xml`.
+
+## imessage-db
+
+Checked 2026-11-16 against the macOS Messages schema
+([imessage-exporter-redux SCHEMA](https://github.com/grioghar/imessage-exporter-redux/blob/main/docs/SCHEMA.md)).
+SQLite `chat.db`: `message.text` (often empty), `attributedBody` as a
+typedstream NSString, `is_from_me`, `date` as nanoseconds since
+2001-01-01, joined to `handle` and `chat` through `chat_message_join`.
+Read with Node's `node:sqlite`. Not a text format, so the Xiaoman
+roundtrip is a dedicated SQLite test rather than `renderFixture`.
+
+- Sample (synthetic): `server/test-fixtures/exports/imessage-db/chat.db`.

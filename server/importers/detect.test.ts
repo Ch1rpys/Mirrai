@@ -81,6 +81,15 @@ describe("detectFormat", () => {
     expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
   });
 
+  it("claims the imessage-db sample as itself", () => {
+    const sample = readFileSync(
+      path.resolve(import.meta.dirname, "../test-fixtures/exports/imessage-db/chat.db"),
+    );
+    const hits = detectFormat(importSourceFrom("chat.db", sample));
+    expect(hits[0]?.id).toBe("imessage-db");
+    expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
+  });
+
   it("claims the sms-xml sample as itself", () => {
     const sample = readFileSync(
       path.resolve(import.meta.dirname, "../test-fixtures/exports/sms-xml/sample.xml"),

@@ -68,4 +68,8 @@ export const V6 = {
     zh: "短信备份的 XML",
     en: "SMS Backup XML",
   },
+  "import.format.imessageDb": {
+    zh: "Mac 信息的 chat.db",
+    en: "Mac Messages chat.db",
+  },
 } as const satisfies CopyTable;

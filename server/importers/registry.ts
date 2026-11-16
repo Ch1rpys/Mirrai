@@ -12,6 +12,7 @@ import { kakaoTxtImporter } from "./formats/kakao-txt";
 import { metaJsonImporter } from "./formats/meta-json";
 import { discordJsonImporter } from "./formats/discord-json";
 import { smsXmlImporter } from "./formats/sms-xml";
+import { imessageDbImporter } from "./formats/imessage-db";
 import type { ImportFormatId, Importer } from "./types";
 
 /**
@@ -35,6 +36,7 @@ export const IMPORTERS: Importer[] = [
   metaJsonImporter,
   discordJsonImporter,
   smsXmlImporter,
+  imessageDbImporter,
 ];
 
 export function importerById(id: ImportFormatId | string): Importer | undefined {
