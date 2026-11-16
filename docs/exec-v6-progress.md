@@ -28,7 +28,7 @@
 | P0.5 | ✅ | b1fe349; c785e6a; 34f5564 | `34f5564` 修复验的两处：冲突不排在周三，从「就嗯？」到第一句和好正好是 3、4、5、5、6、8 小时，这段里没有别的消息。`xiaoman.test.ts` 35 通过。闸门 `269 passed \| 2 skipped (271)`，`2562 passed \| 8 skipped (2570)`。 |
 | P0.6 | ✅ | 1588608 (move); b089be8 (eval); 58d1123 (tests) | `server/chat/service.test.ts`、`stream.test.ts`、`fidelity-prompt.test.ts`、`server/eval/run.test.ts`、`server/routers.eval.test.ts`、`server/eval/compare-cli.test.ts` 未改文件、全部通过。P0.3 `prompt-golden.test.ts` 10 通过、快照未改。`server/chat/generate.test.ts`：同一分身/上下文/`now`，`runConversation` 与 `runEval` 发给 provider 的 `messages` 去掉留出句后 `toEqual`；`layerOverridesForEval({ without: ["act"] })` 后 `sampledAct` 为 `null`、`layersUsed` 不含 `act`。`scripts/eval-run.ts` 含 `--without`。搬家后闸门 266 passed \| 2 skipped (268)，2553 passed \| 8 skipped (2561)；评测接入后 267 passed \| 2 skipped (269)，2557 passed \| 8 skipped (2565)。 |
 | P0.7 | ✅ | 16ad889; e6e22c1 (scan) | `server/egress.test.ts` 4 通过：`server/` 生产文件里每一处 `fetch(` / `new WebSocket(` / `http(s).request(` 都在白名单；在 `server/llm/index.ts` 加 `fetch("https://example.com")` 后失败，输出 `missing: ['server/llm/index.ts']`；删掉后 4 通过。`docs/egress.md` 表体 14 行 = `EGRESS_ITEMS.length`。`EgressList.test.tsx`：每一项的「连到哪」「发什么」和「默认开/关」都渲染出来。`corepack pnpm gate` 全绿：269 passed \| 2 skipped (271)，2562 passed \| 8 skipped (2570)。 |
-| A1 | ⬜ |  |  |
+| A1 | ✅ | 6cf669d (schema/helpers); c017aed (write/upload); 6736dc3 (readers); 3d66751 (backfill/banner) | 临时库 `mirrai_v6_scratch`：`drizzle-kit push --force` 后 `migrate.mjs` 应用到 0045；`server/db-records.test.ts` 5 通过（夹具条数=`countRecords`、`iterateRecords` 分页同数且时间升序、同一秒两条「嗯」都在、`register: "all"` 计 2、再 `importRecords` 同一份夹具写入 0）；库已 `dropdb`。`server/routers.file-upload-import.test.ts`：`createCollectedMessages` mock 收到 `fileId: 99`、`lineNo` 1/2、`kind: "text"`、`speaker` 小满/阿树。`server/chat/exemplars-upload.test.ts` 2 通过：未导入时提示词不含 `prompt.exemplarsHeading`；上传导入后含该标题和「在的呀」，且 `getCollectedMessagesForPersona` 带 `{ newest: true }`。`server/records-readers.test.ts` 6 通过（prompt/generate/behavior-profile/routers/eval-run.ts 无调用/eval CLI）。P0.3 `prompt-golden.test.ts` 10 通过、快照未改。`server/routers-v6/import.test.ts`：别人的分身 `NOT_FOUND`；未解析的 txt 从磁盘读入、不读 `extractedMemory`。`BackfillBanner.test.tsx`：count=0 不渲染；count=2 显示横幅和「现在整理」。闸门 `278 passed \| 3 skipped (281)` 文件，`2604 passed \| 13 skipped (2617)` 用例，`all six steps passed`。 |
 | A2 | ⬜ |  |  |
 | A3 | ⬜ |  |  |
 | A4 | ⬜ |  |  |
@@ -218,6 +218,17 @@
 | 14 | P0.7 | `server/` 下每一处 `fetch(` 都登记 | 扫描跳过 `*.test.ts` / `*.test.tsx` | 测试里的 `fetch` 打的是本机监听端口，或出现在夹具字符串里，不算出站。 |
 | 15 | P0.7 | 文档「行数」和条目数一致 | 断言的是表体行数（`| id |` 且 id 含连字符）等于 `EGRESS_ITEMS.length`（14） | 文件还有标题和表头，整文件行数对不上条目数。 |
 | 16 | P0.7 | 名人研究流程若发请求则登记 | `celebrity.ts` 只走已配置的 LLM provider，不自己 `fetch` | 写在 `docs/egress.md` 表前说明，不单列一行，避免把「没有出站」登记成出站。 |
+| 17 | A1 | 新 db helper 一律写在 `server/db.ts` | `importRecords` 写在 `server/collectors/db-store.ts`，紧挨 `importCollectedMessages` | 手册 A1 做法 4 允许「在它旁边新增」；上传测试要 mock `createCollectedMessages`，同一模块内的调用 mock 不到。 |
+| 18 | A1 | `iterateRecords` 用 JS `Date` 做 keyset 游标 | 游标是 `(spokenAt, id) > (SELECT … WHERE id = $cursorId)` | `timestamp without time zone` 和 JS `Date` 比较会对不上，分页少行、`getRecordsAround` 的 after 为空。 |
+| 19 | A1 | `countRecords` / `iterateRecords` 的 `userId` 过滤只在 `recordsWhere` 里 | 函数体再写一次 `eq(collectedMessages.userId, userId)`；`getRecordsAround` 的返回类型做成具名 `RecordsAround` | `db-isolation` 要求 helper 函数体出现 `eq(.userId)`；返回类型里的 `{` 会被扫描器当成函数体开头。 |
+| 20 | A1 | 闸门跳过数不能增加 | 无 `DATABASE_URL` 时 `db-records.test.ts` 5 条 `skipIf`，跳过文件 3、跳过用例 13（原 2 文件 / 8 用例） | 手册 2.3 要求新的库测试用 `skipIf(!DATABASE_URL)`。带临时库跑这 5 条全过。 |
+| 21 | A1 | 现状写 `service.ts` 重排分支、`eval/run.ts` 读记录 | 重排在 `generate.ts`；`eval/run.ts` 不再自己读记录，评测 CLI 在 `scripts/eval-run.ts` | P0.6 把生成路径收拢之后的代码。 |
+| 22 | A1 | `startImport` 是 C1.1 的框架 | A1 建了瘦的 `server/importers/`（`types`/`roles`/`generic-line`/`startImport`），`file.upload` 接上它 | A1 做法 5 要求上传后调用 `startImport`，C1.1 再补检测、其余格式、归档和向导路由。 |
+| 23 | A1 | 写入前 `countRecords` 加本批不超过上限 | 上限用 `countRecords(..., { register: "all" })` | 默认 `register` 是 private，上限必须算整张表。 |
+| 24 | A1 | `file_type` 的 `chat_export` 对齐 C1.1 白名单（含 html/xml/db/mht） | A1 只允许 `.txt` `.csv` `.json`；`.zip` 走 `archive` | html 会在同源上传目录当页面跑；其余扩展等 C1.1 格式落地再开。 |
+| 25 | A1 | 对 `archive` 调用 `startImport` 并解析 | `archive` 停在 `needs_format`，不把 zip 当文本解析 | 解包是 C1.1。 |
+| 26 | A1 | `generic-line` 沿用 `parseTranscriptMessages`：没有说话人时每行算一条 | 没有说话人的文件全部跳过，记入 `skipped` | 导入需要说话人才能猜角色；表头和说明行不许进记录表。 |
+| 27 | A1 | 先红后绿：旧代码上 `exemplarSectionFor` 断言「有示范」为红 | `exemplars-upload.test.ts` 在写入路径落地之后才写成；空记录仍无示范段，导入后有 | 本会话从 4–5 步接着做，没有回到 4–5 之前的 HEAD 跑那条红。 |
 
 ## 未验证清单
 
@@ -277,3 +288,11 @@ P0.1、P0.2、P0.3、P0.4、P0.6、P0.7 维持 ✅。P0.5 改回 ⬜。
 
 - `34f5564` 修上面两处。冲突不落在周三，和好从「就嗯？」起算满设计的小时数，这段保持空白。追一句不再平移冲突场景里的消息，改错字不会插进晚安或这段空白。多点回复的八成按实际写上的回复来分，不按没对上的用户行来分。
 - 修完后 `corepack pnpm gate` 退出码 0：`269 passed | 2 skipped (271)` 个文件，`2562 passed | 8 skipped (2570)` 个用例。通过数没有减少，跳过数没有增加。P0.5 改回 ✅。
+
+### WP1 · 实现会话 · 2026-11-16 · A1
+
+- 分支 `exec/v6`。独立验收留下的 `- [ ]` 已全部勾掉。没有「等 xxx」的推后项。
+- A1 按手册拆成四个提交：`6cf669d` 表/共用模块/db helper；`c017aed` `importRecords` + `generic-line` + 上传触发；`6736dc3` 读者 `{ newest: true }`；`3d66751` `import.backfill` 和上传页横幅。
+- 临时库 `mirrai_v6_scratch` 上跑过 db-records（5/5），用完已删。`mirrai_live` 未碰。
+- 无 `DATABASE_URL` 的 `corepack pnpm gate`：`278 passed | 3 skipped (281)` 文件，`2604 passed | 13 skipped (2617)` 用例，`all six steps passed`。相对 WP0 闸门（269/2 文件、2562/8 用例）：通过文件 +9、通过用例 +42；跳过文件 +1、跳过用例 +5，全部来自 `db-records.test.ts` 的 `skipIf`（见偏差 20）。
+- A1 标 ✅。C1.1 起未做。未验证清单、待用户决定仍空。
