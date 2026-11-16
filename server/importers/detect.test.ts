@@ -51,6 +51,16 @@ describe("detectFormat", () => {
     expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
   });
 
+  it("claims the wechat-json sample as itself", () => {
+    const sample = readFileSync(
+      path.resolve(import.meta.dirname, "../test-fixtures/exports/wechat-json/sample.json"),
+      "utf8",
+    );
+    const hits = detectFormat(source("chat.json", sample));
+    expect(hits[0]?.id).toBe("wechat-json");
+    expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
+  });
+
   it("does not claim a prose paragraph", () => {
     const prose = [
       "The evening was quiet.",

@@ -11,7 +11,8 @@ export type FixtureFormat =
   | "generic-line"
   | "wechat-txt-2line"
   | "wechat-txt-paren"
-  | "wechat-csv";
+  | "wechat-csv"
+  | "wechat-json";
 
 function textRows(records: FixtureRecord[]): FixtureRecord[] {
   return records.filter((row) => row.kind === "text" && row.content.trim());
@@ -40,6 +41,15 @@ function csvCell(value: string): string {
   return value;
 }
 
+function renderWechatJson(records: FixtureRecord[]): string {
+  const rows = textRows(records).map((row) => ({
+    sender: row.speaker,
+    content: row.content.trim(),
+    timestamp: formatShanghai(row.timestamp),
+  }));
+  return JSON.stringify(rows, null, 2);
+}
+
 function renderWechatCsv(records: FixtureRecord[]): string {
   const header = "IsSender,StrContent,StrTime,Type,SubType,NickName";
   const lines = textRows(records).map((row) =>
@@ -65,6 +75,8 @@ export function renderFixture(records: FixtureRecord[], format: FixtureFormat | 
       return renderWechatTxtParen(records);
     case "wechat-csv":
       return renderWechatCsv(records);
+    case "wechat-json":
+      return renderWechatJson(records);
     default:
       throw new Error(`renderFixture: format "${format}" is not implemented yet (C1.1)`);
   }

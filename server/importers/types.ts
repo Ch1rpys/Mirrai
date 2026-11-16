@@ -4,7 +4,8 @@ export type ImportFormatId =
   | "generic-line"
   | "wechat-txt-2line"
   | "wechat-txt-paren"
-  | "wechat-csv";
+  | "wechat-csv"
+  | "wechat-json";
 
 export type ImportSourceName =
   | "wechat_export"

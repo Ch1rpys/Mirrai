@@ -56,3 +56,12 @@ Headers include `IsSender`, `StrContent`, `StrTime`, `Type`, `SubType`,
 transfer), 50 call, 10000 system (pat / recall from the wording).
 
 - Sample (synthetic): `server/test-fixtures/exports/wechat-csv/sample.csv`.
+
+## wechat-json
+
+Checked 2026-11-16 against the field names `server/collectors/runner.ts`
+already accepts (`sender` / `sender_name` / `from` / `content` / `text`
+/ `timestamp` / `create_time` / `StrTime`). A top-level array, or an
+object with `messages` / `data`, is read the same way.
+
+- Sample (synthetic): `server/test-fixtures/exports/wechat-json/sample.json`.

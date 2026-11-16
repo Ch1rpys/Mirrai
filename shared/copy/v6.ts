@@ -28,4 +28,8 @@ export const V6 = {
     zh: "微信 CSV",
     en: "WeChat CSV",
   },
+  "import.format.wechatJson": {
+    zh: "微信 JSON",
+    en: "WeChat JSON",
+  },
 } as const satisfies CopyTable;
