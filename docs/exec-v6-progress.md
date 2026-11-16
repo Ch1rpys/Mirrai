@@ -24,7 +24,7 @@
 | P0.1 | ✅ | b3710ef (docs); 2fe5653 (progress) | `git branch --show-current` → `exec/v6`. `git log --oneline main..exec/v6` 第一个提交 `b3710ef` 只含 `docs/ideas-v6.md` 和 `docs/exec-v6.md`。基线见上表，与 §2.2 一致。进度表 176 行。 |
 | P0.2 | ✅ | b298550 | `corepack pnpm gate` 退出码 0，输出 `all six steps passed`（typecheck / test 258 passed \| 2 skipped, 2489 passed \| 8 skipped / copy-audit / fidelity-gate / client-build / server-bundle）。`server/gate-script.test.ts` 3 通过。故意在 `server/_core/fidelity-gate.ts` 加 `const __p02TypeError: number = "intentionally-wrong"` 后 `corepack pnpm gate` 退出码 2，输出 `[gate] failed at typecheck (exit 2, 1.8s)`；`git checkout HEAD -- server/_core/fidelity-gate.ts` 改回。 |
 | P0.3 | ✅ | e506484 | `server/chat/prompt-golden.test.ts` 10 通过；快照文件 9 份 `exports[`. 改 `shared/copy/prompt.ts` 的 `prompt.identityVolunteers` zh「【AI 身份】」为「【AI 身份x】」后 8 个快照红（`Snapshot mismatched`）；`git checkout HEAD -- shared/copy/prompt.ts` 后 10 通过。`corepack pnpm gate` 全绿：259 passed \| 2 skipped (261)，2499 passed \| 8 skipped (2507)。 |
-| P0.4 | ⬜ |  |  |
+| P0.4 | ✅ | 1e44f5d (data); e59ec6d (routes/UI) | 临时库四步+升级路径：rollback 后 `settings`/`styleProfile` 消失，再 migrate 回来；升级路径 DROP 两列并删 `schema_migrations` 的 0044 后再 migrate，两列出现。`shared/persona-settings.test.ts` 5 通过（空值默认、`twoStage: "yes"` 回落、未知键丢弃、`maxDelayMinutes: 9999` 钳到 360、深合并）。`server/routers.persona-settings.test.ts` 3 通过（别人的分身 `NOT_FOUND`、patch 后读回、`withPersonaDataLock` 源码位置）。`server/schema-coverage.test.ts`、`schema-parity.test.ts` 通过。P0.3 黄金快照 10 通过未改。`corepack pnpm gate` 全绿：264 passed \| 2 skipped (266)，2514 passed \| 8 skipped (2522)。 |
 | P0.5 | ⬜ |  |  |
 | P0.6 | ⬜ |  |  |
 | P0.7 | ⬜ |  |  |
@@ -203,6 +203,8 @@
 | # | 条目 | 这份文件写的 | 实际做的 | 为什么 |
 |---|---|---|---|---|
 | 1 | P0.1 | 写作基线是 `main` @ `4adc434`（v1.3.0） | 从当时的 `main` HEAD `f71e77b` 拉 `exec/v6` | `4adc434` 之后 `main` 上还有 AtomGit 徽章等文档提交；工作区只有两份未跟踪文档，符合 P0.1 做法第 1 步。闸门数字与第 2.2 节一致。 |
+| 2 | P0.4 | 未单独点名 `getRecordsVersion` | `server/db.ts` 增加 `getRecordsVersion(personaId, userId)`，用 `count` + `max(id)` 生成 `${条数}:${最大id}` | 第 3.3 节要这个格式，P0.4 时还没有 `iterateRecords`；一次聚合查询避免把记录整表读进内存。 |
+| 3 | P0.4 | `style.*` 可写在 `routers.ts` 或 `routers-v6` | `style` 组放在 `server/routers-v6/style.ts`，`appRouter` 只挂一行 | 第 3.7 节要求新增路由组不往 `routers.ts` 里堆逻辑。 |
 
 ## 未验证清单
 
@@ -223,3 +225,4 @@
 - 基线已跑，数字与手册 2.2 一致（见上表）。临时库 `mirrai_v6_scratch` 已删除。
 - P0.2：`b298550`（`scripts/gate-all.mjs`、`server/gate-script.test.ts`、`package.json` 的 `gate` 脚本）。闸门测试 260 文件 / 2497 用例（+1 文件、+3 用例）。
 - P0.3：`e506484`（`server/chat/prompt-golden.test.ts` 与快照）。闸门 261 文件 / 2507 用例（+1 文件、+10 用例）。
+- P0.4：`1e44f5d` 数据层，`e59ec6d` 路由和界面。闸门 266 文件 / 2522 用例。`--replay` 现为 42 条（含 0044）。
