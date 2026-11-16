@@ -12,6 +12,18 @@ export const V6 = {
     zh: "这份文件没有整理成记录。",
     en: "This file was not turned into records.",
   },
+  "errors.importArchiveBroken": {
+    zh: "这个压缩包打不开。",
+    en: "That zip archive could not be opened.",
+  },
+  "errors.importArchiveTooMany": {
+    zh: "这个压缩包里的文件太多，没有解开。",
+    en: "That zip archive has too many files, so it was not unpacked.",
+  },
+  "errors.importArchiveTooLarge": {
+    zh: "这个压缩包解开之后太大，没有留下文件。",
+    en: "That zip archive would unpack to more than the size limit, so nothing was kept.",
+  },
   "import.format.genericLine": {
     zh: "一行一条的聊天记录",
     en: "One message per line",

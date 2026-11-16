@@ -9,6 +9,18 @@ A format is listed here only after its shape has been checked against a
 document or a real sample. Formats the handbook named but that could not
 be verified stay off the registry, so the wizard does not offer them.
 
+## Archives
+
+A `.zip` is unpacked with `fflate`'s streaming `Unzip` into
+`personas/<userId>/<personaId>/imports/<fileId>/`. Names that contain
+`..`, start with `/`, or use a drive letter are skipped. Only chat
+extensions (`txt csv json html htm xml db mht`) and media extensions
+(`jpg jpeg png gif webp heic bmp mp3 m4a aac wav ogg opus amr silk aud
+mp4 mov webm`) are written. Caps: 200 000 entries, 8 GiB unpacked
+(`MAX_IMPORT_UNPACKED_BYTES`), 2 GiB per file. Over a cap the
+destination is deleted. `fflate` 0.8.3 is MIT; checked 2026-11-16
+against [fflate](https://github.com/101arrowz/fflate).
+
 ## generic-line
 
 The app's own one-line transcript, the same shape `parseTranscriptMessages`

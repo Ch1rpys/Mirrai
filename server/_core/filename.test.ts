@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeFileName, resolveUploadPath } from "./filename";
+import { sanitizeFileName, resolveUploadPath, importEntryKind } from "./filename";
 
 describe("sanitizeFileName", () => {
   it("keeps an ordinary name", () => {
@@ -43,6 +43,19 @@ describe("sanitizeFileName", () => {
   it("keeps the extension when truncating", () => {
     const long = `${"a".repeat(300)}.txt`;
     expect(sanitizeFileName(long).endsWith(".txt")).toBe(true);
+  });
+});
+
+describe("importEntryKind", () => {
+  it("recognises a chat export, a picture, and a zip", () => {
+    expect(importEntryKind("chat.TXT")).toBe("chat");
+    expect(importEntryKind("photo.JPEG")).toBe("media");
+    expect(importEntryKind("bundle.zip")).toBe("archive");
+  });
+
+  it("rejects an extension the unpacker will not write", () => {
+    expect(importEntryKind("secret.exe")).toBeNull();
+    expect(importEntryKind("notes")).toBeNull();
   });
 });
 

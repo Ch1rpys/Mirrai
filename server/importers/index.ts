@@ -1,12 +1,16 @@
 /**
  * Turns an uploaded chat file into rows in the record table.
  *
- * Detection picks a format; the wizard (C1.2) can override it. Archives
- * wait for unpacking. A file whose two sides cannot be named stops at
- * `needs_roles` so nothing is written until the user says who is who.
+ * Detection picks a format; the wizard (C1.2) can override it. A zip is
+ * unpacked first, then each chat file inside it is detected. A file
+ * whose two sides cannot be named stops at `needs_roles` so nothing is
+ * written until the user says who is who.
  */
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { copy, type Locale } from "@shared/copy";
+import { ENV } from "../_core/env";
+import { resolveUploadPath } from "../_core/filename";
 import {
   getPersonaById,
   getPersonaFileById,
@@ -16,8 +20,13 @@ import {
 } from "../db";
 import { importRecords, RecordLimitError } from "../collectors/db-store";
 import { resolveStoredPath } from "../storage";
+import {
+  importUnpackRelKey,
+  unpackErrorCopyKey,
+  unpackZip,
+} from "./archive";
 import { detectFormat, pickDetectedFormat } from "./detect";
-import { importSourceFrom } from "./normalize";
+import { cappedWarnings, importSourceFrom, yieldToEventLoop } from "./normalize";
 import { importerById } from "./registry";
 import { assignRoles, guessRoles } from "./roles";
 import type {
@@ -104,13 +113,98 @@ async function loadSource(
   return importSourceFrom(file.originalName ?? "file", bytes, input.bytes ? undefined : input.text);
 }
 
+async function sourceFromArchive(
+  file: { id: number; userId: number; personaId: number; originalName?: string | null; fileKey?: string | null },
+  input: StartImportInput,
+): Promise<
+  | { status: "ok"; source: ImportSource; report: ParseReport }
+  | { status: "needs_format" | "needs_chat" | "failed"; report: ParseReport; reason?: string }
+> {
+  const zipSource = await loadSource(file, input);
+  if (!zipSource) {
+    return { status: "failed", report: {}, reason: copy(input.locale === "en" ? "en" : "zh", "errors.importFailed") };
+  }
+
+  const locale: Locale = input.locale === "en" ? "en" : "zh";
+  let destDir: string;
+  try {
+    destDir = resolveUploadPath(
+      ENV.uploadDir,
+      importUnpackRelKey(file.userId, file.personaId, file.id),
+    );
+  } catch {
+    return { status: "failed", report: {}, reason: copy(locale, "errors.importFailed") };
+  }
+
+  const unpacked = await unpackZip(zipSource.bytes, destDir);
+  const report: ParseReport = {
+    mediaFiles: unpacked.mediaFiles.map((row) => row.relativePath),
+    chatFiles: [],
+    skipped: unpacked.skipped,
+    warnings: unpacked.warnings,
+    progress: 0,
+  };
+
+  if (!unpacked.ok) {
+    return {
+      status: "failed",
+      report,
+      reason: copy(locale, unpackErrorCopyKey(unpacked.errorCode)),
+    };
+  }
+
+  const chats: Array<{
+    path: string;
+    format?: ImportFormatId;
+    confidence?: number;
+    source: ImportSource;
+  }> = [];
+  for (const entry of unpacked.chatFiles) {
+    const bytes = await readFile(entry.absPath);
+    const chatSource = importSourceFrom(entry.relativePath, bytes);
+    const detected = detectFormat(chatSource);
+    chats.push({
+      path: entry.relativePath,
+      format: detected[0]?.id,
+      confidence: detected[0]?.confidence,
+      source: chatSource,
+    });
+    await yieldToEventLoop();
+  }
+  report.chatFiles = chats.map((row) => ({
+    path: row.path,
+    format: row.format,
+    confidence: row.confidence,
+  }));
+
+  if (chats.length === 0) {
+    return { status: "needs_format", report };
+  }
+  if (chats.length > 1 && !input.chatId) {
+    report.chats = chats.map((row) => ({
+      id: row.path,
+      title: path.posix.basename(row.path),
+      count: 0,
+    }));
+    return { status: "needs_chat", report };
+  }
+
+  const chosen = input.chatId
+    ? chats.find((row) => row.path === input.chatId)
+    : chats[0];
+  if (!chosen) {
+    return { status: "failed", report, reason: copy(locale, "errors.importFailed") };
+  }
+  return { status: "ok", source: chosen.source, report };
+}
+
 /**
  * Parses one uploaded file and writes the rows it can already assign.
  *
  * Stops at `needs_format` when detection cannot pick a format, at
- * `needs_chat` when a file holds several conversations, and at
- * `needs_roles` when the two sides cannot be named. An archive is
- * unpacked in a later step; until then it also stops at `needs_format`.
+ * `needs_chat` when a file holds several conversations (or a zip holds
+ * several chat files), and at `needs_roles` when the two sides cannot
+ * be named.
  */
 export async function startImport(input: StartImportInput): Promise<StartImportResult> {
   const locale: Locale = input.locale === "en" ? "en" : "zh";
@@ -132,17 +226,29 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
     parseReport: reportOf({ progress: 0 }),
   });
 
-  if (file.fileType === "archive" && !input.format) {
-    await updatePersonaFile(file.id, input.userId, {
-      parseStatus: "needs_format",
-      parseReport: reportOf({ progress: 0 }),
-    });
-    return { status: "needs_format", written: 0 };
+  let source: ImportSource | null = null;
+  let archiveReport: ParseReport = {};
+
+  if (file.fileType === "archive") {
+    const fromZip = await sourceFromArchive(file, input);
+    archiveReport = fromZip.report;
+    if (fromZip.status !== "ok") {
+      if (fromZip.status === "failed") {
+        return fail(fromZip.reason ?? copy(locale, "errors.importFailed"), fromZip.report);
+      }
+      await updatePersonaFile(file.id, input.userId, {
+        parseStatus: fromZip.status,
+        parseReport: reportOf(fromZip.report),
+      });
+      return { status: fromZip.status, written: 0 };
+    }
+    source = fromZip.source;
+  } else {
+    source = await loadSource(file, input);
   }
 
-  const source = await loadSource(file, input);
   if (!source) {
-    return fail(copy(locale, "errors.importFailed"));
+    return fail(copy(locale, "errors.importFailed"), archiveReport);
   }
 
   const detected = detectFormat(source);
@@ -184,7 +290,10 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
     firstAt: asIso(times.length ? new Date(Math.min(...times.map((d) => d.getTime()))) : undefined),
     lastAt: asIso(times.length ? new Date(Math.max(...times.map((d) => d.getTime()))) : undefined),
   };
-  const warnings: ParseWarning[] = parsed.warnings;
+  const warnings: ParseWarning[] = cappedWarnings([
+    ...(archiveReport.warnings ?? []),
+    ...parsed.warnings,
+  ]);
   const baseReport: ParseReport = {
     format: importer.id,
     confidence: picked.confidence,
@@ -195,10 +304,12 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
       lastAt: row.lastAt,
     })),
     timeRange,
-    skipped: parsed.skipped,
+    skipped: (archiveReport.skipped ?? 0) + parsed.skipped,
     warnings,
     kindCounts: countBy(parsed.records.map((row) => row.kind)),
-    chats: parsed.chats,
+    chats: parsed.chats ?? archiveReport.chats,
+    chatFiles: archiveReport.chatFiles,
+    mediaFiles: archiveReport.mediaFiles,
     progress: 0,
   };
 

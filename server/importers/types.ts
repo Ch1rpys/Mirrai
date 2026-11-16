@@ -94,6 +94,10 @@ export interface ParseReport {
   progress?: number;
   failedReason?: string;
   chats?: ParseResult["chats"];
+  /** Chat files found inside an unpacked zip, as paths relative to the unpack dir. */
+  chatFiles?: Array<{ path: string; format?: ImportFormatId; confidence?: number }>;
+  /** Media files found inside an unpacked zip, as paths relative to the unpack dir. */
+  mediaFiles?: string[];
 }
 
 export type { ParsedRecord, RecordKind };

@@ -53,6 +53,62 @@ export const ALLOWED_EXTENSIONS: Record<string, string[]> = {
   archive: [".zip"],
 };
 
+/**
+ * Chat files a zip may unpack. Kept here so the upload route and the
+ * unpacker share one list; `chat_export` on the upload surface is
+ * widened to this in the streaming-upload step.
+ */
+export const IMPORT_CHAT_EXTENSIONS = [
+  ".txt",
+  ".csv",
+  ".json",
+  ".html",
+  ".htm",
+  ".xml",
+  ".db",
+  ".mht",
+] as const;
+
+/** Media files a zip may unpack, left on disk for later importers. */
+export const IMPORT_MEDIA_EXTENSIONS = [
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".gif",
+  ".webp",
+  ".heic",
+  ".bmp",
+  ".mp3",
+  ".m4a",
+  ".aac",
+  ".wav",
+  ".ogg",
+  ".opus",
+  ".amr",
+  ".silk",
+  ".aud",
+  ".mp4",
+  ".mov",
+  ".webm",
+] as const;
+
+export const IMPORT_ARCHIVE_EXTENSIONS = [".zip"] as const;
+
+const IMPORT_CHAT_SET = new Set<string>(IMPORT_CHAT_EXTENSIONS);
+const IMPORT_MEDIA_SET = new Set<string>(IMPORT_MEDIA_EXTENSIONS);
+const IMPORT_ARCHIVE_SET = new Set<string>(IMPORT_ARCHIVE_EXTENSIONS);
+
+export type ImportEntryKind = "chat" | "media" | "archive";
+
+/** Which kind of import file this name is, or null when it is neither. */
+export function importEntryKind(fileName: string): ImportEntryKind | null {
+  const ext = fileExtension(fileName);
+  if (IMPORT_CHAT_SET.has(ext)) return "chat";
+  if (IMPORT_MEDIA_SET.has(ext)) return "media";
+  if (IMPORT_ARCHIVE_SET.has(ext)) return "archive";
+  return null;
+}
+
 /** The extension of a file name, lower-cased, including the dot. */
 export function fileExtension(name: string): string {
   const ext = path.extname(String(name ?? "")).toLowerCase();
