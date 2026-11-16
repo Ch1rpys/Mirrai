@@ -9,6 +9,11 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { copy, type Locale } from "@shared/copy";
+import {
+  CHAT_IMPORT_FILE_TYPES,
+  isChatImportFileType,
+  type ChatImportFileType,
+} from "@shared/records";
 import { ENV } from "../_core/env";
 import { resolveUploadPath } from "../_core/filename";
 import {
@@ -49,19 +54,8 @@ export { IMPORTERS, importerById } from "./registry";
 export { assignRoles, guessRoles } from "./roles";
 export type { ParseResult, ParseReport, ImportFormatId, ColumnMap } from "./types";
 
-/** File types that should be parsed into records after upload. */
-export const CHAT_IMPORT_FILE_TYPES = [
-  "chat_txt",
-  "chat_csv",
-  "chat_export",
-  "archive",
-] as const;
-
-export type ChatImportFileType = (typeof CHAT_IMPORT_FILE_TYPES)[number];
-
-export function isChatImportFileType(value: string): value is ChatImportFileType {
-  return (CHAT_IMPORT_FILE_TYPES as readonly string[]).includes(value);
-}
+export { CHAT_IMPORT_FILE_TYPES, isChatImportFileType };
+export type { ChatImportFileType };
 
 export interface StartImportInput {
   fileId: number;

@@ -133,6 +133,8 @@ describe("isUnparsedChatUpload", () => {
   it("is true only for chat files that have never been parsed", () => {
     expect(isUnparsedChatUpload({ fileType: "chat_txt", parseStatus: null })).toBe(true);
     expect(isUnparsedChatUpload({ fileType: "chat_csv" })).toBe(true);
+    expect(isUnparsedChatUpload({ fileType: "chat_export", parseStatus: null })).toBe(true);
+    expect(isUnparsedChatUpload({ fileType: "archive" })).toBe(true);
     expect(isUnparsedChatUpload({ fileType: "chat_txt", parseStatus: "done" })).toBe(false);
     expect(isUnparsedChatUpload({ fileType: "image", parseStatus: null })).toBe(false);
   });

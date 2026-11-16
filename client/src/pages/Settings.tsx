@@ -284,8 +284,13 @@ function ProfileTab() {
    * success closed *this* editor — so saving the address style threw
    * away the name and the email the user had typed but not yet saved.
    */
+  const utils = trpc.useUtils();
   const updateProfile = trpc.user.updateProfile.useMutation({
-    onSuccess: () => { toast.success(t("settings.profile.updated")); refetch(); },
+    onSuccess: () => {
+      toast.success(t("settings.profile.updated"));
+      refetch();
+      void utils.auth.me.invalidate();
+    },
     onError: (e: any) => toast.error(e.message),
   });
   const changePassword = trpc.user.changePassword.useMutation({
@@ -302,6 +307,7 @@ function ProfileTab() {
 
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
+  const [editTimezone, setEditTimezone] = useState("");
   const [editEmail, setEditEmail] = useState("");
   /* Whether the app may read the user's own messages. */
   const updateTrajectoryAssessment = trpc.user.updateTrajectoryAssessment.useMutation({
@@ -335,6 +341,7 @@ function ProfileTab() {
   const lastProfileValues = useRef<{
     name: string;
     email: string;
+    timezone: string;
     addressStyle: string;
     boundaries: string;
   } | null>(null);
@@ -344,6 +351,7 @@ function ProfileTab() {
     const next = {
       name: profile.name || "",
       email: profile.email || "",
+      timezone: profile.timezone || "",
       addressStyle: profile.addressStyle || "",
       boundaries: profile.boundaries || "",
     };
@@ -351,6 +359,7 @@ function ProfileTab() {
     lastProfileValues.current = next;
     if (!previous || previous.name !== next.name) setEditName(next.name);
     if (!previous || previous.email !== next.email) setEditEmail(next.email);
+    if (!previous || previous.timezone !== next.timezone) setEditTimezone(next.timezone);
     if (!previous || previous.addressStyle !== next.addressStyle) setAddressStyle(next.addressStyle);
     if (!previous || previous.boundaries !== next.boundaries) setBoundaries(next.boundaries);
   }, [profile]);
@@ -401,6 +410,15 @@ function ProfileTab() {
                     type="email" placeholder="your@email.com"
                     className="h-9 rounded-md text-sm" />
                 </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground" htmlFor="user-timezone">{t("settings.profile.timezone")}</Label>
+                  <Input id="user-timezone" value={editTimezone} onChange={e => setEditTimezone(e.target.value)}
+                    placeholder={t("settings.profile.timezonePlaceholder")}
+                    className="h-9 rounded-md text-sm" />
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {t("settings.profile.timezoneNote")}
+                  </p>
+                </div>
                 <div className="flex gap-2 pt-1">
                   <Button size="sm" className="rounded-md px-5"
                     onClick={() => updateProfile.mutate(
@@ -410,6 +428,7 @@ function ProfileTab() {
                         // field could never clear the address. `null`
                         // means "take it away".
                         email: editEmail.trim() || null,
+                        timezone: editTimezone.trim() || null,
                       },
                       // This editor closes when *this* form is saved —
                       // and only then. The other form uses the same
@@ -446,6 +465,11 @@ function ProfileTab() {
                     <Clock className="w-3 h-3" /> {t("settings.profile.lastLogin", { date: formatInstantInZone(profile.lastSignedIn, locale, timezone) })}
                   </span>
                 </div>
+                {profile.timezone && (
+                  <p id="user-timezone" className="text-xs text-muted-foreground mt-2">
+                    {t("settings.profile.timezone")} {profile.timezone}
+                  </p>
+                )}
                 <Button size="sm" variant="ghost" className="mt-3 -ml-2 text-xs text-primary hover:text-primary/80 rounded-md h-7 px-3"
                   onClick={() => setEditing(true)}>
                   <Pencil className="w-3 h-3" /> {t("settings.profile.edit")}

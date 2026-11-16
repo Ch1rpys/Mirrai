@@ -190,6 +190,20 @@ export function renderRecordContent(
   return row.content;
 }
 
+/** File types the import wizard turns into records. */
+export const CHAT_IMPORT_FILE_TYPES = [
+  "chat_txt",
+  "chat_csv",
+  "chat_export",
+  "archive",
+] as const;
+
+export type ChatImportFileType = (typeof CHAT_IMPORT_FILE_TYPES)[number];
+
+export function isChatImportFileType(value: string): value is ChatImportFileType {
+  return (CHAT_IMPORT_FILE_TYPES as readonly string[]).includes(value);
+}
+
 /**
  * Whether an uploaded chat file still needs to be turned into records.
  *
@@ -201,7 +215,7 @@ export function isUnparsedChatUpload(file: {
   fileType: string;
   parseStatus?: string | null;
 }): boolean {
-  if (file.fileType !== "chat_txt" && file.fileType !== "chat_csv") return false;
+  if (!isChatImportFileType(file.fileType)) return false;
   return file.parseStatus == null || file.parseStatus === "";
 }
 

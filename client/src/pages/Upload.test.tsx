@@ -34,6 +34,12 @@ vi.mock("@/lib/trpc", () => ({
     },
     import: {
       backfill: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      formats: { useQuery: () => ({ data: [{ id: "generic-line", label: "一行一条" }] }) },
+      status: { useQuery: () => ({ data: undefined, error: null, refetch: vi.fn() }) },
+      preview: { useQuery: () => ({ data: undefined }) },
+      confirm: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      resume: { useMutation: () => ({ mutateAsync: vi.fn(), mutate: vi.fn(), isPending: false }) },
+      cancel: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     collector: {
       preview: { useQuery: () => ({ data: { total: 0 } }) },
@@ -172,5 +178,37 @@ describe("the files that are on their way", () => {
     });
     // The key is not shown to the person.
     expect(screen.queryByText(/notes\.txt#/)).toBeNull();
+  });
+
+  it("lists the formats the server actually supports", () => {
+    render(<Upload />);
+    expect(screen.getByText(translate("zh", "upload.formatsHint", { formats: "一行一条" }))).toBeTruthy();
+  });
+
+  it("streams a zip through the import upload route", async () => {
+    const send = vi.fn();
+    class FakeXHR {
+      upload: { onprogress: ((event: { lengthComputable: boolean; loaded: number; total: number }) => void) | null } = { onprogress: null };
+      status = 200;
+      responseText = JSON.stringify({ fileId: 9 });
+      withCredentials = false;
+      open = vi.fn();
+      setRequestHeader = vi.fn();
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      send(body: unknown) {
+        send(body);
+        this.upload.onprogress?.({ lengthComputable: true, loaded: 40, total: 80 });
+        this.onload?.();
+      }
+    }
+    vi.stubGlobal("XMLHttpRequest", FakeXHR);
+    render(<Upload />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [makeFile("chat.zip", "application/zip")] } });
+    await waitFor(() => {
+      expect(send).toHaveBeenCalled();
+    });
+    expect(upload).not.toHaveBeenCalled();
   });
 });

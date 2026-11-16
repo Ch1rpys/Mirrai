@@ -9,7 +9,8 @@ import {
 import { Button } from "@/components/ui/button";
 import DistillationModePicker from "@/components/DistillationModePicker";
 import BackfillBanner from "@/components/v6/BackfillBanner";
-import { isUnparsedChatUpload } from "@shared/records";
+import ImportWizard from "@/components/v6/ImportWizard";
+import { isChatImportFileType, isUnparsedChatUpload } from "@shared/records";
 import { resolveIntakeGaps } from "@/lib/intake-gaps";
 import { toast } from "sonner";
 import { useLocale } from "@/contexts/LocaleContext";
@@ -18,7 +19,14 @@ import {
   type DistillationMode,
 } from "@shared/distillation-modes";
 
-const ALL_ACCEPT = ".txt,.csv,image/*,video/*";
+const ALL_ACCEPT = ".txt,.csv,.json,.html,.htm,.xml,.mht,.db,.zip,image/*,video/*";
+const STREAM_THRESHOLD = 40 * 1024 * 1024;
+const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
+/** persona_files.fileSize is int4; the stream route refuses anything larger. */
+const MAX_IMPORT_BYTES = 2_147_483_647;
+const CHAT_EXPORT_EXT = new Set(["json", "html", "htm", "xml", "mht", "db"]);
+
+type UploadKind = "chat_txt" | "chat_csv" | "chat_export" | "archive" | "image" | "video";
 
 /** The agent hosts a generated skill package can be installed into. */
 const SKILL_HOSTS = ["claude-code", "openclaw", "codex", "hermes"] as const;
@@ -116,10 +124,12 @@ function IntakeGaps({ inputMeta }: { inputMeta: unknown }) {
  * The `accept` attribute only constrains the file picker. A drag and
  * drop goes straight past it.
  */
-function detectFileType(file: File): "chat_txt" | "chat_csv" | "image" | "video" | null {
+function detectFileType(file: File): UploadKind | null {
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   if (ext === "txt") return "chat_txt";
   if (ext === "csv") return "chat_csv";
+  if (ext === "zip") return "archive";
+  if (CHAT_EXPORT_EXT.has(ext)) return "chat_export";
   if (file.type.startsWith("video/")) return "video";
   if (file.type.startsWith("image/")) return "image";
   // The browser may not know the type — the extension is the fallback.
@@ -128,15 +138,59 @@ function detectFileType(file: File): "chat_txt" | "chat_csv" | "image" | "video"
   return null;
 }
 
+function shouldStream(file: File, fileType: UploadKind): boolean {
+  if (fileType === "image" || fileType === "video") return false;
+  return fileType === "archive" || file.size > STREAM_THRESHOLD;
+}
+
+function maxBytesFor(fileType: UploadKind): number {
+  return fileType === "image" || fileType === "video" ? MAX_MEDIA_BYTES : MAX_IMPORT_BYTES;
+}
+
 /**
- * The largest file the app accepts.
+ * Stream a chat export or a zip to the import upload route.
  *
- * The server refuses anything larger, but it refuses it after the whole
- * file has been read into the page and turned into a string — so
- * dragging a large video made the browser encode hundreds of megabytes
- * before anything was said.
+ * The JSON `file.upload` path base64-encodes the whole file in the tab.
+ * A forty-megabyte zip would freeze the page; this path sends the bytes
+ * as the request body and reports progress as they go.
  */
-const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+function putImportFile(args: {
+  personaId: number;
+  file: File;
+  locale: string;
+  onProgress: (percent: number) => void;
+}): Promise<{ fileId: number }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const params = new URLSearchParams({
+      personaId: String(args.personaId),
+      name: args.file.name,
+    });
+    xhr.open("PUT", `/api/import/upload?${params.toString()}`);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader("x-mirrai-locale", args.locale === "en" ? "en" : "zh");
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) {
+        args.onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+    xhr.onload = () => {
+      let body: { fileId?: number; error?: string } = {};
+      try {
+        body = JSON.parse(xhr.responseText) as typeof body;
+      } catch {
+        body = {};
+      }
+      if (xhr.status >= 200 && xhr.status < 300 && body.fileId != null) {
+        resolve({ fileId: body.fileId });
+        return;
+      }
+      reject(new Error(body.error || `HTTP ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error("network"));
+    xhr.send(args.file);
+  });
+}
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -150,6 +204,7 @@ function fileToBase64(file: File): Promise<string> {
 function getMimeType(file: File, fileType: string): string {
   if (fileType === "chat_txt") return "text/plain";
   if (fileType === "chat_csv") return "text/csv";
+  if (fileType === "archive") return "application/zip";
   return file.type || "application/octet-stream";
 }
 
@@ -190,8 +245,8 @@ export default function Upload() {
   const personaId = Number.parseInt(params.id ?? "", 10);
   const hasPersonaId = Number.isInteger(personaId) && personaId > 0;
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
-  const { t } = useLocale();
+  const { isAuthenticated, user } = useAuth({ redirectOnUnauthenticated: true });
+  const { t, locale } = useLocale();
 
   /**
    * The uploads that are on their way.
@@ -211,6 +266,7 @@ export default function Upload() {
     name: string;
     status: "uploading" | "done" | "error";
     file?: File;
+    progress?: number;
   }>>({});
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -223,6 +279,10 @@ export default function Upload() {
   );
   const { data: files, refetch: refetchFiles, isLoading: filesLoadingQuery, isError: filesError } = trpc.file.list.useQuery(
     { personaId }, { enabled: isAuthenticated && hasPersonaId }
+  );
+  const { data: importFormats } = trpc.import.formats.useQuery(
+    undefined,
+    { enabled: isAuthenticated },
   );
   // Material pulled in by a collector is just as usable as an uploaded file.
   // A persona whose only material came from a collector must still be
@@ -348,6 +408,68 @@ export default function Upload() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const sendFile = useCallback(async (file: File, key: string) => {
+    const fileType = detectFileType(file);
+    if (!fileType) {
+      // The kind is checked before the file is read, not after.
+      toast.error(t("upload.unsupportedType", { name: file.name }));
+      return;
+    }
+    if (file.size > maxBytesFor(fileType)) {
+      toast.error(t(
+        fileType === "image" || fileType === "video" ? "upload.fileTooLarge" : "upload.fileTooLargeImport",
+        { name: file.name },
+      ));
+      return;
+    }
+    setUploadingFiles(prev => ({ ...prev, [key]: { name: file.name, status: "uploading", file, progress: 0 } }));
+    try {
+      if (shouldStream(file, fileType)) {
+        await putImportFile({
+          personaId,
+          file,
+          locale,
+          onProgress: (percent) => {
+            setUploadingFiles(prev => {
+              const current = prev[key];
+              if (!current) return prev;
+              return { ...prev, [key]: { ...current, progress: percent } };
+            });
+          },
+        });
+      } else {
+        const content = await fileToBase64(file);
+        await uploadMutation.mutateAsync({
+          personaId, fileName: file.name, fileType,
+          fileSize: file.size, fileContent: content, mimeType: getMimeType(file, fileType),
+        });
+      }
+      /**
+       * The upload is finished, so it is forgotten.
+       *
+       * The map was only ever added to — so every file the user
+       * ever uploaded stayed in it for the life of the page, and the
+       * page held the name and the state of each of them for ever.
+       */
+      setUploadingFiles(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      toast.success(t("upload.uploadSuccess", { name: file.name }));
+      refetchFiles();
+    } catch {
+      // The failure is kept, so the row says what happened. It goes
+      // when the page is left.
+      //
+      // The file is kept with it — so the row can offer to try it
+      // again. It used to be thrown away: the row could only be
+      // dismissed, so a file that failed because the network was
+      // shaky had to be found and chosen all over again.
+      setUploadingFiles(prev => ({ ...prev, [key]: { name: file.name, status: "error", file } }));
+    }
+  }, [personaId, uploadMutation, refetchFiles, t, locale]);
+
   const handleFiles = useCallback(async (fileList: FileList | File[]) => {
     for (const file of Array.from(fileList)) {
       /**
@@ -360,49 +482,9 @@ export default function Upload() {
        * for ever.
        */
       const key = `${file.name}#${uploadCounter++}`;
-      const fileType = detectFileType(file);
-      if (!fileType) {
-        // The kind is checked before the file is read, not after.
-        toast.error(t("upload.unsupportedType", { name: file.name }));
-        continue;
-      }
-      if (file.size > MAX_UPLOAD_BYTES) {
-        toast.error(t("upload.fileTooLarge", { name: file.name }));
-        continue;
-      }
-      setUploadingFiles(prev => ({ ...prev, [key]: { name: file.name, status: "uploading", file } }));
-      try {
-        const content = await fileToBase64(file);
-        await uploadMutation.mutateAsync({
-          personaId, fileName: file.name, fileType,
-          fileSize: file.size, fileContent: content, mimeType: getMimeType(file, fileType),
-        });
-        /**
-         * The upload is finished, so it is forgotten.
-         *
-         * The map was only ever added to — so every file the user
-         * ever uploaded stayed in it for the life of the page, and the
-         * page held the name and the state of each of them for ever.
-         */
-        setUploadingFiles(prev => {
-          const next = { ...prev };
-          delete next[key];
-          return next;
-        });
-        toast.success(t("upload.uploadSuccess", { name: file.name }));
-        refetchFiles();
-      } catch {
-        // The failure is kept, so the row says what happened. It goes
-        // when the page is left.
-        //
-        // The file is kept with it — so the row can offer to try it
-        // again. It used to be thrown away: the row could only be
-        // dismissed, so a file that failed because the network was
-        // shaky had to be found and chosen all over again.
-        setUploadingFiles(prev => ({ ...prev, [key]: { name: file.name, status: "error", file } }));
-      }
+      await sendFile(file, key);
     }
-  }, [personaId, uploadMutation, refetchFiles, t]);
+  }, [sendFile]);
 
   /**
    * Try one file again.
@@ -413,31 +495,8 @@ export default function Upload() {
   const retryUpload = useCallback(async (key: string) => {
     const entry = uploadingFiles[key];
     if (!entry?.file) return;
-    setUploadingFiles(prev => ({ ...prev, [key]: { ...entry, status: "uploading" } }));
-    try {
-      const file = entry.file;
-      const fileType = detectFileType(file);
-      if (!fileType) {
-        setUploadingFiles(prev => ({ ...prev, [key]: { ...entry, status: "error" } }));
-        toast.error(t("upload.unsupportedType", { name: file.name }));
-        return;
-      }
-      const content = await fileToBase64(file);
-      await uploadMutation.mutateAsync({
-        personaId, fileName: file.name, fileType,
-        fileSize: file.size, fileContent: content, mimeType: getMimeType(file, fileType),
-      });
-      setUploadingFiles(prev => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-      toast.success(t("upload.uploadSuccess", { name: file.name }));
-      refetchFiles();
-    } catch {
-      setUploadingFiles(prev => ({ ...prev, [key]: { ...entry, status: "error" } }));
-    }
-  }, [uploadingFiles, personaId, uploadMutation, refetchFiles, t]);
+    await sendFile(entry.file, key);
+  }, [uploadingFiles, sendFile]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false);
@@ -660,7 +719,11 @@ export default function Upload() {
           <p className="font-display text-lg sm:text-xl font-semibold text-foreground mb-2">
             {t("upload.dropTitle")}
           </p>
-          <p className="text-muted-foreground text-sm">{t("upload.formatsHint")}</p>
+          <p className="text-muted-foreground text-sm">
+            {t("upload.formatsHint", {
+              formats: (importFormats ?? []).map((row) => row.label).join(locale === "en" ? ", " : "、") || "…",
+            })}
+          </p>
         </div>
         {/* The file input lives outside the drop zone, so that activating
             the zone does not re-enter it. */}
@@ -709,14 +772,23 @@ export default function Upload() {
             </div>
             <div>
               {files?.map((f: any) => (
-                <div key={f.id} className="flex items-center gap-3 py-3 border-t border-border">
-                  <span className="text-sm text-foreground/85 flex-1 truncate">{f.originalName}</span>
-                  <span className="text-xs text-muted-foreground tabular-nums flex-shrink-0">
-                    {formatFileSize(f.fileSize)}
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
-                    <Check className="w-3 h-3" />{t("upload.uploaded")}
-                  </span>
+                <div key={f.id} className="py-3 border-t border-border">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-foreground/85 flex-1 truncate">{f.originalName}</span>
+                    <span className="text-xs text-muted-foreground tabular-nums flex-shrink-0">
+                      {formatFileSize(f.fileSize)}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
+                      <Check className="w-3 h-3" />{t("upload.uploaded")}
+                    </span>
+                  </div>
+                  {isChatImportFileType(f.fileType) && (
+                    <ImportWizard
+                      fileId={f.id}
+                      personaName={persona?.name ?? ""}
+                      timezone={(user as { timezone?: string | null } | null)?.timezone}
+                    />
+                  )}
                 </div>
               ))}
               {pendingUploads.map(([key, entry]) => (
@@ -726,7 +798,10 @@ export default function Upload() {
                   </span>
                   {entry.status === "uploading" ? (
                     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground flex-shrink-0">
-                      <Loader2 className="w-3 h-3 animate-spin" />{t("upload.uploading")}
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      {entry.progress != null && entry.progress > 0
+                        ? t("upload.streaming", { percent: entry.progress })
+                        : t("upload.uploading")}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-2 flex-shrink-0">
