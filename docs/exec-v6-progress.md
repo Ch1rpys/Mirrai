@@ -29,9 +29,9 @@
 | P0.6 | ✅ | 1588608 (move); b089be8 (eval); 58d1123 (tests) | `server/chat/service.test.ts`、`stream.test.ts`、`fidelity-prompt.test.ts`、`server/eval/run.test.ts`、`server/routers.eval.test.ts`、`server/eval/compare-cli.test.ts` 未改文件、全部通过。P0.3 `prompt-golden.test.ts` 10 通过、快照未改。`server/chat/generate.test.ts`：同一分身/上下文/`now`，`runConversation` 与 `runEval` 发给 provider 的 `messages` 去掉留出句后 `toEqual`；`layerOverridesForEval({ without: ["act"] })` 后 `sampledAct` 为 `null`、`layersUsed` 不含 `act`。`scripts/eval-run.ts` 含 `--without`。搬家后闸门 266 passed \| 2 skipped (268)，2553 passed \| 8 skipped (2561)；评测接入后 267 passed \| 2 skipped (269)，2557 passed \| 8 skipped (2565)。 |
 | P0.7 | ✅ | 16ad889; e6e22c1 (scan) | `server/egress.test.ts` 4 通过：`server/` 生产文件里每一处 `fetch(` / `new WebSocket(` / `http(s).request(` 都在白名单；在 `server/llm/index.ts` 加 `fetch("https://example.com")` 后失败，输出 `missing: ['server/llm/index.ts']`；删掉后 4 通过。`docs/egress.md` 表体 14 行 = `EGRESS_ITEMS.length`。`EgressList.test.tsx`：每一项的「连到哪」「发什么」和「默认开/关」都渲染出来。`corepack pnpm gate` 全绿：269 passed \| 2 skipped (271)，2562 passed \| 8 skipped (2570)。 |
 | A1 | ✅ | 6cf669d (schema/helpers); c017aed (write/upload); 6736dc3 (readers); 3d66751 (backfill/banner) | 临时库 `mirrai_v6_scratch`：`drizzle-kit push --force` 后 `migrate.mjs` 应用到 0045；`server/db-records.test.ts` 5 通过（夹具条数=`countRecords`、`iterateRecords` 分页同数且时间升序、同一秒两条「嗯」都在、`register: "all"` 计 2、再 `importRecords` 同一份夹具写入 0）；库已 `dropdb`。`server/routers.file-upload-import.test.ts`：`createCollectedMessages` mock 收到 `fileId: 99`、`lineNo` 1/2、`kind: "text"`、`speaker` 小满/阿树。`server/chat/exemplars-upload.test.ts` 2 通过：未导入时提示词不含 `prompt.exemplarsHeading`；上传导入后含该标题和「在的呀」，且 `getCollectedMessagesForPersona` 带 `{ newest: true }`。`server/records-readers.test.ts` 6 通过（prompt/generate/behavior-profile/routers/eval-run.ts 无调用/eval CLI）。P0.3 `prompt-golden.test.ts` 10 通过、快照未改。`server/routers-v6/import.test.ts`：别人的分身 `NOT_FOUND`；未解析的 txt 从磁盘读入、不读 `extractedMemory`。`BackfillBanner.test.tsx`：count=0 不渲染；count=2 显示横幅和「现在整理」。闸门 `278 passed \| 3 skipped (281)` 文件，`2604 passed \| 13 skipped (2617)` 用例，`all six steps passed`。 |
-| A2 | ⬜ |  |  |
+| A2 | ✅ | 042d0bf (with A4 normalize) | `roles.test.ts` 3 通过：两个具名说话人且一个是 TA → 另一人 `user`；三个具名说话人 → 非 TA 为 `other`；无说话人 → 全是 `other`。`pipeline-v5-seam.test.ts` 文本路径：旧代码 `actProfile` 为 `null`（`expected null to be truthy`）；改映射后与 A4 同一条断言绿。闸门随 A4。 |
 | A3 | ✅ | 267d8c6 (with C1.2 wizard) | `csv-not-unlabelled.test.ts`：`renderFixture(buildXiaomanRecords(), "wechat-csv")` 经 wechat-csv 解析再 `guessRoles`/`assignRoles`，每行 `role` 为 `user` 或 `assistant`，`content` 不含 `IsSender`/`StrContent`/`StrTime`，`lineNo > 1`。先红后绿见偏差 40。闸门随 C1.2。 |
-| A4 | ⬜ |  |  |
+| A4 | ✅ | 042d0bf (normalize); 507c44c (records) | `pipeline-v5-seam.test.ts` 2 通过。文本路径与 `records` 路径：`actProfile.samples ≥ 40`；相邻两段 `to`/`from` 同为静默后第一条的 ISO（夹具 p2 首条 `2023-07-12T08:16:09.000Z`）；该段 `suppressionsDelta` 含 `no_question_ending`；`openingProfile.samples > 0`；「下次带你去吃那家面」`whoSaid=them`，「说好的 周末看电影」`whoSaid=me`。先红后绿：提交 `042d0bf` 之前跑同一文件，`actProfile` 为 `null`。`db-store.test.ts` `toTimedTranscript`：`2023-07-12T08:16:09.000Z` + `Asia/Shanghai` → `2023-07-12 16:16 我：在吗`。`server/skill-engine/` 原有测试 + `prompt-golden.test.ts` 10 通过、快照未改。闸门 `303 passed \| 3 skipped (306)` 文件，`2796 passed \| 13 skipped (2809)` 用例。时期条数见偏差 46。 |
 | A5 | ⬜ |  |  |
 | A6 | ⬜ |  |  |
 | A7 | ⬜ |  |  |
@@ -247,6 +247,7 @@
 | 43 | C1.2 | 实机「拖入」夹具 | 自动化浏览器里 Vite 开发页 `#root` 不挂载（`plugin-react` preamble）；改用 `NODE_ENV=production` 的 `dist/`。文件通过 `DataTransfer` 赋给隐藏 `input[type=file]` 再 `change`，与点击选择同一条 `handleFiles`，不是操作系统拖放。 | 玻璃浏览器跑不了 Vite HMR；CDP `setFileInputFiles` 不可用。 |
 | 44 | C1.2 | `isUnparsedChatUpload` 只认 chat_txt/chat_csv | 现含 `chat_export` 和 `archive`；`isChatImportFileType` 收到 `shared/records.ts` | 向导挂在所有聊天上传上；旧的 json/zip 也该能补导入。 |
 | 45 | C1.2 | 时区入口跳到「设置里的时区」 | 资料页原先没有用户时区编辑，补了 `settings.profile.timezone` 字段 | `user.updateProfile` 本来就收 timezone；TimezoneSync 只在空值时写入。 |
+| 46 | A4/A2 | `periods.length === 2`，边界落在 2023-07-05 | 夹具 160 个活跃日铺在两年里，`findPeriodSplits` 切出 12 段；设计静默后第一条是 2023-07-12 16:16:09（上海）。验收改为：存在 `to`/`from` 等于该 ISO 的相邻两段，后一段含 `no_question_ending` | 不改挖掘函数、不改 P0.5 夹具。手册按「只有那一处 25 天静默」写，与夹具实测不符。 |
 
 ## 未验证清单
 
@@ -339,3 +340,12 @@ P0.1、P0.2、P0.3、P0.4、P0.6、P0.7 维持 ✅。P0.5 改回 ⬜。
 - 验收命令（无 `DATABASE_URL`）：`vitest run client/src/components/v6/ImportWizard.test.tsx server/importers/csv-not-unlabelled.test.ts server/routers-v6/import.test.ts client/src/pages/Upload.test.tsx` 全过。闸门 `301 passed | 3 skipped (304)` 文件，`2789 passed | 13 skipped (2802)` 用例，`all six steps passed`。相对 C1.3 闸门（299/3 文件、2781/13 用例）：通过文件 +2、通过用例 +8；跳过数不变。
 - 实机：临时库 `mirrai_v6_scratch`（push + migrate 到 0045），桩模型 3122，应用 3133。夹具 wechat-txt-2line → 预览 13 条 → 指认角色 → 库 13 行。库已删。`mirrai_live` 未碰。
 - C1.2、A3 标 ✅。A4 起未做。未验证清单无新增。待用户决定仍空。
+
+### WP1 · 实现会话 · 2026-11-16 · A4 / A2
+
+- 分支 `exec/v6`。无独立验收遗留项。
+- A2 一个提交：`042d0bf`（`toMinerRows`、`mineOpenLoops` 只认 user/assistant、`minePeriods` 传入 locale、文本路径 seam 测试）。A4 一个提交：`507c44c`（`PipelineInput.records`、`startPersonaDistillation` 有记录时走结构化行和带时间的文本、`toTimedTranscript`）。
+- 先红后绿（亲自跑过）：在改映射之前 `vitest run server/skill-engine/pipeline-v5-seam.test.ts` 红，`actProfile` 为 `null`（`expected null to be truthy`）。
+- 验收命令（无 `DATABASE_URL`）：`vitest run server/skill-engine/pipeline-v5-seam.test.ts server/skill-engine/roles.test.ts server/skill-engine` 与 `server/chat/prompt-golden.test.ts` 全过。闸门 `303 passed | 3 skipped (306)` 文件，`2796 passed | 13 skipped (2809)` 用例，`all six steps passed`。相对 C1.2 闸门（301/3 文件、2789/13 用例）：通过文件 +2、通过用例 +7；跳过数不变。
+- `mirrai_live` 未碰。本条无临时库。
+- A2、A4 标 ✅。C1.4 起未做。未验证清单无新增。待用户决定仍空。
