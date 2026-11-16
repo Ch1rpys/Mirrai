@@ -117,7 +117,7 @@
 | B9.1 | 🔒 |  |  |
 | B9.2 | 🔒 |  |  |
 | B9.3 | ⬜ |  |  |
-| C1.1 | ⬜ |  |  |
+| C1.1 | ✅ | 5723b34 (framework); format parsers 29196ef…e9e6811; 24a2233 (fflate); dd4e1bd (archive); e9797fc (PUT); 4ad0751 (routes) | 夹具 `server/test-fixtures/exports/<id>/` 每种已登记格式一份。`roundtrip.test.ts` 15 通过（imessage-db 不是文本格式，见偏差 31）。`detect.test.ts` 17 通过：每种样本认成自己且 ≥0.6，散文不被认领。`roles.test.ts`：fromMe 优先。`archive.test.ts` 5 通过：正常包解出 chat.txt+pic.jpg；`../evil.txt`/`/abs.txt` 跳过且不落在目录外；`maxEntries: 3` 时 `errorCode: "too-many-entries"` 且 dest 被删；`.md`/`.bin` 跳过。`import-upload-route.test.ts` 4 通过：未登录 401、别人的分身 404、超限 413、正常 PUT 后文件在 `personas/7/5/` 且 `createPersonaFile` `fileType: "chat_export"`。`routers-v6/import.test.ts`：preview 不调 `createCollectedMessages`/`updatePersonaFile`；`needs_roles` 且 me/them 空 → `BAD_REQUEST`；别人的文件 `NOT_FOUND`。`egress.test.ts` 4 通过。README 每种已登记格式有出处；`wechat-html` 在「Not listed」。闸门 `298 passed \| 3 skipped (301)` 文件，`2700 passed \| 13 skipped (2713)` 用例。 |
 | C1.2 | ⬜ |  |  |
 | C1.3 | ⬜ |  |  |
 | C1.4 | ⬜ |  |  |
@@ -229,11 +229,21 @@
 | 25 | A1 | 对 `archive` 调用 `startImport` 并解析 | `archive` 停在 `needs_format`，不把 zip 当文本解析 | 解包是 C1.1。 |
 | 26 | A1 | `generic-line` 沿用 `parseTranscriptMessages`：没有说话人时每行算一条 | 没有说话人的文件全部跳过，记入 `skipped` | 导入需要说话人才能猜角色；表头和说明行不许进记录表。 |
 | 27 | A1 | 先红后绿：旧代码上 `exemplarSectionFor` 断言「有示范」为红 | `exemplars-upload.test.ts` 在写入路径落地之后才写成；空记录仍无示范段，导入后有 | 本会话从 4–5 步接着做，没有回到 4–5 之前的 HEAD 跑那条红。 |
+| 28 | C1.1 | `wechat-html` 列为已支持 | 不进注册表，README「Not listed」 | 2026-11-16 核对于 WeChatMsg HTML 导出：消息是注入查看器的 JS 对象，没有稳定静态表。手册：联网查不到的格式不要列为已支持。 |
+| 29 | C1.1 | 文本 `detect` 低于 0.3 返回 null；取前 300 行消息头占比 | 两行一块的格式用 `blockHeaderRatio`（分母不含消息体行），阈值仍是 0.3 / 0.6 / 0.15 | 按行计数会把两行格式的置信度封在 ~0.5，夹具过不了「≥ 0.6」。 |
+| 30 | C1.1 | LINE / Kakao 往返时间精确到该格式能表达的粒度 | `roundtrip.test.ts` 对这两种放宽到 `time: "minute"` | 导出只有 `HH:mm`，没有秒。 |
+| 31 | C1.1 | 每种文本类格式走 `renderFixture` 往返 | `imessage-db` 走 `formats/imessage-db.test.ts`，不进 `roundtrip.test.ts` | chat.db 是 SQLite，不是文本。 |
+| 32 | C1.1 | zip 条目是符号链接则跳过 | `fflate` 的 `UnzipFile` 不暴露 unix mode / extra；解出的是普通文件（内容是链接目标），从不 `symlink()` | 流式 API 看不到符号链接位。`..` 和绝对路径仍跳过。 |
+| 33 | C1.1 | PUT 扩展名 = 解包白名单（聊天+媒体）或 zip | PUT 只接受聊天扩展名和 `.zip`；媒体只从 zip 里解出 | `file_type` 枚举没有 `audio`；单独传一张图不应走导入器。 |
+| 34 | C1.1 | `MAX_IMPORT_BYTES` 默认 2 GiB | 实际上限 `2147483647`（2 GiB − 1） | `persona_files.fileSize` 是 signed int4，存不下 2147483648。 |
+| 35 | C1.1 | 验收点名 `server/routers.import.test.ts` | 测试在 `server/routers-v6/import.test.ts`（路由组按 3.7 节放 `routers-v6`） | 与 A1 的 `import.backfill` 同一文件。 |
+| 36 | A1/C1.1 | 偏差 24：`chat_export` 只允许 txt/csv/json | C1.1 起 `ALLOWED_EXTENSIONS.chat_export` 为 txt/csv/json/html/htm/xml/db/mht；zip 仍走 `archive` | 格式已落地。html 仍只给属主看（`uploadsAuthGuard`）。 |
 
 ## 未验证清单
 
 | 条目 | 缺什么 | 该跑的命令 | 谁来跑 |
 |---|---|---|---|
+| C1.1 | `wechat-html` 没有稳定静态 schema，未实现 | 若之后有静态 HTML 样本：对照样本写 `formats/wechat-html.ts`，再进注册表 | 有真实 WeChat HTML 导出的人 |
 
 ## 待用户决定
 
@@ -296,3 +306,11 @@ P0.1、P0.2、P0.3、P0.4、P0.6、P0.7 维持 ✅。P0.5 改回 ⬜。
 - 临时库 `mirrai_v6_scratch` 上跑过 db-records（5/5），用完已删。`mirrai_live` 未碰。
 - 无 `DATABASE_URL` 的 `corepack pnpm gate`：`278 passed | 3 skipped (281)` 文件，`2604 passed | 13 skipped (2617)` 用例，`all six steps passed`。相对 WP0 闸门（269/2 文件、2562/8 用例）：通过文件 +9、通过用例 +42；跳过文件 +1、跳过用例 +5，全部来自 `db-records.test.ts` 的 `skipIf`（见偏差 20）。
 - A1 标 ✅。C1.1 起未做。未验证清单、待用户决定仍空。
+
+### WP1 · 实现会话 · 2026-11-16 · C1.1
+
+- 分支 `exec/v6`。独立验收留下的 `- [ ]` 已全部勾掉。没有「等 xxx」的推后项。
+- C1.1 按手册拆分：框架 `5723b34`；每种已核对格式一个提交（`29196ef`…`e9e6811`）；白名单依赖 `24a2233`（`fflate` 0.8.3 MIT）；归档包 `dd4e1bd`；流式上传 `e9797fc`；路由 `4ad0751`。`wechat-html` 未列入。
+- 验收命令（无 `DATABASE_URL`）：`vitest run server/importers/roundtrip.test.ts detect.test.ts roles.test.ts archive.test.ts server/import-upload-route.test.ts server/routers-v6/import.test.ts server/egress.test.ts` → 7 文件 59 通过。闸门 `298 passed | 3 skipped (301)` 文件，`2700 passed | 13 skipped (2713)` 用例，`all six steps passed`。相对 A1 闸门（278/3 文件、2604/13 用例）：通过文件 +20、通过用例 +96；跳过数不变。
+- `mirrai_live` 未碰。本条无临时库。
+- C1.1 标 ✅。C1.3 起未做。未验证清单新增 wechat-html。待用户决定仍空。
