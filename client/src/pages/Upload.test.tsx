@@ -24,6 +24,7 @@ vi.mock("@/lib/trpc", () => ({
     },
     persona: {
       get: { useQuery: () => ({ data: { id: 1, name: "小A", analysisStatus: "ready" }, refetch: vi.fn(), isError: false }) },
+      getSettings: { useQuery: () => ({ data: { pendingRedistillAdded: 0 }, refetch: vi.fn() }) },
       getAnalysisStatus: { useQuery: () => ({ data: { status: "ready" }, refetch: vi.fn() }) },
       triggerAnalysis: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },

@@ -5,10 +5,14 @@
  * only records that it ran: version, when, and which records it saw.
  */
 import {
+  getPersonaById,
+  getPersonaSettings,
   getPersonaStyleProfile,
   getRecordsVersion,
+  setPersonaSettings,
   setPersonaStyleProfile,
 } from "../db";
+import { mergePersonaSettings } from "@shared/persona-settings";
 import { normalizeStyleProfile, type StyleProfile } from "@shared/style-profile";
 
 export async function measureStyleProfile(params: {
@@ -30,4 +34,28 @@ export async function measureStyleProfile(params: {
   });
   await setPersonaStyleProfile(personaId, userId, next);
   return next;
+}
+
+/**
+ * After records were written (or refused as copies).
+ *
+ * The style profile is remade only when the version string moved. A
+ * persona that is already distilled is told how many new rows arrived,
+ * so the upload page can offer a rebuild.
+ */
+export async function afterRecordsChanged(params: {
+  personaId: number;
+  userId: number;
+  added: number;
+}): Promise<StyleProfile> {
+  const profile = await measureStyleProfile(params);
+  if (params.added <= 0) return profile;
+  const persona = await getPersonaById(params.personaId, params.userId);
+  if (persona?.analysisStatus !== "ready") return profile;
+  const current = await getPersonaSettings(params.personaId, params.userId);
+  const next = mergePersonaSettings(current, {
+    pendingRedistillAdded: (current?.pendingRedistillAdded ?? 0) + params.added,
+  });
+  await setPersonaSettings(params.personaId, params.userId, next);
+  return profile;
 }

@@ -24,6 +24,7 @@ import {
   updatePersonaFile,
 } from "../db";
 import { importRecords, RecordLimitError } from "../collectors/db-store";
+import { afterRecordsChanged } from "../_core/style-profile";
 import { resolveStoredPath } from "../storage";
 import {
   importUnpackRelKey,
@@ -398,6 +399,15 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
         progress: 100,
       }),
     });
+    try {
+      await afterRecordsChanged({
+        personaId: file.personaId,
+        userId: input.userId,
+        added: written,
+      });
+    } catch (error) {
+      console.warn("[Import] The style profile could not be updated:", error);
+    }
     return { status: "done", written };
   } catch (error) {
     if (error instanceof RecordLimitError) {

@@ -6,11 +6,13 @@ import {
   createPersona,
   deletePersona,
   deleteRecordsByFile,
+  getPersonaStyleProfile,
   getRecordsAround,
   getRecordSourceSummary,
   iterateRecords,
 } from "./db";
 import { importRecords } from "./collectors/db-store";
+import { measureStyleProfile } from "./_core/style-profile";
 import { buildXiaomanRecords } from "./test-fixtures/xiaoman";
 import { seedXiaoman } from "./test-fixtures/seed-db";
 
@@ -192,6 +194,74 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
       await deletePersona(personaId, userId);
     }
   });
+
+  it("writes only the new tail when the same platform is imported again", async () => {
+    const userId = 9_970_000 + Math.floor(Math.random() * 10_000);
+    const personaId = await createPersona({ userId, name: "incremental" });
+    try {
+      const all = buildXiaomanRecords()
+        .filter((row) => row.role === "user" || row.role === "assistant")
+        .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime() || a.id - b.id);
+      const cut = Math.floor(all.length * 0.8);
+      const asRecords = (rows: typeof all) =>
+        rows.map((row) => ({
+          speaker: row.speaker,
+          content: row.content,
+          timestamp: row.timestamp,
+          kind: row.kind,
+          lineNo: row.id,
+          meta: row.meta,
+          role: row.role,
+        }));
+      expect(
+        await importRecords({
+          personaId,
+          userId,
+          source: "wechat_export",
+          records: asRecords(all.slice(0, cut)),
+        }),
+      ).toBe(cut);
+      const afterFirst = await measureStyleProfile({
+        personaId,
+        userId,
+        now: new Date("2026-01-01T00:00:00.000Z"),
+      });
+      expect(afterFirst.recordsVersion).toMatch(/^\d+:\d+$/);
+      expect(
+        await importRecords({
+          personaId,
+          userId,
+          source: "wechat_export",
+          records: asRecords(all),
+        }),
+      ).toBe(all.length - cut);
+      const afterSecond = await measureStyleProfile({
+        personaId,
+        userId,
+        now: new Date("2026-02-01T00:00:00.000Z"),
+      });
+      expect(afterSecond.recordsVersion).not.toBe(afterFirst.recordsVersion);
+      expect(afterSecond.measuredAt).toBe("2026-02-01T00:00:00.000Z");
+      expect(
+        await importRecords({
+          personaId,
+          userId,
+          source: "wechat_export",
+          records: asRecords(all),
+        }),
+      ).toBe(0);
+      const afterThird = await measureStyleProfile({
+        personaId,
+        userId,
+        now: new Date("2026-03-01T00:00:00.000Z"),
+      });
+      expect(afterThird.recordsVersion).toBe(afterSecond.recordsVersion);
+      expect(afterThird.measuredAt).toBe(afterSecond.measuredAt);
+      expect(await getPersonaStyleProfile(personaId, userId)).toEqual(afterSecond);
+    } finally {
+      await deletePersona(personaId, userId);
+    }
+  }, 60_000);
 
   it("interleaves two sources by time and keeps the same sentence from both", async () => {
     const userId = 9_960_000 + Math.floor(Math.random() * 10_000);

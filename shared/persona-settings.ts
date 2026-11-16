@@ -62,6 +62,13 @@ export interface PersonaSettings {
   saidItHintShown?: boolean;
   consentLink?: { tokenHash: string; expiresAt: string; answeredAt?: string };
   disabledProfiles?: string[];
+  /**
+   * Records added after the last distillation.
+   *
+   * The upload page offers to rebuild when this is a positive count.
+   * Missing means nothing is waiting.
+   */
+  pendingRedistillAdded?: number;
 }
 
 const LAYER_KEYS = [
@@ -368,6 +375,10 @@ export function normalizePersonaSettings(value: unknown): PersonaSettings {
   if (consentLink) settings.consentLink = consentLink;
   const disabledProfiles = normalizeDisabledProfiles(source.disabledProfiles);
   if (disabledProfiles) settings.disabledProfiles = disabledProfiles;
+  const pendingRedistillAdded = asFiniteNumber(source.pendingRedistillAdded);
+  if (pendingRedistillAdded !== undefined && pendingRedistillAdded > 0) {
+    settings.pendingRedistillAdded = Math.round(pendingRedistillAdded);
+  }
 
   return settings;
 }

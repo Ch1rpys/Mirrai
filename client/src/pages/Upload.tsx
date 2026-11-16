@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import DistillationModePicker from "@/components/DistillationModePicker";
 import BackfillBanner from "@/components/v6/BackfillBanner";
+import StaleRecordsBanner from "@/components/v6/StaleRecordsBanner";
 import ImportWizard from "@/components/v6/ImportWizard";
 import { isChatImportFileType, isUnparsedChatUpload } from "@shared/records";
 import { resolveIntakeGaps } from "@/lib/intake-gaps";
@@ -277,6 +278,10 @@ export default function Upload() {
   const { data: persona, refetch: refetchPersona, isError: personaError } = trpc.persona.get.useQuery(
     { id: personaId }, { enabled: isAuthenticated && hasPersonaId }
   );
+  const { data: personaSettings, refetch: refetchSettings } = trpc.persona.getSettings.useQuery(
+    { id: personaId },
+    { enabled: isAuthenticated && hasPersonaId, refetchInterval: 2500 },
+  );
   const { data: files, refetch: refetchFiles, isLoading: filesLoadingQuery, isError: filesError } = trpc.file.list.useQuery(
     { personaId }, { enabled: isAuthenticated && hasPersonaId }
   );
@@ -394,6 +399,7 @@ export default function Upload() {
       // the server has written "analyzing" yet.
       setWatching(true);
       refetchStatus();
+      void refetchSettings();
     },
     onError: (e) => toast.error(t("upload.analysisFailed", { message: e.message })),
   });
@@ -596,6 +602,11 @@ export default function Upload() {
           count={pendingBackfill}
           pending={backfillMutation.isPending}
           onBackfill={() => backfillMutation.mutate({ personaId })}
+        />
+        <StaleRecordsBanner
+          added={isAnalyzing ? 0 : (personaSettings?.pendingRedistillAdded ?? 0)}
+          pending={triggerMutation.isPending}
+          onRebuild={() => triggerMutation.mutate({ id: personaId, mode })}
         />
 
         {/* Analysis Status · Ready */}

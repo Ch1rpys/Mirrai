@@ -1140,6 +1140,8 @@ export const en = {
     gapsNote: "See what is missing before the run, and add it — the second run will be better.",
     backfillBanner: "This persona has {{count}} previously uploaded files that have not been turned into records. Exemplars, rhythm, and the likeness measurements can only use them after they are organised.",
     backfillNow: "Organise them now",
+    staleRecordsBanner: "{{added}} new records were added. The persona is still the one built from the earlier set.",
+    staleRecordsNow: "Read the new ones in",
     tipsTitle: "Upload tips",
     tipsKicker: "Tips",
     tips: [

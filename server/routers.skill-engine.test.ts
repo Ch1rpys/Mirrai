@@ -19,6 +19,8 @@ const getFilesByPersonaId = vi.fn();
 const getCollectedMessagesForPersona = vi.fn();
 const updatePersona = vi.fn();
 const getSkillJobById = vi.fn();
+const getPersonaSettings = vi.fn();
+const setPersonaSettings = vi.fn();
 
 vi.mock("./db", () => ({
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
@@ -26,6 +28,8 @@ vi.mock("./db", () => ({
   getCollectedMessagesForPersona: (...a: unknown[]) => getCollectedMessagesForPersona(...a),
   updatePersona: (...a: unknown[]) => updatePersona(...a),
   getSkillJobById: (...a: unknown[]) => getSkillJobById(...a),
+  getPersonaSettings: (...a: unknown[]) => getPersonaSettings(...a),
+  setPersonaSettings: (...a: unknown[]) => setPersonaSettings(...a),
 }));
 
 const runSkillPipeline = vi.fn();
@@ -78,6 +82,8 @@ describe("distilling a persona", () => {
       { fileType: "chat_txt", extractedMemory: "在吗\n在的呀", fileUrl: null },
     ]);
     getCollectedMessagesForPersona.mockResolvedValue([]);
+    getPersonaSettings.mockResolvedValue(null);
+    setPersonaSettings.mockResolvedValue(true);
     updatePersona.mockResolvedValue(undefined);
     getSkillJobById.mockResolvedValue(undefined);
     runSkillPipeline.mockResolvedValue({ persona: {} });

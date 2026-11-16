@@ -5430,7 +5430,7 @@ export async function setPersonaStyleProfile(
   profile: StyleProfile,
 ): Promise<boolean> {
   const db = await getDb();
-  if (!db) throw new Error("DB not available");
+  if (!db) return false;
   const rows = await db
     .update(personas)
     .set({ styleProfile: normalizeStyleProfile(profile) })

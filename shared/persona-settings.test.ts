@@ -34,6 +34,11 @@ describe("persona settings", () => {
     expect(normalizePersonaSettings({ timing: { maxDelayMinutes: 12 } }).timing.maxDelayMinutes).toBe(12);
   });
 
+  it("keeps a positive pending-redistill count and drops zero", () => {
+    expect(normalizePersonaSettings({ pendingRedistillAdded: 12 }).pendingRedistillAdded).toBe(12);
+    expect(normalizePersonaSettings({ pendingRedistillAdded: 0 }).pendingRedistillAdded).toBeUndefined();
+  });
+
   it("deep-merges without dropping fields the patch did not mention", () => {
     const current = normalizePersonaSettings({
       layers: { twoStage: true, stickers: false },

@@ -477,6 +477,18 @@ async function startPersonaDistillation(params: {
       analysisProgress: 5,
       analysisMessage: copy(locale, "persona.analysisStarting"),
     });
+    try {
+      const settings = await getPersonaSettings(personaId, userId);
+      if (settings?.pendingRedistillAdded) {
+        await setPersonaSettings(
+          personaId,
+          userId,
+          mergePersonaSettings(settings, { pendingRedistillAdded: 0 }),
+        );
+      }
+    } catch {
+      // The rebuild flag is a hint, not a precondition.
+    }
 
     await runSkillPipeline({
       personaId,

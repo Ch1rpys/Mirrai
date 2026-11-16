@@ -1135,6 +1135,8 @@ export const zh = {
     gapsNote: "解析之前先看看还缺什么，补上之后重新解析会更准。",
     backfillBanner: "这个分身有 {{count}} 个以前上传的文件还没有整理成记录。整理之后，示范、节奏和「像不像」的测量才用得上它们。",
     backfillNow: "现在整理",
+    staleRecordsBanner: "新增了 {{added}} 条记录。分身还是按之前的记录建的。",
+    staleRecordsNow: "把新的读进去",
     tipsTitle: "上传建议",
     tipsKicker: "提示",
     tips: [
