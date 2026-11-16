@@ -44,6 +44,7 @@
     "audit:i18n": "tsx scripts/audit-cn.ts",
     "eval": "tsx scripts/eval-run.ts",
     "fidelity:gate": "tsx scripts/fidelity-gate.ts",
+    "gate": "node scripts/gate-all.mjs",
     "setup:redis": "tsx scripts/setup-redis.ts"
   },
   "dependencies": {
