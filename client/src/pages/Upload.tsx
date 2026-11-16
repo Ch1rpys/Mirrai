@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import DistillationModePicker from "@/components/DistillationModePicker";
 import BackfillBanner from "@/components/v6/BackfillBanner";
 import StaleRecordsBanner from "@/components/v6/StaleRecordsBanner";
+import RecordSources from "@/components/v6/RecordSources";
 import ImportWizard from "@/components/v6/ImportWizard";
 import { isChatImportFileType, isUnparsedChatUpload } from "@shared/records";
 import { resolveIntakeGaps } from "@/lib/intake-gaps";
@@ -605,9 +606,11 @@ export default function Upload() {
         />
         <StaleRecordsBanner
           added={isAnalyzing ? 0 : (personaSettings?.pendingRedistillAdded ?? 0)}
+          removed={!isAnalyzing && personaSettings?.pendingRedistillRemoved === true}
           pending={triggerMutation.isPending}
           onRebuild={() => triggerMutation.mutate({ id: personaId, mode })}
         />
+        <RecordSources personaId={personaId} />
 
         {/* Analysis Status · Ready */}
         {isReady && (

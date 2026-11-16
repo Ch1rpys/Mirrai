@@ -1137,6 +1137,11 @@ export const zh = {
     backfillNow: "现在整理",
     staleRecordsBanner: "新增了 {{added}} 条记录。分身还是按之前的记录建的。",
     staleRecordsNow: "把新的读进去",
+    staleRemovedBanner: "记录少了。分身还是按之前的记录建的。",
+    recordSourcesTitle: "已经入库的来源",
+    recordSourceCount: "{{count}} 条",
+    recordSourceRange: "{{from}} 到 {{to}}",
+    deleteSourceConfirm: "删掉「{{name}}」和它带来的 {{count}} 条记录？分身不会马上变，重新蒸馏之后才会按剩下的记录来。",
     tipsTitle: "上传建议",
     tipsKicker: "提示",
     tips: [

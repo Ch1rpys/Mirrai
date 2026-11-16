@@ -24,7 +24,7 @@ vi.mock("@/lib/trpc", () => ({
     },
     persona: {
       get: { useQuery: () => ({ data: { id: 1, name: "小A", analysisStatus: "ready" }, refetch: vi.fn(), isError: false }) },
-      getSettings: { useQuery: () => ({ data: { pendingRedistillAdded: 0 }, refetch: vi.fn() }) },
+      getSettings: { useQuery: () => ({ data: { pendingRedistillAdded: 0, pendingRedistillRemoved: false }, refetch: vi.fn() }) },
       getAnalysisStatus: { useQuery: () => ({ data: { status: "ready" }, refetch: vi.fn() }) },
       triggerAnalysis: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -32,6 +32,11 @@ vi.mock("@/lib/trpc", () => ({
     file: {
       list: { useQuery: () => ({ data: [], refetch: refetchFiles, isLoading: false, isError: false }) },
       upload: { useMutation: () => ({ mutateAsync: upload, isPending: false }) },
+      delete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    record: {
+      sources: { useQuery: () => ({ data: [] }) },
+      deleteSource: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     import: {
       backfill: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -45,6 +50,9 @@ vi.mock("@/lib/trpc", () => ({
     collector: {
       preview: { useQuery: () => ({ data: { total: 0 } }) },
     },
+    useUtils: () => ({
+      persona: { getSettings: { invalidate: vi.fn() } },
+    }),
   },
 }));
 
@@ -59,6 +67,11 @@ vi.mock("wouter", () => ({
 
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
+
+vi.mock("@/components/ConfirmDialog", () => ({
+  useConfirm: () => async () => true,
+  ConfirmProvider: ({ children }: { children: any }) => children,
 }));
 
 vi.mock("@/contexts/LocaleContext", () => ({

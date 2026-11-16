@@ -10,16 +10,20 @@ import { useLocale } from "@/contexts/LocaleContext";
  */
 export default function StaleRecordsBanner(props: {
   added: number;
+  removed?: boolean;
   pending?: boolean;
   onRebuild: () => void;
 }) {
   const { t } = useLocale();
-  if (props.added <= 0) return null;
+  const added = props.added > 0;
+  if (!added && !props.removed) return null;
 
   return (
     <div className="surface p-5 sm:p-6 mb-6 animate-fade-in-up">
       <p className="text-sm text-foreground leading-relaxed">
-        {t("upload.staleRecordsBanner", { added: props.added })}
+        {added
+          ? t("upload.staleRecordsBanner", { added: props.added })
+          : t("upload.staleRemovedBanner")}
       </p>
       <Button
         className="mt-3 rounded-md"

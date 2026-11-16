@@ -1142,6 +1142,11 @@ export const en = {
     backfillNow: "Organise them now",
     staleRecordsBanner: "{{added}} new records were added. The persona is still the one built from the earlier set.",
     staleRecordsNow: "Read the new ones in",
+    staleRemovedBanner: "Some records are gone. The persona is still the one built from the earlier set.",
+    recordSourcesTitle: "Sources already in the table",
+    recordSourceCount: "{{count}} records",
+    recordSourceRange: "{{from}} to {{to}}",
+    deleteSourceConfirm: "Delete “{{name}}” and the {{count}} records it brought in? The persona will not change until it is distilled again from what remains.",
     tipsTitle: "Upload tips",
     tipsKicker: "Tips",
     tips: [

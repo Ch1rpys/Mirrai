@@ -29,4 +29,9 @@ describe("the stale-records banner", () => {
     fireEvent.click(screen.getByRole("button", { name: translate("zh", "upload.staleRecordsNow") }));
     expect(onRebuild).toHaveBeenCalledTimes(1);
   });
+
+  it("says the records are gone when rows were removed", () => {
+    render(<StaleRecordsBanner added={0} removed onRebuild={() => {}} />);
+    expect(screen.getByText(translate("zh", "upload.staleRemovedBanner"))).toBeInTheDocument();
+  });
 });
