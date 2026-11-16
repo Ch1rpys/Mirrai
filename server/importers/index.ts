@@ -1,10 +1,11 @@
 /**
  * Turns an uploaded chat file into rows in the record table.
  *
- * A1 only knows `generic-line`. C1.1 adds the rest of the formats,
- * detection, archives, and the wizard routes; this file stays the
- * place `file.upload` calls.
+ * Detection picks a format; the wizard (C1.2) can override it. Archives
+ * wait for unpacking. A file whose two sides cannot be named stops at
+ * `needs_roles` so nothing is written until the user says who is who.
  */
+import { readFile } from "node:fs/promises";
 import { copy, type Locale } from "@shared/copy";
 import {
   getPersonaById,
@@ -14,13 +15,24 @@ import {
   updatePersonaFile,
 } from "../db";
 import { importRecords, RecordLimitError } from "../collectors/db-store";
-import { parseGenericLine } from "./formats/generic-line";
+import { resolveStoredPath } from "../storage";
+import { detectFormat, pickDetectedFormat } from "./detect";
+import { importSourceFrom } from "./normalize";
+import { importerById } from "./registry";
 import { assignRoles, guessRoles } from "./roles";
-import type { ParseReport, ParseWarning } from "./types";
+import type {
+  ColumnMap,
+  ImportFormatId,
+  ImportSource,
+  ParseReport,
+  ParseWarning,
+} from "./types";
 
 export { parseGenericLine } from "./formats/generic-line";
+export { detectFormat, pickDetectedFormat } from "./detect";
+export { IMPORTERS, importerById } from "./registry";
 export { assignRoles, guessRoles } from "./roles";
-export type { ParseResult, ParseReport } from "./types";
+export type { ParseResult, ParseReport, ImportFormatId } from "./types";
 
 /** File types that should be parsed into records after upload. */
 export const CHAT_IMPORT_FILE_TYPES = [
@@ -39,9 +51,16 @@ export function isChatImportFileType(value: string): value is ChatImportFileType
 export interface StartImportInput {
   fileId: number;
   userId: number;
-  /** The full file text. Upload passes this so the truncated excerpt is not parsed. */
+  /** The full file text. Upload may pass this so the truncated excerpt is not parsed. */
   text?: string;
+  /** Raw bytes. Preferred over `text` so encoding is decided here. */
+  bytes?: Uint8Array;
   locale?: Locale | string;
+  format?: ImportFormatId;
+  me?: string[];
+  them?: string[];
+  chatId?: string;
+  columnMap?: ColumnMap;
 }
 
 export interface StartImportResult {
@@ -65,12 +84,33 @@ function reportOf(partial: ParseReport): ParseReport {
   return partial;
 }
 
+async function loadSource(
+  file: { originalName?: string | null; fileKey?: string | null },
+  input: StartImportInput,
+): Promise<ImportSource | null> {
+  let bytes: Uint8Array | undefined = input.bytes;
+  if (!bytes && input.text != null) bytes = Buffer.from(input.text, "utf8");
+  if (!bytes && file.fileKey) {
+    const disk = resolveStoredPath(file.fileKey);
+    if (disk) {
+      try {
+        bytes = await readFile(disk);
+      } catch {
+        bytes = undefined;
+      }
+    }
+  }
+  if (!bytes) return null;
+  return importSourceFrom(file.originalName ?? "file", bytes, input.bytes ? undefined : input.text);
+}
+
 /**
  * Parses one uploaded file and writes the rows it can already assign.
  *
- * Stops at `needs_format` for an archive (C1.1 unpacks those) and at
- * `needs_roles` when the two sides cannot be named. A file the parser
- * cannot turn into lines is `failed`.
+ * Stops at `needs_format` when detection cannot pick a format, at
+ * `needs_chat` when a file holds several conversations, and at
+ * `needs_roles` when the two sides cannot be named. An archive is
+ * unpacked in a later step; until then it also stops at `needs_format`.
  */
 export async function startImport(input: StartImportInput): Promise<StartImportResult> {
   const locale: Locale = input.locale === "en" ? "en" : "zh";
@@ -92,7 +132,7 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
     parseReport: reportOf({ progress: 0 }),
   });
 
-  if (file.fileType === "archive") {
+  if (file.fileType === "archive" && !input.format) {
     await updatePersonaFile(file.id, input.userId, {
       parseStatus: "needs_format",
       parseReport: reportOf({ progress: 0 }),
@@ -100,13 +140,41 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
     return { status: "needs_format", written: 0 };
   }
 
-  const text = input.text;
-  if (text == null) {
+  const source = await loadSource(file, input);
+  if (!source) {
     return fail(copy(locale, "errors.importFailed"));
   }
 
-  const parsed = await parseGenericLine(text, {
+  const detected = detectFormat(source);
+  const picked = input.format
+    ? { id: input.format, confidence: 1 }
+    : pickDetectedFormat(detected);
+
+  if (!picked || picked === "ambiguous") {
+    await updatePersonaFile(file.id, input.userId, {
+      parseStatus: "needs_format",
+      parseReport: reportOf({
+        format: detected[0]?.id,
+        confidence: detected[0]?.confidence,
+        progress: 0,
+      }),
+    });
+    return { status: "needs_format", written: 0 };
+  }
+
+  const importer = importerById(picked.id);
+  if (!importer) {
+    await updatePersonaFile(file.id, input.userId, {
+      parseStatus: "needs_format",
+      parseReport: reportOf({ format: picked.id, confidence: picked.confidence, progress: 0 }),
+    });
+    return { status: "needs_format", written: 0 };
+  }
+
+  const parsed = await importer.parse(source, {
     timeZone: (await getUserTimezone(input.userId)) ?? undefined,
+    chatId: input.chatId,
+    columnMap: input.columnMap,
   });
   const speakers = parsed.speakers.map((row) => row.name);
   const times = parsed.records
@@ -118,8 +186,8 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
   };
   const warnings: ParseWarning[] = parsed.warnings;
   const baseReport: ParseReport = {
-    format: "generic-line",
-    confidence: 1,
+    format: importer.id,
+    confidence: picked.confidence,
     speakers: parsed.speakers.map((row) => ({
       name: row.name,
       count: row.count,
@@ -130,8 +198,17 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
     skipped: parsed.skipped,
     warnings,
     kindCounts: countBy(parsed.records.map((row) => row.kind)),
+    chats: parsed.chats,
     progress: 0,
   };
+
+  if (parsed.chats && parsed.chats.length > 1 && !input.chatId) {
+    await updatePersonaFile(file.id, input.userId, {
+      parseStatus: "needs_chat",
+      parseReport: reportOf({ ...baseReport, progress: 0 }),
+    });
+    return { status: "needs_chat", written: 0 };
+  }
 
   if (parsed.records.length === 0) {
     return fail(copy(locale, "errors.importFailed"), baseReport);
@@ -139,10 +216,13 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
 
   const persona = await getPersonaById(file.personaId, input.userId);
   const user = await getUserById(input.userId);
-  const mapping = guessRoles(speakers, {
-    personaName: persona?.name,
-    userName: user?.name,
-  });
+  const mapping =
+    input.me && input.them && input.me.length > 0 && input.them.length > 0
+      ? { me: input.me, them: input.them }
+      : guessRoles(speakers, {
+          personaName: persona?.name,
+          userName: user?.name,
+        }, parsed.records);
   if (!mapping) {
     await updatePersonaFile(file.id, input.userId, {
       parseStatus: "needs_roles",
@@ -166,7 +246,7 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
     const written = await importRecords({
       personaId: file.personaId,
       userId: input.userId,
-      source: "generic",
+      source: importer.source,
       fileId: file.id,
       records: assigned,
       onProgress: async (soFar, total) => {

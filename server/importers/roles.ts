@@ -11,31 +11,58 @@ function keyOf(name: string): string {
  * Guesses which speakers are the user and which are TA.
  *
  * Returns null when the file has to stop at `needs_roles`.
+ *
+ * A format that already tagged rows with `fromMe` (WeChat CSV, SMS)
+ * is taken at its word: those names are assigned first. Name matching
+ * and the two-speaker inference only run on whoever is left.
  */
 export function guessRoles(
   speakers: string[],
   names: { personaName?: string | null; userName?: string | null },
+  records?: ParsedRecord[],
 ): { me: string[]; them: string[] } | null {
   const persona = names.personaName ? keyOf(names.personaName) : "";
   const user = names.userName ? keyOf(names.userName) : "";
   const me: string[] = [];
   const them: string[] = [];
+  const seen = new Set<string>();
+
+  const take = (bucket: string[], raw: string) => {
+    const name = raw.trim();
+    if (!name) return;
+    const key = keyOf(name);
+    if (seen.has(key)) return;
+    seen.add(key);
+    bucket.push(name);
+  };
+
+  if (records) {
+    for (const row of records) {
+      if (row.fromMe === true) take(me, row.speaker);
+      else if (row.fromMe === false) take(them, row.speaker);
+    }
+  }
+
   const leftover: string[] = [];
   for (const raw of speakers) {
     const name = raw.trim();
     if (!name) continue;
     const key = keyOf(name);
-    if (persona && key === persona) them.push(name);
-    else if (ME_LABELS.has(key) || (user && key === user)) me.push(name);
+    if (seen.has(key)) continue;
+    if (persona && key === persona) take(them, name);
+    else if (ME_LABELS.has(key) || (user && key === user)) take(me, name);
     else leftover.push(name);
   }
-  if (speakers.filter((s) => s.trim()).length === 2) {
+
+  const named = speakers.filter((s) => s.trim());
+  if (named.length === 2) {
     if (me.length === 1 && them.length === 0 && leftover.length === 1) {
-      them.push(leftover[0]);
+      take(them, leftover[0]);
     } else if (them.length === 1 && me.length === 0 && leftover.length === 1) {
-      me.push(leftover[0]);
+      take(me, leftover[0]);
     }
   }
+
   if (me.length === 0 || them.length === 0) return null;
   return { me, them };
 }

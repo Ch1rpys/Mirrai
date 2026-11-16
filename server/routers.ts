@@ -1793,11 +1793,10 @@ export const appRouter = router({
            * is filled from the bytes that were just stored, not from
            * that excerpt.
            */
-          const fullText = input.fileType === "archive" ? undefined : buffer.toString("utf-8");
           await startImport({
             fileId,
             userId: ctx.user.id,
-            text: fullText,
+            bytes: input.fileType === "archive" ? undefined : buffer,
             locale: ctx.locale,
           });
         }

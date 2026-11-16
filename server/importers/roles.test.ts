@@ -24,6 +24,17 @@ describe("guessRoles", () => {
   it("returns null when three speakers cannot be named", () => {
     expect(guessRoles(["小满", "阿树", "同事"], { personaName: "小满" })).toBeNull();
   });
+
+  it("takes fromMe on the records before matching names", () => {
+    const records: ParsedRecord[] = [
+      line("小满", { fromMe: true }),
+      line("阿树", { fromMe: false }),
+    ];
+    expect(guessRoles(["小满", "阿树"], { personaName: "小满" }, records)).toEqual({
+      me: ["小满"],
+      them: ["阿树"],
+    });
+  });
 });
 
 describe("assignRoles", () => {

@@ -12,4 +12,8 @@ export const V6 = {
     zh: "这份文件没有整理成记录。",
     en: "This file was not turned into records.",
   },
+  "import.format.genericLine": {
+    zh: "一行一条的聊天记录",
+    en: "One message per line",
+  },
 } as const satisfies CopyTable;

@@ -1,5 +1,12 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseGenericLine } from "./generic-line";
+
+const SAMPLE = readFileSync(
+  path.resolve(import.meta.dirname, "../../test-fixtures/exports/generic-line/sample.txt"),
+  "utf8",
+);
 
 describe("parseGenericLine", () => {
   it("reads a bracketed timestamp, a speaker, and a continuation line", async () => {
@@ -34,5 +41,21 @@ describe("parseGenericLine", () => {
     const prose = await parseGenericLine("just a paragraph\nof two lines");
     expect(prose.records).toHaveLength(0);
     expect(prose.skipped).toBe(2);
+  });
+
+  it("reads the hand-written sample, including a continuation and a colon in the content", async () => {
+    const parsed = await parseGenericLine(SAMPLE, { timeZone: "Asia/Shanghai" });
+    expect(parsed.records.length).toBeGreaterThanOrEqual(10);
+    expect(parsed.records[0]).toMatchObject({
+      speaker: "小满",
+      content: "在吗 还是说已经睡了",
+    });
+    const withColon = parsed.records.find((row) => row.content.includes("他说：先这样"));
+    expect(withColon?.speaker).toBe("小满");
+    const fakeHeader = parsed.records.find((row) =>
+      row.content.includes("[2022-03-01 20:02:00] 这不是新消息"),
+    );
+    expect(fakeHeader?.speaker).toBe("小满");
+    expect(fakeHeader?.content).toBe("内容里写着 [2022-03-01 20:02:00] 这不是新消息");
   });
 });

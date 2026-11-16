@@ -1,11 +1,21 @@
-import { parseZoneless } from "@shared/timezone";
+import { copy } from "@shared/copy";
 import type { ParsedRecord } from "@shared/records";
-import type { ParseOptions, ParseResult } from "../types";
+import {
+  collectSpeakers,
+  headerRatio,
+  looksLikeJson,
+  looksLikeMht,
+  looksLikeSqlite,
+  looksLikeXml,
+  looksLikeZip,
+  parseExportTime,
+  yieldToEventLoop,
+} from "../normalize";
+import type { DetectResult, Importer, ImportSource, ParseOptions, ParseResult } from "../types";
 
 /** A speaker label in front of a message. Same rule as `parseTranscriptMessages`. */
 const SPEAKER = /^([^\s:：/\\]{1,20})\s*[:：]\s*(.*)$/;
 
-// i18n:allow-input — date particles in a chat export's timestamp, not shown.
 function splitTimestamp(line: string): { at?: string; rest: string } {
   const bracket = line.match(/^\[([^\]]{4,32})\]\s*/);
   if (bracket && /\d/.test(bracket[1])) {
@@ -26,20 +36,8 @@ function hasSpeaker(line: string): boolean {
   return !!match && !match[2].startsWith("//");
 }
 
-// i18n:allow-input — the same date particles, normalised before parseZoneless.
-function readTimestamp(raw: string | undefined, timeZone?: string | null): Date | null {
-  if (!raw) return null;
-  const normalised = raw
-    .replace(/年/g, "-")
-    .replace(/月/g, "-")
-    .replace(/日/g, "")
-    .replace(/\//g, "-")
-    .trim();
-  return parseZoneless(normalised, timeZone ?? undefined);
-}
-
-function yieldToEventLoop(): Promise<void> {
-  return new Promise(setImmediate);
+export function isGenericLineHeader(line: string): boolean {
+  return hasSpeaker(line.trim());
 }
 
 /**
@@ -55,7 +53,6 @@ export async function parseGenericLine(
   const records: ParsedRecord[] = [];
   const warnings: ParseResult["warnings"] = [];
   let skipped = 0;
-  const speakerStats = new Map<string, { name: string; count: number; firstAt?: Date; lastAt?: Date }>();
 
   const hasAnySpeaker = lines.some((line) => line.trim() && hasSpeaker(line.trim()));
 
@@ -88,25 +85,42 @@ export async function parseGenericLine(
       skipped += 1;
       continue;
     }
-    const timestamp = readTimestamp(at, options.timeZone);
     records.push({
       speaker,
       content,
-      timestamp,
+      timestamp: parseExportTime(at, options.timeZone),
       kind: "text",
       lineNo,
     });
-    const stat = speakerStats.get(speaker) ?? { name: speaker, count: 0 };
-    stat.count += 1;
-    if (timestamp && (!stat.firstAt || timestamp < stat.firstAt)) stat.firstAt = timestamp;
-    if (timestamp && (!stat.lastAt || timestamp > stat.lastAt)) stat.lastAt = timestamp;
-    speakerStats.set(speaker, stat);
   }
 
   return {
     records,
-    speakers: [...speakerStats.values()],
+    speakers: collectSpeakers(records),
     warnings: warnings.slice(0, 50),
     skipped,
   };
 }
+
+function detectGenericLine(source: ImportSource): DetectResult | null {
+  if (looksLikeSqlite(source.bytes) || looksLikeZip(source.bytes)) return null;
+  if (looksLikeJson(source.text) || looksLikeXml(source.text) || looksLikeMht(source.text)) {
+    return null;
+  }
+  const confidence = headerRatio(source.text, isGenericLineHeader);
+  if (confidence < 0.3) return null;
+  return { id: "generic-line", confidence };
+}
+
+export const genericLineImporter: Importer = {
+  id: "generic-line",
+  label: {
+    zh: copy("zh", "import.format.genericLine"),
+    en: copy("en", "import.format.genericLine"),
+  },
+  source: "generic",
+  detect: detectGenericLine,
+  parse(source, options) {
+    return parseGenericLine(source.text, options);
+  },
+};

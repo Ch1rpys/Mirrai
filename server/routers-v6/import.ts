@@ -34,19 +34,19 @@ export const importRouter = router({
       const results: Array<{ fileId: number; status: string; written: number }> = [];
 
       for (const file of pending) {
-        let text: string | undefined;
+        let bytes: Uint8Array | undefined;
         const diskPath = resolveStoredPath(file.fileKey);
         if (diskPath) {
           try {
-            text = (await readFile(diskPath)).toString("utf-8");
+            bytes = await readFile(diskPath);
           } catch {
-            text = undefined;
+            bytes = undefined;
           }
         }
         const result = await startImport({
           fileId: file.id,
           userId: ctx.user.id,
-          text,
+          bytes,
           locale: ctx.locale,
         });
         results.push({ fileId: file.id, status: result.status, written: result.written });
