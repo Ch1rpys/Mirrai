@@ -25,6 +25,11 @@ import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
 import { userDayColumn, userHourColumn } from "./_core/user-day";
 import { dayShiftMinutes, zonedDayStart } from "@shared/timezone";
+import {
+  normalizePersonaSettings,
+  type PersonaSettings,
+} from "@shared/persona-settings";
+import { normalizeStyleProfile, type StyleProfile } from "@shared/style-profile";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -5064,6 +5069,95 @@ export async function getPersonaBehaviorProfile(personaId: number, userId: numbe
   const rows = await db.select({ behaviorProfile: personas.behaviorProfile }).from(personas)
     .where(and(eq(personas.id, personaId), eq(personas.userId, userId))).limit(1);
   return rows[0]?.behaviorProfile ?? null;
+}
+
+/**
+ * The sixth-stage switches for this persona.
+ *
+ * Missing means every default. A row that is not the caller's returns
+ * null, the same way the other persona helpers do.
+ */
+export async function getPersonaSettings(
+  personaId: number,
+  userId: number,
+): Promise<PersonaSettings | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select({ settings: personas.settings })
+    .from(personas)
+    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)))
+    .limit(1);
+  if (!rows[0]) return null;
+  return normalizePersonaSettings(rows[0].settings);
+}
+
+export async function setPersonaSettings(
+  personaId: number,
+  userId: number,
+  settings: PersonaSettings,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const rows = await db
+    .update(personas)
+    .set({ settings: normalizePersonaSettings(settings) })
+    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)))
+    .returning({ id: personas.id });
+  return rows.length > 0;
+}
+
+/** The measurements taken from this persona's records. */
+export async function getPersonaStyleProfile(
+  personaId: number,
+  userId: number,
+): Promise<StyleProfile | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select({ styleProfile: personas.styleProfile })
+    .from(personas)
+    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)))
+    .limit(1);
+  if (!rows[0]) return null;
+  if (rows[0].styleProfile == null) return null;
+  return normalizeStyleProfile(rows[0].styleProfile);
+}
+
+export async function setPersonaStyleProfile(
+  personaId: number,
+  userId: number,
+  profile: StyleProfile,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const rows = await db
+    .update(personas)
+    .set({ styleProfile: normalizeStyleProfile(profile) })
+    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)))
+    .returning({ id: personas.id });
+  return rows.length > 0;
+}
+
+/**
+ * `${count}:${maxId}` of the collected records.
+ *
+ * The style profile uses this to decide whether the measurements are
+ * still for the records that are in the table.
+ */
+export async function getRecordsVersion(personaId: number, userId: number): Promise<string> {
+  const db = await getDb();
+  if (!db) return "0:0";
+  const [row] = await db
+    .select({
+      n: count(),
+      maxId: max(collectedMessages.id),
+    })
+    .from(collectedMessages)
+    .where(
+      and(eq(collectedMessages.personaId, personaId), eq(collectedMessages.userId, userId)),
+    );
+  return `${Number(row?.n ?? 0)}:${Number(row?.maxId ?? 0)}`;
 }
 
 // ─── The way out ────────────────────────────────────────────────────────────

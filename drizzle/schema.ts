@@ -254,6 +254,20 @@ export const personas = pgTable("personas", {
    * standard preset, which is what the app used before the presets existed.
    */
   distillationMode: varchar("distillationMode", { length: 32 }),
+  /**
+   * Per-persona switches and small config for the sixth stage.
+   *
+   * Empty means every default. Existing columns such as `rerankEnabled`
+   * and `timingEnabled` stay where they are; new switches go here.
+   */
+  settings: jsonb("settings"),
+  /**
+   * What was measured from the records.
+   *
+   * These are measurements, not user decisions, so they do not live in
+   * `personaData` (that column has a lock and a merge of confirmations).
+   */
+  styleProfile: jsonb("styleProfile"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 }, (table) => ({
