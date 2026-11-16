@@ -21,8 +21,8 @@
 
 | 编号 | 状态 | 提交 | 验收证据 |
 |---|---|---|---|
-| P0.1 | ✅ | b3710ef (docs); this file | git branch --show-current → exec/v6. git log --oneline main..exec/v6 first commit is only docs/ideas-v6.md and docs/exec-v6.md. Baseline ran on this machine 2026-11-16 and matches §2.2 (see 基线). Progress table has 176 rows; IDs match appendix C plus P0.1–P0.7 and P18.1–P18.5. git status --short empty after this commit. |
-| P0.2 | ⬜ |  |  |
+| P0.1 | ✅ | b3710ef (docs); 2fe5653 (progress) | `git branch --show-current` → `exec/v6`. `git log --oneline main..exec/v6` 第一个提交 `b3710ef` 只含 `docs/ideas-v6.md` 和 `docs/exec-v6.md`。基线见上表，与 §2.2 一致。进度表 176 行。 |
+| P0.2 | ✅ | b298550 | `corepack pnpm gate` 退出码 0，输出 `all six steps passed`（typecheck / test 258 passed \| 2 skipped, 2489 passed \| 8 skipped / copy-audit / fidelity-gate / client-build / server-bundle）。`server/gate-script.test.ts` 3 通过。故意在 `server/_core/fidelity-gate.ts` 加 `const __p02TypeError: number = "intentionally-wrong"` 后 `corepack pnpm gate` 退出码 2，输出 `[gate] failed at typecheck (exit 2, 1.8s)`；`git checkout HEAD -- server/_core/fidelity-gate.ts` 改回。 |
 | P0.3 | ⬜ |  |  |
 | P0.4 | ⬜ |  |  |
 | P0.5 | ⬜ |  |  |
@@ -219,5 +219,6 @@
 ### WP0 · 实现会话 · 2026-11-16
 
 - 分支 `exec/v6` 已从 `main` (`f71e77b`) 拉出。`core.hooksPath` 已是 `.githooks`（又执行了一次 `git config core.hooksPath .githooks`）。
-- P0.1 文档提交：`b3710ef`（仅 `docs/ideas-v6.md`、`docs/exec-v6.md`）。
+- P0.1 文档提交：`b3710ef`（仅 `docs/ideas-v6.md`、`docs/exec-v6.md`）；进度文件：`2fe5653`。
 - 基线已跑，数字与手册 2.2 一致（见上表）。临时库 `mirrai_v6_scratch` 已删除。
+- P0.2：`b298550`（`scripts/gate-all.mjs`、`server/gate-script.test.ts`、`package.json` 的 `gate` 脚本）。闸门测试 260 文件 / 2497 用例（+1 文件、+3 用例）。
