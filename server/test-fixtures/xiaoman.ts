@@ -604,13 +604,42 @@ export function buildXiaomanRecords(options?: {
   });
 
   const noonScenes = main.filter((s) => s.slot === "noon");
-  const conflictScenes = shuffle(rng, noonScenes).slice(0, 6);
-  const durations = shuffle(rng, [...XIAOMAN_TRUTH.conflicts.durationsHours]);
+  // Wednesday already has a class scene at 16:05, so a fight is not placed
+  // that day. The preamble also has to finish in time for the repair to
+  // land before 21:00.
+  const CONFLICT_BUILDUP_MS = 20 * 60 * 1000;
+  const episodeHours = new Map<number, number>();
+  function conflictFits(scene: ScenePlan, hours: number): boolean {
+    if (weekdayOf(scene.date.year, scene.date.month, scene.date.day) === 3) return false;
+    const start = shanghaiDate(
+      scene.date.year,
+      scene.date.month,
+      scene.date.day,
+      scene.startHour,
+      scene.startMinute,
+      scene.startSecond,
+    );
+    const repair = new Date(start.getTime() + CONFLICT_BUILDUP_MS + hours * 3_600_000);
+    const startWall = wallClock(start);
+    const repairWall = wallClock(repair);
+    return (
+      repairWall.year === startWall.year &&
+      repairWall.month === startWall.month &&
+      repairWall.day === startWall.day &&
+      repairWall.hour >= 15 &&
+      repairWall.hour < 21
+    );
+  }
+  const durations = [...XIAOMAN_TRUTH.conflicts.durationsHours].sort((a, b) => b - a);
   const repairFlags = shuffle(rng, [true, true, true, true, false, false]);
-  conflictScenes.forEach((scene, i) => {
+  const pool = shuffle(rng, noonScenes);
+  durations.forEach((hours, i) => {
+    const scene = pool.find((candidate) => candidate.conflictEpisode == null && conflictFits(candidate, hours));
+    if (!scene) throw new Error(`xiaoman: no noon scene fits a ${hours}h conflict`);
     scene.conflictEpisode = i + 1;
-    scene.conflictHours = durations[i];
+    scene.conflictHours = hours;
     scene.taRepair = repairFlags[i];
+    episodeHours.set(scene.conflictEpisode, hours);
   });
 
   let nextId = main.length + 1;
@@ -803,17 +832,8 @@ export function buildXiaomanRecords(options?: {
         act: "tease",
         conflictEpisode: scene.conflictEpisode,
       });
-      const startWall = wallClock(
-        shanghaiDate(scene.date.year, scene.date.month, scene.date.day, scene.startHour, scene.startMinute, 0),
-      );
-      const reconcile = shanghaiDate(
-        scene.date.year,
-        scene.date.month,
-        scene.date.day,
-        startWall.hour + (scene.conflictHours ?? 3),
-        startWall.minute,
-        0,
-      );
+      const triggerAt = drafts[drafts.length - 1]!.timestamp;
+      const reconcile = new Date(triggerAt.getTime() + (scene.conflictHours ?? 3) * 3_600_000);
       const recScene: ScenePlan = {
         ...scene,
         id: nextId++,
@@ -1064,20 +1084,28 @@ export function buildXiaomanRecords(options?: {
   });
 
   const multiUsers = genericUsers.slice(7, 47);
-  const lastOnlyFlags = quota(rng, [
-    [true, 32],
-    [false, 8],
-  ]);
-  multiUsers.forEach((row, i) => {
+  const multiPairs: Array<{ row: Draft; reply: Draft }> = [];
+  for (const row of multiUsers) {
     row.content = "晚上吃饭，然后去超市，还有记得带伞";
     row.truth = { ...row.truth, locked: true, userAct: "multi-point", ritual: "multi-point" };
     const idx = drafts.indexOf(row);
     const reply = drafts.slice(idx + 1).find((r) => r.role === "assistant" && r.kind === "text");
-    if (reply && !reply.truth.locked && reply.truth.state !== "distant") {
-      const lastOnly = lastOnlyFlags[i] ?? true;
-      reply.content = lastOnly ? "伞我帮你带" : "吃饭超市伞都好";
-      reply.truth = { ...reply.truth, locked: true, ritual: "multi-point", act: lastOnly ? "answer" : "answer" };
-    }
+    if (reply && !reply.truth.locked && reply.truth.state !== "distant") multiPairs.push({ row, reply });
+  }
+  const lastOnlyCount = Math.round(multiPairs.length * XIAOMAN_TRUTH.multiPoint.lastOnlyRate);
+  const lastOnlyFlags = quota(rng, [
+    [true, lastOnlyCount],
+    [false, multiPairs.length - lastOnlyCount],
+  ]);
+  multiPairs.forEach((pair, i) => {
+    const lastOnly = lastOnlyFlags[i] ?? true;
+    pair.reply.content = lastOnly ? "伞我帮你带" : "吃饭超市伞都好";
+    pair.reply.truth = {
+      ...pair.reply.truth,
+      locked: true,
+      ritual: "multi-point",
+      act: "answer",
+    };
   });
 
   polish(drafts, rng);
@@ -1085,15 +1113,29 @@ export function buildXiaomanRecords(options?: {
 
   const typoPool = shuffle(
     rng,
-    drafts.filter(
-      (row) =>
-        row.role === "assistant" &&
-        row.kind === "text" &&
-        !row.truth.locked &&
-        row.truth.slot !== "morning" &&
-        (row.truth.burstIndex == null || row.truth.burstIndex === 0) &&
-        (row.truth.burstSize == null || row.truth.burstSize === 1),
-    ),
+    drafts.filter((row) => {
+      if (row.role !== "assistant" || row.kind !== "text" || row.truth.locked) return false;
+      if (row.truth.slot === "morning") return false;
+      if (row.truth.burstIndex != null && row.truth.burstIndex !== 0) return false;
+      if (row.truth.burstSize != null && row.truth.burstSize !== 1) return false;
+      const fixAt = row.timestamp.getTime() + 30_000;
+      const goodnight = drafts.find(
+        (other) =>
+          other.truth.sceneId === row.truth.sceneId &&
+          other.role === "user" &&
+          other.content === "晚安",
+      );
+      if (goodnight && fixAt >= goodnight.timestamp.getTime()) return false;
+      for (const [episode, hours] of episodeHours) {
+        const trigger = drafts.find(
+          (other) => other.truth.conflictEpisode === episode && other.content === XIAOMAN_TRUTH.conflicts.triggerTa,
+        );
+        if (!trigger) continue;
+        const repairAt = trigger.timestamp.getTime() + hours * 3_600_000;
+        if (fixAt > trigger.timestamp.getTime() && fixAt < repairAt) return false;
+      }
+      return true;
+    }),
   ).slice(0, 6);
   typoPool.forEach((target) => {
     target.content = "今天好雷";
@@ -1142,6 +1184,7 @@ export function buildXiaomanRecords(options?: {
   );
   fixBurstGaps(drafts);
   insertFollowUps();
+  finalizeConflictClocks();
 
   function insertFollowUps(): void {
     const replies = quota(rng, [
@@ -1161,6 +1204,7 @@ export function buildXiaomanRecords(options?: {
           row.truth.ritual !== "晚安" &&
           row.truth.ritual !== "typo" &&
           row.truth.ritual !== "typo-fix" &&
+          row.truth.conflictEpisode == null &&
           (row.truth.burstIndex == null || row.truth.burstIndex === (row.truth.burstSize ?? 1) - 1),
       ),
     );
@@ -1216,6 +1260,48 @@ export function buildXiaomanRecords(options?: {
       added++;
     }
     if (added !== 30) throw new Error(`xiaoman follow-ups: placed ${added}, need 30`);
+  }
+
+  // The fight lasts from「就嗯？」until the first repair line, with nothing
+  // else said in between. Later edits can move the trigger; the repair
+  // scene moves with it so the designed hours stay exact.
+  function finalizeConflictClocks(): void {
+    for (const [episode, hours] of episodeHours) {
+      const trigger = drafts.find(
+        (row) => row.truth.conflictEpisode === episode && row.content === XIAOMAN_TRUTH.conflicts.triggerTa,
+      );
+      if (!trigger) throw new Error(`xiaoman: conflict ${episode} has no trigger`);
+      const repairs = drafts
+        .filter((row) => row.truth.conflictEpisode === episode && row.truth.ritual === "conflict-repair")
+        .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      const first = repairs[0];
+      if (!first) throw new Error(`xiaoman: conflict ${episode} has no repair`);
+      const target = trigger.timestamp.getTime() + hours * 3_600_000;
+      const delta = target - first.timestamp.getTime();
+      if (delta !== 0) {
+        const sceneId = first.truth.sceneId;
+        for (const row of drafts) {
+          if (row.truth.sceneId === sceneId) row.timestamp = new Date(row.timestamp.getTime() + delta);
+        }
+      }
+      const between = drafts.filter(
+        (row) => row.timestamp.getTime() > trigger.timestamp.getTime() && row.timestamp.getTime() < target,
+      );
+      if (between.length > 0) {
+        throw new Error(`xiaoman: conflict ${episode} has ${between.length} lines inside the distant stretch`);
+      }
+      const repairWall = wallClock(new Date(target));
+      const triggerWall = wallClock(trigger.timestamp);
+      if (
+        repairWall.hour < 15 ||
+        repairWall.hour >= 21 ||
+        repairWall.year !== triggerWall.year ||
+        repairWall.month !== triggerWall.month ||
+        repairWall.day !== triggerWall.day
+      ) {
+        throw new Error(`xiaoman: conflict ${episode} repairs at ${repairWall.hour}:${repairWall.minute}`);
+      }
+    }
   }
 
   const ordered = [...drafts].sort((a, b) => {

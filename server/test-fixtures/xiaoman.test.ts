@@ -418,6 +418,24 @@ describe("冲突", () => {
       expect(w.hour).toBeGreaterThanOrEqual(15);
       expect(w.hour).toBeLessThan(21);
     }
+    const measuredHours: number[] = [];
+    for (const episode of episodes) {
+      const rows = records
+        .filter((row) => row.truth.conflictEpisode === episode)
+        .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      const trigger = rows.find((row) => row.content === "就嗯？");
+      const repair = rows.find((row) => row.truth.ritual === "conflict-repair");
+      expect(trigger).toBeTruthy();
+      expect(repair).toBeTruthy();
+      const gapMs = repair!.timestamp.getTime() - trigger!.timestamp.getTime();
+      measuredHours.push(gapMs / 3_600_000);
+      const between = records.filter(
+        (row) => row.timestamp > trigger!.timestamp && row.timestamp < repair!.timestamp,
+      );
+      expect(between).toHaveLength(0);
+    }
+    measuredHours.sort((a, b) => a - b);
+    expect(measuredHours).toEqual([...XIAOMAN_TRUTH.conflicts.durationsHours].sort((a, b) => a - b));
   });
 });
 
