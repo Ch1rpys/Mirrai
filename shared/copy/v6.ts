@@ -36,6 +36,10 @@ export const V6 = {
     zh: "QQ 消息管理器的 TXT",
     en: "QQ message-manager TXT",
   },
+  "import.format.qqMht": {
+    zh: "QQ 消息管理器的 MHT",
+    en: "QQ message-manager MHT",
+  },
   "import.format.telegramJson": {
     zh: "Telegram 的 JSON 导出",
     en: "Telegram JSON export",

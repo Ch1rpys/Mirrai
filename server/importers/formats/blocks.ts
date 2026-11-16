@@ -50,7 +50,10 @@ export async function parseNameTimeBlocks(
     const raw = lines[i];
     const trimmed = raw.trim();
     if (!trimmed) {
-      flush();
+      // A blank line between a header and its first body line is padding
+      // (HTML `</div><div>` turns into one). A blank after some body ends
+      // the message, which is how the TXT exporters separate blocks.
+      if (current && body.length > 0) flush();
       continue;
     }
     if (options.isPreamble?.(trimmed)) {

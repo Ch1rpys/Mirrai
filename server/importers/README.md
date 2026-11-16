@@ -77,6 +77,19 @@ Hours may be one digit.
 
 - Sample (synthetic): `server/test-fixtures/exports/qq-txt/sample.txt`.
 
+## qq-mht
+
+Checked 2026-11-16 against converters of the official QQ message-manager
+MHT export
+([NnWinter/QQ_Mht_Message_To_Html](https://github.com/NnWinter/QQ_Mht_Message_To_Html),
+[Ylsssq926 qq_parser](https://github.com/Ylsssq926/relic.skill/blob/main/scripts/qq_parser.py)).
+Tencent does not publish the HTML schema. The file is MIME (`MIME-Version`,
+`text/html` part); after tags are stripped, each message is
+`昵称(QQ号) YYYY-MM-DD H:mm:ss` then the body. Hours may be one digit;
+`上午` / `下午` are allowed.
+
+- Sample (synthetic): `server/test-fixtures/exports/qq-mht/sample.mht`.
+
 ## telegram-json
 
 Checked 2026-11-16 against the official

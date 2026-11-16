@@ -14,6 +14,7 @@ export type FixtureFormat =
   | "wechat-csv"
   | "wechat-json"
   | "qq-txt"
+  | "qq-mht"
   | "telegram-json";
 
 function textRows(records: FixtureRecord[]): FixtureRecord[] {
@@ -41,6 +42,31 @@ function renderWechatTxtParen(records: FixtureRecord[]): string {
 function csvCell(value: string): string {
   if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
   return value;
+}
+
+/** i18n:allow-identifier — QQ MHT MIME wrapper and 昵称(QQ号) headers. */
+function renderQqMht(records: FixtureRecord[]): string {
+  const body = textRows(records)
+    .map((row) => {
+      const id = row.speaker === "小满" ? "10001" : "10002";
+      return `<div>${row.speaker}(${id}) ${formatShanghai(row.timestamp)}</div>\n<div>${row.content.trim().replace(/\n/g, "<br>")}</div>`;
+    })
+    .join("\n");
+  return [
+    "From: <Saved by Blink>",
+    "MIME-Version: 1.0",
+    'Content-Type: multipart/related; boundary="----=_NextPart"',
+    "",
+    "------=_NextPart",
+    'Content-Type: text/html; charset="utf-8"',
+    "",
+    "<html><body>",
+    "<div>消息记录</div>",
+    "<div>消息对象:小满</div>",
+    body,
+    "</body></html>",
+    "------=_NextPart--",
+  ].join("\n");
 }
 
 /** i18n:allow-identifier — QQ TXT export banner; the parser matches these bytes. */
@@ -110,6 +136,8 @@ export function renderFixture(records: FixtureRecord[], format: FixtureFormat | 
       return renderWechatJson(records);
     case "qq-txt":
       return renderQqTxt(records);
+    case "qq-mht":
+      return renderQqMht(records);
     case "telegram-json":
       return renderTelegramJson(records);
     default:

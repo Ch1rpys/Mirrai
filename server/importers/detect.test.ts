@@ -61,6 +61,16 @@ describe("detectFormat", () => {
     expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
   });
 
+  it("claims the qq-mht sample as itself", () => {
+    const sample = readFileSync(
+      path.resolve(import.meta.dirname, "../test-fixtures/exports/qq-mht/sample.mht"),
+      "utf8",
+    );
+    const hits = detectFormat(source("chat.mht", sample));
+    expect(hits[0]?.id).toBe("qq-mht");
+    expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
+  });
+
   it("claims the qq-txt sample as itself", () => {
     const sample = readFileSync(
       path.resolve(import.meta.dirname, "../test-fixtures/exports/qq-txt/sample.txt"),
