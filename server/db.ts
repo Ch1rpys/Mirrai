@@ -4393,7 +4393,13 @@ export interface IterateRecordsOptions {
   kinds?: string[];
   from?: Date;
   to?: Date;
-  /** Missing means private only — later imports of moments, letters, or group chats must not quietly change the one-to-one voice. */
+  /**
+   * Missing means private only — later imports of moments, letters, or
+   * group chats must not quietly change the one-to-one voice.
+   *
+   * `"all"` drops the filter, which is what the write-path cap uses:
+   * the million-row ceiling is the whole table, not one register.
+   */
   register?: string;
 }
 
@@ -4408,17 +4414,19 @@ function recordsWhere(
 ) {
   const register = options.register ?? "private";
   const registerFilter =
-    register === "private"
-      ? sql`(
-          ${collectedMessages.meta} IS NULL
-          OR ${collectedMessages.meta}->>'register' IS NULL
-          OR ${collectedMessages.meta}->>'register' = 'private'
-        )`
-      : sql`${collectedMessages.meta}->>'register' = ${register}`;
+    register === "all"
+      ? undefined
+      : register === "private"
+        ? sql`(
+            ${collectedMessages.meta} IS NULL
+            OR ${collectedMessages.meta}->>'register' IS NULL
+            OR ${collectedMessages.meta}->>'register' = 'private'
+          )`
+        : sql`${collectedMessages.meta}->>'register' = ${register}`;
   return and(
     eq(collectedMessages.personaId, personaId),
     eq(collectedMessages.userId, userId),
-    registerFilter,
+    ...(registerFilter ? [registerFilter] : []),
     ...(options.role ? [eq(collectedMessages.role, options.role)] : []),
     ...(options.kinds && options.kinds.length > 0
       ? [inArray(collectedMessages.kind, options.kinds)]

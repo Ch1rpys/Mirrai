@@ -20,6 +20,7 @@ import type { CollectedMessage } from "./types";
 import type { CollectorAuthState, CollectorCredentials, CollectInput, SourceConnector } from "./types";
 import type { CollectorJob, CollectorJobStatus } from "./jobs";
 import { copy } from "@shared/copy";
+import type { ParsedRecord, RecordRole } from "@shared/records";
 
 /**
  * The write chain, per job.
@@ -383,6 +384,118 @@ export async function importCollectedMessages(params: {
    * wrong.
    */
   return await db.createCollectedMessages(rows);
+}
+
+const IMPORT_BATCH = 5_000;
+
+/**
+ * The write path refused a file because the persona is already full.
+ *
+ * The ceiling is checked before any row of the batch is written, so a
+ * file that would overflow does not leave a prefix of itself stored.
+ */
+export class RecordLimitError extends Error {
+  readonly current: number;
+  readonly incoming: number;
+  readonly max: number;
+
+  constructor(current: number, incoming: number, max: number) {
+    super("recordsLimit");
+    this.name = "RecordLimitError";
+    this.current = current;
+    this.incoming = incoming;
+    this.max = max;
+  }
+}
+
+/**
+ * The key of one uploaded record inside its batch.
+ *
+ * Timed lines reuse the collector's `source|iso|content` string so a
+ * row that is already there still matches. The second and later copy of
+ * the same words in the same second append `| #n`, counting from 1.
+ *
+ * The upload path does not read the keys that are already stored — a
+ * million-row history does not fit in memory — so the occurrence is
+ * counted only inside this batch. Re-importing the same file in the
+ * same order produces the same keys, and the unique index drops them.
+ */
+function recordIdentityKey(
+  source: string,
+  timestamp: Date | null,
+  content: string,
+  occurrence: number,
+  sourceId?: string,
+): string {
+  if (sourceId) return sourceIdKey(source, sourceId);
+  const base = timestamp
+    ? idempotencyKey(source, timestamp, content)
+    : `${source}||${content}`;
+  return occurrence === 0 ? base : `${base}|#${occurrence}`;
+}
+
+/**
+ * Writes parsed records into the persona.
+ *
+ * Unlike the collector import, this path does not pre-read existing
+ * keys. It inserts in batches of five thousand and lets the unique
+ * index refuse the second copy of a line. Returns how many rows were
+ * actually written.
+ */
+export async function importRecords(params: {
+  personaId: number;
+  userId: number;
+  source: string;
+  fileId?: number | null;
+  records: Array<ParsedRecord & { role: RecordRole }>;
+  onProgress?: (written: number, total: number) => void | Promise<void>;
+}): Promise<number> {
+  const current = await db.countRecords(params.personaId, params.userId, { register: "all" });
+  if (current + params.records.length > db.MAX_RECORDS_PER_PERSONA) {
+    throw new RecordLimitError(current, params.records.length, db.MAX_RECORDS_PER_PERSONA);
+  }
+
+  const seen = new Map<string, number>();
+  const rows = params.records.map((record) => {
+    const timestamp = record.timestamp;
+    const identity = record.sourceId
+      ? sourceIdKey(params.source, record.sourceId)
+      : timestamp
+        ? idempotencyKey(params.source, timestamp, record.content)
+        : `${params.source}||${record.content}`;
+    const occurrence = seen.get(identity) ?? 0;
+    seen.set(identity, occurrence + 1);
+    const key = recordIdentityKey(
+      params.source,
+      timestamp,
+      record.content,
+      occurrence,
+      record.sourceId,
+    );
+    return {
+      userId: params.userId,
+      personaId: params.personaId,
+      source: params.source,
+      role: record.role,
+      content: record.content,
+      timestamp,
+      kind: record.kind,
+      speaker: record.speaker,
+      fileId: params.fileId ?? null,
+      lineNo: record.lineNo,
+      meta: record.meta ?? null,
+      sourceMessageId: record.sourceId ?? null,
+      idempotencyKey: hashKey(key),
+    };
+  });
+
+  let written = 0;
+  for (let start = 0; start < rows.length; start += IMPORT_BATCH) {
+    const chunk = rows.slice(start, start + IMPORT_BATCH);
+    written += await db.createCollectedMessages(chunk);
+    await params.onProgress?.(written, params.records.length);
+  }
+  return written;
 }
 
 /**

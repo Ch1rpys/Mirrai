@@ -92,6 +92,7 @@ import {
 } from "@shared/timezone";
 import { resolveRelationshipPhase, parseRecalledIds } from "@shared/user-side";
 import { copy, localizeScene } from "@shared/copy";
+import { isChatImportFileType, startImport } from "./importers";
 import { asMaterial } from "./_core/material";
 import { buildEvalCases, casesFromRows, trainingTexts } from "./eval/dataset";
 import { labelEvalCases } from "./eval/act-labels";
@@ -1736,7 +1737,7 @@ export const appRouter = router({
       .input(z.object({
         personaId: z.number(),
         fileName: z.string().min(1).max(255),
-        fileType: z.enum(["chat_txt", "chat_csv", "collected", "image", "video"]),
+        fileType: z.enum(["chat_txt", "chat_csv", "collected", "image", "video", "chat_export", "archive"]),
         fileSize: z.number().min(1).max(MAX_UPLOAD_BYTES),
         fileContent: z.string(),
         mimeType: z.string().max(128),
@@ -1757,7 +1758,11 @@ export const appRouter = router({
         const fileKey = `personas/${ctx.user.id}/${input.personaId}/${nanoid()}-${safeName}`;
         const { url } = await storagePut(fileKey, buffer, input.mimeType);
         let extractedText: string | undefined;
-        if (input.fileType === "chat_txt" || input.fileType === "chat_csv") {
+        if (
+          input.fileType === "chat_txt"
+          || input.fileType === "chat_csv"
+          || input.fileType === "chat_export"
+        ) {
           extractedText = buffer.toString("utf-8").slice(0, MAX_EXTRACTED_CHARS);
         } else if (input.fileType === "collected") {
           /**
@@ -1778,6 +1783,23 @@ export const appRouter = router({
         // ask for up to thirty thousand characters — so the limit belongs
         // at the point of use, not on the way in.
         const fileId = await createPersonaFile({ personaId: input.personaId, userId: ctx.user.id, fileType: input.fileType, originalName: safeName, fileKey, fileUrl: url, fileSize: buffer.length, extractedMemory: extractedText, processStatus: "done" });
+        if (isChatImportFileType(input.fileType)) {
+          /**
+           * The full buffer is parsed.
+           *
+           * `extractedMemory` is still sliced so the old distillation
+           * path keeps the ceiling it has always had. The record table
+           * is filled from the bytes that were just stored, not from
+           * that excerpt.
+           */
+          const fullText = input.fileType === "archive" ? undefined : buffer.toString("utf-8");
+          await startImport({
+            fileId,
+            userId: ctx.user.id,
+            text: fullText,
+            locale: ctx.locale,
+          });
+        }
         return { fileId, fileUrl: url };
       }),
 

@@ -48,6 +48,7 @@ const client = vi.hoisted(() => ({
 
 const getChannelState = vi.fn();
 const getCollectionJob = vi.fn();
+const countRecords = vi.fn();
 
 vi.mock("../db", () => ({
   getChannelState: (...a: unknown[]) => getChannelState(...a),
@@ -56,13 +57,18 @@ vi.mock("../db", () => ({
   getCollectedMessages: (...a: unknown[]) => getCollectedMessages(...a),
   getCollectedMessageKeys: (...a: unknown[]) => getCollectedMessageKeys(...a),
   getCollectionJob: (...a: unknown[]) => getCollectionJob(...a),
+  countRecords: (...a: unknown[]) => countRecords(...a),
+  MAX_RECORDS_PER_PERSONA: 1_000_000,
   getDb: async () => client,
 }));
 
+import { createHash } from "node:crypto";
 import { collectionSources as collectionSourcesTable } from "../../drizzle/schema";
 import {
   getPersistedCollectorJob,
   importCollectedMessages,
+  importRecords,
+  RecordLimitError,
   loadCollectionSource,
   saveCollectionSource,
   saveConnectorSource,
@@ -465,5 +471,61 @@ describe("toTranscript", () => {
 
   it("handles an empty list", () => {
     expect(toTranscript([])).toBe("");
+  });
+});
+
+describe("importRecords", () => {
+  beforeEach(() => {
+    createCollectedMessages.mockReset();
+    getCollectedMessageKeys.mockReset();
+    countRecords.mockReset();
+    countRecords.mockResolvedValue(0);
+    createCollectedMessages.mockImplementation(
+      async (rows: unknown[]) => (rows as unknown[]).length,
+    );
+  });
+
+  it("keeps two identical lines of the same second, without reading existing keys", async () => {
+    const at = new Date("2022-03-01T12:00:00.000Z");
+    const written = await importRecords({
+      personaId: 5,
+      userId: 1,
+      source: "generic",
+      fileId: 99,
+      records: [
+        { speaker: "小满", content: "嗯", timestamp: at, kind: "text", lineNo: 1, role: "assistant" },
+        { speaker: "小满", content: "嗯", timestamp: at, kind: "text", lineNo: 2, role: "assistant" },
+      ],
+    });
+    expect(written).toBe(2);
+    expect(getCollectedMessageKeys).not.toHaveBeenCalled();
+    const rows = createCollectedMessages.mock.calls[0][0] as Array<Record<string, unknown>>;
+    const hash = (key: string) => createHash("md5").update(key).digest("hex");
+    const base = `generic|${at.toISOString()}|嗯`;
+    expect(rows[0].idempotencyKey).toBe(hash(base));
+    expect(rows[1].idempotencyKey).toBe(hash(`${base}|#1`));
+    expect(rows[0]).toMatchObject({ fileId: 99, lineNo: 1, kind: "text", speaker: "小满" });
+  });
+
+  it("refuses a batch that would pass the persona's record ceiling", async () => {
+    countRecords.mockResolvedValue(1_000_000);
+    await expect(
+      importRecords({
+        personaId: 5,
+        userId: 1,
+        source: "generic",
+        records: [
+          {
+            speaker: "小满",
+            content: "在吗",
+            timestamp: new Date("2022-03-01T12:00:00.000Z"),
+            kind: "text",
+            lineNo: 1,
+            role: "assistant",
+          },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(RecordLimitError);
+    expect(createCollectedMessages).not.toHaveBeenCalled();
   });
 });

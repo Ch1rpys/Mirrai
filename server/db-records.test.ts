@@ -10,6 +10,7 @@ import {
   getRecordSourceSummary,
   iterateRecords,
 } from "./db";
+import { importRecords } from "./collectors/db-store";
 import { buildXiaomanRecords } from "./test-fixtures/xiaoman";
 import { seedXiaoman } from "./test-fixtures/seed-db";
 
@@ -114,6 +115,7 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
       expect(written).toBe(2);
       expect(await countRecords(personaId, userId)).toBe(1);
       expect(await countRecords(personaId, userId, { register: "public" })).toBe(1);
+      expect(await countRecords(personaId, userId, { register: "all" })).toBe(2);
     } finally {
       await deletePersona(personaId, userId);
     }
@@ -158,6 +160,34 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
       expect(await countRecords(personaId, userId)).toBe(1);
       const after = await getRecordSourceSummary(personaId, userId);
       expect(after.some((row) => row.source === "wechat_export")).toBe(false);
+    } finally {
+      await deletePersona(personaId, userId);
+    }
+  });
+
+  it("writes nothing when the same fixture is imported again", async () => {
+    const userId = 9_950_000 + Math.floor(Math.random() * 10_000);
+    const { personaId } = await seedXiaoman(null, { userId });
+    try {
+      const records = buildXiaomanRecords()
+        .filter((row) => row.role === "user" || row.role === "assistant")
+        .map((row) => ({
+          speaker: row.speaker,
+          content: row.content,
+          timestamp: row.timestamp,
+          kind: row.kind,
+          lineNo: row.id,
+          meta: row.meta,
+          role: row.role,
+        }));
+      expect(
+        await importRecords({
+          personaId,
+          userId,
+          source: "generic",
+          records,
+        }),
+      ).toBe(0);
     } finally {
       await deletePersona(personaId, userId);
     }

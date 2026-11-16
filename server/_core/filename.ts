@@ -48,6 +48,9 @@ export const ALLOWED_EXTENSIONS: Record<string, string[]> = {
    * as a page is a page on that origin.
    */
   collected: [".txt", ".csv", ".json", ".eml", ".mbox"],
+  /** A chat export that is not a zip. C1.1 widens this as formats land. */
+  chat_export: [".txt", ".csv", ".json"],
+  archive: [".zip"],
 };
 
 /** The extension of a file name, lower-cased, including the dot. */
