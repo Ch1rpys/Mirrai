@@ -1,0 +1,102 @@
+{
+  "guild": { "id": "1", "name": "home" },
+  "channel": { "id": "2", "name": "xiaoman" },
+  "messages": [
+    {
+      "id": "1",
+      "timestamp": "2022-03-01T12:00:00.000Z",
+      "content": "在吗",
+      "author": { "id": "111", "name": "小满" },
+      "attachments": [],
+      "stickers": []
+    },
+    {
+      "id": "2",
+      "timestamp": "2022-03-01T12:00:05.000Z",
+      "content": "在的呀\n还没睡",
+      "author": { "id": "222", "name": "阿树" },
+      "attachments": [],
+      "stickers": []
+    },
+    {
+      "id": "3",
+      "timestamp": "2022-03-01T12:00:12.000Z",
+      "content": "他说：先这样",
+      "author": { "id": "111", "name": "小满" },
+      "attachments": [],
+      "stickers": []
+    },
+    {
+      "id": "4",
+      "timestamp": "2022-03-01T12:00:20.000Z",
+      "content": "好",
+      "author": { "id": "222", "name": "阿树" },
+      "attachments": [],
+      "stickers": []
+    },
+    {
+      "id": "5",
+      "timestamp": "2022-03-01T12:01:00.000Z",
+      "content": "内容里写着 2022-03-01 20:02:00 这不是新消息",
+      "author": { "id": "111", "name": "小满" },
+      "attachments": [],
+      "stickers": []
+    },
+    {
+      "id": "6",
+      "timestamp": "2022-03-01T12:01:08.000Z",
+      "content": "看到了",
+      "author": { "id": "222", "name": "阿树" },
+      "attachments": [],
+      "stickers": []
+    },
+    {
+      "id": "7",
+      "timestamp": "2022-03-02T00:15:00.000Z",
+      "content": "",
+      "author": { "id": "111", "name": "小满" },
+      "attachments": [],
+      "stickers": [{ "id": "s1", "name": "dog" }]
+    },
+    {
+      "id": "8",
+      "timestamp": "2022-03-02T00:15:10.000Z",
+      "content": "早",
+      "author": { "id": "222", "name": "阿树" },
+      "attachments": [],
+      "stickers": []
+    },
+    {
+      "id": "9",
+      "timestamp": "2022-03-02T04:00:00.000Z",
+      "content": "",
+      "author": { "id": "111", "name": "小满" },
+      "attachments": [{ "fileName": "photo.jpg", "url": "https://cdn.example/photo.jpg" }],
+      "stickers": []
+    },
+    {
+      "id": "10",
+      "timestamp": "2022-03-02T04:00:20.000Z",
+      "content": "吃",
+      "author": { "id": "222", "name": "阿树" },
+      "attachments": [],
+      "stickers": []
+    },
+    {
+      "id": "11",
+      "timestamp": "2022-03-02T13:30:00.000Z",
+      "content": "人呢",
+      "author": { "id": "111", "name": "小满" },
+      "attachments": [],
+      "stickers": []
+    },
+    {
+      "id": "12",
+      "timestamp": "2022-03-02T13:30:40.000Z",
+      "content": "在",
+      "author": { "id": "222", "name": "阿树" },
+      "attachments": [],
+      "stickers": []
+    }
+  ]
+}

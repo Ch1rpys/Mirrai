@@ -19,7 +19,8 @@ export type FixtureFormat =
   | "whatsapp-txt"
   | "line-txt"
   | "kakao-txt"
-  | "meta-json";
+  | "meta-json"
+  | "discord-json";
 
 function textRows(records: FixtureRecord[]): FixtureRecord[] {
   return records.filter((row) => row.kind === "text" && row.content.trim());
@@ -96,6 +97,18 @@ function merHour(stamp: string): { mer: "오전" | "오후"; hour: number; minut
   const mer = hour24 < 12 ? "오전" : "오후";
   const hour = hour24 % 12 === 0 ? 12 : hour24 % 12;
   return { mer, hour, minute };
+}
+
+function renderDiscordJson(records: FixtureRecord[]): string {
+  const messages = textRows(records).map((row, index) => ({
+    id: String(index + 1),
+    timestamp: row.timestamp.toISOString(),
+    content: row.content.trim(),
+    author: { id: String(index + 1), name: row.speaker },
+    attachments: [],
+    stickers: [],
+  }));
+  return JSON.stringify({ guild: { id: "1", name: "home" }, channel: { id: "2", name: "chat" }, messages }, null, 2);
 }
 
 function renderMetaJson(records: FixtureRecord[]): string {
@@ -213,6 +226,8 @@ export function renderFixture(records: FixtureRecord[], format: FixtureFormat | 
       return renderKakaoTxt(records);
     case "meta-json":
       return renderMetaJson(records);
+    case "discord-json":
+      return renderDiscordJson(records);
     default:
       throw new Error(`renderFixture: format "${format}" is not implemented yet (C1.1)`);
   }

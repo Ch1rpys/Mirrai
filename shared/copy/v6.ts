@@ -60,4 +60,8 @@ export const V6 = {
     zh: "Instagram / Messenger 的 JSON",
     en: "Instagram / Messenger JSON",
   },
+  "import.format.discordJson": {
+    zh: "Discord 导出的 JSON",
+    en: "Discord exported JSON",
+  },
 } as const satisfies CopyTable;

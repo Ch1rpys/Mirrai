@@ -81,6 +81,16 @@ describe("detectFormat", () => {
     expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
   });
 
+  it("claims the discord-json sample as itself", () => {
+    const sample = readFileSync(
+      path.resolve(import.meta.dirname, "../test-fixtures/exports/discord-json/sample.json"),
+      "utf8",
+    );
+    const hits = detectFormat(source("channel.json", sample));
+    expect(hits[0]?.id).toBe("discord-json");
+    expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
+  });
+
   it("claims the meta-json sample as itself", () => {
     const sample = readFileSync(
       path.resolve(import.meta.dirname, "../test-fixtures/exports/meta-json/sample.json"),

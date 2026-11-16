@@ -154,3 +154,13 @@ with `Buffer.from(s, "latin1").toString("utf8")`. The array is newest
 first; records are sorted oldest first.
 
 - Sample (synthetic): `server/test-fixtures/exports/meta-json/sample.json`.
+
+## discord-json
+
+Checked 2026-11-16 against DiscordChatExporter
+([JsonMessageWriter.cs](https://github.com/Tyrrrz/DiscordChatExporter/blob/prime/DiscordChatExporter.Core/Exporting/JsonMessageWriter.cs)).
+A channel file is `{ guild, channel, messages }`. Each message has ISO
+`timestamp`, `content`, `author.name` (or `nickname`), `attachments[]`
+(`fileName` / `url`), `stickers[]` (`name`).
+
+- Sample (synthetic): `server/test-fixtures/exports/discord-json/sample.json`.

@@ -10,6 +10,7 @@ import { whatsappTxtImporter } from "./formats/whatsapp-txt";
 import { lineTxtImporter } from "./formats/line-txt";
 import { kakaoTxtImporter } from "./formats/kakao-txt";
 import { metaJsonImporter } from "./formats/meta-json";
+import { discordJsonImporter } from "./formats/discord-json";
 import type { ImportFormatId, Importer } from "./types";
 
 /**
@@ -31,6 +32,7 @@ export const IMPORTERS: Importer[] = [
   lineTxtImporter,
   kakaoTxtImporter,
   metaJsonImporter,
+  discordJsonImporter,
 ];
 
 export function importerById(id: ImportFormatId | string): Importer | undefined {

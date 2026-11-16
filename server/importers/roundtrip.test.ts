@@ -30,6 +30,7 @@ const TEXT_FORMATS: Array<{ id: ImportFormatId & FixtureFormat; time: "second" |
   { id: "line-txt", time: "minute" },
   { id: "kakao-txt", time: "minute" },
   { id: "meta-json", time: "second" },
+  { id: "discord-json", time: "second" },
 ];
 
 describe("importer roundtrip", () => {
