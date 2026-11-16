@@ -5,6 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/Ch1rpys/Mirrai/actions/workflows/ci.yml/badge.svg)](https://github.com/Ch1rpys/Mirrai/actions/workflows/ci.yml)
 [![GitHub Stars](https://img.shields.io/github/stars/Ch1rpys/Mirrai?style=social)](https://github.com/Ch1rpys/Mirrai/stargazers)
+[![AtomGit](https://atomgit.com/Ch1rpys/Mirrai/star/new_badge.svg)](https://atomgit.com/Ch1rpys/Mirrai)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6.svg)](https://typescriptlang.org)
 [![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev)
 [![Node.js](https://img.shields.io/badge/Node.js-24+-339933.svg)](https://nodejs.org)
