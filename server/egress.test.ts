@@ -50,10 +50,22 @@ function filesWithCalls(): string[] {
   return hits.sort();
 }
 
+function unlistedCallSites(
+  files: Array<{ file: string; source: string }>,
+  listed: Set<string>,
+): string[] {
+  return files
+    .filter((file) => CALL_PATTERN.test(file.source) && !listed.has(file.file))
+    .map((file) => file.file)
+    .sort();
+}
+
 describe("the outbound inventory", () => {
   it("lists every fetch, WebSocket and http(s).request under server/", () => {
-    const listed = listedFiles();
-    const missing = filesWithCalls().filter((file) => !listed.has(file));
+    const missing = unlistedCallSites(
+      filesWithCalls().map((file) => ({ file, source: readFileSync(join(ROOT, file), "utf8") })),
+      listedFiles(),
+    );
     expect(missing).toEqual([]);
   });
 
@@ -64,9 +76,12 @@ describe("the outbound inventory", () => {
   });
 
   it("fails when a new unlisted fetch appears", () => {
-    const synthetic = 'fetch("https://example.com")';
-    expect(CALL_PATTERN.test(synthetic)).toBe(true);
-    expect(listedFiles().has("server/invented-egress.ts")).toBe(false);
+    const files = filesWithCalls().map((file) => ({
+      file,
+      source: readFileSync(join(ROOT, file), "utf8"),
+    }));
+    files.push({ file: "server/invented-egress.ts", source: 'fetch("https://example.com")' });
+    expect(unlistedCallSites(files, listedFiles())).toEqual(["server/invented-egress.ts"]);
   });
 
   it("keeps the markdown table in lockstep with the inventory", () => {
