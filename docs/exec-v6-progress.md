@@ -121,7 +121,7 @@
 | C1.2 | ✅ | 267d8c6 (wizard); 50ab2ec (upload page) | `ImportWizard.test.tsx` 5 通过：detecting 有 progressbar 和「已处理 4 条」；needs_format 有格式下拉和「按列对应」；needs_roles 未同时选我/TA 时「继续」禁用，选 阿树=我、小满=TA 后 `import.confirm` 收到 `me:["阿树"]` `them:["小满"]`；done 文案含 added/theirs/existing；failed 显示原因和「再试一次」。`routers-v6/import.test.ts`：preview 不调 `createCollectedMessages`/`updatePersonaFile`；needs_roles 且 me/them 空 → `BAD_REQUEST`；别人的文件 `NOT_FOUND`。`Upload.test.tsx`：formatsHint 用服务端标签「一行一条」；`.zip` 走 PUT 不走 `file.upload`。实机（桩模型 `live-stub-model.mjs` 3122，应用 PORT 3133，临时库 `mirrai_v6_scratch`）：登录 c12user，分身「小满」，把 `server/test-fixtures/exports/wechat-txt-2line/sample.txt` 交给上传页 `input[type=file]` 的 change（与点击选择同一条 `handleFiles`）；向导 `needs_roles` 3 个说话人；指认 小满=TA、阿树=我、system=其他人；预览「微信 TXT（时间与昵称一行） · 共 13 条」「你 6 条，小满 6 条」；继续后「新增 13 条，其中 6 条是 小满 说的。0 条之前已经有了。」库 `collected_messages` 13 行（user 6 / assistant 6 / other 1），`persona_files.parseStatus=done` `format=wechat-txt-2line` `written=13`。库已 `dropdb`。闸门 `301 passed \| 3 skipped (304)` 文件，`2789 passed \| 13 skipped (2802)` 用例。 |
 | C1.3 | ✅ | 25d6d1a (map/render); 14274b4 (readers) | `normalize.test.ts` 含上表每一行：`[图片]`/`[Photo]`/`<Media omitted>`/`<图片>` image，`[表情]`/`[动画表情]`/`[Sticker]`/`[表情:狗狗探头]` sticker，`[语音]`/`[语音 12秒]`/`[Voice]` voice，`[视频]`/`[Video]` video，`[位置]`/`[Location]` location，`[链接]`/`[文件]`/`[音乐]` link/file/music，`[转账]`/`微信转账`/`[红包]` transfer/redpacket，撤回/recalled recall，拍了拍 pat，通话 call；`[语音通话] 时长 00:43:12` → `durationSec: 2592`；「那张图片很好看」为 null。`wechat-csv.test.ts`：夹具表情 `kind: "sticker"` `content: "[sticker]"`，语音 `"[voice:12]"` `meta.durationSec: 12`，通话 `"[call:voice:2592]"` `meta.durationSec: 2592`。`shared/records.test.ts` 每种 kind 中英各至少一例（sticker `［表情：狗狗探头］` / `[sticker: 狗狗探头]`，call `［语音通话 43 分 12 秒］`）。`shared/copy/copy.test.ts` 通过。`dataset.test.ts`「does not train on sticker, voice, or call tokens」：小满夹具经 `trainingTexts` 后语料不含 `[sticker:`/`[voice:`/`[call:` 开头。闸门 `299 passed \| 3 skipped (302)` 文件，`2781 passed \| 13 skipped (2794)` 用例。 |
 | C1.4 | ✅ | b80fc5f | `shared/scenes.test.ts`：夹具偶数 `sceneId` 标 `wechat_export`、奇数标 `sms` 后 `splitScenes` 切出的 id 序列与不标来源时相同。`db-store.test.ts`：同一秒同一句 `wechat_export` 与 `sms` 的 `idempotencyKey` 不同。临时库 `mirrai_v6_scratch` 上 `db-records.test.ts` 6 通过（原 5 条 + 新条）：两源各导入 3 条，`iterateRecords` 按时间交错 `wechat/sms/wechat/sms/wechat/sms`，12:04 的两句「嗯」都在。库已 `dropdb`。上传页列表等 C1.6。闸门 `303 passed \| 3 skipped (306)` 文件，`2798 passed \| 14 skipped (2812)` 用例；跳过 +1 见偏差 47。 |
-| C1.5 | ⬜ |  |  |
+| C1.5 | ✅ | d2858ff | 临时库 `mirrai_v6_scratch`（push + migrate 到 0045）上 `db-records.test.ts` 7 通过：`writes only the new tail when the same platform is imported again` 夹具 user/assistant 5202 条，先写 4161（80%），再导全量写入 1041（后 20%），第三次写入 0；第二次后 `styleProfile.recordsVersion` 变，第三次 `measuredAt` 仍是 `2026-02-01T00:00:00.000Z`。库已 `dropdb`。`style-profile.test.ts` 4 通过：recordsVersion 未变时 `setPersonaStyleProfile` 0 次；变了写 1 次；蒸馏过的分身 `pendingRedistillAdded: 4`；写入 0 不记。`StaleRecordsBanner.test.tsx`：added=0 不渲染；added=8 显示「新增了 8 条记录。分身还是按之前的记录建的。」点「把新的读进去」调用 onRebuild。闸门 `305 passed \| 3 skipped (308)` 文件，`2805 passed \| 15 skipped (2820)` 用例。 |
 | C1.6 | ⬜ |  |  |
 | C1.7 | ⬜ |  |  |
 | C1.8 | ⬜ |  |  |
@@ -249,6 +249,9 @@
 | 45 | C1.2 | 时区入口跳到「设置里的时区」 | 资料页原先没有用户时区编辑，补了 `settings.profile.timezone` 字段 | `user.updateProfile` 本来就收 timezone；TimezoneSync 只在空值时写入。 |
 | 46 | A4/A2 | `periods.length === 2`，边界落在 2023-07-05 | 夹具 160 个活跃日铺在两年里，`findPeriodSplits` 切出 12 段；设计静默后第一条是 2023-07-12 16:16:09（上海）。验收改为：存在 `to`/`from` 等于该 ISO 的相邻两段，后一段含 `no_question_ending` | 不改挖掘函数、不改 P0.5 夹具。手册按「只有那一处 25 天静默」写，与夹具实测不符。 |
 | 47 | C1.4 | 闸门跳过数不能增加 | 无 `DATABASE_URL` 时 `db-records.test.ts` 现 6 条 `skipIf`（原 5），跳过用例 14 | 手册 2.3 要求库测试 `skipIf(!DATABASE_URL)`。带临时库跑这 6 条全过。与偏差 20 同类。 |
+| 48 | C1.5 | 蒸馏过的分身靠 `styleProfile.recordsVersion` 判断要不要提示重建 | `personas.settings.pendingRedistillAdded` 累加新写入条数；上传页读它 | 导入完成后立刻 `measureStyleProfile`，`recordsVersion` 会跟上新条数，分身是不是按旧记录建的从画像上看不出来。C1.6 的「记录少了」仍按手册去对 `countRecords` 与 `recordsVersion`。 |
+| 49 | C1.5 | 闸门跳过数不能增加 | 无 `DATABASE_URL` 时 `db-records.test.ts` 现 7 条 `skipIf`（原 6），跳过用例 15 | 新增的 80%/20% 增量测试同样 `skipIf`。带临时库跑这 7 条全过。与偏差 20、47 同类。 |
+| 50 | C1.5 | `setPersonaStyleProfile` 无库时抛 `DB not available` | 无库时返回 `false` | 导入在测量失败时仍应结束；测试 mock 没有库，抛错会打 warn。与 `getPersonaStyleProfile` 无库返回 `null` 对齐。 |
 
 ## 未验证清单
 
@@ -358,3 +361,11 @@ P0.1、P0.2、P0.3、P0.4、P0.6、P0.7 维持 ✅。P0.5 改回 ⬜。
 - 临时库 `mirrai_v6_scratch`（push + migrate 到 0045）上 `db-records.test.ts` 6 通过，库已删。`mirrai_live` 未碰。
 - 闸门 `303 passed | 3 skipped (306)` 文件，`2798 passed | 14 skipped (2812)` 用例，`all six steps passed`。相对 A4 闸门（303/3 文件、2796/13 用例）：通过用例 +2；跳过用例 +1（偏差 47）。
 - C1.4 标 ✅。C1.5 起未做。未验证清单无新增。待用户决定仍空。
+
+### WP1 · 实现会话 · 2026-11-16 · C1.5
+
+- 分支 `exec/v6`。无独立验收遗留项。
+- C1.5 一个提交：`d2858ff`。同一平台再导入靠已有去重键只进新行；`startImport` 成功后 `afterRecordsChanged`（`recordsVersion` 变了才重量）；已蒸馏分身把新增条数记进 `pendingRedistillAdded`；横幅「把新的读进去」走完整蒸馏（B1.7 未落地）；蒸馏开始时清掉该计数。
+- 临时库 `mirrai_v6_scratch`（push + migrate 到 0045）上 `db-records.test.ts` 7 通过（5202 条 80%→4161，再导全量写入 1041，第三次 0；第二次 recordsVersion 变，第三次 `measuredAt` 不变）。库已删。`mirrai_live` 未碰。
+- 闸门 `305 passed | 3 skipped (308)` 文件，`2805 passed | 15 skipped (2820)` 用例，`all six steps passed`。相对 C1.4 闸门（303/3 文件、2798/14 用例）：通过文件 +2、通过用例 +7；跳过用例 +1（偏差 49）。
+- C1.5 标 ✅。C1.6 起未做。未验证清单无新增。待用户决定仍空。
