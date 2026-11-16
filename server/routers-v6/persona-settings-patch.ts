@@ -141,5 +141,6 @@ export const personaSettingsPatchSchema = z
       .optional(),
     disabledProfiles: z.array(z.string()).optional(),
     pendingRedistillAdded: z.number().optional(),
+    pendingRedistillRemoved: z.boolean().optional(),
   })
   .strict();

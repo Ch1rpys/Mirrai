@@ -4,7 +4,9 @@ import {
   countRecords,
   createCollectedMessages,
   createPersona,
+  createPersonaFile,
   deletePersona,
+  deletePersonaFile,
   deleteRecordsByFile,
   getPersonaStyleProfile,
   getRecordsAround,
@@ -162,6 +164,82 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
       expect(await countRecords(personaId, userId)).toBe(1);
       const after = await getRecordSourceSummary(personaId, userId);
       expect(after.some((row) => row.source === "wechat_export")).toBe(false);
+    } finally {
+      await deletePersona(personaId, userId);
+    }
+  });
+
+  it("deleting one file leaves the other file's rows", async () => {
+    const userId = 9_980_000 + Math.floor(Math.random() * 10_000);
+    const personaId = await createPersona({ userId, name: "two-files" });
+    try {
+      const fileA = await createPersonaFile({
+        personaId,
+        userId,
+        fileType: "chat_txt",
+        originalName: "a.txt",
+        fileKey: `personas/${userId}/${personaId}/a.txt`,
+        fileUrl: `/uploads/personas/${userId}/${personaId}/a.txt`,
+        fileSize: 12,
+      });
+      const fileB = await createPersonaFile({
+        personaId,
+        userId,
+        fileType: "chat_txt",
+        originalName: "b.txt",
+        fileKey: `personas/${userId}/${personaId}/b.txt`,
+        fileUrl: `/uploads/personas/${userId}/${personaId}/b.txt`,
+        fileSize: 12,
+      });
+      const asRecords = (
+        rows: Array<{ at: string; content: string }>,
+        role: "user" | "assistant",
+      ) =>
+        rows.map((row, index) => ({
+          speaker: role === "user" ? "阿树" : "小满",
+          content: row.content,
+          timestamp: new Date(row.at),
+          kind: "text" as const,
+          lineNo: index + 1,
+          role,
+        }));
+      expect(
+        await importRecords({
+          personaId,
+          userId,
+          source: "wechat_export",
+          fileId: fileA,
+          records: asRecords(
+            [
+              { at: "2022-03-01T12:00:00.000Z", content: "a1" },
+              { at: "2022-03-01T12:01:00.000Z", content: "a2" },
+              { at: "2022-03-01T12:02:00.000Z", content: "a3" },
+            ],
+            "assistant",
+          ),
+        }),
+      ).toBe(3);
+      expect(
+        await importRecords({
+          personaId,
+          userId,
+          source: "sms",
+          fileId: fileB,
+          records: asRecords(
+            [
+              { at: "2022-03-01T12:03:00.000Z", content: "b1" },
+              { at: "2022-03-01T12:04:00.000Z", content: "b2" },
+            ],
+            "user",
+          ),
+        }),
+      ).toBe(2);
+      const removed = await deletePersonaFile(fileA, userId);
+      expect(removed?.deletedRecords).toBe(3);
+      expect(await countRecords(personaId, userId)).toBe(2);
+      const summary = await getRecordSourceSummary(personaId, userId);
+      expect(summary.some((row) => row.fileId === fileA)).toBe(false);
+      expect(summary.some((row) => row.fileId === fileB && row.count === 2)).toBe(true);
     } finally {
       await deletePersona(personaId, userId);
     }

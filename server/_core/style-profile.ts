@@ -59,3 +59,24 @@ export async function afterRecordsChanged(params: {
   await setPersonaSettings(params.personaId, params.userId, next);
   return profile;
 }
+
+/**
+ * After records were removed.
+ *
+ * The style profile is left as it was — remasuring would hide that the
+ * persona was built from a larger set. A distilled persona is told the
+ * table is now smaller, so the upload page can offer a rebuild.
+ */
+export async function afterRecordsRemoved(params: {
+  personaId: number;
+  userId: number;
+}): Promise<void> {
+  const persona = await getPersonaById(params.personaId, params.userId);
+  if (persona?.analysisStatus !== "ready") return;
+  const live = await getRecordsVersion(params.personaId, params.userId);
+  const profile = await getPersonaStyleProfile(params.personaId, params.userId);
+  if (!profile?.recordsVersion || profile.recordsVersion === live) return;
+  const current = await getPersonaSettings(params.personaId, params.userId);
+  const next = mergePersonaSettings(current, { pendingRedistillRemoved: true });
+  await setPersonaSettings(params.personaId, params.userId, next);
+}

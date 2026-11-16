@@ -51,6 +51,15 @@ describe("the stored files", () => {
     expect(await storageDelete("personas/1/2/nothing.png")).toBe(false);
   });
 
+  it("removes an unpacked directory", async () => {
+    const { storagePut, storageDeleteTree } = await import("./storage");
+    await storagePut("personas/1/2/imports/9/chat.txt", Buffer.from("x"));
+    const nested = path.join(dir, "personas", "1", "2", "imports", "9", "chat.txt");
+    expect(fs.existsSync(nested)).toBe(true);
+    expect(await storageDeleteTree("personas/1/2/imports/9")).toBe(true);
+    expect(fs.existsSync(path.join(dir, "personas", "1", "2", "imports", "9"))).toBe(false);
+  });
+
   it("does not remove a file outside the uploads directory", async () => {
     const { storageDelete } = await import("./storage");
     const outside = path.join(dir, "..", "mirrai-outside.txt");

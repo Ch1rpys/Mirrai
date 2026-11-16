@@ -39,6 +39,11 @@ describe("persona settings", () => {
     expect(normalizePersonaSettings({ pendingRedistillAdded: 0 }).pendingRedistillAdded).toBeUndefined();
   });
 
+  it("keeps a pending-removed flag and drops false", () => {
+    expect(normalizePersonaSettings({ pendingRedistillRemoved: true }).pendingRedistillRemoved).toBe(true);
+    expect(normalizePersonaSettings({ pendingRedistillRemoved: false }).pendingRedistillRemoved).toBeUndefined();
+  });
+
   it("deep-merges without dropping fields the patch did not mention", () => {
     const current = normalizePersonaSettings({
       layers: { twoStage: true, stickers: false },

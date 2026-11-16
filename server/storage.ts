@@ -58,6 +58,29 @@ export async function storageDelete(relKey: string): Promise<boolean> {
   }
 }
 
+/**
+ * Removes a stored directory and everything inside it.
+ *
+ * An unpacked zip lives next to the archive. Deleting the archive row
+ * has to take that directory with it, the same way a single file is
+ * unlinked.
+ */
+export async function storageDeleteTree(relKey: string): Promise<boolean> {
+  const key = relKey.replace(/^\/+/, "");
+  let filePath: string;
+  try {
+    filePath = resolveUploadPath(ENV.uploadDir, key);
+  } catch {
+    return false;
+  }
+  try {
+    await fs.promises.rm(filePath, { recursive: true, force: true });
+    return fs.existsSync(filePath) === false;
+  } catch {
+    return false;
+  }
+}
+
 export async function storageGet(
   relKey: string
 ): Promise<{ key: string; url: string }> {

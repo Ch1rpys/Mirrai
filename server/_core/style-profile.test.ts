@@ -16,7 +16,7 @@ vi.mock("../db", () => ({
   setPersonaSettings: (...a: unknown[]) => setPersonaSettings(...a),
 }));
 
-import { afterRecordsChanged, measureStyleProfile } from "./style-profile";
+import { afterRecordsChanged, afterRecordsRemoved, measureStyleProfile } from "./style-profile";
 
 describe("measureStyleProfile", () => {
   beforeEach(() => {
@@ -77,6 +77,41 @@ describe("afterRecordsChanged", () => {
 
   it("does not note a write of zero", async () => {
     await afterRecordsChanged({ personaId: 5, userId: 1, added: 0 });
+    expect(setPersonaSettings).not.toHaveBeenCalled();
+  });
+});
+
+describe("afterRecordsRemoved", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getPersonaById.mockResolvedValue({ id: 5, userId: 1, analysisStatus: "ready" });
+    getPersonaSettings.mockResolvedValue(null);
+    setPersonaSettings.mockResolvedValue(true);
+  });
+
+  it("notes a distilled persona whose records version no longer matches", async () => {
+    getPersonaStyleProfile.mockResolvedValue({
+      version: 1,
+      measuredAt: "2026-01-01T00:00:00.000Z",
+      recordsVersion: "10:40",
+    });
+    getRecordsVersion.mockResolvedValue("7:30");
+    await afterRecordsRemoved({ personaId: 5, userId: 1 });
+    expect(setPersonaSettings).toHaveBeenCalledWith(
+      5,
+      1,
+      expect.objectContaining({ pendingRedistillRemoved: true }),
+    );
+  });
+
+  it("does not note a table that still matches the profile", async () => {
+    getPersonaStyleProfile.mockResolvedValue({
+      version: 1,
+      measuredAt: "2026-01-01T00:00:00.000Z",
+      recordsVersion: "10:40",
+    });
+    getRecordsVersion.mockResolvedValue("10:40");
+    await afterRecordsRemoved({ personaId: 5, userId: 1 });
     expect(setPersonaSettings).not.toHaveBeenCalled();
   });
 });

@@ -69,6 +69,13 @@ export interface PersonaSettings {
    * Missing means nothing is waiting.
    */
   pendingRedistillAdded?: number;
+  /**
+   * Records were removed after the last distillation.
+   *
+   * The upload page offers to rebuild when this is true. Missing means
+   * the table still matches what the persona was built from.
+   */
+  pendingRedistillRemoved?: boolean;
 }
 
 const LAYER_KEYS = [
@@ -378,6 +385,9 @@ export function normalizePersonaSettings(value: unknown): PersonaSettings {
   const pendingRedistillAdded = asFiniteNumber(source.pendingRedistillAdded);
   if (pendingRedistillAdded !== undefined && pendingRedistillAdded > 0) {
     settings.pendingRedistillAdded = Math.round(pendingRedistillAdded);
+  }
+  if (source.pendingRedistillRemoved === true) {
+    settings.pendingRedistillRemoved = true;
   }
 
   return settings;

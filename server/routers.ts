@@ -18,11 +18,11 @@ import {
   resolveProviderForUser,
   resolveProviderForUserWithOwnership,
 } from "./llm/user-provider";
-import { storagePut } from "./storage";
+import { storagePut, storageDelete, storageDeleteTree } from "./storage";
 import {
   createPersona, getPersonasByUserId, getPersonaById, updatePersona, deletePersona,
   getPersonasWithStats, getUserStats, getRecentActivity, getDailyChatCounts,
-  createPersonaFile, getFilesByPersonaId,
+  createPersonaFile, getFilesByPersonaId, deletePersonaFile,
   createMessage,
   getPersonaFileById, getMessagesByPersonaId, getMessagesByPersonaIdPaged, clearMessagesByPersonaId, searchMessages,
   updateUserMessage, deleteMessage, deleteMessagesFrom, getPreviousMessage,
@@ -93,6 +93,8 @@ import {
 import { resolveRelationshipPhase, parseRecalledIds } from "@shared/user-side";
 import { copy, localizeScene } from "@shared/copy";
 import { isChatImportFileType, startImport } from "./importers";
+import { importUnpackRelKey } from "./importers/archive";
+import { afterRecordsRemoved } from "./_core/style-profile";
 import { asMaterial } from "./_core/material";
 import { buildEvalCases, casesFromRows, trainingTexts } from "./eval/dataset";
 import { labelEvalCases } from "./eval/act-labels";
@@ -103,6 +105,7 @@ import { mergePersonaSettings, normalizePersonaSettings } from "@shared/persona-
 import { personaSettingsPatchSchema } from "./routers-v6/persona-settings-patch";
 import { styleRouter } from "./routers-v6/style";
 import { importRouter } from "./routers-v6/import";
+import { recordRouter } from "./routers-v6/record";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
 import { normalizeMicroRules } from "@shared/micro-rules";
@@ -479,11 +482,14 @@ async function startPersonaDistillation(params: {
     });
     try {
       const settings = await getPersonaSettings(personaId, userId);
-      if (settings?.pendingRedistillAdded) {
+      if (settings?.pendingRedistillAdded || settings?.pendingRedistillRemoved) {
         await setPersonaSettings(
           personaId,
           userId,
-          mergePersonaSettings(settings, { pendingRedistillAdded: 0 }),
+          mergePersonaSettings(settings, {
+            pendingRedistillAdded: 0,
+            pendingRedistillRemoved: false,
+          }),
         );
       }
     } catch {
@@ -1852,6 +1858,30 @@ export const appRouter = router({
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         return getFilesByPersonaId(input.personaId, ctx.user.id);
+      }),
+
+    /**
+     * Removes one uploaded file, the records it brought in, and the
+     * bytes on disk. The persona is not rebuilt until the user asks.
+     */
+    delete: protectedProcedure
+      .input(z.object({ fileId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const deleted = await deletePersonaFile(input.fileId, ctx.user.id);
+        if (!deleted) throw new TRPCError({ code: "NOT_FOUND" });
+        if (deleted.fileKey) await storageDelete(deleted.fileKey);
+        await storageDeleteTree(
+          importUnpackRelKey(ctx.user.id, deleted.personaId, input.fileId),
+        );
+        try {
+          await afterRecordsRemoved({
+            personaId: deleted.personaId,
+            userId: ctx.user.id,
+          });
+        } catch (error) {
+          console.warn("[Import] The rebuild flag could not be updated:", error);
+        }
+        return { deletedRecords: deleted.deletedRecords };
       }),
   }),
 
@@ -5550,6 +5580,7 @@ export const appRouter = router({
 
   style: styleRouter,
   import: importRouter,
+  record: recordRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {

@@ -4611,6 +4611,49 @@ export async function deleteRecordsByFile(
   return deleted.length;
 }
 
+/**
+ * Deletes one uploaded file's row and the records it brought in.
+ *
+ * The disk bytes are not touched here — they go after the transaction
+ * commits, the same way `deletePersona` waits.
+ */
+export type DeletedPersonaFile = {
+  personaId: number;
+  fileKey: string | null;
+  originalName: string | null;
+  deletedRecords: number;
+};
+
+export async function deletePersonaFile(
+  fileId: number,
+  userId: number,
+): Promise<DeletedPersonaFile | null> {
+  const file = await getPersonaFileById(fileId, userId);
+  if (!file) return null;
+  const deletedRecords = await withTransaction(async (tx) => {
+    const records = await tx
+      .delete(collectedMessages)
+      .where(
+        and(
+          eq(collectedMessages.personaId, file.personaId),
+          eq(collectedMessages.userId, userId),
+          eq(collectedMessages.fileId, fileId),
+        ),
+      )
+      .returning({ id: collectedMessages.id });
+    await tx
+      .delete(personaFiles)
+      .where(and(eq(personaFiles.id, fileId), eq(personaFiles.userId, userId)));
+    return records.length;
+  });
+  return {
+    personaId: file.personaId,
+    fileKey: file.fileKey,
+    originalName: file.originalName,
+    deletedRecords,
+  };
+}
+
 export async function deleteRecordsBySource(
   personaId: number,
   userId: number,
