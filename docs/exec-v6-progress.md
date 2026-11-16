@@ -122,7 +122,7 @@
 | C1.3 | ✅ | 25d6d1a (map/render); 14274b4 (readers) | `normalize.test.ts` 含上表每一行：`[图片]`/`[Photo]`/`<Media omitted>`/`<图片>` image，`[表情]`/`[动画表情]`/`[Sticker]`/`[表情:狗狗探头]` sticker，`[语音]`/`[语音 12秒]`/`[Voice]` voice，`[视频]`/`[Video]` video，`[位置]`/`[Location]` location，`[链接]`/`[文件]`/`[音乐]` link/file/music，`[转账]`/`微信转账`/`[红包]` transfer/redpacket，撤回/recalled recall，拍了拍 pat，通话 call；`[语音通话] 时长 00:43:12` → `durationSec: 2592`；「那张图片很好看」为 null。`wechat-csv.test.ts`：夹具表情 `kind: "sticker"` `content: "[sticker]"`，语音 `"[voice:12]"` `meta.durationSec: 12`，通话 `"[call:voice:2592]"` `meta.durationSec: 2592`。`shared/records.test.ts` 每种 kind 中英各至少一例（sticker `［表情：狗狗探头］` / `[sticker: 狗狗探头]`，call `［语音通话 43 分 12 秒］`）。`shared/copy/copy.test.ts` 通过。`dataset.test.ts`「does not train on sticker, voice, or call tokens」：小满夹具经 `trainingTexts` 后语料不含 `[sticker:`/`[voice:`/`[call:` 开头。闸门 `299 passed \| 3 skipped (302)` 文件，`2781 passed \| 13 skipped (2794)` 用例。 |
 | C1.4 | ✅ | b80fc5f | `shared/scenes.test.ts`：夹具偶数 `sceneId` 标 `wechat_export`、奇数标 `sms` 后 `splitScenes` 切出的 id 序列与不标来源时相同。`db-store.test.ts`：同一秒同一句 `wechat_export` 与 `sms` 的 `idempotencyKey` 不同。临时库 `mirrai_v6_scratch` 上 `db-records.test.ts` 6 通过（原 5 条 + 新条）：两源各导入 3 条，`iterateRecords` 按时间交错 `wechat/sms/wechat/sms/wechat/sms`，12:04 的两句「嗯」都在。库已 `dropdb`。上传页列表等 C1.6。闸门 `303 passed \| 3 skipped (306)` 文件，`2798 passed \| 14 skipped (2812)` 用例；跳过 +1 见偏差 47。 |
 | C1.5 | ✅ | d2858ff | 临时库 `mirrai_v6_scratch`（push + migrate 到 0045）上 `db-records.test.ts` 7 通过：`writes only the new tail when the same platform is imported again` 夹具 user/assistant 5202 条，先写 4161（80%），再导全量写入 1041（后 20%），第三次写入 0；第二次后 `styleProfile.recordsVersion` 变，第三次 `measuredAt` 仍是 `2026-02-01T00:00:00.000Z`。库已 `dropdb`。`style-profile.test.ts` 4 通过：recordsVersion 未变时 `setPersonaStyleProfile` 0 次；变了写 1 次；蒸馏过的分身 `pendingRedistillAdded: 4`；写入 0 不记。`StaleRecordsBanner.test.tsx`：added=0 不渲染；added=8 显示「新增了 8 条记录。分身还是按之前的记录建的。」点「把新的读进去」调用 onRebuild。闸门 `305 passed \| 3 skipped (308)` 文件，`2805 passed \| 15 skipped (2820)` 用例。 |
-| C1.6 | ⬜ |  |  |
+| C1.6 | ✅ | 0b53159 (server); d856d0e (UI) | `routers.file-delete.test.ts` 2 通过：别人的文件 `NOT_FOUND`；`storageDelete` 收到 `personas/1/5/chat.txt`。`routers-v6/record.test.ts` 3 通过：别人的分身 `NOT_FOUND`；sources 带上 `chat.txt` / `wechat-txt-2line`；`deleteSource` 调 `deleteRecordsBySource(5,1,"sms")`。临时库 `mirrai_v6_scratch` 上 `db-records.test.ts` 8 通过：`deleting one file leaves the other file's rows` 先写 3+2 条，删文件 A 后 `countRecords=2`。库已 `dropdb`。`RecordSources.test.tsx`：空列表不渲染；有来源时点删除出确认框，确认后 `file.delete({ fileId: 11 })`。`db-delete-coverage.test.ts`、`db-isolation.test.ts` 通过。闸门 `308 passed \| 3 skipped (311)` 文件，`2817 passed \| 16 skipped (2833)` 用例。 |
 | C1.7 | ⬜ |  |  |
 | C1.8 | ⬜ |  |  |
 | C2.1 | ⬜ |  |  |
@@ -252,6 +252,8 @@
 | 48 | C1.5 | 蒸馏过的分身靠 `styleProfile.recordsVersion` 判断要不要提示重建 | `personas.settings.pendingRedistillAdded` 累加新写入条数；上传页读它 | 导入完成后立刻 `measureStyleProfile`，`recordsVersion` 会跟上新条数，分身是不是按旧记录建的从画像上看不出来。C1.6 的「记录少了」仍按手册去对 `countRecords` 与 `recordsVersion`。 |
 | 49 | C1.5 | 闸门跳过数不能增加 | 无 `DATABASE_URL` 时 `db-records.test.ts` 现 7 条 `skipIf`（原 6），跳过用例 15 | 新增的 80%/20% 增量测试同样 `skipIf`。带临时库跑这 7 条全过。与偏差 20、47 同类。 |
 | 50 | C1.5 | `setPersonaStyleProfile` 无库时抛 `DB not available` | 无库时返回 `false` | 导入在测量失败时仍应结束；测试 mock 没有库，抛错会打 warn。与 `getPersonaStyleProfile` 无库返回 `null` 对齐。 |
+| 51 | C1.6 | 闸门跳过数不能增加 | 无 `DATABASE_URL` 时 `db-records.test.ts` 现 8 条 `skipIf`（原 7），跳过用例 16 | 两个文件删一个的库测试同样 `skipIf`。带临时库跑这 8 条全过。与偏差 20、47、49 同类。 |
+| 52 | C1.6 | `deletePersonaFile` 返回匿名对象类型 | 具名 `DeletedPersonaFile` | `db-isolation` 的函数体扫描把 `Promise<{` 当成函数体开头（与偏差 19 同类）。 |
 
 ## 未验证清单
 
@@ -369,3 +371,11 @@ P0.1、P0.2、P0.3、P0.4、P0.6、P0.7 维持 ✅。P0.5 改回 ⬜。
 - 临时库 `mirrai_v6_scratch`（push + migrate 到 0045）上 `db-records.test.ts` 7 通过（5202 条 80%→4161，再导全量写入 1041，第三次 0；第二次 recordsVersion 变，第三次 `measuredAt` 不变）。库已删。`mirrai_live` 未碰。
 - 闸门 `305 passed | 3 skipped (308)` 文件，`2805 passed | 15 skipped (2820)` 用例，`all six steps passed`。相对 C1.4 闸门（303/3 文件、2798/14 用例）：通过文件 +2、通过用例 +7；跳过用例 +1（偏差 49）。
 - C1.5 标 ✅。C1.6 起未做。未验证清单无新增。待用户决定仍空。
+
+### WP1 · 实现会话 · 2026-11-16 · C1.6
+
+- 分支 `exec/v6`。无独立验收遗留项。C1.4 的上传页来源列表一并补上。
+- C1.6 两个提交：`0b53159` 服务端（`file.delete`、`record.sources` / `record.deleteSource`、`deletePersonaFile` 事务、磁盘在提交后删、`pendingRedistillRemoved`）；`d856d0e` 界面（`RecordSources`、确认框、记录少了横幅）。
+- 临时库 `mirrai_v6_scratch`（push + migrate 到 0045）上 `db-records.test.ts` 8 通过。库已删。`mirrai_live` 未碰。
+- 闸门 `308 passed | 3 skipped (311)` 文件，`2817 passed | 16 skipped (2833)` 用例，`all six steps passed`。相对 C1.5 闸门（305/3 文件、2805/15 用例）：通过文件 +3、通过用例 +12；跳过用例 +1（偏差 51）。
+- C1.6 标 ✅。C1.7 起未做。未验证清单无新增。待用户决定仍空。
