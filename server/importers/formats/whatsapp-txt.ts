@@ -11,6 +11,7 @@
 import { copy } from "@shared/copy";
 import type { ParsedRecord, RecordKind } from "@shared/records";
 import {
+  applyTextPlaceholder,
   cappedWarnings,
   collectSpeakers,
   headerRatio,
@@ -68,6 +69,7 @@ function inferDateOrder(dates: string[]): "ymd" | "mdy" | "dmy" {
   return "dmy";
 }
 
+/** WhatsApp attachment markers → kind. `<Media omitted>` is also in parseTextPlaceholder. */
 function kindFromAttachment(content: string): { kind: RecordKind; content: string; path?: string } {
   const attached = content.match(/<attached:\s*([^>]+)>/i);
   const fileAttached = content.match(/^(.+?)\s+\(file attached\)\s*$/i);
@@ -107,8 +109,9 @@ export async function parseWhatsappTxt(text: string, options: ParseOptions = {})
   const flush = () => {
     if (!current) return;
     current.content = current.content.replace(/\s+$/, "");
-    if (current.content || current.kind !== "text") records.push(current);
-    else skipped += 1;
+    if (current.content || current.kind !== "text") {
+      records.push(current.kind === "text" ? applyTextPlaceholder(current) : current);
+    } else skipped += 1;
     current = null;
   };
 

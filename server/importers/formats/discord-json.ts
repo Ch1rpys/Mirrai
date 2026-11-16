@@ -9,6 +9,7 @@
 import { copy } from "@shared/copy";
 import type { ParsedRecord, RecordKind } from "@shared/records";
 import {
+  applyTextPlaceholder,
   cappedWarnings,
   collectSpeakers,
   looksLikeSqlite,
@@ -27,6 +28,7 @@ function authorName(record: Record<string, unknown>): string {
   return jsonString(author, ["name", "displayName", "username"]);
 }
 
+/** DiscordChatExporter `stickers[]` / `attachments[]` → kind. */
 function kindFromDiscord(record: Record<string, unknown>, text: string): { kind: RecordKind; content: string; path?: string } {
   const stickers = asArray(record.stickers);
   const sticker = asObject(stickers[0]);
@@ -76,7 +78,7 @@ export async function parseDiscordJson(text: string, _options: ParseOptions = {}
       continue;
     }
     const stamp = typeof item.timestamp === "string" ? Date.parse(item.timestamp) : Number.NaN;
-    records.push({
+    const row = {
       speaker,
       content,
       timestamp: Number.isNaN(stamp) ? null : new Date(stamp),
@@ -84,7 +86,8 @@ export async function parseDiscordJson(text: string, _options: ParseOptions = {}
       lineNo: i + 1,
       sourceId: item.id != null ? String(item.id) : undefined,
       meta: path ? { path } : undefined,
-    });
+    };
+    records.push(kind === "text" ? applyTextPlaceholder(row) : row);
   }
   return {
     records,

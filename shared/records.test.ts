@@ -61,11 +61,58 @@ describe("recordText", () => {
 });
 
 describe("renderRecordContent", () => {
-  it("returns the stored token until C1.3 paints it", () => {
-    expect(renderRecordContent({ kind: "sticker", content: "[sticker:狗狗探头]" }, "zh")).toBe(
-      "[sticker:狗狗探头]",
-    );
+  it("leaves ordinary text and system lines alone", () => {
     expect(renderRecordContent({ kind: "text", content: "晚安" }, "en")).toBe("晚安");
+    expect(renderRecordContent({ kind: "system", content: "你已添加对方" }, "zh")).toBe("你已添加对方");
+  });
+
+  it.each([
+    [{ kind: "sticker", content: "[sticker:狗狗探头]" }, "zh", "［表情：狗狗探头］"],
+    [{ kind: "sticker", content: "[sticker:狗狗探头]" }, "en", "[sticker: 狗狗探头]"],
+    [{ kind: "sticker", content: "[sticker]" }, "zh", "［表情］"],
+    [{ kind: "sticker", content: "[sticker]" }, "en", "[sticker]"],
+    [{ kind: "image", content: "[image]" }, "zh", "［图片］"],
+    [{ kind: "image", content: "[image]" }, "en", "[image]"],
+    [{ kind: "voice", content: "[voice:12]" }, "zh", "［语音 12 秒］"],
+    [{ kind: "voice", content: "[voice:12]" }, "en", "[voice 12s]"],
+    [{ kind: "voice", content: "[voice]" }, "zh", "［语音］"],
+    [{ kind: "voice", content: "[voice]" }, "en", "[voice]"],
+    [{ kind: "video", content: "[video:8]" }, "zh", "［视频 8 秒］"],
+    [{ kind: "video", content: "[video:8]" }, "en", "[video 8s]"],
+    [{ kind: "video", content: "[video]" }, "zh", "［视频］"],
+    [{ kind: "video", content: "[video]" }, "en", "[video]"],
+    [{ kind: "location", content: "[location:星巴克]" }, "zh", "［位置：星巴克］"],
+    [{ kind: "location", content: "[location:星巴克]" }, "en", "[location: 星巴克]"],
+    [{ kind: "location", content: "[location]" }, "zh", "［位置］"],
+    [{ kind: "location", content: "[location]" }, "en", "[location]"],
+    [{ kind: "link", content: "[link:标题]" }, "zh", "［链接：标题］"],
+    [{ kind: "link", content: "[link:标题]" }, "en", "[link: 标题]"],
+    [{ kind: "link", content: "[link]" }, "zh", "［链接］"],
+    [{ kind: "link", content: "[link]" }, "en", "[link]"],
+    [{ kind: "music", content: "[music:歌]" }, "zh", "［音乐：歌］"],
+    [{ kind: "music", content: "[music:歌]" }, "en", "[music: 歌]"],
+    [{ kind: "music", content: "[music]" }, "zh", "［音乐］"],
+    [{ kind: "music", content: "[music]" }, "en", "[music]"],
+    [{ kind: "transfer", content: "[transfer:12.00]" }, "zh", "［转账：12.00］"],
+    [{ kind: "transfer", content: "[transfer:12.00]" }, "en", "[transfer: 12.00]"],
+    [{ kind: "transfer", content: "[transfer]" }, "zh", "［转账］"],
+    [{ kind: "transfer", content: "[transfer]" }, "en", "[transfer]"],
+    [{ kind: "redpacket", content: "[redpacket]" }, "zh", "［红包］"],
+    [{ kind: "redpacket", content: "[redpacket]" }, "en", "[red packet]"],
+    [{ kind: "pat", content: "[pat]" }, "zh", "［拍了拍］"],
+    [{ kind: "pat", content: "[pat]" }, "en", "[pat]"],
+    [{ kind: "recall", content: "[recall]" }, "zh", "［撤回］"],
+    [{ kind: "recall", content: "[recall]" }, "en", "[recalled]"],
+    [{ kind: "call", content: "[call:voice:2592]" }, "zh", "［语音通话 43 分 12 秒］"],
+    [{ kind: "call", content: "[call:voice:2592]" }, "en", "[voice call 43 min 12s]"],
+    [{ kind: "call", content: "[call:video:60]" }, "zh", "［视频通话 1 分］"],
+    [{ kind: "call", content: "[call:video:60]" }, "en", "[video call 1 min]"],
+    [{ kind: "file", content: "[file:note.txt]" }, "zh", "［文件：note.txt］"],
+    [{ kind: "file", content: "[file:note.txt]" }, "en", "[file: note.txt]"],
+    [{ kind: "file", content: "[file]" }, "zh", "［文件］"],
+    [{ kind: "file", content: "[file]" }, "en", "[file]"],
+  ] as const)("%j %s", (row, locale, expected) => {
+    expect(renderRecordContent(row, locale)).toBe(expected);
   });
 });
 

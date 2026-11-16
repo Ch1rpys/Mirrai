@@ -1,6 +1,7 @@
 import { copy } from "@shared/copy";
 import type { ParsedRecord } from "@shared/records";
 import {
+  applyTextPlaceholder,
   collectSpeakers,
   headerRatio,
   looksLikeJson,
@@ -13,7 +14,10 @@ import {
 } from "../normalize";
 import type { DetectResult, Importer, ImportSource, ParseOptions, ParseResult } from "../types";
 
-/** A speaker label in front of a message. Same rule as `parseTranscriptMessages`. */
+/**
+ * A speaker label in front of a message. Same rule as `parseTranscriptMessages`.
+ * Non-text bodies use the shared placeholders in `parseTextPlaceholder`.
+ */
 const SPEAKER = /^([^\s:：/\\]{1,20})\s*[:：]\s*(.*)$/;
 
 function splitTimestamp(line: string): { at?: string; rest: string } {
@@ -103,9 +107,10 @@ export async function parseGenericLine(
     });
   }
 
+  const placed = records.map(applyTextPlaceholder);
   return {
-    records,
-    speakers: collectSpeakers(records),
+    records: placed,
+    speakers: collectSpeakers(placed),
     warnings: warnings.slice(0, 50),
     skipped,
   };

@@ -24,12 +24,25 @@ describe("wechat-csv", () => {
       fromMe: true,
       content: "在的呀\n还没睡",
     });
-    expect(parsed.records.find((row) => row.kind === "image")?.fromMe).toBe(false);
-    expect(parsed.records.find((row) => row.kind === "sticker")?.fromMe).toBe(true);
-    expect(parsed.records.find((row) => row.kind === "voice")).toBeTruthy();
-    expect(parsed.records.find((row) => row.kind === "recall")).toBeTruthy();
-    expect(parsed.records.find((row) => row.kind === "pat")).toBeTruthy();
+    expect(parsed.records.find((row) => row.kind === "image")).toMatchObject({
+      fromMe: false,
+      content: "[image]",
+    });
+    expect(parsed.records.find((row) => row.kind === "sticker")).toMatchObject({
+      fromMe: true,
+      content: "[sticker]",
+    });
+    expect(parsed.records.find((row) => row.kind === "voice")).toMatchObject({
+      content: "[voice:12]",
+      meta: expect.objectContaining({ durationSec: 12 }),
+    });
+    expect(parsed.records.find((row) => row.kind === "recall")?.content).toBe("[recall]");
+    expect(parsed.records.find((row) => row.kind === "pat")?.content).toBe("[pat]");
     expect(parsed.records.find((row) => row.kind === "link")?.content).toContain("example.com");
+    expect(parsed.records.find((row) => row.kind === "call")).toMatchObject({
+      content: "[call:voice:2592]",
+      meta: expect.objectContaining({ mode: "voice", durationSec: 2592 }),
+    });
   });
 
   it("is detected from its sample with confidence of at least 0.6", () => {

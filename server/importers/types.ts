@@ -56,6 +56,8 @@ export interface ParseOptions {
   timeZone?: string | null;
   columnMap?: ColumnMap;
   chatId?: string;
+  /** Relative paths of media files unpacked from the same zip. */
+  mediaFiles?: string[];
 }
 
 export interface ParseWarning {

@@ -108,4 +108,104 @@ export const V6 = {
     zh: "按列对应的表格",
     en: "Table by column map",
   },
+  "record.duration.hour": {
+    zh: "{{n}} 小时",
+    en: "{{n}}h",
+  },
+  "record.duration.minute": {
+    zh: "{{n}} 分",
+    en: "{{n}} min",
+  },
+  "record.duration.second": {
+    zh: "{{n}} 秒",
+    en: "{{n}}s",
+  },
+  "record.kind.sticker": {
+    zh: "［表情：{{label}}］",
+    en: "[sticker: {{label}}]",
+  },
+  "record.kind.stickerBare": {
+    zh: "［表情］",
+    en: "[sticker]",
+  },
+  "record.kind.image": {
+    zh: "［图片］",
+    en: "[image]",
+  },
+  "record.kind.voice": {
+    zh: "［语音 {{duration}}］",
+    en: "[voice {{duration}}]",
+  },
+  "record.kind.voiceBare": {
+    zh: "［语音］",
+    en: "[voice]",
+  },
+  "record.kind.video": {
+    zh: "［视频 {{duration}}］",
+    en: "[video {{duration}}]",
+  },
+  "record.kind.videoBare": {
+    zh: "［视频］",
+    en: "[video]",
+  },
+  "record.kind.location": {
+    zh: "［位置：{{name}}］",
+    en: "[location: {{name}}]",
+  },
+  "record.kind.locationBare": {
+    zh: "［位置］",
+    en: "[location]",
+  },
+  "record.kind.link": {
+    zh: "［链接：{{title}}］",
+    en: "[link: {{title}}]",
+  },
+  "record.kind.linkBare": {
+    zh: "［链接］",
+    en: "[link]",
+  },
+  "record.kind.music": {
+    zh: "［音乐：{{title}}］",
+    en: "[music: {{title}}]",
+  },
+  "record.kind.musicBare": {
+    zh: "［音乐］",
+    en: "[music]",
+  },
+  "record.kind.transfer": {
+    zh: "［转账：{{amount}}］",
+    en: "[transfer: {{amount}}]",
+  },
+  "record.kind.transferBare": {
+    zh: "［转账］",
+    en: "[transfer]",
+  },
+  "record.kind.redpacket": {
+    zh: "［红包］",
+    en: "[red packet]",
+  },
+  "record.kind.pat": {
+    zh: "［拍了拍］",
+    en: "[pat]",
+  },
+  "record.kind.recall": {
+    zh: "［撤回］",
+    en: "[recalled]",
+  },
+  "record.kind.callVoice": {
+    zh: "［语音通话 {{duration}}］",
+    en: "[voice call {{duration}}]",
+  },
+  "record.kind.callVideo": {
+    zh: "［视频通话 {{duration}}］",
+    en: "[video call {{duration}}]",
+  },
+  "record.kind.file": {
+    zh: "［文件：{{name}}］",
+    en: "[file: {{name}}]",
+  },
+  "record.kind.fileBare": {
+    zh: "［文件］",
+    en: "[file]",
+  },
 } as const satisfies CopyTable;

@@ -1,6 +1,7 @@
 import { copy } from "@shared/copy";
 import type { ParsedRecord } from "@shared/records";
 import {
+  applyTextPlaceholder,
   cappedWarnings,
   collectSpeakers,
   looksLikeSqlite,
@@ -48,14 +49,16 @@ export async function parseWechatJson(text: string, options: ParseOptions = {}):
         : isSender === 0 || isSender === "0" || isSender === false
           ? false
           : undefined;
-    records.push({
-      speaker,
-      content,
-      timestamp: jsonTime(record, TIME_KEYS, options.timeZone),
-      kind: "text",
-      lineNo: i + 1,
-      fromMe,
-    });
+    records.push(
+      applyTextPlaceholder({
+        speaker,
+        content,
+        timestamp: jsonTime(record, TIME_KEYS, options.timeZone),
+        kind: "text",
+        lineNo: i + 1,
+        fromMe,
+      }),
+    );
   }
   return {
     records,

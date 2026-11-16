@@ -9,8 +9,9 @@
  * put 上午/下午 in the time field. Quoted bodies may span lines.
  */
 import { copy } from "@shared/copy";
-import type { ParsedRecord } from "@shared/records";
+import type { ParsedRecord, RecordKind } from "@shared/records";
 import {
+  applyTextPlaceholder,
   cappedWarnings,
   collectSpeakers,
   headerRatio,
@@ -19,10 +20,63 @@ import {
   looksLikeSqlite,
   looksLikeXml,
   looksLikeZip,
+  parseDurationSeconds,
   parseExportTime,
   yieldToEventLoop,
 } from "../normalize";
 import type { DetectResult, Importer, ImportSource, ParseOptions, ParseResult, ParseWarning } from "../types";
+
+/**
+ * LINE's own whole-message markers, checked 2026-11-16 against
+ * [LINE export converters](https://opnd.cc/line-chat-export-to-excel/)
+ * and a recorded Japanese file
+ * ([Qiita](https://qiita.com/shimajiroxyz/items/9a06a086ee9730ee3d55)).
+ */
+// i18n:allow-input — LINE export placeholders, not shown.
+const LINE_PLACEHOLDER: Record<string, RecordKind> = {
+  "[Photo]": "image",
+  "[写真]": "image",
+  "[Sticker]": "sticker",
+  "[スタンプ]": "sticker",
+  "[Video]": "video",
+  "[動画]": "video",
+  "[File]": "file",
+  "[ファイル]": "file",
+  "[Voice message]": "voice",
+  "[ボイスメッセージ]": "voice",
+};
+
+function parseLinePlaceholder(raw: string): {
+  kind: RecordKind;
+  content: string;
+  meta?: Record<string, unknown>;
+} | null {
+  const text = raw.trim();
+  const mapped = LINE_PLACEHOLDER[text];
+  if (mapped) {
+    return { kind: mapped, content: mapped === "sticker" ? "[sticker]" : `[${mapped}]` };
+  }
+  const call = text.match(/^(?:☎\s*)?(?:通話時間|Call time)\s+(\d{1,2}:\d{2}(?::\d{2})?)$/i);
+  if (call) {
+    const durationSec = parseDurationSeconds(call[1]) ?? 0;
+    return { kind: "call", content: `[call:voice:${durationSec}]`, meta: { mode: "voice", durationSec } };
+  }
+  if (/メッセージの送信を取り消しました|unsent a message/i.test(text)) {
+    return { kind: "recall", content: "[recall]" };
+  }
+  return null;
+}
+
+function applyLinePlaceholder(row: ParsedRecord): ParsedRecord {
+  const hit = parseLinePlaceholder(row.content);
+  if (!hit) return applyTextPlaceholder(row);
+  return {
+    ...row,
+    kind: hit.kind,
+    content: hit.content,
+    meta: hit.meta ? { ...row.meta, ...hit.meta } : row.meta,
+  };
+}
 
 const MSG = /^((?:上午|下午)?\d{1,2}:\d{2})\t([^\t]+)\t(.*)$/;
 
@@ -65,7 +119,7 @@ export async function parseLineTxt(text: string, options: ParseOptions = {}): Pr
       content = content.slice(1, -1);
     }
     current.content = content;
-    if (current.content) records.push(current);
+    if (current.content) records.push(applyLinePlaceholder(current));
     else skipped += 1;
     current = null;
     inQuote = false;

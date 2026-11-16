@@ -8,6 +8,7 @@
 import { copy } from "@shared/copy";
 import type { ParsedRecord, RecordKind } from "@shared/records";
 import {
+  applyTextPlaceholder,
   cappedWarnings,
   collectSpeakers,
   looksLikeSqlite,
@@ -37,7 +38,21 @@ function messageText(record: Record<string, unknown>): string {
   return telegramText(record.text_entities);
 }
 
-function kindAndContent(record: Record<string, unknown>, text: string): { kind: RecordKind; content: string } {
+/** Telegram `media_type` / `action` → kind. Checked against core.telegram.org/import-export. */
+const TELEGRAM_MEDIA_KIND: Record<string, RecordKind> = {
+  sticker: "sticker",
+  voice_message: "voice",
+  video_file: "video",
+  video_message: "video",
+  animation: "video",
+  audio_file: "music",
+  photo: "image",
+};
+
+function kindAndContent(
+  record: Record<string, unknown>,
+  text: string,
+): { kind: RecordKind; content: string; meta?: Record<string, unknown> } {
   const media = typeof record.media_type === "string" ? record.media_type : "";
   const path =
     typeof record.file === "string"
@@ -53,32 +68,48 @@ function kindAndContent(record: Record<string, unknown>, text: string): { kind: 
 
   if (record.type === "service" || record.action) {
     if (record.action === "phone_call" || record.action === "group_call") {
-      return { kind: "call", content: `[call:voice:${duration ?? 0}]` };
+      return {
+        kind: "call",
+        content: `[call:voice:${duration ?? 0}]`,
+        meta: { mode: "voice", durationSec: duration ?? 0 },
+      };
     }
     return { kind: "system", content: text || String(record.action ?? "system") };
   }
-  if (media === "sticker") {
-    return { kind: "sticker", content: emoji ? `[sticker:${emoji}]` : "[sticker]" };
+  if (media === "sticker" || TELEGRAM_MEDIA_KIND[media] === "sticker") {
+    return {
+      kind: "sticker",
+      content: emoji ? `[sticker:${emoji}]` : "[sticker]",
+      meta: emoji ? { label: emoji } : undefined,
+    };
   }
   if (media === "voice_message") {
-    return { kind: "voice", content: duration ? `[voice:${duration}]` : "[voice]" };
+    return {
+      kind: "voice",
+      content: duration ? `[voice:${duration}]` : "[voice]",
+      meta: duration != null ? { durationSec: duration } : undefined,
+    };
   }
   if (media === "video_file" || media === "video_message" || media === "animation") {
     return { kind: "video", content: "[video]" };
   }
   if (media === "audio_file") {
     const title = typeof record.title === "string" ? record.title : "";
-    return { kind: "music", content: title ? `[music:${title}]` : "[music]" };
+    return { kind: "music", content: title ? `[music:${title}]` : "[music]", meta: title ? { title } : undefined };
   }
   if (record.photo || media === "photo") {
     return { kind: "image", content: "[image]" };
   }
   if (record.location_information || record.place_name) {
     const place = typeof record.place_name === "string" ? record.place_name : text;
-    return { kind: "location", content: place ? `[location:${place}]` : "[location]" };
+    return {
+      kind: "location",
+      content: place ? `[location:${place}]` : "[location]",
+      meta: place ? { name: place } : undefined,
+    };
   }
   if (path && !text) {
-    return { kind: "file", content: `[file:${path}]` };
+    return { kind: "file", content: `[file:${path}]`, meta: { name: path } };
   }
   return { kind: "text", content: text };
 }
@@ -142,8 +173,8 @@ export async function parseTelegramJson(text: string, options: ParseOptions = {}
         (typeof item.author === "string" && item.author.trim()) ||
         "system";
       const body = messageText(item);
-      const { kind, content } = kindAndContent(item, body.trim());
-      if (!content && kind === "text") {
+      const mapped = kindAndContent(item, body.trim());
+      if (!mapped.content && mapped.kind === "text") {
         skipped += 1;
         warnings.push({ code: "skipped_line", lineNo });
         continue;
@@ -153,15 +184,16 @@ export async function parseTelegramJson(text: string, options: ParseOptions = {}
         parseExportTime(item.date as string | number | undefined, options.timeZone);
       const path =
         typeof item.file === "string" ? item.file : typeof item.photo === "string" ? item.photo : undefined;
-      records.push({
+      const row = {
         speaker,
-        content,
+        content: mapped.content,
         timestamp,
-        kind,
+        kind: mapped.kind,
         lineNo,
         sourceId: item.id != null ? String(item.id) : undefined,
-        meta: path ? { path } : undefined,
-      });
+        meta: { ...mapped.meta, ...(path ? { path } : {}) },
+      };
+      records.push(mapped.kind === "text" ? applyTextPlaceholder(row) : row);
     }
   }
   return {

@@ -11,6 +11,7 @@
 import { copy } from "@shared/copy";
 import type { ParsedRecord, RecordKind } from "@shared/records";
 import {
+  applyTextPlaceholder,
   cappedWarnings,
   collectSpeakers,
   looksLikeSqlite,
@@ -42,6 +43,7 @@ function firstPath(value: unknown): string | undefined {
   return first && typeof first.uri === "string" ? first.uri : undefined;
 }
 
+/** Instagram / Messenger attachment fields → kind. */
 function kindFromMeta(record: Record<string, unknown>, text: string): { kind: RecordKind; content: string; path?: string } {
   const photo = firstPath(record.photos);
   if (photo) return { kind: "image", content: "[image]", path: photo };
@@ -87,14 +89,15 @@ export async function parseMetaJson(text: string, _options: ParseOptions = {}): 
       warnings.push({ code: "skipped_line", lineNo: i + 1 });
       continue;
     }
-    records.push({
+    const row = {
       speaker,
       content,
       timestamp: parseUnixTime(Number(item.timestamp_ms)),
       kind,
       lineNo: i + 1,
       meta: path ? { path } : undefined,
-    });
+    };
+    records.push(kind === "text" ? applyTextPlaceholder(row) : row);
   }
   records.sort((a, b) => {
     const at = a.timestamp?.getTime() ?? 0;

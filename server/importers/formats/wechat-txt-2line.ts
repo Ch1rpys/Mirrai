@@ -3,7 +3,10 @@ import { blockHeaderRatio, looksLikeJson, looksLikeMht, looksLikeSqlite, looksLi
 import type { DetectResult, Importer, ImportSource, ParseOptions, ParseResult } from "../types";
 import { parseNameTimeBlocks, type BlockHeader } from "./blocks";
 
-/** WeChatMsg TxtExporter: `YYYY-MM-DD HH:mm:ss nickname` then the body. */
+/**
+ * WeChatMsg TxtExporter: `YYYY-MM-DD HH:mm:ss nickname` then the body.
+ * Non-text bodies use the shared placeholders in `parseTextPlaceholder`.
+ */
 const HEADER = /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(?:\s+(.+))?$/;
 
 export function isWechatTxt2LineHeader(line: string): boolean {

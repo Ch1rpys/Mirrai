@@ -12,9 +12,74 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { copy } from "@shared/copy";
-import type { ParsedRecord } from "@shared/records";
-import { cappedWarnings, collectSpeakers, looksLikeSqlite, looksLikeZip } from "../normalize";
+import type { ParsedRecord, RecordKind } from "@shared/records";
+import {
+  applyTextPlaceholder,
+  cappedWarnings,
+  collectSpeakers,
+  looksLikeSqlite,
+  looksLikeZip,
+} from "../normalize";
 import type { DetectResult, Importer, ImportSource, ParseOptions, ParseResult } from "../types";
+
+/**
+ * Native chat.db flags → kind. Checked 2026-11-16 against
+ * [macfor chat.db](https://kb.macfor.io/docs/communication/messages/chat-database)
+ * and [imessage-chatdb](https://pypi.org/project/imessage-chatdb/):
+ * `is_audio_message`, `associated_message_type` 1000 (sticker),
+ * URL balloon, attachments via `message_attachment_join`.
+ */
+const IMESSAGE_KIND: Record<string, RecordKind> = {
+  audio: "voice",
+  sticker: "sticker",
+  link: "link",
+  image: "image",
+  video: "video",
+  file: "file",
+};
+
+function tableColumns(db: DatabaseSync, table: string): Set<string> {
+  try {
+    const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    return new Set(rows.map((row) => row.name));
+  } catch {
+    return new Set();
+  }
+}
+
+function imessageKind(row: {
+  isAudio?: number | bigint;
+  associatedType?: number | bigint;
+  balloon?: string | null;
+  mime?: string | null;
+  isSticker?: number | bigint;
+  attachName?: string | null;
+}): { kind: RecordKind; content?: string; meta?: Record<string, unknown> } | null {
+  if (Number(row.isAudio ?? 0) === 1) {
+    return { kind: IMESSAGE_KIND.audio, content: "[voice]" };
+  }
+  if (Number(row.associatedType ?? 0) === 1000 || Number(row.isSticker ?? 0) === 1) {
+    return { kind: IMESSAGE_KIND.sticker, content: "[sticker]" };
+  }
+  if (typeof row.balloon === "string" && row.balloon.includes("URLBalloonProvider")) {
+    return { kind: IMESSAGE_KIND.link, content: "[link]" };
+  }
+  const mime = (row.mime ?? "").toLowerCase();
+  const name = row.attachName ?? "";
+  if (mime.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(name)) {
+    return { kind: IMESSAGE_KIND.image, content: "[image]", meta: name ? { path: name } : undefined };
+  }
+  if (mime.startsWith("video/") || /\.(mp4|mov|webm)$/i.test(name)) {
+    return { kind: IMESSAGE_KIND.video, content: "[video]", meta: name ? { path: name } : undefined };
+  }
+  if (mime.startsWith("audio/")) {
+    return { kind: IMESSAGE_KIND.voice, content: "[voice]", meta: name ? { path: name } : undefined };
+  }
+  if (name || mime) {
+    return { kind: IMESSAGE_KIND.file, content: name ? `[file:${name}]` : "[file]", meta: name ? { name } : undefined };
+  }
+  return null;
+}
 
 const APPLE_EPOCH = 978_307_200;
 
@@ -97,18 +162,36 @@ export async function parseImessageDb(bytes: Uint8Array, options: ParseOptions =
         )
         .all() as Array<{ id: number; title: string; count: number }>;
 
+      const cols = tableColumns(db, "message");
+      const attachCols = tableColumns(db, "attachment");
+      const extra = [
+        cols.has("is_audio_message") ? "m.is_audio_message AS isAudio" : "0 AS isAudio",
+        cols.has("associated_message_type")
+          ? "m.associated_message_type AS associatedType"
+          : "0 AS associatedType",
+        cols.has("balloon_bundle_id") ? "m.balloon_bundle_id AS balloon" : "NULL AS balloon",
+      ].join(", ");
+      const attachSelect = attachCols.size
+        ? `, a.mime_type AS mime, a.transfer_name AS attachName, a.is_sticker AS isSticker`
+        : `, NULL AS mime, NULL AS attachName, 0 AS isSticker`;
+      const attachJoin = attachCols.size
+        ? ` LEFT JOIN message_attachment_join maj ON maj.message_id = m.ROWID
+            LEFT JOIN attachment a ON a.ROWID = maj.attachment_id`
+        : "";
       const sql = options.chatId
         ? `SELECT m.ROWID AS id, m.text AS text, m.attributedBody AS attributedBody,
-                  m.is_from_me AS isFromMe, m.date AS date, h.id AS handle
+                  m.is_from_me AS isFromMe, m.date AS date, h.id AS handle, ${extra}${attachSelect}
            FROM message m
            LEFT JOIN handle h ON h.ROWID = m.handle_id
            JOIN chat_message_join j ON j.message_id = m.ROWID
+           ${attachJoin}
            WHERE j.chat_id = ?
            ORDER BY m.date ASC, m.ROWID ASC`
         : `SELECT m.ROWID AS id, m.text AS text, m.attributedBody AS attributedBody,
-                  m.is_from_me AS isFromMe, m.date AS date, h.id AS handle
+                  m.is_from_me AS isFromMe, m.date AS date, h.id AS handle, ${extra}${attachSelect}
            FROM message m
            LEFT JOIN handle h ON h.ROWID = m.handle_id
+           ${attachJoin}
            ORDER BY m.date ASC, m.ROWID ASC`;
       const rows = (
         options.chatId ? db.prepare(sql).all(Number(options.chatId)) : db.prepare(sql).all()
@@ -119,6 +202,12 @@ export async function parseImessageDb(bytes: Uint8Array, options: ParseOptions =
         isFromMe: number;
         date: number | bigint;
         handle: string | null;
+        isAudio?: number | bigint;
+        associatedType?: number | bigint;
+        balloon?: string | null;
+        mime?: string | null;
+        attachName?: string | null;
+        isSticker?: number | bigint;
       }>;
 
       const records: ParsedRecord[] = [];
@@ -130,20 +219,23 @@ export async function parseImessageDb(bytes: Uint8Array, options: ParseOptions =
             : Buffer.from(row.attributedBody as ArrayBuffer)
           : null;
         const text = (row.text && String(row.text).trim()) || parseAttributedBody(blob);
-        if (!text) {
+        const native = imessageKind(row);
+        if (!text && !native) {
           skipped += 1;
           continue;
         }
         const fromMe = Number(row.isFromMe) === 1;
-        records.push({
+        const parsed: ParsedRecord = {
           speaker: row.handle?.trim() || (fromMe ? "me" : "them"),
           fromMe,
-          content: text,
-          timestamp: appleToDate(Number(row.date)),
-          kind: "text",
+          content: native?.content ?? text,
+          timestamp: appleToDate(row.date),
+          kind: native?.kind ?? "text",
           lineNo: Number(row.id),
           sourceId: String(row.id),
-        });
+          meta: native?.meta,
+        };
+        records.push(parsed.kind === "text" ? applyTextPlaceholder(parsed) : parsed);
       }
       return {
         records,

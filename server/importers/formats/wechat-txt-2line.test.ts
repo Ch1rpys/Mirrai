@@ -21,8 +21,8 @@ describe("wechat-txt-2line", () => {
     });
     expect(parsed.records[0].timestamp?.toISOString()).toBe("2022-03-01T12:00:00.000Z");
     expect(parsed.records.find((row) => row.content.includes("他说：先这样"))?.speaker).toBe("小满");
-    const system = parsed.records.find((row) => row.kind === "system");
-    expect(system?.content).toBe("你撤回了一条消息");
+    const recalled = parsed.records.find((row) => row.kind === "recall");
+    expect(recalled?.content).toBe("[recall]");
   });
 
   it("is detected from its sample with confidence of at least 0.6", () => {

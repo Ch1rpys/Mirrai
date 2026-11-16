@@ -34,6 +34,12 @@ already reads.
   Covers a continuation line, a colon inside the content, and a line of
   content that looks like a message header.
 - Known variants: ASCII `:` or fullwidth `：`. Date particles `年/月/日`.
+- Kinds: whole-message placeholders via `parseTextPlaceholder`
+  (`[图片]` / `[Photo]` / `<Media omitted>` image; `[表情]` / `[Sticker]`
+  sticker; `[语音]` / `[Voice]` voice; `[视频]` video; `[位置]` location;
+  `[链接]` / `[文件]` / `[音乐]` link/file/music; `[转账]` / `微信转账` /
+  `[红包]` transfer/redpacket; 撤回 / recalled → recall; 拍了拍 → pat;
+  `[语音通话] 时长 HH:mm:ss` → call).
 
 ## wechat-txt-2line
 
@@ -45,6 +51,7 @@ A system message's header is the timestamp alone.
 - Sample (synthetic): `server/test-fixtures/exports/wechat-txt-2line/sample.txt`.
 - Known variants: body may be several lines; a colon inside the body is
   not a new header.
+- Kinds: same placeholders as generic-line (`parseTextPlaceholder`).
 
 ## wechat-txt-paren
 
@@ -55,6 +62,7 @@ Checked 2026-11-16 against
 the next lines.
 
 - Sample (synthetic): `server/test-fixtures/exports/wechat-txt-paren/sample.txt`.
+- Kinds: same placeholders as generic-line (`parseTextPlaceholder`).
 
 ## wechat-csv
 
@@ -63,9 +71,13 @@ Checked 2026-11-16 against WeChatMsg / PyWxDump MSG columns:
 and [PyWxDump message types](https://deepwiki.com/chenrgSix/PyWxDump/6.3-message-type-handling).
 
 Headers include `IsSender`, `StrContent`, `StrTime`, `Type`, `SubType`,
-`NickName`. `IsSender = 1` is the user. Type 1 text, 3 image, 34 voice,
-43 video, 47 sticker, 48 location, 49 app (subtype 5 link, 6 file, 2000
-transfer), 50 call, 10000 system (pat / recall from the wording).
+`NickName`. `IsSender = 1` is the user.
+
+Kinds (`TYPE_KIND` in `formats/wechat-csv.ts`): Type 1 text, 3 image, 34
+voice, 43 video, 47 sticker, 48 location, 49 app (subtype 6 file, 2000
+transfer, 2003 redpacket, else link / music), 50 call, 10000 system
+(pat / recall from the wording). Duration clocks on voice/call become
+`meta.durationSec`.
 
 - Sample (synthetic): `server/test-fixtures/exports/wechat-csv/sample.csv`.
 
@@ -77,6 +89,7 @@ already accepts (`sender` / `sender_name` / `from` / `content` / `text`
 object with `messages` / `data`, is read the same way.
 
 - Sample (synthetic): `server/test-fixtures/exports/wechat-json/sample.json`.
+- Kinds: same placeholders as generic-line (`parseTextPlaceholder`).
 
 ## qq-txt
 
@@ -88,6 +101,7 @@ The file starts with `消息记录` / `消息对象:`; each message is
 Hours may be one digit.
 
 - Sample (synthetic): `server/test-fixtures/exports/qq-txt/sample.txt`.
+- Kinds: same placeholders as generic-line (`parseTextPlaceholder`).
 
 ## qq-mht
 
@@ -101,6 +115,7 @@ Tencent does not publish the HTML schema. The file is MIME (`MIME-Version`,
 `上午` / `下午` are allowed.
 
 - Sample (synthetic): `server/test-fixtures/exports/qq-mht/sample.mht`.
+- Kinds: same placeholders as generic-line (`parseTextPlaceholder`).
 
 ## telegram-json
 
@@ -115,6 +130,10 @@ a string or an ordered array of strings and `{ type, text }` entities;
 `sticker_emoji`, `duration_seconds`. Service rows use `type: "service"`
 and `action` (`phone_call` becomes a call).
 
+Kinds (`TELEGRAM_MEDIA_KIND`): sticker / voice_message / video_* /
+animation / audio_file (music) / photo; `phone_call` → call with
+`duration_seconds`. A zip media path is kept on `meta.path`.
+
 - Sample (synthetic): `server/test-fixtures/exports/telegram-json/sample.json`.
 
 ## whatsapp-txt
@@ -126,7 +145,8 @@ iOS: `[D/M/Y, HH:mm:ss] Name: text`. Android: `D/M/Y, HH:mm - Name: text`.
 Date order follows the file (day > 12 vs month > 12 vs a 4-digit year).
 A header without `Name:` is a system message. Attachments are
 `<attached: file>` or `file (file attached)`. Continuation lines have no
-timestamp.
+timestamp. Image/video/audio/sticker/file kinds follow the attachment
+name or `… omitted` wording; `meta.path` is the attached filename.
 
 - Sample (synthetic): `server/test-fixtures/exports/whatsapp-txt/sample.txt`.
 
@@ -142,6 +162,10 @@ time field. Bodies with line breaks are wrapped in double quotes.
 
 - Sample (synthetic): `server/test-fixtures/exports/line-txt/sample.txt`.
 - Known limit: the file has no seconds; roundtrip compares times to the minute.
+- Kinds (`LINE_PLACEHOLDER`): `[Photo]`/`[写真]` image, `[Sticker]`/
+  `[スタンプ]` sticker, `[Video]`/`[動画]` video, `[File]`/`[ファイル]`
+  file, `[Voice message]`/`[ボイスメッセージ]` voice, `☎ 通話時間 mm:ss`
+  call, 取り消しました → recall.
 
 ## kakao-txt
 
@@ -154,6 +178,8 @@ Continuation lines have no clock.
 
 - Sample (synthetic): `server/test-fixtures/exports/kakao-txt/sample.txt`.
 - Known limit: the clock has no seconds; roundtrip compares times to the minute.
+- Kinds (`KAKAO_PLACEHOLDER`): `사진` / `사진 N장` image, `동영상`
+  video, `음성메시지` voice, `이모티콘` sticker.
 
 ## meta-json
 
@@ -163,7 +189,9 @@ A thread is `{ participants, messages }`. Each message has `sender_name`,
 `timestamp_ms`, optional `content`, `photos`, `audio_files`, `videos`,
 `share`. UTF-8 bytes were stored as latin1; the importer restores them
 with `Buffer.from(s, "latin1").toString("utf8")`. The array is newest
-first; records are sorted oldest first.
+first; records are sorted oldest first. `photos` → image, `audio_files`
+→ voice, `videos` → video, `sticker.uri` → sticker, `share.link` → link;
+the URI is `meta.path`.
 
 - Sample (synthetic): `server/test-fixtures/exports/meta-json/sample.json`.
 
@@ -173,7 +201,8 @@ Checked 2026-11-16 against DiscordChatExporter
 ([JsonMessageWriter.cs](https://github.com/Tyrrrz/DiscordChatExporter/blob/prime/DiscordChatExporter.Core/Exporting/JsonMessageWriter.cs)).
 A channel file is `{ guild, channel, messages }`. Each message has ISO
 `timestamp`, `content`, `author.name` (or `nickname`), `attachments[]`
-(`fileName` / `url`), `stickers[]` (`name`).
+(`fileName` / `url`), `stickers[]` (`name`). Stickers → sticker;
+attachments by extension → image/video/voice/file, path on `meta.path`.
 
 - Sample (synthetic): `server/test-fixtures/exports/discord-json/sample.json`.
 
@@ -183,7 +212,8 @@ Checked 2026-11-16 against SyncTech
 ([Fields in XML backup files](https://www.synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/)).
 Each `<sms>` is a self-closing tag: `address`, `date` (Unix ms), `type`
 (1 received, 2 sent), `body`, optional `contact_name`. Drafts (type 3+)
-are skipped. Newlines in `body` are `&#10;`.
+are skipped. Newlines in `body` are `&#10;`. Placeholder bodies use
+`parseTextPlaceholder`.
 
 - Sample (synthetic): `server/test-fixtures/exports/sms-xml/sample.xml`.
 
@@ -196,6 +226,10 @@ typedstream NSString, `is_from_me`, `date` as nanoseconds since
 2001-01-01, joined to `handle` and `chat` through `chat_message_join`.
 Read with Node's `node:sqlite`. Not a text format, so the Xiaoman
 roundtrip is a dedicated SQLite test rather than `renderFixture`.
+Kinds (`IMESSAGE_KIND`): `is_audio_message` → voice,
+`associated_message_type` 1000 / `is_sticker` → sticker, URL balloon →
+link, attachment MIME → image/video/voice/file. Columns that a synthetic
+sample does not have are selected as NULL.
 
 - Sample (synthetic): `server/test-fixtures/exports/imessage-db/chat.db`.
 
@@ -205,7 +239,7 @@ Any comma / tab / semicolon table. The wizard names the time, speaker,
 and content columns (optional: a from-me column and the value that means
 yes). A file whose headers are already `Time` / `Speaker` / `Content`
 (or the usual aliases) is guessed without a map. WeChat CSV (`IsSender`)
-is left to `wechat-csv`.
+is left to `wechat-csv`. Placeholder cells use `parseTextPlaceholder`.
 
 - Sample (synthetic): `server/test-fixtures/exports/column-map/sample.csv`.
 

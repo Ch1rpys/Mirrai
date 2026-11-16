@@ -6,8 +6,8 @@
  * records. Time is a wall clock in the user's zone, via `parseZoneless`.
  */
 import { parseZoneless } from "@shared/timezone";
-import type { ParsedRecord } from "@shared/records";
-import type { ImportSource, ParseResult, ParseWarning } from "./types";
+import type { ParsedRecord, RecordKind } from "@shared/records";
+import type { ImportSource, ParseOptions, ParseResult, ParseWarning } from "./types";
 
 const SQLITE_MAGIC = Buffer.from("SQLite format 3\0");
 const ZERO_WIDTH = /[\u200B-\u200D\u2060\uFEFF\u00AD]/g;
@@ -328,3 +328,125 @@ export function emptyParseResult(extra: Partial<ParseResult> = {}): ParseResult 
 export function cappedWarnings(warnings: ParseWarning[]): ParseWarning[] {
   return warnings.slice(0, 50);
 }
+
+export function parseDurationSeconds(raw: string): number | undefined {
+  const text = raw.trim();
+  const hms = text.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+  if (hms) return Number(hms[1]) * 3600 + Number(hms[2]) * 60 + Number(hms[3]);
+  const ms = text.match(/^(\d{1,2}):(\d{2})$/);
+  if (ms) return Number(ms[1]) * 60 + Number(ms[2]);
+  const sec = text.match(/^(\d+)\s*秒$/);
+  if (sec) return Number(sec[1]);
+  return undefined;
+}
+
+/**
+ * Turns a whole-message placeholder (`[图片]`, `[语音通话] 时长 00:43:12`)
+ * into a kind and a language-independent token. Running text that merely
+ * mentions 图片 stays text.
+ */
+// i18n:allow-input — placeholders as they appear in a text export, not shown.
+export function parseTextPlaceholder(raw: string): {
+  kind: RecordKind;
+  content: string;
+  meta?: Record<string, unknown>;
+} | null {
+  const text = raw.trim();
+  if (!text) return null;
+
+  if (/撤回了一条消息|recalled a message/i.test(text)) {
+    return { kind: "recall", content: "[recall]" };
+  }
+  if (/拍了拍/.test(text)) {
+    return { kind: "pat", content: "[pat]" };
+  }
+
+  const call = text.match(
+    /^\[(语音通话|视频通话)\](?:\s*(?:时长|通话时长)\s*(\d{1,2}:\d{2}(?::\d{2})?))?\s*$/,
+  );
+  if (call) {
+    const mode = call[1] === "视频通话" ? "video" : "voice";
+    const durationSec = call[2] ? parseDurationSeconds(call[2]) ?? 0 : 0;
+    return {
+      kind: "call",
+      content: `[call:${mode}:${durationSec}]`,
+      meta: { mode, durationSec },
+    };
+  }
+
+  if (/^(?:\[图片\]|\[Photo\]|<Media omitted>|<图片>)$/i.test(text)) {
+    return { kind: "image", content: "[image]" };
+  }
+
+  const stickerNamed = text.match(/^\[(?:表情|动画表情|Sticker):([^\]]+)\]$/i);
+  if (stickerNamed) {
+    const label = stickerNamed[1].trim();
+    return { kind: "sticker", content: `[sticker:${label}]`, meta: { label } };
+  }
+  if (/^(?:\[表情\]|\[动画表情\]|\[Sticker\])$/i.test(text)) {
+    return { kind: "sticker", content: "[sticker]" };
+  }
+
+  const voice = text.match(/^\[(?:语音|Voice)(?:\s+(\d+)\s*秒)?\]$/i);
+  if (voice) {
+    const durationSec = voice[1] ? Number(voice[1]) : undefined;
+    return {
+      kind: "voice",
+      content: durationSec != null ? `[voice:${durationSec}]` : "[voice]",
+      meta: durationSec != null ? { durationSec } : undefined,
+    };
+  }
+
+  if (/^(?:\[视频\]|\[Video\])$/i.test(text)) {
+    return { kind: "video", content: "[video]" };
+  }
+  if (/^(?:\[位置\]|\[Location\])$/i.test(text)) {
+    return { kind: "location", content: "[location]" };
+  }
+  if (/^\[链接\]$/i.test(text)) return { kind: "link", content: "[link]" };
+  if (/^\[文件\]$/i.test(text)) return { kind: "file", content: "[file]" };
+  if (/^\[音乐\]$/i.test(text)) return { kind: "music", content: "[music]" };
+  if (/^\[转账\]$|^微信转账$/.test(text)) return { kind: "transfer", content: "[transfer]" };
+  if (/^\[红包\]$/.test(text)) return { kind: "redpacket", content: "[redpacket]" };
+
+  return null;
+}
+
+export function applyTextPlaceholder(row: ParsedRecord): ParsedRecord {
+  const hit = parseTextPlaceholder(row.content);
+  if (!hit) return row;
+  return {
+    ...row,
+    kind: hit.kind,
+    content: hit.content,
+    meta: hit.meta ? { ...row.meta, ...hit.meta } : row.meta,
+  };
+}
+
+/**
+ * The unpacked media file whose basename matches `hint`, if any.
+ */
+export function mediaPathFor(
+  hint: string | undefined,
+  mediaFiles: string[] | undefined,
+): string | undefined {
+  if (!hint || !mediaFiles?.length) return undefined;
+  const base = hint.replace(/\\/g, "/").split("/").pop();
+  if (!base) return undefined;
+  const hit = mediaFiles.find((path) => path.replace(/\\/g, "/").split("/").pop() === base);
+  return hit;
+}
+
+export function attachMediaPaths(
+  records: ParsedRecord[],
+  mediaFiles: string[] | undefined,
+): ParsedRecord[] {
+  if (!mediaFiles?.length) return records;
+  return records.map((row) => {
+    const hint = typeof row.meta?.path === "string" ? row.meta.path : undefined;
+    const path = mediaPathFor(hint, mediaFiles);
+    if (!path) return row;
+    return { ...row, meta: { ...row.meta, path } };
+  });
+}
+

@@ -8,6 +8,7 @@
  * headers are `昵称(QQ号) YYYY-MM-DD H:mm:ss` (12-hour `上午`/`下午`
  * allowed), then the body until the next header. Tencent does not
  * publish the HTML schema; this is the shape those tools agree on.
+ * Non-text bodies use the shared placeholders in `parseTextPlaceholder`.
  */
 import { copy } from "@shared/copy";
 import { blockHeaderRatio, looksLikeMht, looksLikeSqlite, looksLikeZip } from "../normalize";

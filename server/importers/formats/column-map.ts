@@ -9,6 +9,7 @@ import { copy } from "@shared/copy";
 import type { ParsedRecord } from "@shared/records";
 import { detectDelimiter, headerIndex, parseCsv } from "../csv";
 import {
+  applyTextPlaceholder,
   cappedWarnings,
   collectSpeakers,
   looksLikeJson,
@@ -69,14 +70,16 @@ export async function parseColumnMap(text: string, options: ParseOptions = {}): 
       map.fromMe == null
         ? undefined
         : fromMeRaw === (map.fromMeTrue ?? "1") || fromMeRaw.toLowerCase() === "true";
-    records.push({
-      speaker,
-      fromMe,
-      content,
-      timestamp: parseExportTime(map.time != null ? row[map.time] : "", options.timeZone),
-      kind: "text",
-      lineNo: i + 2,
-    });
+    records.push(
+      applyTextPlaceholder({
+        speaker,
+        fromMe,
+        content,
+        timestamp: parseExportTime(map.time != null ? row[map.time] : "", options.timeZone),
+        kind: "text",
+        lineNo: i + 2,
+      }),
+    );
   }
   return {
     records,

@@ -6,7 +6,9 @@ import {
   collectSpeakers,
   looksLikeSqlite,
   looksLikeZip,
+  parseDurationSeconds,
   parseExportTime,
+  parseTextPlaceholder,
   yieldToEventLoop,
 } from "../normalize";
 import type { DetectResult, Importer, ImportSource, ParseOptions, ParseResult, ParseWarning } from "../types";
@@ -38,22 +40,51 @@ function kindFromType(type: number, subType: number, content: string): RecordKin
   return TYPE_KIND[type] ?? "text";
 }
 
-function tokenFor(kind: RecordKind, content: string): string {
-  if (kind === "text" || kind === "system") return content;
-  if (kind === "sticker") return content ? `[sticker:${content}]` : "[sticker]";
-  if (kind === "voice") return "[voice]";
-  if (kind === "video") return "[video]";
-  if (kind === "image") return "[image]";
-  if (kind === "location") return content ? `[location:${content}]` : "[location]";
-  if (kind === "file") return content ? `[file:${content}]` : "[file]";
-  if (kind === "music") return content ? `[music:${content}]` : "[music]";
-  if (kind === "transfer") return content ? `[transfer:${content}]` : "[transfer]";
-  if (kind === "redpacket") return "[redpacket]";
-  if (kind === "call") return "[call:voice:0]";
-  if (kind === "link") return content ? `[link:${content}]` : "[link]";
-  if (kind === "pat") return "[pat]";
-  if (kind === "recall") return "[recall]";
-  return content;
+function tokenFor(
+  kind: RecordKind,
+  content: string,
+): { content: string; meta?: Record<string, unknown> } {
+  if (kind === "text" || kind === "system") {
+    const hit = parseTextPlaceholder(content);
+    if (hit) return { content: hit.content, meta: hit.meta };
+    return { content };
+  }
+  if (kind === "sticker") {
+    const label = content.trim();
+    return {
+      content: label ? `[sticker:${label}]` : "[sticker]",
+      meta: label ? { label } : undefined,
+    };
+  }
+  if (kind === "voice") {
+    const sec = content.match(/(\d+)\s*秒/)?.[1];
+    const durationSec = sec ? Number(sec) : parseDurationSeconds(content);
+    return {
+      content: durationSec != null ? `[voice:${durationSec}]` : "[voice]",
+      meta: durationSec != null ? { durationSec } : undefined,
+    };
+  }
+  if (kind === "call") {
+    const clock = content.match(/(\d{1,2}:\d{2}(?::\d{2})?)/)?.[1];
+    const durationSec = clock ? parseDurationSeconds(clock) ?? 0 : 0;
+    return {
+      content: `[call:voice:${durationSec}]`,
+      meta: { mode: "voice", durationSec },
+    };
+  }
+  if (kind === "video") return { content: "[video]" };
+  if (kind === "image") return { content: "[image]" };
+  if (kind === "location") {
+    return { content: content ? `[location:${content}]` : "[location]", meta: content ? { name: content } : undefined };
+  }
+  if (kind === "file") return { content: content ? `[file:${content}]` : "[file]" };
+  if (kind === "music") return { content: content ? `[music:${content}]` : "[music]" };
+  if (kind === "transfer") return { content: content ? `[transfer:${content}]` : "[transfer]" };
+  if (kind === "redpacket") return { content: "[redpacket]" };
+  if (kind === "link") return { content: content ? `[link:${content}]` : "[link]" };
+  if (kind === "pat") return { content: "[pat]" };
+  if (kind === "recall") return { content: "[recall]" };
+  return { content };
 }
 
 export async function parseWechatCsv(text: string, options: ParseOptions = {}): Promise<ParseResult> {
@@ -103,21 +134,25 @@ export async function parseWechatCsv(text: string, options: ParseOptions = {}): 
           continue;
         }
       }
-      content = tokenFor(kind, rawContent);
-      if (!content) {
+      const token = tokenFor(kind, rawContent);
+      if (!token.content) {
         skipped += 1;
         continue;
       }
       const isSender = iSender >= 0 ? String(row[iSender]).trim() === "1" : undefined;
       const speaker = (iName >= 0 ? (row[iName] ?? "").trim() : "") || (isSender ? "me" : "them");
+      const resolvedKind =
+        kind === "text" || kind === "system"
+          ? (parseTextPlaceholder(rawContent)?.kind ?? kind)
+          : kind;
       records.push({
         speaker,
         fromMe: isSender,
-        content,
+        content: token.content,
         timestamp: parseExportTime(iTime >= 0 ? row[iTime] : "", options.timeZone),
-        kind,
+        kind: resolvedKind,
         lineNo,
-        meta: { type, subType },
+        meta: { type, subType, ...token.meta },
       });
     } catch {
       skipped += 1;

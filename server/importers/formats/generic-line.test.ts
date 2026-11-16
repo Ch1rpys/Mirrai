@@ -32,6 +32,19 @@ describe("parseGenericLine", () => {
     expect(parsed.speakers.map((row) => row.name).sort()).toEqual(["小满", "阿树"].sort());
   });
 
+  it("maps a whole-message placeholder onto a kind", async () => {
+    const parsed = await parseGenericLine(
+      "[2022-03-01 20:00:00] 小满：[图片]\n[2022-03-01 20:00:05] 阿树：[语音通话] 时长 00:43:12",
+      { timeZone: "Asia/Shanghai" },
+    );
+    expect(parsed.records[0]).toMatchObject({ kind: "image", content: "[image]" });
+    expect(parsed.records[1]).toMatchObject({
+      kind: "call",
+      content: "[call:voice:2592]",
+      meta: { mode: "voice", durationSec: 2592 },
+    });
+  });
+
   it("strips a leading BOM and skips a file that names nobody", async () => {
     const withBom = `\uFEFF[2022-03-01 20:00:00] 小满：在吗`;
     const parsed = await parseGenericLine(withBom);

@@ -8,9 +8,10 @@
  * `YYYY년 M월 D일` date rule; Mac CSV `Date,User,Message`.
  */
 import { copy } from "@shared/copy";
-import type { ParsedRecord } from "@shared/records";
+import type { ParsedRecord, RecordKind } from "@shared/records";
 import { headerIndex, parseCsv } from "../csv";
 import {
+  applyTextPlaceholder,
   cappedWarnings,
   collectSpeakers,
   headerRatio,
@@ -23,6 +24,45 @@ import {
   yieldToEventLoop,
 } from "../normalize";
 import type { DetectResult, Importer, ImportSource, ParseOptions, ParseResult, ParseWarning } from "../types";
+
+/**
+ * KakaoTalk whole-message markers, checked 2026-11-16 against
+ * [lalalab export guide](https://lalalab.kr/talk/guide/)
+ * (`사진`, `사진 N장`, `동영상`, `음성메시지`, `이모티콘`).
+ */
+const KAKAO_PLACEHOLDER: Record<string, RecordKind> = {
+  "사진": "image",
+  "동영상": "video",
+  "음성메시지": "voice",
+  "이모티콘": "sticker",
+};
+
+function parseKakaoPlaceholder(raw: string): {
+  kind: RecordKind;
+  content: string;
+  meta?: Record<string, unknown>;
+} | null {
+  const text = raw.trim();
+  if (/^사진(\s*\d+\s*장)?$/.test(text)) {
+    return { kind: "image", content: "[image]" };
+  }
+  const mapped = KAKAO_PLACEHOLDER[text];
+  if (mapped) {
+    return { kind: mapped, content: mapped === "sticker" ? "[sticker]" : `[${mapped}]` };
+  }
+  return null;
+}
+
+function applyKakaoPlaceholder(row: ParsedRecord): ParsedRecord {
+  const hit = parseKakaoPlaceholder(row.content);
+  if (!hit) return applyTextPlaceholder(row);
+  return {
+    ...row,
+    kind: hit.kind,
+    content: hit.content,
+    meta: hit.meta ? { ...row.meta, ...hit.meta } : row.meta,
+  };
+}
 
 const MOBILE =
   /^(\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\.\s*(?:오전|오후|AM|PM)\s*\d{1,2}:\d{2}(?::\d{2})?),\s*(.+?)\s*:\s*(.*)$/i;
@@ -68,13 +108,15 @@ async function parseKakaoCsv(text: string, options: ParseOptions): Promise<Parse
       skipped += 1;
       continue;
     }
-    records.push({
-      speaker,
-      content,
-      timestamp: parseExportTime(row[iTime], options.timeZone),
-      kind: "text",
-      lineNo: i + 2,
-    });
+    records.push(
+      applyKakaoPlaceholder({
+        speaker,
+        content,
+        timestamp: parseExportTime(row[iTime], options.timeZone),
+        kind: "text",
+        lineNo: i + 2,
+      }),
+    );
   }
   return { records, speakers: collectSpeakers(records), warnings: cappedWarnings(warnings), skipped };
 }
@@ -95,7 +137,7 @@ export async function parseKakaoTxt(text: string, options: ParseOptions = {}): P
   const flush = () => {
     if (!current) return;
     current.content = current.content.replace(/\s+$/, "");
-    if (current.content) records.push(current);
+    if (current.content) records.push(applyKakaoPlaceholder(current));
     else skipped += 1;
     current = null;
   };

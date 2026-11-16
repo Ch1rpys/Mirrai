@@ -9,6 +9,7 @@
 import { copy } from "@shared/copy";
 import type { ParsedRecord } from "@shared/records";
 import {
+  applyTextPlaceholder,
   cappedWarnings,
   collectSpeakers,
   looksLikeSqlite,
@@ -59,14 +60,16 @@ export async function parseSmsXml(text: string, _options: ParseOptions = {}): Pr
       continue;
     }
     const speaker = (contact && contact !== "(Unknown)" ? contact : address).trim() || "sms";
-    records.push({
-      speaker,
-      fromMe: type === "2",
-      content: body,
-      timestamp: parseUnixTime(Number(date)),
-      kind: "text" as const,
-      lineNo: i + 1,
-    });
+    records.push(
+      applyTextPlaceholder({
+        speaker,
+        fromMe: type === "2",
+        content: body,
+        timestamp: parseUnixTime(Number(date)),
+        kind: "text",
+        lineNo: i + 1,
+      }),
+    );
   }
   return {
     records,

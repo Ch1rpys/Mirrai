@@ -22,6 +22,22 @@ describe("line-txt", () => {
     );
   });
 
+  it("maps LINE photo, sticker, and call markers", async () => {
+    const text = [
+      "[LINE] Chat history with 小满",
+      "2022/03/01",
+      "20:00\t小满\t[写真]",
+      "20:01\t阿树\t[スタンプ]",
+      "20:02\t小满\t☎ 通話時間 0:07",
+    ].join("\n");
+    const parsed = await parseLineTxt(text, { timeZone: "Asia/Shanghai" });
+    expect(parsed.records.map((row) => row.kind)).toEqual(["image", "sticker", "call"]);
+    expect(parsed.records[2]).toMatchObject({
+      content: "[call:voice:7]",
+      meta: { mode: "voice", durationSec: 7 },
+    });
+  });
+
   it("is detected from its sample with confidence of at least 0.6", () => {
     const hits = detectFormat(importSourceFrom("chat.txt", Buffer.from(SAMPLE, "utf8"), SAMPLE));
     expect(hits[0]?.id).toBe("line-txt");

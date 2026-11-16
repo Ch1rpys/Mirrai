@@ -6,6 +6,7 @@ import { parseNameTimeBlocks, type BlockHeader } from "./blocks";
 /**
  * `昵称 (YYYY-MM-DD HH:mm:ss):` then the body, on the same line or the
  * next. WeChatDumpText writes the same shape without the trailing colon.
+ * Non-text bodies use the shared placeholders in `parseTextPlaceholder`.
  */
 const HEADER = /^(.+?)\s+\((\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}:\d{2})\):?\s*(.*)$/;
 

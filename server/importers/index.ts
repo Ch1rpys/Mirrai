@@ -26,7 +26,12 @@ import {
   unpackZip,
 } from "./archive";
 import { detectFormat, pickDetectedFormat } from "./detect";
-import { cappedWarnings, importSourceFrom, yieldToEventLoop } from "./normalize";
+import {
+  attachMediaPaths,
+  cappedWarnings,
+  importSourceFrom,
+  yieldToEventLoop,
+} from "./normalize";
 import { importerById } from "./registry";
 import { assignRoles, guessRoles } from "./roles";
 import type {
@@ -281,7 +286,9 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
     timeZone: (await getUserTimezone(input.userId)) ?? undefined,
     chatId: input.chatId,
     columnMap: input.columnMap,
+    mediaFiles: archiveReport.mediaFiles,
   });
+  parsed.records = attachMediaPaths(parsed.records, archiveReport.mediaFiles);
   const speakers = parsed.speakers.map((row) => row.name);
   const times = parsed.records
     .map((row) => row.timestamp)
@@ -536,7 +543,9 @@ export async function previewImport(input: StartImportInput): Promise<PreviewRes
     timeZone: (await getUserTimezone(input.userId)) ?? undefined,
     chatId: input.chatId,
     columnMap: input.columnMap,
+    mediaFiles: archiveReport.mediaFiles,
   });
+  parsed.records = attachMediaPaths(parsed.records, archiveReport.mediaFiles);
   const times = parsed.records
     .map((row) => row.timestamp)
     .filter((value): value is Date => value instanceof Date);

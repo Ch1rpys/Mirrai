@@ -24,6 +24,21 @@ describe("kakao-txt", () => {
     );
   });
 
+  it("maps Kakao photo, video, and sticker markers", async () => {
+    const text = [
+      "2022년 3월 1일 화요일",
+      "2022. 3. 1. 오후 8:00, 小满 : 사진",
+      "2022. 3. 1. 오후 8:01, 阿树 : 동영상",
+      "2022. 3. 1. 오후 8:02, 小满 : 이모티콘",
+    ].join("\n");
+    const parsed = await parseKakaoTxt(text, { timeZone: "Asia/Shanghai" });
+    expect(parsed.records.map((row) => ({ kind: row.kind, content: row.content }))).toEqual([
+      { kind: "image", content: "[image]" },
+      { kind: "video", content: "[video]" },
+      { kind: "sticker", content: "[sticker]" },
+    ]);
+  });
+
   it("reads a Mac CSV with Date,User,Message", async () => {
     const csv = ["Date,User,Message", "2022-03-01 20:00:00,小满,在吗", "2022-03-01 20:00:05,阿树,在的呀"].join("\n");
     const parsed = await parseKakaoTxt(csv, { timeZone: "Asia/Shanghai" });

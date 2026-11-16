@@ -6,6 +6,7 @@
  * a spoken account — lands in `collected_messages`. The table name
  * stays; the documents and the interface call it a record.
  */
+import { copy } from "./copy";
 
 export const RECORD_KINDS = [
   "text",
@@ -87,18 +88,105 @@ export function recordText(row: RecordContentRow): string {
   return row.content;
 }
 
+function formatDuration(seconds: number, locale: "zh" | "en"): string {
+  const sec = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const parts: string[] = [];
+  if (h) parts.push(copy(locale, "record.duration.hour", { n: h }));
+  if (m) parts.push(copy(locale, "record.duration.minute", { n: m }));
+  if (s || parts.length === 0) parts.push(copy(locale, "record.duration.second", { n: s }));
+  return parts.join(" ");
+}
+
+function tokenParts(content: string): { kind: string; parts: string[] } | null {
+  const match = content.trim().match(/^\[([a-z]+)(?::([^\]]*))?\]$/i);
+  if (!match) return null;
+  return {
+    kind: match[1].toLowerCase(),
+    parts: match[2] ? match[2].split(":") : [],
+  };
+}
+
 /**
  * Renders a stored token into words a person can read.
  *
  * Non-text rows store a language-independent token in `content`
- * (`[sticker:狗狗探头]`, `[call:voice:2592]`). The pretty form, with
- * copy(), arrives in C1.3; until then the token itself is what the
- * interface shows.
+ * (`[sticker:狗狗探头]`, `[call:voice:2592]`). The interface and the
+ * model see the copy() form.
  */
 export function renderRecordContent(
   row: RecordContentRow,
-  _locale: "zh" | "en" = "zh",
+  locale: "zh" | "en" = "zh",
 ): string {
+  const kind = row.kind ?? "text";
+  if (kind === "text" || kind === "system") return row.content;
+
+  const token = tokenParts(row.content);
+
+  if (kind === "sticker") {
+    const label =
+      (token?.parts.length ? token.parts.join(":") : "") ||
+      (typeof row.meta?.label === "string" ? row.meta.label : "");
+    return label
+      ? copy(locale, "record.kind.sticker", { label })
+      : copy(locale, "record.kind.stickerBare");
+  }
+  if (kind === "image") return copy(locale, "record.kind.image");
+  if (kind === "voice") {
+    const sec = Number(token?.parts[0] ?? row.meta?.durationSec);
+    return Number.isFinite(sec)
+      ? copy(locale, "record.kind.voice", { duration: formatDuration(sec, locale) })
+      : copy(locale, "record.kind.voiceBare");
+  }
+  if (kind === "video") {
+    const sec = Number(token?.parts[0] ?? row.meta?.durationSec);
+    return Number.isFinite(sec)
+      ? copy(locale, "record.kind.video", { duration: formatDuration(sec, locale) })
+      : copy(locale, "record.kind.videoBare");
+  }
+  if (kind === "location") {
+    const name = token?.parts[0] || (typeof row.meta?.name === "string" ? row.meta.name : "");
+    return name
+      ? copy(locale, "record.kind.location", { name })
+      : copy(locale, "record.kind.locationBare");
+  }
+  if (kind === "link") {
+    const title = token?.parts.join(":") || (typeof row.meta?.title === "string" ? row.meta.title : "");
+    return title
+      ? copy(locale, "record.kind.link", { title })
+      : copy(locale, "record.kind.linkBare");
+  }
+  if (kind === "music") {
+    const title = token?.parts.join(":") || (typeof row.meta?.title === "string" ? row.meta.title : "");
+    return title
+      ? copy(locale, "record.kind.music", { title })
+      : copy(locale, "record.kind.musicBare");
+  }
+  if (kind === "transfer") {
+    const amount = token?.parts[0] || (typeof row.meta?.amount === "string" ? row.meta.amount : "");
+    return amount
+      ? copy(locale, "record.kind.transfer", { amount })
+      : copy(locale, "record.kind.transferBare");
+  }
+  if (kind === "redpacket") return copy(locale, "record.kind.redpacket");
+  if (kind === "pat") return copy(locale, "record.kind.pat");
+  if (kind === "recall") return copy(locale, "record.kind.recall");
+  if (kind === "call") {
+    const mode = token?.parts[0] === "video" || row.meta?.mode === "video" ? "video" : "voice";
+    const sec = Number(token?.parts[1] ?? row.meta?.durationSec ?? 0);
+    const duration = formatDuration(Number.isFinite(sec) ? sec : 0, locale);
+    return copy(locale, mode === "video" ? "record.kind.callVideo" : "record.kind.callVoice", {
+      duration,
+    });
+  }
+  if (kind === "file") {
+    const name = token?.parts.join(":") || (typeof row.meta?.name === "string" ? row.meta.name : "");
+    return name
+      ? copy(locale, "record.kind.file", { name })
+      : copy(locale, "record.kind.fileBare");
+  }
   return row.content;
 }
 

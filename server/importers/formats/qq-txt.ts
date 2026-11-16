@@ -3,7 +3,10 @@ import { blockHeaderRatio, looksLikeJson, looksLikeMht, looksLikeSqlite, looksLi
 import type { DetectResult, Importer, ImportSource, ParseOptions, ParseResult } from "../types";
 import { parseNameTimeBlocks, type BlockHeader } from "./blocks";
 
-/** Official QQ message manager TXT: `YYYY-MM-DD H:mm:ss nickname` then the body. */
+/**
+ * Official QQ message manager TXT: `YYYY-MM-DD H:mm:ss nickname` then the body.
+ * Non-text bodies use the shared placeholders in `parseTextPlaceholder`.
+ */
 const HEADER = /^(\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{2}:\d{2})\s+(.+)$/;
 
 export function isQqTxtHeader(line: string): boolean {

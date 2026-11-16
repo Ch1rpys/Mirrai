@@ -5,6 +5,7 @@
  */
 import type { ParsedRecord, RecordKind } from "@shared/records";
 import {
+  applyTextPlaceholder,
   cappedWarnings,
   collectSpeakers,
   parseExportTime,
@@ -38,7 +39,7 @@ export async function parseNameTimeBlocks(
   const flush = () => {
     if (!current) return;
     current.content = body.join("\n").trim();
-    if (current.content) records.push(current);
+    if (current.content) records.push(applyTextPlaceholder(current));
     else skipped += 1;
     current = null;
     body.length = 0;
