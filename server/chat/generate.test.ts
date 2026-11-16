@@ -114,6 +114,7 @@ vi.mock("../_core/emotion", () => ({
   inferEmotionalState: vi.fn(async () => ({ state: "warm", source: "heuristic" })),
 }));
 
+import { copy } from "@shared/copy";
 import { runConversation } from "./service";
 import { planTurn } from "./generate";
 import { layerOverridesForEval, runEval } from "../eval/run";
@@ -222,8 +223,28 @@ beforeEach(() => {
   invokeWithProvider.mockResolvedValue("嗯。");
 });
 
+function withoutHeldOutExemplar(messages: Array<{ role: string; content: string }>) {
+  const heading = copy("zh", "prompt.exemplarsHeading");
+  return messages.map((message) => {
+    const headingAt = message.content.indexOf(heading);
+    const heldAt = message.content.indexOf(HELD_OUT);
+    if (headingAt === -1 || heldAt === -1) return message;
+    const openAt = message.content.lastIndexOf("<persona_data>", headingAt);
+    const closeAt = message.content.indexOf("</persona_data>", heldAt);
+    if (openAt === -1 || closeAt === -1) return message;
+    const before = message.content.slice(0, openAt).replace(/\n+$/, "");
+    const after = message.content.slice(closeAt + "</persona_data>".length).replace(/^\n+/, "");
+    return { ...message, content: [before, after].filter(Boolean).join("\n\n") };
+  });
+}
+
 describe("the shared generation path", () => {
   it("sends the same messages from a conversation and from evaluation, except the held-out line", async () => {
+    getCollectedMessagesForPersona.mockResolvedValue([
+      { id: 1, role: "user", content: "吃饭了吗", timestamp: NOW },
+      { id: 2, role: "assistant", content: HELD_OUT, timestamp: NOW },
+    ]);
+
     for await (const _ of runConversation({
       persona: persona(),
       userId: 1,
@@ -234,7 +255,7 @@ describe("the shared generation path", () => {
     })) {
       // drain
     }
-    const chatMessages = (invokeWithProvider.mock.calls[0][1] as { messages: unknown }).messages;
+    const chatMessages = (invokeWithProvider.mock.calls[0][1] as { messages: Array<{ role: string; content: string }> }).messages;
 
     invokeWithProvider.mockClear();
     await runEval({
@@ -250,29 +271,38 @@ describe("the shared generation path", () => {
       trainingTexts: ["在的"],
       now: NOW,
     });
-    const evalMessages = (invokeWithProvider.mock.calls[0][1] as { messages: unknown }).messages;
+    const evalMessages = (invokeWithProvider.mock.calls[0][1] as { messages: Array<{ role: string; content: string }> }).messages;
 
-    const withoutHeldOut = (messages: unknown) =>
-      JSON.parse(JSON.stringify(messages).replaceAll(HELD_OUT, ""));
-
-    expect(withoutHeldOut(evalMessages)).toEqual(withoutHeldOut(chatMessages));
+    expect(JSON.stringify(chatMessages)).toContain(HELD_OUT);
+    expect(JSON.stringify(evalMessages)).not.toContain(HELD_OUT);
+    expect(withoutHeldOutExemplar(chatMessages)).toEqual(evalMessages);
   });
 
   it("turns action sampling off with --without act", async () => {
-    const overrides = layerOverridesForEval({ without: ["act"] });
-    const plan = await planTurn({
-      persona: persona(),
+    const withActs = persona();
+    withActs.personaData = {
+      personality: "温柔",
+      actProfile: { samples: 80, unconditional: { tease: 80 }, buckets: [] },
+    };
+    const input = {
+      persona: withActs,
       userId: 1,
       userMessage: "吃饭了吗",
       history: CONTEXT,
       now: NOW,
-      locale: "zh",
+      locale: "zh" as const,
       seed: "eval:1:0:held",
-      layerOverrides: overrides,
       exclude: { texts: [HELD_OUT] },
+    };
+    const sampled = await planTurn(input);
+    const suppressed = await planTurn({
+      ...input,
+      layerOverrides: layerOverridesForEval({ without: ["act"] }),
     });
-    expect(plan.sampledAct).toBeNull();
-    expect(plan.layersUsed).not.toContain("act");
+    expect(sampled.sampledAct).toBe("tease");
+    expect(sampled.layersUsed).toContain("act");
+    expect(suppressed.sampledAct).toBeNull();
+    expect(suppressed.layersUsed).not.toContain("act");
   });
 });
 
