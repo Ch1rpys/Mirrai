@@ -56,4 +56,8 @@ export const V6 = {
     zh: "KakaoTalk 导出的记录",
     en: "KakaoTalk exported chat",
   },
+  "import.format.metaJson": {
+    zh: "Instagram / Messenger 的 JSON",
+    en: "Instagram / Messenger JSON",
+  },
 } as const satisfies CopyTable;

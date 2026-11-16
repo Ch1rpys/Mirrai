@@ -11,7 +11,8 @@ export type ImportFormatId =
   | "telegram-json"
   | "whatsapp-txt"
   | "line-txt"
-  | "kakao-txt";
+  | "kakao-txt"
+  | "meta-json";
 
 export type ImportSourceName =
   | "wechat_export"

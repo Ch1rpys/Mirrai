@@ -81,6 +81,16 @@ describe("detectFormat", () => {
     expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
   });
 
+  it("claims the meta-json sample as itself", () => {
+    const sample = readFileSync(
+      path.resolve(import.meta.dirname, "../test-fixtures/exports/meta-json/sample.json"),
+      "utf8",
+    );
+    const hits = detectFormat(source("message_1.json", sample));
+    expect(hits[0]?.id).toBe("meta-json");
+    expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
+  });
+
   it("claims the kakao-txt sample as itself", () => {
     const sample = readFileSync(
       path.resolve(import.meta.dirname, "../test-fixtures/exports/kakao-txt/sample.txt"),

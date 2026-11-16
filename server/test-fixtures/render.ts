@@ -18,7 +18,8 @@ export type FixtureFormat =
   | "telegram-json"
   | "whatsapp-txt"
   | "line-txt"
-  | "kakao-txt";
+  | "kakao-txt"
+  | "meta-json";
 
 function textRows(records: FixtureRecord[]): FixtureRecord[] {
   return records.filter((row) => row.kind === "text" && row.content.trim());
@@ -95,6 +96,15 @@ function merHour(stamp: string): { mer: "오전" | "오후"; hour: number; minut
   const mer = hour24 < 12 ? "오전" : "오후";
   const hour = hour24 % 12 === 0 ? 12 : hour24 % 12;
   return { mer, hour, minute };
+}
+
+function renderMetaJson(records: FixtureRecord[]): string {
+  const messages = textRows(records).map((row) => ({
+    sender_name: row.speaker,
+    timestamp_ms: row.timestamp.getTime(),
+    content: row.content.trim(),
+  }));
+  return JSON.stringify({ participants: [], messages }, null, 2);
 }
 
 function renderKakaoTxt(records: FixtureRecord[]): string {
@@ -201,6 +211,8 @@ export function renderFixture(records: FixtureRecord[], format: FixtureFormat | 
       return renderLineTxt(records);
     case "kakao-txt":
       return renderKakaoTxt(records);
+    case "meta-json":
+      return renderMetaJson(records);
     default:
       throw new Error(`renderFixture: format "${format}" is not implemented yet (C1.1)`);
   }

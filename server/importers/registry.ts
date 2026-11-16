@@ -9,6 +9,7 @@ import { telegramJsonImporter } from "./formats/telegram-json";
 import { whatsappTxtImporter } from "./formats/whatsapp-txt";
 import { lineTxtImporter } from "./formats/line-txt";
 import { kakaoTxtImporter } from "./formats/kakao-txt";
+import { metaJsonImporter } from "./formats/meta-json";
 import type { ImportFormatId, Importer } from "./types";
 
 /**
@@ -29,6 +30,7 @@ export const IMPORTERS: Importer[] = [
   whatsappTxtImporter,
   lineTxtImporter,
   kakaoTxtImporter,
+  metaJsonImporter,
 ];
 
 export function importerById(id: ImportFormatId | string): Importer | undefined {

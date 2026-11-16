@@ -142,3 +142,15 @@ Continuation lines have no clock.
 
 - Sample (synthetic): `server/test-fixtures/exports/kakao-txt/sample.txt`.
 - Known limit: the clock has no seconds; roundtrip compares times to the minute.
+
+## meta-json
+
+Checked 2026-11-16 against Instagram / Messenger data downloads
+([latin1 mojibake](https://stackoverflow.com/questions/50008296/facebook-json-badly-encoded)).
+A thread is `{ participants, messages }`. Each message has `sender_name`,
+`timestamp_ms`, optional `content`, `photos`, `audio_files`, `videos`,
+`share`. UTF-8 bytes were stored as latin1; the importer restores them
+with `Buffer.from(s, "latin1").toString("utf8")`. The array is newest
+first; records are sorted oldest first.
+
+- Sample (synthetic): `server/test-fixtures/exports/meta-json/sample.json`.
