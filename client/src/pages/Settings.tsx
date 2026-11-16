@@ -32,6 +32,7 @@ import GraduationModeSelect, {
 import DistillationModePicker from "@/components/DistillationModePicker";
 import { useLocale } from "@/contexts/LocaleContext";
 import SafetyTransparency from "@/components/SafetyTransparency";
+import EgressList from "@/components/v6/EgressList";
 import type { GraduationMode } from "@shared/graduation-mode";
 import {
   DEFAULT_DISTILLATION_MODE,
@@ -1440,6 +1441,8 @@ export function DataManagementTab() {
           </div>
         </section>
       )}
+
+      <EgressList />
 
       {/* Export */}
       <section className="surface p-5 sm:p-6">

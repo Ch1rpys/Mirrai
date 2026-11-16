@@ -985,6 +985,12 @@ export const en = {
       installDescription: "It gets its own window and desktop icon, and the interface still opens offline. Your data stays on this machine.",
       installing: "Installing…",
       installRejected: "The browser declined this install request",
+      egressTitle: "Where this app connects",
+      egressNote: "A read-only list. To turn a row off, follow the instruction on that row.",
+      egressDestination: "Connects to",
+      egressSends: "Sends",
+      egressOn: "On by default",
+      egressOff: "Off by default",
     },
   },
 

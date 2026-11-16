@@ -980,6 +980,12 @@ export const zh = {
       installDescription: "安装后会有独立窗口和桌面图标，界面在离线时也能打开。数据依然只保存在本机。",
       installing: "安装中...",
       installRejected: "浏览器没有接受这次安装请求",
+      egressTitle: "这个应用会连到哪里",
+      egressNote: "只读清单。要关掉某一项，看那一行写的办法。",
+      egressDestination: "连到哪",
+      egressSends: "发什么",
+      egressOn: "默认开",
+      egressOff: "默认关",
     },
   },
 
