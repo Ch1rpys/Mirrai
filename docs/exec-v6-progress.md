@@ -123,7 +123,7 @@
 | C1.4 | ✅ | b80fc5f | `shared/scenes.test.ts`：夹具偶数 `sceneId` 标 `wechat_export`、奇数标 `sms` 后 `splitScenes` 切出的 id 序列与不标来源时相同。`db-store.test.ts`：同一秒同一句 `wechat_export` 与 `sms` 的 `idempotencyKey` 不同。临时库 `mirrai_v6_scratch` 上 `db-records.test.ts` 6 通过（原 5 条 + 新条）：两源各导入 3 条，`iterateRecords` 按时间交错 `wechat/sms/wechat/sms/wechat/sms`，12:04 的两句「嗯」都在。库已 `dropdb`。上传页列表等 C1.6。闸门 `303 passed \| 3 skipped (306)` 文件，`2798 passed \| 14 skipped (2812)` 用例；跳过 +1 见偏差 47。 |
 | C1.5 | ✅ | d2858ff | 临时库 `mirrai_v6_scratch`（push + migrate 到 0045）上 `db-records.test.ts` 7 通过：`writes only the new tail when the same platform is imported again` 夹具 user/assistant 5202 条，先写 4161（80%），再导全量写入 1041（后 20%），第三次写入 0；第二次后 `styleProfile.recordsVersion` 变，第三次 `measuredAt` 仍是 `2026-02-01T00:00:00.000Z`。库已 `dropdb`。`style-profile.test.ts` 4 通过：recordsVersion 未变时 `setPersonaStyleProfile` 0 次；变了写 1 次；蒸馏过的分身 `pendingRedistillAdded: 4`；写入 0 不记。`StaleRecordsBanner.test.tsx`：added=0 不渲染；added=8 显示「新增了 8 条记录。分身还是按之前的记录建的。」点「把新的读进去」调用 onRebuild。闸门 `305 passed \| 3 skipped (308)` 文件，`2805 passed \| 15 skipped (2820)` 用例。 |
 | C1.6 | ✅ | 0b53159 (server); d856d0e (UI) | `routers.file-delete.test.ts` 2 通过：别人的文件 `NOT_FOUND`；`storageDelete` 收到 `personas/1/5/chat.txt`。`routers-v6/record.test.ts` 3 通过：别人的分身 `NOT_FOUND`；sources 带上 `chat.txt` / `wechat-txt-2line`；`deleteSource` 调 `deleteRecordsBySource(5,1,"sms")`。临时库 `mirrai_v6_scratch` 上 `db-records.test.ts` 8 通过：`deleting one file leaves the other file's rows` 先写 3+2 条，删文件 A 后 `countRecords=2`。库已 `dropdb`。`RecordSources.test.tsx`：空列表不渲染；有来源时点删除出确认框，确认后 `file.delete({ fileId: 11 })`。`db-delete-coverage.test.ts`、`db-isolation.test.ts` 通过。闸门 `308 passed \| 3 skipped (311)` 文件，`2817 passed \| 16 skipped (2833)` 用例。 |
-| C1.7 | ⬜ |  |  |
+| C1.7 | ✅ | 825c73c | `redact.test.ts` 9 通过：`13800138000`→`[phone]`、`12345678901` 不动；`+8613800138000`→`[phone]`；18 位含末位 X→`[id]`、17 位不动；`alice@example.com`→`[email]`、`not@valid` 不动；`4111111111111111`→`[card]`、`1234567890123` 不动；`琪琪`/`我妈` 稳定为 `[person-1]`/`[person-2]` 且 other 的 speaker 也换；`keepNames: ["小满"]` 时分身名不动。`import.test.ts`：`confirm` 带 `redaction.phones` 时写库内容为 `打 [phone]` / `在的`，`parseReport.redaction` 为 `phones: true` `replaced.phones: 1`，两处 JSON 都不含 `13800138000`。`ImportWizard.test.tsx`：勾选「手机号」后预览「打 13800138000」变成「打 [phone]」。闸门 `309 passed \| 3 skipped (312)` 文件，`2828 passed \| 16 skipped (2844)` 用例。 |
 | C1.8 | ⬜ |  |  |
 | C2.1 | ⬜ |  |  |
 | C2.2 | ⬜ |  |  |
@@ -254,6 +254,7 @@
 | 50 | C1.5 | `setPersonaStyleProfile` 无库时抛 `DB not available` | 无库时返回 `false` | 导入在测量失败时仍应结束；测试 mock 没有库，抛错会打 warn。与 `getPersonaStyleProfile` 无库返回 `null` 对齐。 |
 | 51 | C1.6 | 闸门跳过数不能增加 | 无 `DATABASE_URL` 时 `db-records.test.ts` 现 8 条 `skipIf`（原 7），跳过用例 16 | 两个文件删一个的库测试同样 `skipIf`。带临时库跑这 8 条全过。与偏差 20、47、49 同类。 |
 | 52 | C1.6 | `deletePersonaFile` 返回匿名对象类型 | 具名 `DeletedPersonaFile` | `db-isolation` 的函数体扫描把 `Promise<{` 当成函数体开头（与偏差 19 同类）。 |
+| 53 | C1.7 | `server/importers/redact.ts` 放实现 | 实现在 `shared/redact.ts`，`server/importers/redact.ts` 再导出 | 向导预览在客户端实时替换，必须和写库用同一份函数。 |
 
 ## 未验证清单
 
@@ -379,3 +380,11 @@ P0.1、P0.2、P0.3、P0.4、P0.6、P0.7 维持 ✅。P0.5 改回 ⬜。
 - 临时库 `mirrai_v6_scratch`（push + migrate 到 0045）上 `db-records.test.ts` 8 通过。库已删。`mirrai_live` 未碰。
 - 闸门 `308 passed | 3 skipped (311)` 文件，`2817 passed | 16 skipped (2833)` 用例，`all six steps passed`。相对 C1.5 闸门（305/3 文件、2805/15 用例）：通过文件 +3、通过用例 +12；跳过用例 +1（偏差 51）。
 - C1.6 标 ✅。C1.7 起未做。未验证清单无新增。待用户决定仍空。
+
+### WP1 · 实现会话 · 2026-11-16 · C1.7
+
+- 分支 `exec/v6`。无独立验收遗留项。
+- C1.7 一个提交：`825c73c`。勾选的手机号 / 身份证 / 邮箱 / 卡号 / 名字在写库前换成记号；`parseReport` 只记勾了哪些和替换次数；向导预览实时反映；分身名和用户名忽略；`TagInput` 提到共用组件。
+- 验收命令（无 `DATABASE_URL`）：`vitest run server/importers/redact.test.ts server/routers-v6/import.test.ts client/src/components/v6/ImportWizard.test.tsx` → 3 文件 25 通过。闸门 `309 passed | 3 skipped (312)` 文件，`2828 passed | 16 skipped (2844)` 用例，`all six steps passed`。相对 C1.6 闸门（308/3 文件、2817/16 用例）：通过文件 +1、通过用例 +11；跳过数不变。
+- `mirrai_live` 未碰。本条无临时库。
+- C1.7 标 ✅。WP1 可做条目全部完成。独立验收另开会话。未验证清单无新增。待用户决定仍空。
