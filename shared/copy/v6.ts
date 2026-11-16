@@ -32,4 +32,8 @@ export const V6 = {
     zh: "微信 JSON",
     en: "WeChat JSON",
   },
+  "import.format.qqTxt": {
+    zh: "QQ 消息管理器的 TXT",
+    en: "QQ message-manager TXT",
+  },
 } as const satisfies CopyTable;

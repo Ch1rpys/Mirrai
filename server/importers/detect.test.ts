@@ -61,6 +61,16 @@ describe("detectFormat", () => {
     expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
   });
 
+  it("claims the qq-txt sample as itself", () => {
+    const sample = readFileSync(
+      path.resolve(import.meta.dirname, "../test-fixtures/exports/qq-txt/sample.txt"),
+      "utf8",
+    );
+    const hits = detectFormat(source("chat.txt", sample));
+    expect(hits[0]?.id).toBe("qq-txt");
+    expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
+  });
+
   it("does not claim a prose paragraph", () => {
     const prose = [
       "The evening was quiet.",

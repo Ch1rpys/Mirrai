@@ -12,7 +12,8 @@ export type FixtureFormat =
   | "wechat-txt-2line"
   | "wechat-txt-paren"
   | "wechat-csv"
-  | "wechat-json";
+  | "wechat-json"
+  | "qq-txt";
 
 function textRows(records: FixtureRecord[]): FixtureRecord[] {
   return records.filter((row) => row.kind === "text" && row.content.trim());
@@ -39,6 +40,22 @@ function renderWechatTxtParen(records: FixtureRecord[]): string {
 function csvCell(value: string): string {
   if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
   return value;
+}
+
+/** i18n:allow-identifier — QQ TXT export banner; the parser matches these bytes. */
+function renderQqTxt(records: FixtureRecord[]): string {
+  const body = textRows(records)
+    .map((row) => `${formatShanghai(row.timestamp)} ${row.speaker}\n${row.content.trim()}`)
+    .join("\n\n");
+  return [
+    "消息记录（此消息记录为文本格式，不支持重新导入）",
+    "",
+    "================================================================",
+    "消息对象:小满",
+    "================================================================",
+    "",
+    body,
+  ].join("\n");
 }
 
 function renderWechatJson(records: FixtureRecord[]): string {
@@ -77,6 +94,8 @@ export function renderFixture(records: FixtureRecord[], format: FixtureFormat | 
       return renderWechatCsv(records);
     case "wechat-json":
       return renderWechatJson(records);
+    case "qq-txt":
+      return renderQqTxt(records);
     default:
       throw new Error(`renderFixture: format "${format}" is not implemented yet (C1.1)`);
   }

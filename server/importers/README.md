@@ -65,3 +65,14 @@ already accepts (`sender` / `sender_name` / `from` / `content` / `text`
 object with `messages` / `data`, is read the same way.
 
 - Sample (synthetic): `server/test-fixtures/exports/wechat-json/sample.json`.
+
+## qq-txt
+
+Checked 2026-11-16 against Tencent's own export
+([QQ 消息管理器](https://kf.qq.com/faq/161230MfMfqy161230q2ENVr.html))
+and the sample in [lomirus/qq-history-to-json](https://github.com/lomirus/qq-history-to-json).
+The file starts with `消息记录` / `消息对象:`; each message is
+`YYYY-MM-DD H:mm:ss nickname` then the body, separated by a blank line.
+Hours may be one digit.
+
+- Sample (synthetic): `server/test-fixtures/exports/qq-txt/sample.txt`.
