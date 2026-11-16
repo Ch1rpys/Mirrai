@@ -33,3 +33,13 @@ A system message's header is the timestamp alone.
 - Sample (synthetic): `server/test-fixtures/exports/wechat-txt-2line/sample.txt`.
 - Known variants: body may be several lines; a colon inside the body is
   not a new header.
+
+## wechat-txt-paren
+
+Checked 2026-11-16 against
+[WeChatDumpText](https://github.com/astarforbae/WeChatDumpText)
+(`发送者名称  (时间戳)` then the body) and the handbook's colon variant
+`昵称 (YYYY-MM-DD HH:mm:ss):`. Content may sit on the header line or
+the next lines.
+
+- Sample (synthetic): `server/test-fixtures/exports/wechat-txt-paren/sample.txt`.

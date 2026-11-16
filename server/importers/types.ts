@@ -1,6 +1,6 @@
 import type { ParsedRecord, RecordKind } from "@shared/records";
 
-export type ImportFormatId = "generic-line" | "wechat-txt-2line";
+export type ImportFormatId = "generic-line" | "wechat-txt-2line" | "wechat-txt-paren";
 
 export type ImportSourceName =
   | "wechat_export"

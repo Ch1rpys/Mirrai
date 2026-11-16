@@ -16,6 +16,8 @@ export interface BlockHeader {
   time: string;
   speaker: string;
   kind?: RecordKind;
+  /** Text that already sat on the header line. */
+  content?: string;
 }
 
 export async function parseNameTimeBlocks(
@@ -65,6 +67,7 @@ export async function parseNameTimeBlocks(
         kind: header.kind ?? "text",
         lineNo,
       };
+      if (header.content) body.push(header.content);
       continue;
     }
     if (current) {

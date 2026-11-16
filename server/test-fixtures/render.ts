@@ -7,7 +7,7 @@
 import type { FixtureRecord } from "./xiaoman";
 import { formatShanghai } from "./xiaoman";
 
-export type FixtureFormat = "generic-line" | "wechat-txt-2line";
+export type FixtureFormat = "generic-line" | "wechat-txt-2line" | "wechat-txt-paren";
 
 function textRows(records: FixtureRecord[]): FixtureRecord[] {
   return records.filter((row) => row.kind === "text" && row.content.trim());
@@ -25,12 +25,20 @@ function renderWechatTxt2Line(records: FixtureRecord[]): string {
     .join("\n\n");
 }
 
+function renderWechatTxtParen(records: FixtureRecord[]): string {
+  return textRows(records)
+    .map((row) => `${row.speaker} (${formatShanghai(row.timestamp)}): ${row.content.trim()}`)
+    .join("\n\n");
+}
+
 export function renderFixture(records: FixtureRecord[], format: FixtureFormat | string): string {
   switch (format) {
     case "generic-line":
       return renderGenericLine(records);
     case "wechat-txt-2line":
       return renderWechatTxt2Line(records);
+    case "wechat-txt-paren":
+      return renderWechatTxtParen(records);
     default:
       throw new Error(`renderFixture: format "${format}" is not implemented yet (C1.1)`);
   }

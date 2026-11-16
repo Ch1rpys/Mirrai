@@ -20,4 +20,8 @@ export const V6 = {
     zh: "微信 TXT（时间与昵称一行）",
     en: "WeChat TXT (time and name on one line)",
   },
+  "import.format.wechatTxtParen": {
+    zh: "微信 TXT（昵称与括号时间）",
+    en: "WeChat TXT (name and parenthesised time)",
+  },
 } as const satisfies CopyTable;

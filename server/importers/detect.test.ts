@@ -31,6 +31,16 @@ describe("detectFormat", () => {
     expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
   });
 
+  it("claims the wechat-txt-paren sample as itself", () => {
+    const sample = readFileSync(
+      path.resolve(import.meta.dirname, "../test-fixtures/exports/wechat-txt-paren/sample.txt"),
+      "utf8",
+    );
+    const hits = detectFormat(source("chat.txt", sample));
+    expect(hits[0]?.id).toBe("wechat-txt-paren");
+    expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
+  });
+
   it("does not claim a prose paragraph", () => {
     const prose = [
       "The evening was quiet.",
