@@ -16,7 +16,8 @@ export type FixtureFormat =
   | "qq-txt"
   | "qq-mht"
   | "telegram-json"
-  | "whatsapp-txt";
+  | "whatsapp-txt"
+  | "line-txt";
 
 function textRows(records: FixtureRecord[]): FixtureRecord[] {
   return records.filter((row) => row.kind === "text" && row.content.trim());
@@ -84,6 +85,26 @@ function renderQqTxt(records: FixtureRecord[]): string {
     "",
     body,
   ].join("\n");
+}
+
+/** i18n:allow-identifier — LINE export chat title; the parser matches these bytes. */
+function renderLineTxt(records: FixtureRecord[]): string {
+  const rows = textRows(records);
+  const lines: string[] = ["[LINE] Chat history with 小满", "Saved on: 2022/03/02 21:30", ""];
+  let lastDay = "";
+  for (const row of rows) {
+    const stamp = formatShanghai(row.timestamp);
+    const day = stamp.slice(0, 10).replace(/-/g, "/");
+    const clock = stamp.slice(11, 16);
+    if (day !== lastDay) {
+      lines.push(day);
+      lastDay = day;
+    }
+    const body = row.content.trim();
+    const field = body.includes("\n") ? `"${body}"` : body;
+    lines.push(`${clock}\t${row.speaker}\t${field}`);
+  }
+  return lines.join("\n");
 }
 
 function renderWhatsappTxt(records: FixtureRecord[]): string {
@@ -155,6 +176,8 @@ export function renderFixture(records: FixtureRecord[], format: FixtureFormat | 
       return renderTelegramJson(records);
     case "whatsapp-txt":
       return renderWhatsappTxt(records);
+    case "line-txt":
+      return renderLineTxt(records);
     default:
       throw new Error(`renderFixture: format "${format}" is not implemented yet (C1.1)`);
   }

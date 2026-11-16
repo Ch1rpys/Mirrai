@@ -48,4 +48,8 @@ export const V6 = {
     zh: "WhatsApp 导出的 TXT",
     en: "WhatsApp exported TXT",
   },
+  "import.format.lineTxt": {
+    zh: "LINE 导出的 TXT",
+    en: "LINE exported TXT",
+  },
 } as const satisfies CopyTable;

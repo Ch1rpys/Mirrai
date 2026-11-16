@@ -7,6 +7,7 @@ import { qqTxtImporter } from "./formats/qq-txt";
 import { qqMhtImporter } from "./formats/qq-mht";
 import { telegramJsonImporter } from "./formats/telegram-json";
 import { whatsappTxtImporter } from "./formats/whatsapp-txt";
+import { lineTxtImporter } from "./formats/line-txt";
 import type { ImportFormatId, Importer } from "./types";
 
 /**
@@ -25,6 +26,7 @@ export const IMPORTERS: Importer[] = [
   qqMhtImporter,
   telegramJsonImporter,
   whatsappTxtImporter,
+  lineTxtImporter,
 ];
 
 export function importerById(id: ImportFormatId | string): Importer | undefined {

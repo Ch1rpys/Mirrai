@@ -117,3 +117,16 @@ A header without `Name:` is a system message. Attachments are
 timestamp.
 
 - Sample (synthetic): `server/test-fixtures/exports/whatsapp-txt/sample.txt`.
+
+## line-txt
+
+Checked 2026-11-16 against LINE Help Center
+([Backing up chats as text files](https://help.line.me/line/smartphone/?contentId=20007388))
+and recorded exports
+([LINE_record2datatable](https://github.com/littlefish0331/LINE_record2datatable)).
+A date heading (`YYYY/M/D（weekday）` or `Fri, M/D/YYYY`) is followed by
+`HH:mm<TAB>name<TAB>content`. Japanese files put `上午` / `下午` in the
+time field. Bodies with line breaks are wrapped in double quotes.
+
+- Sample (synthetic): `server/test-fixtures/exports/line-txt/sample.txt`.
+- Known limit: the file has no seconds; roundtrip compares times to the minute.
