@@ -12,9 +12,10 @@ import {
 } from "@shared/suppressions";
 import { residueFlags } from "@shared/assistant-residue";
 import { copy } from "@shared/copy";
+import { isTextRecord } from "@shared/records";
 
 export interface MineSuppressionParams {
-  messages: Array<{ role: string; content: string; timestamp?: Date | string | null }>;
+  messages: Array<{ role: string; content: string; timestamp?: Date | string | null; kind?: string | null }>;
   locale?: "zh" | "en";
 }
 
@@ -35,7 +36,7 @@ function theirs(
   messages: MineSuppressionParams["messages"],
 ): Array<{ content: string; at?: string }> {
   return messages
-    .filter((row) => row.role === "assistant" && String(row.content ?? "").trim())
+    .filter((row) => row.role === "assistant" && isTextRecord(row) && String(row.content ?? "").trim())
     .map((row) => ({
       content: String(row.content).trim(),
       ...(row.timestamp ? { at: String(row.timestamp) } : {}),

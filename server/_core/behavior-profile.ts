@@ -23,6 +23,7 @@ import {
   type BehaviorSample,
 } from "@shared/behavior-profile";
 import { residueFlags } from "@shared/assistant-residue";
+import { isTextRecord } from "@shared/records";
 import { zonedHour } from "@shared/timezone";
 import * as db from "../db";
 
@@ -63,7 +64,7 @@ export interface RecordExchange {
  * sorted by the time they claim before anything is measured.
  */
 export function exchangesFromRecords(
-  rows: Array<{ role: string; content: string; timestamp: Date | null }>,
+  rows: Array<{ role: string; content: string; timestamp: Date | null; kind?: string | null }>,
   options?: { personaTimezone?: string | null },
 ): RecordExchange[] {
   const timezone = options?.personaTimezone ?? null;
@@ -74,6 +75,7 @@ export function exchangesFromRecords(
       role: row.role,
       at: row.timestamp as Date,
       content: row.content,
+      kind: row.kind,
     }))
     .sort((a, b) => a.at.getTime() - b.at.getTime());
 
@@ -108,8 +110,8 @@ export function exchangesFromRecords(
     }
     if (burst) {
       burst.count += 1;
-      burst.content = `${burst.content}\n${row.content}`.trim();
-    } else burst = { at: row.at, count: 1, content: row.content };
+      if (isTextRecord(row)) burst.content = `${burst.content}\n${row.content}`.trim();
+    } else burst = { at: row.at, count: 1, content: isTextRecord(row) ? row.content : "" };
   }
   flush();
 

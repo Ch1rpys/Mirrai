@@ -52,6 +52,17 @@ describe("reading the record", () => {
     expect(exchanges[0].burstSize).toBe(1);
   });
 
+  it("does not count a sticker token toward reply length", () => {
+    const exchanges = exchangesFromRecords([
+      record("user", "2026-05-20T10:00:00Z"),
+      { ...record("assistant", "2026-05-20T10:00:02Z", "[sticker:狗狗探头]"), kind: "sticker" },
+      record("assistant", "2026-05-20T10:00:03Z", "在"),
+    ]);
+    expect(exchanges).toHaveLength(1);
+    expect(exchanges[0].content).toBe("在");
+    expect(exchanges[0].burstSize).toBe(2);
+  });
+
   it("skips the rows that were never timed", () => {
     // A gap that was never recorded is not a gap of zero — it is a gap
     // nobody knows, and pretending otherwise would put a spike at zero

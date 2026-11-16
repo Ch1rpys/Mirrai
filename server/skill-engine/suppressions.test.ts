@@ -20,4 +20,16 @@ describe("counting subtractions", () => {
   it("does not write a forget style when none of the three appear", () => {
     expect(mineForgetStyles({ messages: lines(40, "嗯，在的") })).toEqual([]);
   });
+
+  it("does not count sticker rows toward the sample floor", () => {
+    const messages = [
+      ...lines(10, "嗯"),
+      ...Array.from({ length: 40 }, () => ({
+        role: "assistant",
+        content: "[sticker:狗狗探头]",
+        kind: "sticker" as const,
+      })),
+    ];
+    expect(mineSuppressions({ messages })).toEqual([]);
+  });
 });

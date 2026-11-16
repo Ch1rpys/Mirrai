@@ -6,6 +6,8 @@ import {
   trainingTexts,
   type EvalSourceMessage,
 } from "./dataset";
+import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
+import { buildCharNgramModel } from "./metrics";
 
 /**
  * Cutting the held-out cases.
@@ -347,6 +349,25 @@ describe("what the model is fitted on", () => {
     // The empty line is nothing to learn from, and the held-out line is
     // the answer.
     expect(texts).toEqual([]);
+  });
+
+  it("does not train on sticker, voice, or call tokens", () => {
+    const records: EvalSourceMessage[] = buildXiaomanRecords().flatMap((row) => {
+      if (row.role !== "user" && row.role !== "assistant") return [];
+      return [{
+        role: row.role,
+        content: row.content,
+        timestamp: row.timestamp,
+        kind: row.kind,
+      }];
+    });
+    const cases = buildEvalCases(records);
+    const texts = trainingTexts(records, cases);
+    expect(texts.some((text) => text.startsWith("[sticker:"))).toBe(false);
+    expect(texts.some((text) => text.startsWith("[voice:"))).toBe(false);
+    expect(texts.some((text) => text.startsWith("[call:"))).toBe(false);
+    const model = buildCharNgramModel(texts);
+    void model;
   });
 
   it("takes an identical line out of the training text as well", () => {

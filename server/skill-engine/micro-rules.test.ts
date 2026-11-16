@@ -121,6 +121,14 @@ describe("finding the smallest contrasts", () => {
     expect(pairs[0].b).toBe("随便你");
   });
 
+  it("does not contrast a sticker with a text line", () => {
+    const pairs = findContrastPairs([
+      { content: "随便", role: "persona", kind: "text" },
+      { content: "[sticker:随便]", role: "persona", kind: "sticker" },
+    ]);
+    expect(pairs).toHaveLength(0);
+  });
+
   it("finds the pair that differs by one character", () => {
     const pairs = findContrastPairs([
       { content: "我走了", role: "persona" },

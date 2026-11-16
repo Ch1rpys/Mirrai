@@ -13,6 +13,7 @@ import type { Persona } from "../../drizzle/schema";
 import type { LLMMessage, LLMProvider } from "../llm/types";
 import { llmService } from "../llm";
 import { copy } from "@shared/copy";
+import { isTextRecord } from "@shared/records";
 import { dayPartFromHour, normalizeActProfile, sampleAct } from "@shared/act-profile";
 import { isUserAsking, type SpeechAct } from "@shared/speech-acts";
 import { loadBehaviorProfile, seededRandom } from "../_core/behavior-profile";
@@ -237,7 +238,7 @@ export async function* executePlan(
         }
       }),
     );
-    let records: Array<{ role: string; content: string; id?: number }> = [];
+    let records: Array<{ role: string; content: string; id?: number; kind?: string | null }> = [];
     try {
       records = await db.getCollectedMessagesForPersona(input.persona.id, input.userId, { newest: true });
     } catch {
@@ -252,7 +253,7 @@ export async function* executePlan(
     const training =
       io.trainingTexts ??
       records
-        .filter((row) => row.role === "assistant")
+        .filter((row) => row.role === "assistant" && isTextRecord(row))
         .map((row) => row.content)
         .slice(-80);
     const picked = pickRerankWinner({

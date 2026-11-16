@@ -32,6 +32,7 @@ import {
   type MicroRuleEvidence,
 } from "@shared/micro-rules";
 import { copy, type Locale } from "@shared/copy";
+import { isTextRecord } from "@shared/records";
 import { asMaterial } from "../_core/material";
 import type { DistillationMode } from "@shared/distillation-modes";
 
@@ -43,6 +44,8 @@ export interface ContrastPairInput {
   timestamp?: Date | string | null;
   /** Who said it. Two messages can only be contrasted within one role. */
   role?: string;
+  /** Record kind. Tone mining only reads `text`. */
+  kind?: string | null;
 }
 
 /** Two messages that differ in a very small way. */
@@ -265,7 +268,9 @@ export function findContrastPairs(
       content: (message.content ?? "").trim(),
       normalised: stripNoise(message.content ?? ""),
       at: toTimestamp(message.timestamp),
+      kind: message.kind,
     }))
+    .filter((candidate) => isTextRecord(candidate))
     .filter((candidate) => candidate.content.length > 0)
     .filter((candidate) => candidate.content.length <= maxChars)
     .filter((candidate) => candidate.normalised.length > 0)

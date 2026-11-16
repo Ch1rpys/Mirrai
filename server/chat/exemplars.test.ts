@@ -42,4 +42,17 @@ describe("retrieving past replies", () => {
   it("cuts a line to one and a half of their median", () => {
     expect(truncateExemplar("abcdefghij", 4).length).toBeLessThanOrEqual(6);
   });
+
+  it("does not retrieve a sticker as a past reply", () => {
+    const found = retrieveExemplars({
+      userMessage: "今晚吃什么",
+      records: [
+        ...records,
+        { id: 7, role: "user", content: "今晚吃什么", kind: "text" },
+        { id: 8, role: "assistant", content: "[sticker:狗狗探头]", kind: "sticker" },
+      ],
+      minScore: 0.05,
+    });
+    expect(found.every((item) => !item.content.startsWith("[sticker:"))).toBe(true);
+  });
 });

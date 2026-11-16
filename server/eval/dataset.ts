@@ -16,6 +16,7 @@
  * nothing.
  */
 import { matchEmotionTrigger, type EmotionTriggerState } from "@shared/emotion-triggers";
+import { isTextRecord } from "@shared/records";
 import { isSpeechAct, labelSpeechActByRule, type SpeechAct } from "@shared/speech-acts";
 
 /** A message as the records store it. */
@@ -24,6 +25,7 @@ export interface EvalSourceMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: Date | null;
+  kind?: string | null;
 }
 
 /** One held-out exchange. */
@@ -122,7 +124,7 @@ export function buildEvalCases(
   const locale = options.locale ?? "zh";
   const sceneBreakMs = (options.sceneBreakHours ?? 6) * 3_600_000;
 
-  const assistantCount = messages.filter((m) => m.role === "assistant").length;
+  const assistantCount = messages.filter((m) => m.role === "assistant" && isTextRecord(m)).length;
   // A conversation with a single one of their lines leaves nothing to
   // measure against and nothing to learn the person's habits from.
   if (assistantCount < 2) return [];
@@ -148,6 +150,7 @@ export function buildEvalCases(
   for (let i = 0; i < messages.length; i++) {
     const message = messages[i];
     if (message.role !== "assistant") continue;
+    if (!isTextRecord(message)) continue;
     if (!message.content || message.content.trim().length < minExpectedChars) continue;
 
     // The context is cut at a scene break: a stretch of silence long
@@ -247,6 +250,7 @@ function toMessage(value: unknown): EvalSourceMessage | null {
     role,
     content,
     timestamp: timestamp && !Number.isNaN(timestamp.getTime()) ? timestamp : null,
+    kind: typeof record.kind === "string" ? record.kind : undefined,
   };
 }
 
@@ -263,7 +267,7 @@ export function trainingTexts(
 ): string[] {
   const heldOut = new Set(cases.map((c) => c.expected.content));
   return messages
-    .filter((m) => m.role === "assistant" && !heldOut.has(m.content))
+    .filter((m) => m.role === "assistant" && isTextRecord(m) && !heldOut.has(m.content))
     .map((m) => m.content)
     .filter((text) => text.trim().length > 0);
 }

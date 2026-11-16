@@ -8,6 +8,7 @@
  * model, and swapping the scorer later does not change the caller.
  */
 import { copy, type Locale } from "@shared/copy";
+import { isTextRecord } from "@shared/records";
 import { keywordCoverage, tokenize } from "./retrieval";
 
 export const EXEMPLAR_MIN_SCORE = 0.08;
@@ -18,6 +19,7 @@ export interface CollectedReply {
   role: string;
   content: string;
   timestamp?: Date | string | null;
+  kind?: string | null;
 }
 
 export interface Exemplar {
@@ -75,20 +77,24 @@ export function retrieveExemplars(params: {
   );
 
   const median = medianLength(
-    params.records.filter((row) => row.role === "assistant").map((row) => row.content),
+    params.records
+      .filter((row) => row.role === "assistant" && isTextRecord(row))
+      .map((row) => row.content),
   );
 
   const scored: Exemplar[] = [];
   for (let i = 0; i < params.records.length; i++) {
     const row = params.records[i];
     if (row.role !== "assistant") continue;
+    if (!isTextRecord(row)) continue;
     if (excludedIds.has(row.id)) continue;
     const content = row.content.trim();
     if (!content || excludedTexts.has(content)) continue;
     let previousUser = "";
     for (let j = i - 1; j >= 0; j--) {
-      if (params.records[j].role === "user" && params.records[j].content.trim()) {
-        previousUser = params.records[j].content.trim();
+      const prev = params.records[j];
+      if (prev.role === "user" && isTextRecord(prev) && prev.content.trim()) {
+        previousUser = prev.content.trim();
         break;
       }
     }

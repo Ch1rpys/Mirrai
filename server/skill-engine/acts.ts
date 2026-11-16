@@ -14,6 +14,7 @@ import {
   labelSpeechActByRule,
   type SpeechAct,
 } from "@shared/speech-acts";
+import { isTextRecord } from "@shared/records";
 import {
   ACT_MIN_SAMPLES,
   dayPartFromHour,
@@ -101,6 +102,7 @@ export async function buildActProfile(params: {
     role: string;
     content: string;
     timestamp?: Date | string | null;
+    kind?: string | null;
   }>;
   userId: number;
   locale?: Locale;
@@ -112,6 +114,7 @@ export async function buildActProfile(params: {
   const theirs: ActLabelInput[] = [];
   let previousUser: string | null = null;
   for (const row of params.messages) {
+    if (!isTextRecord(row)) continue;
     if (row.role === "user") {
       previousUser = row.content;
       continue;
