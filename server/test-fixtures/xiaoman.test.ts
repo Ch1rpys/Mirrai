@@ -49,6 +49,14 @@ function median(values: number[]): number {
   return (sorted[mid - 1]! + sorted[mid]!) / 2;
 }
 
+function logSigma(values: number[]): number {
+  const logs = values.filter((value) => value > 0).map((value) => Math.log(value));
+  if (logs.length < 2) return 0;
+  const mean = logs.reduce((sum, value) => sum + value, 0) / logs.length;
+  const variance = logs.reduce((sum, value) => sum + (value - mean) ** 2, 0) / logs.length;
+  return Math.sqrt(variance);
+}
+
 function percentile(values: number[], p: number): number {
   const sorted = [...values].sort((a, b) => a - b);
   if (sorted.length === 0) return 0;
@@ -116,6 +124,15 @@ describe("规模", () => {
     expect(records.filter((row) => row.role === "assistant").length).toBeGreaterThanOrEqual(XIAOMAN_TRUTH.taLinesMin);
     expect(records.length).toBeGreaterThan(2000);
     expect(records.length).toBeLessThan(8000);
+    const ordinary = derived.scenes.filter(
+      (scene) =>
+        (scene.slot === "evening" || scene.slot === "noon" || scene.slot === "afternoon") &&
+        scene.conflictEpisode == null,
+    );
+    for (const scene of ordinary) {
+      const userTurns = records.filter((row) => row.truth.sceneId === scene.id && row.role === "user").length;
+      expect(userTurns).toBe(scene.slot === "evening" ? XIAOMAN_TRUTH.roundsPerMainScene + 1 : XIAOMAN_TRUTH.roundsPerMainScene);
+    }
   });
 });
 
@@ -155,6 +172,21 @@ describe("早晚的往来", () => {
   it("closes evening scenes with 晚安 and keeps 早 as its own one-exchange scene", () => {
     const eveningGoodnight = records.filter((row) => row.truth.ritual === "晚安" && row.role === "assistant");
     expect(eveningGoodnight.length).toBeGreaterThanOrEqual(XIAOMAN_TRUTH.goodnight.min);
+    for (const scene of scenesBySlot("evening")) {
+      const rows = records
+        .filter((row) => row.truth.sceneId === scene.id)
+        .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      const tail = rows.slice(-2);
+      expect(tail[0]?.role).toBe("user");
+      expect(tail[0]?.content).toBe("晚安");
+      expect(tail[1]?.role).toBe("assistant");
+      expect(tail[1]?.truth.ritual).toBe("晚安");
+      const end = wallClock(scene.end);
+      const start = wallClock(scene.start);
+      expect(end.year).toBe(start.year);
+      expect(end.month).toBe(start.month);
+      expect(end.day).toBe(start.day);
+    }
     const mornings = scenesBySlot("morning");
     expect(mornings.length).toBeGreaterThanOrEqual(XIAOMAN_TRUTH.morning.min);
     for (const scene of mornings) {
@@ -305,6 +337,8 @@ describe("回复间隔", () => {
     expect(median(evening)).toBeLessThan(60);
     expect(median(daytime)).toBeGreaterThan(80);
     expect(median(daytime)).toBeLessThan(180);
+    expect(Math.abs(logSigma(evening) - XIAOMAN_TRUTH.replySigma)).toBeLessThan(0.08);
+    expect(Math.abs(logSigma(daytime) - XIAOMAN_TRUTH.replySigma)).toBeLessThan(0.08);
   });
 });
 
@@ -393,6 +427,25 @@ describe("表情包", () => {
     expect(sticker(XIAOMAN_TRUTH.stickerPeek).length).toBeGreaterThan(0);
     expect(sticker(XIAOMAN_TRUTH.stickerSigh).length).toBeGreaterThan(0);
     expect(records.filter((row) => row.kind === "sticker" && row.truth.state === "distant")).toHaveLength(0);
+    const burstRounds = (state: "happy" | "playful" | "melancholy") => {
+      const ids = new Set<number>();
+      for (const row of records) {
+        if (row.truth.state !== state || row.truth.burstId == null) continue;
+        ids.add(row.truth.burstId);
+      }
+      return ids.size;
+    };
+    const happyPlayfulRounds = burstRounds("happy") + burstRounds("playful");
+    expectRate(
+      sticker(XIAOMAN_TRUTH.stickerPeek).length,
+      happyPlayfulRounds,
+      XIAOMAN_TRUTH.stickerHappyPlayful,
+    );
+    expectRate(
+      sticker(XIAOMAN_TRUTH.stickerSigh).length,
+      burstRounds("melancholy"),
+      XIAOMAN_TRUTH.stickerMelancholy,
+    );
   });
 });
 
@@ -493,6 +546,20 @@ describe("追一句", () => {
     expect(follows.length).toBe(30);
     expectRate(follows.filter((row) => row.content === "人呢").length, follows.length, 0.7);
     expectRate(follows.filter((row) => row.content === "？").length, follows.length, 0.3);
+    for (const follow of follows) {
+      const earlier = records
+        .filter((row) => row.truth.sceneId === follow.truth.sceneId && row.timestamp < follow.timestamp && row.id !== follow.id)
+        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      const previousTa = earlier.find((row) => row.role === "assistant");
+      expect(previousTa).toBeTruthy();
+      const gapMin = (follow.timestamp.getTime() - previousTa!.timestamp.getTime()) / 60_000;
+      expect(gapMin).toBeGreaterThanOrEqual(6);
+      expect(gapMin).toBeLessThanOrEqual(12);
+      const userBetween = earlier.filter(
+        (row) => row.role === "user" && row.timestamp > previousTa!.timestamp && row.timestamp < follow.timestamp,
+      );
+      expect(userBetween).toHaveLength(0);
+    }
   });
 });
 

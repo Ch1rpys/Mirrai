@@ -141,7 +141,7 @@ export const XIAOMAN_TRUTH = {
   span: { from: "2022-03-01", to: "2024-10-31" },
   silence: { from: "2023-06-10", to: "2023-07-04", days: 25 },
   activeDays: 160,
-  roundsPerMainScene: 6,
+  roundsPerMainScene: 10,
   taLinesMin: 1400,
   slotEvening: 0.7,
   slotNoon: 0.2,
@@ -496,8 +496,16 @@ function delayMs(rng: Rng, slot: FixtureSlot): number {
   const median =
     slot === "noon" || slot === "wednesday" ? XIAOMAN_TRUTH.replyMedianDaySec : XIAOMAN_TRUTH.replyMedianEveningSec;
   const sampled = logNormal(rng, median, XIAOMAN_TRUTH.replySigma);
-  const capSec = slot === "evening" ? 90 : 400;
-  return Math.round(Math.min(capSec, Math.max(8, sampled)) * 1000);
+  return Math.round(Math.max(1, sampled) * 1000);
+}
+
+/** An evening delay that would cross midnight is cut at 23:59:50. The distribution itself is not capped. */
+function addDelay(t: Date, slot: FixtureSlot, rng: Rng): Date {
+  const next = addMs(t, delayMs(rng, slot));
+  if (slot !== "evening") return next;
+  const w = wallClock(t);
+  const limit = shanghaiDate(w.year, w.month, w.day, 23, 59, 50);
+  return next.getTime() > limit.getTime() ? limit : next;
 }
 
 function addMs(date: Date, ms: number): Date {
@@ -857,7 +865,7 @@ export function buildXiaomanRecords(options?: {
       scene.startMinute,
       scene.startSecond,
     );
-    const rounds = 6;
+    const rounds = XIAOMAN_TRUTH.roundsPerMainScene;
     const zaimeAt = zaimeSceneIds.has(scene.id) ? 2 : -1;
     for (let r = 0; r < rounds; r++) {
       const userKind = zaimeAt === r ? "zaime" : "generic";
@@ -867,7 +875,7 @@ export function buildXiaomanRecords(options?: {
         makeUserLine(rng, userKind),
         userKind === "zaime" ? { ritual: "在吗", locked: true } : {},
       );
-      t = addMs(t, delayMs(rng, scene.slot));
+      t = addDelay(t, scene.slot, rng);
       if (userKind === "zaime") {
         const reply = zaimeReplies[zaimeIdx++] ?? "在";
         addTa(scene, t, reply, { ritual: "在吗", locked: true, burstSize: 1, burstIndex: 0, act: "acknowledge" });
@@ -887,7 +895,7 @@ export function buildXiaomanRecords(options?: {
     }
     if (scene.slot === "evening") {
       addUser(scene, t, "晚安", { ritual: "晚安", locked: true });
-      t = addMs(t, delayMs(rng, "evening"));
+      t = addDelay(t, "evening", rng);
       const reply = goodnightReplies[goodnightIdx++] ?? "晚安";
       addTa(scene, t, reply, { ritual: "晚安", locked: true, burstSize: 1, burstIndex: 0, act: "affection" });
     }
@@ -975,19 +983,39 @@ export function buildXiaomanRecords(options?: {
     });
   };
 
-  const birthdayScene = main.find((s) => s.date.year === 2022 && s.date.month === 4 && s.date.day === 2) ?? main[0]!;
-  addTa(birthdayScene, shanghaiDate(2022, 4, 2, 21, 8, 12), XIAOMAN_TRUTH.factBirthday.text, {
-    locked: true,
-    ritual: "fact-birthday",
-    period: "p1",
-    burstSize: 1,
-    burstIndex: 0,
+  const birthdayHost = drafts.find((row) => {
+    if (row.role !== "assistant" || row.kind !== "text" || row.truth.locked) return false;
+    const w = wallClock(row.timestamp);
+    return w.year === 2022 && w.month === 4 && w.day === 2;
   });
-  const cafeScene = main.find((s) => s.date.year === 2022 && s.date.month === 3 && s.date.day === 12) ?? main[0]!;
-  addUser(cafeScene, shanghaiDate(2022, 3, 12, 20, 10, 0), XIAOMAN_TRUTH.factCafe.text, {
-    locked: true,
-    ritual: "fact-cafe",
+  if (birthdayHost) {
+    birthdayHost.content = XIAOMAN_TRUTH.factBirthday.text;
+    birthdayHost.truth = { ...birthdayHost.truth, locked: true, ritual: "fact-birthday", period: "p1" };
+  } else {
+    const birthdayScene = main.find((s) => s.date.year === 2022 && s.date.month === 4 && s.date.day === 2) ?? main[0]!;
+    addTa(birthdayScene, shanghaiDate(2022, 4, 2, 12, 0, 0), XIAOMAN_TRUTH.factBirthday.text, {
+      locked: true,
+      ritual: "fact-birthday",
+      period: "p1",
+      burstSize: 1,
+      burstIndex: 0,
+    });
+  }
+  const cafeHost = drafts.find((row) => {
+    if (row.role !== "user" || row.kind !== "text" || row.truth.locked) return false;
+    const w = wallClock(row.timestamp);
+    return w.year === 2022 && w.month === 3 && w.day === 12;
   });
+  if (cafeHost) {
+    cafeHost.content = XIAOMAN_TRUTH.factCafe.text;
+    cafeHost.truth = { ...cafeHost.truth, locked: true, ritual: "fact-cafe" };
+  } else {
+    const cafeScene = main.find((s) => s.date.year === 2022 && s.date.month === 3 && s.date.day === 12) ?? main[0]!;
+    addUser(cafeScene, shanghaiDate(2022, 3, 12, 12, 0, 0), XIAOMAN_TRUTH.factCafe.text, {
+      locked: true,
+      ritual: "fact-cafe",
+    });
+  }
 
   overwrite(
     takeTa(12),
@@ -1006,13 +1034,7 @@ export function buildXiaomanRecords(options?: {
     Array.from({ length: 15 }, () => "又咕咕了"),
     { ritual: "lexicon-咕咕" },
   );
-  const openLoopScene = main.find((s) => s.period === "p1" && s.state !== "distant") ?? main[0]!;
-  addTa(openLoopScene, shanghaiDate(openLoopScene.date.year, openLoopScene.date.month, openLoopScene.date.day, 21, 40, 10), XIAOMAN_TRUTH.openLoopTa, {
-    locked: true,
-    ritual: "open-loop",
-    burstSize: 1,
-    burstIndex: 0,
-  });
+  overwrite(takeTa(1), [XIAOMAN_TRUTH.openLoopTa], { ritual: "open-loop" });
 
   const genericUsers = shuffle(
     rng,
@@ -1024,17 +1046,21 @@ export function buildXiaomanRecords(options?: {
     openLoopUser.truth = { ...openLoopUser.truth, locked: true, ritual: "open-loop" };
   }
 
-  const stockHosts = main.filter((s) => s.state !== "distant").slice(0, 6);
-  stockHosts.forEach((scene, i) => {
-    const at = shanghaiDate(scene.date.year, scene.date.month, scene.date.day, 21, 12 + i, 0);
-    addUser(scene, at, i % 2 === 0 ? "今天股票怎么样" : "基金又跌了", { locked: true, ritual: "stock" });
-    addTa(scene, addMs(at, 40_000), XIAOMAN_TRUTH.stockReply, {
-      locked: true,
-      ritual: "stock",
-      act: "deflect",
-      burstSize: 1,
-      burstIndex: 0,
-    });
+  const stockUsers = genericUsers.slice(1, 7);
+  stockUsers.forEach((row, i) => {
+    row.content = i % 2 === 0 ? "今天股票怎么样" : "基金又跌了";
+    row.truth = { ...row.truth, locked: true, ritual: "stock" };
+    const idx = drafts.indexOf(row);
+    const reply = drafts.slice(idx + 1).find(
+      (candidate) =>
+        candidate.role === "assistant" &&
+        candidate.kind === "text" &&
+        !candidate.truth.locked &&
+        candidate.truth.state !== "distant",
+    );
+    if (!reply) return;
+    reply.content = XIAOMAN_TRUTH.stockReply;
+    reply.truth = { ...reply.truth, locked: true, ritual: "stock", act: "deflect" };
   });
 
   const multiUsers = genericUsers.slice(7, 47);
@@ -1056,51 +1082,6 @@ export function buildXiaomanRecords(options?: {
 
   polish(drafts, rng);
   fixBurstGaps(drafts);
-
-  const followPool = shuffle(
-    rng,
-    drafts.filter(
-      (row) =>
-        row.role === "assistant" &&
-        row.kind === "text" &&
-        row.truth.state !== "distant" &&
-        row.truth.slot !== "morning" &&
-        row.truth.slot !== "reconcile" &&
-        row.truth.slot !== "call",
-    ),
-  );
-  const followReplies = quota(rng, [
-    ["人呢", 21],
-    ["？", 9],
-  ]);
-  let followAdded = 0;
-  for (const target of followPool) {
-    if (followAdded >= 30) break;
-    const minutes = 6 + Math.floor(rng() * 7);
-    const at = addMs(target.timestamp, minutes * 60_000);
-    if (isSleepHour(at) || isWednesdayQuiet(at)) continue;
-    const wall = wallClock(at);
-    if (wall.hour > 23 || (wall.hour === 23 && wall.minute >= 50)) continue;
-    push({
-      role: "assistant",
-      speaker: XIAOMAN_NAME,
-      content: followReplies[followAdded] ?? "人呢",
-      timestamp: at,
-      kind: "text",
-      truth: {
-        sceneId: target.truth.sceneId,
-        period: target.truth.period,
-        state: target.truth.state,
-        slot: target.truth.slot,
-        locked: true,
-        ritual: "follow-up",
-        burstSize: 1,
-        burstIndex: 0,
-        act: "share",
-      },
-    });
-    followAdded++;
-  }
 
   const typoPool = shuffle(
     rng,
@@ -1137,15 +1118,15 @@ export function buildXiaomanRecords(options?: {
   });
 
   if (options?.withHarm) {
-    const harmHosts = main.slice(0, HARM_LINES.length);
-    harmHosts.forEach((scene, i) => {
-      addTa(scene, shanghaiDate(scene.date.year, scene.date.month, scene.date.day, 22, 10 + i, 0), HARM_LINES[i]!, {
-        locked: true,
-        ritual: "harm",
-        act: "tease",
-        burstSize: 1,
-        burstIndex: 0,
-      });
+    const harmHosts = shuffle(
+      rng,
+      drafts.filter(
+        (row) => row.role === "assistant" && row.kind === "text" && !row.truth.locked && row.truth.state !== "distant",
+      ),
+    ).slice(0, HARM_LINES.length);
+    harmHosts.forEach((row, i) => {
+      row.content = HARM_LINES[i]!;
+      row.truth = { ...row.truth, locked: true, ritual: "harm", act: "tease" };
     });
   }
 
@@ -1160,6 +1141,82 @@ export function buildXiaomanRecords(options?: {
     rng,
   );
   fixBurstGaps(drafts);
+  insertFollowUps();
+
+  function insertFollowUps(): void {
+    const replies = quota(rng, [
+      ["人呢", 21],
+      ["？", 9],
+    ]);
+    const anchors = shuffle(
+      rng,
+      drafts.filter(
+        (row) =>
+          row.role === "assistant" &&
+          row.kind === "text" &&
+          row.truth.state !== "distant" &&
+          row.truth.slot !== "morning" &&
+          row.truth.slot !== "reconcile" &&
+          row.truth.slot !== "call" &&
+          row.truth.ritual !== "晚安" &&
+          row.truth.ritual !== "typo" &&
+          row.truth.ritual !== "typo-fix" &&
+          (row.truth.burstIndex == null || row.truth.burstIndex === (row.truth.burstSize ?? 1) - 1),
+      ),
+    );
+    const used = new Set<number>();
+    let added = 0;
+    for (const target of anchors) {
+      if (added >= 30) break;
+      const sceneId = target.truth.sceneId;
+      if (used.has(sceneId)) continue;
+      const anchorAt = target.timestamp.getTime();
+      const later = drafts.filter((row) => row.truth.sceneId === sceneId && row.timestamp.getTime() > anchorAt);
+      if (target.truth.slot === "evening" && later.length === 0) continue;
+      const minutes = 6 + Math.floor(rng() * 7);
+      const delta = minutes * 60_000;
+      const at = new Date(anchorAt + delta);
+      if (isSleepHour(at) || isWednesdayQuiet(at)) continue;
+      const anchorWall = wallClock(target.timestamp);
+      const atWall = wallClock(at);
+      if (atWall.year !== anchorWall.year || atWall.month !== anchorWall.month || atWall.day !== anchorWall.day) continue;
+      if (later.length > 0) {
+        const latest = later.reduce((max, row) => Math.max(max, row.timestamp.getTime()), 0);
+        const shiftedWall = wallClock(new Date(latest + delta));
+        if (
+          shiftedWall.year !== anchorWall.year ||
+          shiftedWall.month !== anchorWall.month ||
+          shiftedWall.day !== anchorWall.day ||
+          isSleepHour(new Date(latest + delta)) ||
+          isWednesdayQuiet(new Date(latest + delta))
+        ) {
+          continue;
+        }
+        for (const row of later) row.timestamp = new Date(row.timestamp.getTime() + delta);
+      }
+      push({
+        role: "assistant",
+        speaker: XIAOMAN_NAME,
+        content: replies[added] ?? "人呢",
+        timestamp: at,
+        kind: "text",
+        truth: {
+          sceneId,
+          period: target.truth.period,
+          state: target.truth.state,
+          slot: target.truth.slot,
+          locked: true,
+          ritual: "follow-up",
+          burstSize: 1,
+          burstIndex: 0,
+          act: "share",
+        },
+      });
+      used.add(sceneId);
+      added++;
+    }
+    if (added !== 30) throw new Error(`xiaoman follow-ups: placed ${added}, need 30`);
+  }
 
   const ordered = [...drafts].sort((a, b) => {
     const dt = a.timestamp.getTime() - b.timestamp.getTime();
