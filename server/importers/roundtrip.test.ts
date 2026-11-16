@@ -19,6 +19,7 @@ const TEXT_FORMATS: Array<{ id: ImportFormatId & FixtureFormat; time: "second" }
   { id: "wechat-csv", time: "second" },
   { id: "wechat-json", time: "second" },
   { id: "qq-txt", time: "second" },
+  { id: "telegram-json", time: "second" },
 ];
 
 describe("importer roundtrip", () => {

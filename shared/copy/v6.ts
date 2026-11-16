@@ -36,4 +36,8 @@ export const V6 = {
     zh: "QQ 消息管理器的 TXT",
     en: "QQ message-manager TXT",
   },
+  "import.format.telegramJson": {
+    zh: "Telegram 的 JSON 导出",
+    en: "Telegram JSON export",
+  },
 } as const satisfies CopyTable;

@@ -6,7 +6,8 @@ export type ImportFormatId =
   | "wechat-txt-paren"
   | "wechat-csv"
   | "wechat-json"
-  | "qq-txt";
+  | "qq-txt"
+  | "telegram-json";
 
 export type ImportSourceName =
   | "wechat_export"

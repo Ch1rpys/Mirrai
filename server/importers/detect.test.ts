@@ -71,6 +71,16 @@ describe("detectFormat", () => {
     expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
   });
 
+  it("claims the telegram-json sample as itself", () => {
+    const sample = readFileSync(
+      path.resolve(import.meta.dirname, "../test-fixtures/exports/telegram-json/sample.json"),
+      "utf8",
+    );
+    const hits = detectFormat(source("result.json", sample));
+    expect(hits[0]?.id).toBe("telegram-json");
+    expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
+  });
+
   it("does not claim a prose paragraph", () => {
     const prose = [
       "The evening was quiet.",

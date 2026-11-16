@@ -4,6 +4,7 @@ import { wechatTxtParenImporter } from "./formats/wechat-txt-paren";
 import { wechatCsvImporter } from "./formats/wechat-csv";
 import { wechatJsonImporter } from "./formats/wechat-json";
 import { qqTxtImporter } from "./formats/qq-txt";
+import { telegramJsonImporter } from "./formats/telegram-json";
 import type { ImportFormatId, Importer } from "./types";
 
 /**
@@ -19,6 +20,7 @@ export const IMPORTERS: Importer[] = [
   wechatCsvImporter,
   wechatJsonImporter,
   qqTxtImporter,
+  telegramJsonImporter,
 ];
 
 export function importerById(id: ImportFormatId | string): Importer | undefined {

@@ -1,0 +1,113 @@
+{
+  "name": "小满",
+  "type": "personal_chat",
+  "id": 1001,
+  "messages": [
+    {
+      "id": 1,
+      "type": "message",
+      "date": "2022-03-01T20:00:00",
+      "date_unixtime": "1646136000",
+      "from": "小满",
+      "from_id": "user111",
+      "text": "在吗"
+    },
+    {
+      "id": 2,
+      "type": "message",
+      "date_unixtime": "1646136005",
+      "from": "阿树",
+      "from_id": "user222",
+      "text": ["在的呀\n还没睡"]
+    },
+    {
+      "id": 3,
+      "type": "message",
+      "date_unixtime": "1646136012",
+      "from": "小满",
+      "from_id": "user111",
+      "text": [{ "type": "plain", "text": "他说：先这样" }]
+    },
+    {
+      "id": 4,
+      "type": "message",
+      "date_unixtime": "1646136020",
+      "from": "阿树",
+      "from_id": "user222",
+      "text": "好"
+    },
+    {
+      "id": 5,
+      "type": "message",
+      "date_unixtime": "1646136060",
+      "from": "小满",
+      "from_id": "user111",
+      "text": "内容里写着 2022-03-01 20:02:00 这不是新消息"
+    },
+    {
+      "id": 6,
+      "type": "message",
+      "date_unixtime": "1646136068",
+      "from": "阿树",
+      "from_id": "user222",
+      "text": "看到了"
+    },
+    {
+      "id": 7,
+      "type": "message",
+      "date_unixtime": "1646177700",
+      "from": "小满",
+      "from_id": "user111",
+      "media_type": "sticker",
+      "sticker_emoji": "🐶",
+      "file": "stickers/sticker.webp",
+      "text": ""
+    },
+    {
+      "id": 8,
+      "type": "message",
+      "date_unixtime": "1646177710",
+      "from": "阿树",
+      "from_id": "user222",
+      "media_type": "voice_message",
+      "duration_seconds": 12,
+      "file": "voice_messages/audio.ogg",
+      "text": ""
+    },
+    {
+      "id": 9,
+      "type": "message",
+      "date_unixtime": "1646193600",
+      "from": "小满",
+      "from_id": "user111",
+      "photo": "photos/photo.jpg",
+      "text": ""
+    },
+    {
+      "id": 10,
+      "type": "message",
+      "date_unixtime": "1646193620",
+      "from": "阿树",
+      "from_id": "user222",
+      "text": "吃"
+    },
+    {
+      "id": 11,
+      "type": "service",
+      "date_unixtime": "1646227800",
+      "actor": "小满",
+      "actor_id": "user111",
+      "action": "phone_call",
+      "duration_seconds": 43,
+      "text": ""
+    },
+    {
+      "id": 12,
+      "type": "message",
+      "date_unixtime": "1646227840",
+      "from": "阿树",
+      "from_id": "user222",
+      "text": "在"
+    }
+  ]
+}

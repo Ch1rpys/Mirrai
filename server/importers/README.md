@@ -76,3 +76,18 @@ The file starts with `消息记录` / `消息对象:`; each message is
 Hours may be one digit.
 
 - Sample (synthetic): `server/test-fixtures/exports/qq-txt/sample.txt`.
+
+## telegram-json
+
+Checked 2026-11-16 against the official
+[Telegram Data Export Schema](https://core.telegram.org/import-export).
+A single-chat file is `{ name, type, id, messages }`. A full takeout wraps
+chats in `chats.list`. Each message has `date` (ISO, no zone) and
+`date_unixtime` (unix seconds as a string); `from` / `from_id`; `text` as
+a string or an ordered array of strings and `{ type, text }` entities;
+`media_type` one of `sticker`, `voice_message`, `video_message`,
+`video_file`, `animation`, `audio_file`; optional `photo`, `file`,
+`sticker_emoji`, `duration_seconds`. Service rows use `type: "service"`
+and `action` (`phone_call` becomes a call).
+
+- Sample (synthetic): `server/test-fixtures/exports/telegram-json/sample.json`.

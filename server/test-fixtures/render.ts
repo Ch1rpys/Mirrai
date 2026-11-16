@@ -13,7 +13,8 @@ export type FixtureFormat =
   | "wechat-txt-paren"
   | "wechat-csv"
   | "wechat-json"
-  | "qq-txt";
+  | "qq-txt"
+  | "telegram-json";
 
 function textRows(records: FixtureRecord[]): FixtureRecord[] {
   return records.filter((row) => row.kind === "text" && row.content.trim());
@@ -58,6 +59,19 @@ function renderQqTxt(records: FixtureRecord[]): string {
   ].join("\n");
 }
 
+/** i18n:allow-identifier — Telegram export chat title; the parser matches these bytes. */
+function renderTelegramJson(records: FixtureRecord[]): string {
+  const messages = textRows(records).map((row, index) => ({
+    id: index + 1,
+    type: "message",
+    date_unixtime: String(Math.floor(row.timestamp.getTime() / 1000)),
+    from: row.speaker,
+    from_id: `user-${row.speaker}`,
+    text: row.content.trim(),
+  }));
+  return JSON.stringify({ name: "小满", type: "personal_chat", id: 1, messages }, null, 2);
+}
+
 function renderWechatJson(records: FixtureRecord[]): string {
   const rows = textRows(records).map((row) => ({
     sender: row.speaker,
@@ -96,6 +110,8 @@ export function renderFixture(records: FixtureRecord[], format: FixtureFormat | 
       return renderWechatJson(records);
     case "qq-txt":
       return renderQqTxt(records);
+    case "telegram-json":
+      return renderTelegramJson(records);
     default:
       throw new Error(`renderFixture: format "${format}" is not implemented yet (C1.1)`);
   }
