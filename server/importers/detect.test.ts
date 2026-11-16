@@ -81,6 +81,16 @@ describe("detectFormat", () => {
     expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
   });
 
+  it("claims the whatsapp-txt sample as itself", () => {
+    const sample = readFileSync(
+      path.resolve(import.meta.dirname, "../test-fixtures/exports/whatsapp-txt/sample.txt"),
+      "utf8",
+    );
+    const hits = detectFormat(source("chat.txt", sample));
+    expect(hits[0]?.id).toBe("whatsapp-txt");
+    expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
+  });
+
   it("claims the telegram-json sample as itself", () => {
     const sample = readFileSync(
       path.resolve(import.meta.dirname, "../test-fixtures/exports/telegram-json/sample.json"),

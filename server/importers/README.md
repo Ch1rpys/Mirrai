@@ -104,3 +104,16 @@ a string or an ordered array of strings and `{ type, text }` entities;
 and `action` (`phone_call` becomes a call).
 
 - Sample (synthetic): `server/test-fixtures/exports/telegram-json/sample.json`.
+
+## whatsapp-txt
+
+Checked 2026-11-16 against WhatsApp iOS/Android export chat
+([Preserve Chat](https://preserve.chat/whatsapp-guides/whatsapp-chat-export-format/),
+[starkdmi/whats_json](https://github.com/starkdmi/whats_json)).
+iOS: `[D/M/Y, HH:mm:ss] Name: text`. Android: `D/M/Y, HH:mm - Name: text`.
+Date order follows the file (day > 12 vs month > 12 vs a 4-digit year).
+A header without `Name:` is a system message. Attachments are
+`<attached: file>` or `file (file attached)`. Continuation lines have no
+timestamp.
+
+- Sample (synthetic): `server/test-fixtures/exports/whatsapp-txt/sample.txt`.

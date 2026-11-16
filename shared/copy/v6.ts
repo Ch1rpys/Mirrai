@@ -44,4 +44,8 @@ export const V6 = {
     zh: "Telegram 的 JSON 导出",
     en: "Telegram JSON export",
   },
+  "import.format.whatsappTxt": {
+    zh: "WhatsApp 导出的 TXT",
+    en: "WhatsApp exported TXT",
+  },
 } as const satisfies CopyTable;

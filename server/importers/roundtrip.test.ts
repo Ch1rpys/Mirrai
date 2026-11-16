@@ -21,6 +21,7 @@ const TEXT_FORMATS: Array<{ id: ImportFormatId & FixtureFormat; time: "second" }
   { id: "qq-txt", time: "second" },
   { id: "qq-mht", time: "second" },
   { id: "telegram-json", time: "second" },
+  { id: "whatsapp-txt", time: "second" },
 ];
 
 describe("importer roundtrip", () => {

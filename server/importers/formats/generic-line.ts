@@ -37,7 +37,11 @@ function hasSpeaker(line: string): boolean {
 }
 
 export function isGenericLineHeader(line: string): boolean {
-  return hasSpeaker(line.trim());
+  const trimmed = line.trim();
+  // WhatsApp iOS puts a comma inside the brackets (`[3/1/22, 8:00:00 PM]`).
+  const bracket = trimmed.match(/^\[([^\]]{4,32})\]\s*/);
+  if (bracket && bracket[1].includes(",")) return false;
+  return hasSpeaker(trimmed);
 }
 
 /**

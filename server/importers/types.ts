@@ -8,7 +8,8 @@ export type ImportFormatId =
   | "wechat-json"
   | "qq-txt"
   | "qq-mht"
-  | "telegram-json";
+  | "telegram-json"
+  | "whatsapp-txt";
 
 export type ImportSourceName =
   | "wechat_export"
