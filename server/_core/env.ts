@@ -189,6 +189,10 @@ export const ENV = {
   cheaperInferenceBaseUrl: process.env.CHEAPER_INFERENCE_BASE_URL ?? "https://api.cheaperinference.com/v1",
   cheaperInferenceModel: process.env.CHEAPER_INFERENCE_MODEL ?? "gpt-5.4-mini",
 
+  demonRouteApiKey: process.env.DEMONROUTE_API_KEY ?? "",
+  demonRouteBaseUrl: process.env.DEMONROUTE_BASE_URL ?? "https://api.demonroute.com/v1",
+  demonRouteModel: process.env.DEMONROUTE_MODEL ?? "Qwen/Qwen3-30B-A3B-Instruct-2507",
+
   deepseekApiKey: process.env.DEEPSEEK_API_KEY ?? "",
   deepseekBaseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
   deepseekModel: process.env.DEEPSEEK_MODEL ?? "deepseek-chat",
