@@ -119,7 +119,7 @@
 | B9.3 | ⬜ |  |  |
 | C1.1 | ✅ | 5723b34 (framework); format parsers 29196ef…e9e6811; 24a2233 (fflate); dd4e1bd (archive); e9797fc (PUT); 4ad0751 (routes) | 夹具 `server/test-fixtures/exports/<id>/` 每种已登记格式一份。`roundtrip.test.ts` 15 通过（imessage-db 不是文本格式，见偏差 31）。`detect.test.ts` 17 通过：每种样本认成自己且 ≥0.6，散文不被认领。`roles.test.ts`：fromMe 优先。`archive.test.ts` 5 通过：正常包解出 chat.txt+pic.jpg；`../evil.txt`/`/abs.txt` 跳过且不落在目录外；`maxEntries: 3` 时 `errorCode: "too-many-entries"` 且 dest 被删；`.md`/`.bin` 跳过。`import-upload-route.test.ts` 4 通过：未登录 401、别人的分身 404、超限 413、正常 PUT 后文件在 `personas/7/5/` 且 `createPersonaFile` `fileType: "chat_export"`。`routers-v6/import.test.ts`：preview 不调 `createCollectedMessages`/`updatePersonaFile`；`needs_roles` 且 me/them 空 → `BAD_REQUEST`；别人的文件 `NOT_FOUND`。`egress.test.ts` 4 通过。README 每种已登记格式有出处；`wechat-html` 在「Not listed」。闸门 `298 passed \| 3 skipped (301)` 文件，`2700 passed \| 13 skipped (2713)` 用例。 |
 | C1.2 | ⬜ |  |  |
-| C1.3 | ⬜ |  |  |
+| C1.3 | ✅ | 25d6d1a (map/render); 14274b4 (readers) | `normalize.test.ts` 含上表每一行：`[图片]`/`[Photo]`/`<Media omitted>`/`<图片>` image，`[表情]`/`[动画表情]`/`[Sticker]`/`[表情:狗狗探头]` sticker，`[语音]`/`[语音 12秒]`/`[Voice]` voice，`[视频]`/`[Video]` video，`[位置]`/`[Location]` location，`[链接]`/`[文件]`/`[音乐]` link/file/music，`[转账]`/`微信转账`/`[红包]` transfer/redpacket，撤回/recalled recall，拍了拍 pat，通话 call；`[语音通话] 时长 00:43:12` → `durationSec: 2592`；「那张图片很好看」为 null。`wechat-csv.test.ts`：夹具表情 `kind: "sticker"` `content: "[sticker]"`，语音 `"[voice:12]"` `meta.durationSec: 12`，通话 `"[call:voice:2592]"` `meta.durationSec: 2592`。`shared/records.test.ts` 每种 kind 中英各至少一例（sticker `［表情：狗狗探头］` / `[sticker: 狗狗探头]`，call `［语音通话 43 分 12 秒］`）。`shared/copy/copy.test.ts` 通过。`dataset.test.ts`「does not train on sticker, voice, or call tokens」：小满夹具经 `trainingTexts` 后语料不含 `[sticker:`/`[voice:`/`[call:` 开头。闸门 `299 passed \| 3 skipped (302)` 文件，`2781 passed \| 13 skipped (2794)` 用例。 |
 | C1.4 | ⬜ |  |  |
 | C1.5 | ⬜ |  |  |
 | C1.6 | ⬜ |  |  |
@@ -238,6 +238,9 @@
 | 34 | C1.1 | `MAX_IMPORT_BYTES` 默认 2 GiB | 实际上限 `2147483647`（2 GiB − 1） | `persona_files.fileSize` 是 signed int4，存不下 2147483648。 |
 | 35 | C1.1 | 验收点名 `server/routers.import.test.ts` | 测试在 `server/routers-v6/import.test.ts`（路由组按 3.7 节放 `routers-v6`） | 与 A1 的 `import.backfill` 同一文件。 |
 | 36 | A1/C1.1 | 偏差 24：`chat_export` 只允许 txt/csv/json | C1.1 起 `ALLOWED_EXTENSIONS.chat_export` 为 txt/csv/json/html/htm/xml/db/mht；zip 仍走 `archive` | 格式已落地。html 仍只给属主看（`uploadsAuthGuard`）。 |
+| 37 | C1.3 | 文本占位规则只列在 generic-line / wechat-txt / qq-txt | LINE `[写真]`/`[スタンプ]`/`☎ 通話時間`、Kakao `사진`/`동영상`/`이모티콘`、iMessage `is_audio_message` / attachment MIME 也映射了 | 2026-11-16 对照 LINE 导出样本、Kakao 导出说明、macOS chat.db 文档；不映射会把整段占位当语气。 |
+| 38 | C1.3 | 验收点名把夹具喂给 `buildCharNgramModel` 的语料构造处 | 过滤写在 `trainingTexts`（以及 `generate.ts` 里同一段后备语料）；测试先 `trainingTexts` 再 `buildCharNgramModel` | 手册列的就是这处语料，不是 `buildCharNgramModel` 本身。 |
+| 39 | C1.3 | 微信两行 TXT 的无昵称系统行保持 `kind: system` | `你撤回了一条消息` 现为 `kind: recall`、`content: "[recall]"` | 与占位规则「含撤回了一条消息 → recall」一致；`wechat-txt-2line.test.ts` 跟着改。 |
 
 ## 未验证清单
 
@@ -306,6 +309,14 @@ P0.1、P0.2、P0.3、P0.4、P0.6、P0.7 维持 ✅。P0.5 改回 ⬜。
 - 临时库 `mirrai_v6_scratch` 上跑过 db-records（5/5），用完已删。`mirrai_live` 未碰。
 - 无 `DATABASE_URL` 的 `corepack pnpm gate`：`278 passed | 3 skipped (281)` 文件，`2604 passed | 13 skipped (2617)` 用例，`all six steps passed`。相对 WP0 闸门（269/2 文件、2562/8 用例）：通过文件 +9、通过用例 +42；跳过文件 +1、跳过用例 +5，全部来自 `db-records.test.ts` 的 `skipIf`（见偏差 20）。
 - A1 标 ✅。C1.1 起未做。未验证清单、待用户决定仍空。
+
+### WP1 · 实现会话 · 2026-11-16 · C1.3
+
+- 分支 `exec/v6`。C1.1 已 ✅。无独立验收遗留项。
+- C1.3 两个提交：`25d6d1a` 映射与渲染（含 `parseTextPlaceholder`、各格式映射表、`renderRecordContent`、归档 `meta.path`）；`14274b4` 文本统计读者只读 `kind === "text"`。
+- 验收命令（无 `DATABASE_URL`）：`vitest run server/importers/normalize.test.ts shared/records.test.ts shared/copy/copy.test.ts server/importers/formats/wechat-csv.test.ts server/eval/dataset.test.ts` 全过。闸门 `299 passed | 3 skipped (302)` 文件，`2781 passed | 13 skipped (2794)` 用例，`all six steps passed`。相对 C1.1 闸门（298/3 文件、2700/13 用例）：通过文件 +1、通过用例 +81；跳过数不变。
+- `mirrai_live` 未碰。本条无临时库。
+- C1.3 标 ✅。C1.2 起未做。
 
 ### WP1 · 实现会话 · 2026-11-16 · C1.1
 
