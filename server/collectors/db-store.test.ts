@@ -526,6 +526,23 @@ describe("importRecords", () => {
     expect(rows[0]).toMatchObject({ fileId: 99, lineNo: 1, kind: "text", speaker: "小满" });
   });
 
+  it("does not collapse the same sentence from two platforms", async () => {
+    const at = new Date("2022-03-01T12:00:00.000Z");
+    const record = {
+      speaker: "小满",
+      content: "嗯",
+      timestamp: at,
+      kind: "text" as const,
+      lineNo: 1,
+      role: "assistant" as const,
+    };
+    await importRecords({ personaId: 5, userId: 1, source: "wechat_export", records: [record] });
+    await importRecords({ personaId: 5, userId: 1, source: "sms", records: [record] });
+    const wechat = createCollectedMessages.mock.calls[0][0] as Array<{ idempotencyKey: string }>;
+    const sms = createCollectedMessages.mock.calls[1][0] as Array<{ idempotencyKey: string }>;
+    expect(wechat[0].idempotencyKey).not.toBe(sms[0].idempotencyKey);
+  });
+
   it("refuses a batch that would pass the persona's record ceiling", async () => {
     countRecords.mockResolvedValue(1_000_000);
     await expect(

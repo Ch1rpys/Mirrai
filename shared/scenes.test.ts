@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { splitScenes, toTurns } from "./scenes";
+import { buildXiaomanRecords } from "../server/test-fixtures/xiaoman";
 
 function row(
   at: string,
@@ -65,6 +66,21 @@ describe("splitScenes", () => {
 
   it("returns nothing for an empty record", () => {
     expect(splitScenes([])).toEqual([]);
+  });
+
+  it("does not change the cuts when even and odd fixture scenes come from different sources", () => {
+    const records = [...buildXiaomanRecords()].sort(
+      (a, b) => a.timestamp.getTime() - b.timestamp.getTime() || a.id - b.id,
+    );
+    const unlabeled = splitScenes(records);
+    const tagged = records.map((row) => ({
+      ...row,
+      source: row.truth.sceneId % 2 === 0 ? "wechat_export" : "sms",
+    }));
+    const labeled = splitScenes(tagged);
+    expect(labeled.map((scene) => scene.map((row) => row.id))).toEqual(
+      unlabeled.map((scene) => scene.map((row) => row.id)),
+    );
   });
 });
 

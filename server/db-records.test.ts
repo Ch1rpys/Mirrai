@@ -192,4 +192,68 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
       await deletePersona(personaId, userId);
     }
   });
+
+  it("interleaves two sources by time and keeps the same sentence from both", async () => {
+    const userId = 9_960_000 + Math.floor(Math.random() * 10_000);
+    const personaId = await createPersona({ userId, name: "two-sources" });
+    try {
+      const wechat = [
+        { at: "2022-03-01T12:00:00.000Z", content: "在吗" },
+        { at: "2022-03-01T12:02:00.000Z", content: "好" },
+        { at: "2022-03-01T12:04:00.000Z", content: "嗯" },
+      ];
+      const sms = [
+        { at: "2022-03-01T12:01:00.000Z", content: "在吗" },
+        { at: "2022-03-01T12:03:00.000Z", content: "好" },
+        { at: "2022-03-01T12:04:00.000Z", content: "嗯" },
+      ];
+      const asRecords = (
+        rows: Array<{ at: string; content: string }>,
+        speaker: string,
+        role: "user" | "assistant",
+      ) =>
+        rows.map((row, index) => ({
+          speaker,
+          content: row.content,
+          timestamp: new Date(row.at),
+          kind: "text" as const,
+          lineNo: index + 1,
+          role,
+        }));
+      expect(
+        await importRecords({
+          personaId,
+          userId,
+          source: "wechat_export",
+          records: asRecords(wechat, "阿树", "user"),
+        }),
+      ).toBe(3);
+      expect(
+        await importRecords({
+          personaId,
+          userId,
+          source: "sms",
+          records: asRecords(sms, "小满", "assistant"),
+        }),
+      ).toBe(3);
+      const read: Array<{ source: string; content: string; at: string }> = [];
+      for await (const row of iterateRecords(personaId, userId)) {
+        read.push({
+          source: row.source,
+          content: row.content,
+          at: row.timestamp?.toISOString() ?? "",
+        });
+      }
+      expect(read.map((row) => `${row.at} ${row.source} ${row.content}`)).toEqual([
+        "2022-03-01T12:00:00.000Z wechat_export 在吗",
+        "2022-03-01T12:01:00.000Z sms 在吗",
+        "2022-03-01T12:02:00.000Z wechat_export 好",
+        "2022-03-01T12:03:00.000Z sms 好",
+        "2022-03-01T12:04:00.000Z wechat_export 嗯",
+        "2022-03-01T12:04:00.000Z sms 嗯",
+      ]);
+    } finally {
+      await deletePersona(personaId, userId);
+    }
+  });
 });
