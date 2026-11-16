@@ -16,13 +16,15 @@ export function mineOpenLoops(params: {
   params.messages.forEach((row, index) => {
     const content = String(row.content ?? "").trim();
     if (!content || !MARKERS.test(content)) return;
+    const whoSaid = row.role === "assistant" ? "them" : row.role === "user" ? "me" : null;
+    if (!whoSaid) return;
     const at = row.timestamp ? String(row.timestamp) : undefined;
     out.push({
       id: `open-loop-${index + 1}`,
       kind: "open_loop",
       title: content.slice(0, 80),
       detail: content.slice(0, 400),
-      whoSaid: row.role === "assistant" ? "them" : "me",
+      whoSaid,
       closed: false,
       source: "auto",
       verified: false,

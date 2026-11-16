@@ -12,6 +12,11 @@ describe("unfinished business", () => {
     });
     expect(mined).toHaveLength(1);
     expect(mined[0].verified).toBe(false);
+    expect(mined[0].whoSaid).toBe("me");
     expect(mined[0].evidence[0].snippet).toContain("改天一起吃饭");
+  });
+
+  it("drops a line that is not from either side", () => {
+    expect(mineOpenLoops({ messages: [{ role: "other", content: "下次一起" }] })).toEqual([]);
   });
 });

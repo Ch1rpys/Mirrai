@@ -70,6 +70,7 @@ import {
   mineMicroRules,
   parseTranscriptMessages,
 } from "./micro-rules";
+import { toMinerRows } from "./roles";
 import { copy, type CopyKey, type Locale } from "@shared/copy";
 import { extractMemories } from "../chat/memory-extract";
 import { storageToDataUrl } from "../storage";
@@ -832,9 +833,32 @@ async function runMerger(input: {
  * in which case the whole transcript is offered and the model is left to
  * quote what it can source.
  */
+function coerceTimestamp(value: Date | string | null | undefined): Date | null {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
+function transcriptRowsFrom(input: PipelineInput): Array<{
+  role: string;
+  content: string;
+  timestamp: Date | null;
+}> {
+  return toMinerRows(
+    parseTranscriptMessages(input.chatContent, { personaName: input.name }),
+    input.name,
+  ).map((row) => ({
+    role: row.role,
+    content: row.content,
+    timestamp: coerceTimestamp(row.timestamp),
+  }));
+}
+
 async function runMicroRuleStage(input: {
-  chatContent: string;
-  name: string;
+  messages: Array<{ role: string; content: string; timestamp?: Date | string | null }>;
   userId: number;
   provider?: string;
   mode: DistillationMode;
@@ -844,10 +868,9 @@ async function runMicroRuleStage(input: {
 }): Promise<MicroRule[]> {
   const locale = input.locale ?? "zh";
   try {
-    const messages = parseTranscriptMessages(input.chatContent, { personaName: input.name });
-    const known = messages.some((message) => message.role === "persona");
-    const pairs = findContrastPairs(messages, {
-      role: known ? "persona" : undefined,
+    const known = input.messages.some((message) => message.role === "assistant");
+    const pairs = findContrastPairs(input.messages, {
+      role: known ? "assistant" : undefined,
       // The presets promise how much of the material a run reads, and the
       // mining reads the same records: the deep preset mines more pairs
       // than the quick one.
@@ -1350,12 +1373,13 @@ async function runSkillPipelineOnce(
       copy(locale, "labels.microRules.mining"),
     );
 
+    const transcriptRows = transcriptRowsFrom(input);
+
     const microRules =
       input.mineRules === false
         ? []
         : await runMicroRuleStage({
-            chatContent,
-            name,
+            messages: transcriptRows,
             userId,
             provider: input.provider,
             mode: preset.id,
@@ -1373,13 +1397,6 @@ async function runSkillPipelineOnce(
         : copy(locale, "labels.microRules.minedNone"),
     );
 
-    const transcriptRows = parseTranscriptMessages(chatContent, { personaName: name }).map(
-      (row) => ({
-        role: row.role === "assistant" || row.role === "user" ? row.role : row.role || "user",
-        content: row.content,
-        timestamp: row.timestamp ?? null,
-      }),
-    );
     const minedSuppressions = [
       ...mineSuppressions({ messages: transcriptRows, locale }),
       ...mineForgetStyles({ messages: transcriptRows, locale }),
@@ -1407,12 +1424,9 @@ async function runSkillPipelineOnce(
       messages: transcriptRows.map((row) => ({
         role: row.role,
         content: row.content,
-        timestamp: row.timestamp instanceof Date
-          ? row.timestamp
-          : row.timestamp
-            ? new Date(row.timestamp)
-            : null,
+        timestamp: row.timestamp,
       })),
+      locale,
     });
 
     /**
