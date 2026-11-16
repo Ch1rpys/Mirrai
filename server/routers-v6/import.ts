@@ -127,6 +127,33 @@ export const importRouter = router({
       });
     }),
 
+  /**
+   * Continues an import that is waiting on format, chat, or a retry.
+   *
+   * Roles are not required here. confirm is the call that names both
+   * sides and is allowed to write.
+   */
+  resume: protectedProcedure
+    .use(rateLimit(RATE_LIMITS.upload))
+    .input(z.object({
+      fileId: z.number(),
+      format: formatId.optional(),
+      chatId: z.string().optional(),
+      columnMap: columnMap.optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const file = await getPersonaFileById(input.fileId, ctx.user.id);
+      if (!file) throw new TRPCError({ code: "NOT_FOUND" });
+      return startImport({
+        fileId: input.fileId,
+        userId: ctx.user.id,
+        locale: ctx.locale,
+        format: input.format,
+        chatId: input.chatId,
+        columnMap: input.columnMap,
+      });
+    }),
+
   cancel: protectedProcedure
     .use(rateLimit(RATE_LIMITS.upload))
     .input(z.object({ fileId: z.number() }))

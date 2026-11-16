@@ -100,6 +100,10 @@ export interface ParseReport {
   chatFiles?: Array<{ path: string; format?: ImportFormatId; confidence?: number }>;
   /** Media files found inside an unpacked zip, as paths relative to the unpack dir. */
   mediaFiles?: string[];
+  /** First rows of a delimiter-separated file, for the column-map wizard. */
+  rawTable?: { headers: string[]; rows: string[][] };
+  /** Rows the writer skipped because they were already in the table. */
+  existing?: number;
 }
 
 export type { ParsedRecord, RecordKind };

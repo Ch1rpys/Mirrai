@@ -26,6 +26,7 @@ import {
   unpackZip,
 } from "./archive";
 import { detectFormat, pickDetectedFormat } from "./detect";
+import { parseCsv } from "./csv";
 import {
   attachMediaPaths,
   cappedWarnings,
@@ -96,6 +97,20 @@ function countBy(values: string[]): Record<string, number> {
 
 function reportOf(partial: ParseReport): ParseReport {
   return partial;
+}
+
+/**
+ * The first eight data rows of a delimiter-separated file.
+ *
+ * The column-map wizard needs a table without parsing the rest of a
+ * large export. A slice is enough for headers and those rows; a quote
+ * cut in half only spoils the last one.
+ */
+function rawTableFrom(text: string): ParseReport["rawTable"] | undefined {
+  const slice = text.length > 16_000 ? text.slice(0, 16_000) : text;
+  const { headers, rows } = parseCsv(slice);
+  if (headers.length === 0) return undefined;
+  return { headers, rows: rows.slice(0, 8) };
 }
 
 async function loadSource(
@@ -268,6 +283,7 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
         format: detected[0]?.id,
         confidence: detected[0]?.confidence,
         progress: 0,
+        rawTable: rawTableFrom(source.text),
       }),
     });
     return { status: "needs_format", written: 0 };
@@ -318,6 +334,7 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
     chatFiles: archiveReport.chatFiles,
     mediaFiles: archiveReport.mediaFiles,
     progress: 0,
+    rawTable: importer.id === "column-map" ? rawTableFrom(source.text) : undefined,
   };
 
   if (parsed.chats && parsed.chats.length > 1 && !input.chatId) {
@@ -383,6 +400,7 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
       parseReport: reportOf({
         ...withRoles,
         written,
+        existing: assigned.length - written,
         progress: 100,
       }),
     });
@@ -525,6 +543,7 @@ export async function previewImport(input: StartImportInput): Promise<PreviewRes
         ...archiveReport,
         format: detected[0]?.id,
         confidence: detected[0]?.confidence,
+        rawTable: rawTableFrom(source.text),
       },
     };
   }
@@ -562,6 +581,7 @@ export async function previewImport(input: StartImportInput): Promise<PreviewRes
     warnings: cappedWarnings([...(archiveReport.warnings ?? []), ...parsed.warnings]),
     kindCounts: countBy(parsed.records.map((row) => row.kind)),
     chats: parsed.chats ?? archiveReport.chats,
+    rawTable: importer.id === "column-map" ? rawTableFrom(source.text) : archiveReport.rawTable,
   };
 
   if (parsed.chats && parsed.chats.length > 1 && !input.chatId) {
