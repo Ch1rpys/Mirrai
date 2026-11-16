@@ -30,7 +30,7 @@
 | P0.7 | ✅ | 16ad889; e6e22c1 (scan) | `server/egress.test.ts` 4 通过：`server/` 生产文件里每一处 `fetch(` / `new WebSocket(` / `http(s).request(` 都在白名单；在 `server/llm/index.ts` 加 `fetch("https://example.com")` 后失败，输出 `missing: ['server/llm/index.ts']`；删掉后 4 通过。`docs/egress.md` 表体 14 行 = `EGRESS_ITEMS.length`。`EgressList.test.tsx`：每一项的「连到哪」「发什么」和「默认开/关」都渲染出来。`corepack pnpm gate` 全绿：269 passed \| 2 skipped (271)，2562 passed \| 8 skipped (2570)。 |
 | A1 | ✅ | 6cf669d (schema/helpers); c017aed (write/upload); 6736dc3 (readers); 3d66751 (backfill/banner) | 临时库 `mirrai_v6_scratch`：`drizzle-kit push --force` 后 `migrate.mjs` 应用到 0045；`server/db-records.test.ts` 5 通过（夹具条数=`countRecords`、`iterateRecords` 分页同数且时间升序、同一秒两条「嗯」都在、`register: "all"` 计 2、再 `importRecords` 同一份夹具写入 0）；库已 `dropdb`。`server/routers.file-upload-import.test.ts`：`createCollectedMessages` mock 收到 `fileId: 99`、`lineNo` 1/2、`kind: "text"`、`speaker` 小满/阿树。`server/chat/exemplars-upload.test.ts` 2 通过：未导入时提示词不含 `prompt.exemplarsHeading`；上传导入后含该标题和「在的呀」，且 `getCollectedMessagesForPersona` 带 `{ newest: true }`。`server/records-readers.test.ts` 6 通过（prompt/generate/behavior-profile/routers/eval-run.ts 无调用/eval CLI）。P0.3 `prompt-golden.test.ts` 10 通过、快照未改。`server/routers-v6/import.test.ts`：别人的分身 `NOT_FOUND`；未解析的 txt 从磁盘读入、不读 `extractedMemory`。`BackfillBanner.test.tsx`：count=0 不渲染；count=2 显示横幅和「现在整理」。闸门 `278 passed \| 3 skipped (281)` 文件，`2604 passed \| 13 skipped (2617)` 用例，`all six steps passed`。 |
 | A2 | ⬜ |  |  |
-| A3 | ⬜ |  |  |
+| A3 | ✅ | 267d8c6 (with C1.2 wizard) | `csv-not-unlabelled.test.ts`：`renderFixture(buildXiaomanRecords(), "wechat-csv")` 经 wechat-csv 解析再 `guessRoles`/`assignRoles`，每行 `role` 为 `user` 或 `assistant`，`content` 不含 `IsSender`/`StrContent`/`StrTime`，`lineNo > 1`。先红后绿见偏差 40。闸门随 C1.2。 |
 | A4 | ⬜ |  |  |
 | A5 | ⬜ |  |  |
 | A6 | ⬜ |  |  |
@@ -118,7 +118,7 @@
 | B9.2 | 🔒 |  |  |
 | B9.3 | ⬜ |  |  |
 | C1.1 | ✅ | 5723b34 (framework); format parsers 29196ef…e9e6811; 24a2233 (fflate); dd4e1bd (archive); e9797fc (PUT); 4ad0751 (routes) | 夹具 `server/test-fixtures/exports/<id>/` 每种已登记格式一份。`roundtrip.test.ts` 15 通过（imessage-db 不是文本格式，见偏差 31）。`detect.test.ts` 17 通过：每种样本认成自己且 ≥0.6，散文不被认领。`roles.test.ts`：fromMe 优先。`archive.test.ts` 5 通过：正常包解出 chat.txt+pic.jpg；`../evil.txt`/`/abs.txt` 跳过且不落在目录外；`maxEntries: 3` 时 `errorCode: "too-many-entries"` 且 dest 被删；`.md`/`.bin` 跳过。`import-upload-route.test.ts` 4 通过：未登录 401、别人的分身 404、超限 413、正常 PUT 后文件在 `personas/7/5/` 且 `createPersonaFile` `fileType: "chat_export"`。`routers-v6/import.test.ts`：preview 不调 `createCollectedMessages`/`updatePersonaFile`；`needs_roles` 且 me/them 空 → `BAD_REQUEST`；别人的文件 `NOT_FOUND`。`egress.test.ts` 4 通过。README 每种已登记格式有出处；`wechat-html` 在「Not listed」。闸门 `298 passed \| 3 skipped (301)` 文件，`2700 passed \| 13 skipped (2713)` 用例。 |
-| C1.2 | ⬜ |  |  |
+| C1.2 | ✅ | 267d8c6 (wizard); 50ab2ec (upload page) | `ImportWizard.test.tsx` 5 通过：detecting 有 progressbar 和「已处理 4 条」；needs_format 有格式下拉和「按列对应」；needs_roles 未同时选我/TA 时「继续」禁用，选 阿树=我、小满=TA 后 `import.confirm` 收到 `me:["阿树"]` `them:["小满"]`；done 文案含 added/theirs/existing；failed 显示原因和「再试一次」。`routers-v6/import.test.ts`：preview 不调 `createCollectedMessages`/`updatePersonaFile`；needs_roles 且 me/them 空 → `BAD_REQUEST`；别人的文件 `NOT_FOUND`。`Upload.test.tsx`：formatsHint 用服务端标签「一行一条」；`.zip` 走 PUT 不走 `file.upload`。实机（桩模型 `live-stub-model.mjs` 3122，应用 PORT 3133，临时库 `mirrai_v6_scratch`）：登录 c12user，分身「小满」，把 `server/test-fixtures/exports/wechat-txt-2line/sample.txt` 交给上传页 `input[type=file]` 的 change（与点击选择同一条 `handleFiles`）；向导 `needs_roles` 3 个说话人；指认 小满=TA、阿树=我、system=其他人；预览「微信 TXT（时间与昵称一行） · 共 13 条」「你 6 条，小满 6 条」；继续后「新增 13 条，其中 6 条是 小满 说的。0 条之前已经有了。」库 `collected_messages` 13 行（user 6 / assistant 6 / other 1），`persona_files.parseStatus=done` `format=wechat-txt-2line` `written=13`。库已 `dropdb`。闸门 `301 passed \| 3 skipped (304)` 文件，`2789 passed \| 13 skipped (2802)` 用例。 |
 | C1.3 | ✅ | 25d6d1a (map/render); 14274b4 (readers) | `normalize.test.ts` 含上表每一行：`[图片]`/`[Photo]`/`<Media omitted>`/`<图片>` image，`[表情]`/`[动画表情]`/`[Sticker]`/`[表情:狗狗探头]` sticker，`[语音]`/`[语音 12秒]`/`[Voice]` voice，`[视频]`/`[Video]` video，`[位置]`/`[Location]` location，`[链接]`/`[文件]`/`[音乐]` link/file/music，`[转账]`/`微信转账`/`[红包]` transfer/redpacket，撤回/recalled recall，拍了拍 pat，通话 call；`[语音通话] 时长 00:43:12` → `durationSec: 2592`；「那张图片很好看」为 null。`wechat-csv.test.ts`：夹具表情 `kind: "sticker"` `content: "[sticker]"`，语音 `"[voice:12]"` `meta.durationSec: 12`，通话 `"[call:voice:2592]"` `meta.durationSec: 2592`。`shared/records.test.ts` 每种 kind 中英各至少一例（sticker `［表情：狗狗探头］` / `[sticker: 狗狗探头]`，call `［语音通话 43 分 12 秒］`）。`shared/copy/copy.test.ts` 通过。`dataset.test.ts`「does not train on sticker, voice, or call tokens」：小满夹具经 `trainingTexts` 后语料不含 `[sticker:`/`[voice:`/`[call:` 开头。闸门 `299 passed \| 3 skipped (302)` 文件，`2781 passed \| 13 skipped (2794)` 用例。 |
 | C1.4 | ⬜ |  |  |
 | C1.5 | ⬜ |  |  |
@@ -241,6 +241,12 @@
 | 37 | C1.3 | 文本占位规则只列在 generic-line / wechat-txt / qq-txt | LINE `[写真]`/`[スタンプ]`/`☎ 通話時間`、Kakao `사진`/`동영상`/`이모티콘`、iMessage `is_audio_message` / attachment MIME 也映射了 | 2026-11-16 对照 LINE 导出样本、Kakao 导出说明、macOS chat.db 文档；不映射会把整段占位当语气。 |
 | 38 | C1.3 | 验收点名把夹具喂给 `buildCharNgramModel` 的语料构造处 | 过滤写在 `trainingTexts`（以及 `generate.ts` 里同一段后备语料）；测试先 `trainingTexts` 再 `buildCharNgramModel` | 手册列的就是这处语料，不是 `buildCharNgramModel` 本身。 |
 | 39 | C1.3 | 微信两行 TXT 的无昵称系统行保持 `kind: system` | `你撤回了一条消息` 现为 `kind: recall`、`content: "[recall]"` | 与占位规则「含撤回了一条消息 → recall」一致；`wechat-txt-2line.test.ts` 跟着改。 |
+| 40 | C1.2/A3 | 先红后绿：旧代码上 csv 无角色 | `csv-not-unlabelled.test.ts` 在 C1.1 已给 wechat-csv 角色之后写成；现码上是绿的 | 不能倒回 C1.1 之前的 HEAD。与偏差 27 同类。 |
+| 41 | C1.2 | 格式未定时向导再调 `startImport` | 路由名是 `import.resume`，不是 `apply` | tRPC `router({})` 把 `apply` 当保留字。 |
+| 42 | C1.2 | `confirm` 只负责带角色的写入 | `confirm` 在任何状态下都要求 me/them；选格式、选会话、失败重试走 `resume` | 已有 `confirm` 的 BAD_REQUEST 验收不能放宽。 |
+| 43 | C1.2 | 实机「拖入」夹具 | 自动化浏览器里 Vite 开发页 `#root` 不挂载（`plugin-react` preamble）；改用 `NODE_ENV=production` 的 `dist/`。文件通过 `DataTransfer` 赋给隐藏 `input[type=file]` 再 `change`，与点击选择同一条 `handleFiles`，不是操作系统拖放。 | 玻璃浏览器跑不了 Vite HMR；CDP `setFileInputFiles` 不可用。 |
+| 44 | C1.2 | `isUnparsedChatUpload` 只认 chat_txt/chat_csv | 现含 `chat_export` 和 `archive`；`isChatImportFileType` 收到 `shared/records.ts` | 向导挂在所有聊天上传上；旧的 json/zip 也该能补导入。 |
+| 45 | C1.2 | 时区入口跳到「设置里的时区」 | 资料页原先没有用户时区编辑，补了 `settings.profile.timezone` 字段 | `user.updateProfile` 本来就收 timezone；TimezoneSync 只在空值时写入。 |
 
 ## 未验证清单
 
@@ -325,3 +331,11 @@ P0.1、P0.2、P0.3、P0.4、P0.6、P0.7 维持 ✅。P0.5 改回 ⬜。
 - 验收命令（无 `DATABASE_URL`）：`vitest run server/importers/roundtrip.test.ts detect.test.ts roles.test.ts archive.test.ts server/import-upload-route.test.ts server/routers-v6/import.test.ts server/egress.test.ts` → 7 文件 59 通过。闸门 `298 passed | 3 skipped (301)` 文件，`2700 passed | 13 skipped (2713)` 用例，`all six steps passed`。相对 A1 闸门（278/3 文件、2604/13 用例）：通过文件 +20、通过用例 +96；跳过数不变。
 - `mirrai_live` 未碰。本条无临时库。
 - C1.1 标 ✅。C1.3 起未做。未验证清单新增 wechat-html。待用户决定仍空。
+
+### WP1 · 实现会话 · 2026-11-16 · C1.2 / A3
+
+- 分支 `exec/v6`。无独立验收遗留项。
+- C1.2 两个提交：`267d8c6` 向导组件（含 `import.resume`、`rawTable`/`existing`、A3 `csv-not-unlabelled.test.ts`）；`50ab2ec` 上传页接入（流式 PUT、`ALL_ACCEPT`、formatsHint、设置里的时区）。
+- 验收命令（无 `DATABASE_URL`）：`vitest run client/src/components/v6/ImportWizard.test.tsx server/importers/csv-not-unlabelled.test.ts server/routers-v6/import.test.ts client/src/pages/Upload.test.tsx` 全过。闸门 `301 passed | 3 skipped (304)` 文件，`2789 passed | 13 skipped (2802)` 用例，`all six steps passed`。相对 C1.3 闸门（299/3 文件、2781/13 用例）：通过文件 +2、通过用例 +8；跳过数不变。
+- 实机：临时库 `mirrai_v6_scratch`（push + migrate 到 0045），桩模型 3122，应用 3133。夹具 wechat-txt-2line → 预览 13 条 → 指认角色 → 库 13 行。库已删。`mirrai_live` 未碰。
+- C1.2、A3 标 ✅。A4 起未做。未验证清单无新增。待用户决定仍空。
