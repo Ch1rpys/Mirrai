@@ -25,9 +25,9 @@
 | P0.2 | ✅ | b298550 | `corepack pnpm gate` 退出码 0，输出 `all six steps passed`（typecheck / test 258 passed \| 2 skipped, 2489 passed \| 8 skipped / copy-audit / fidelity-gate / client-build / server-bundle）。`server/gate-script.test.ts` 3 通过。故意在 `server/_core/fidelity-gate.ts` 加 `const __p02TypeError: number = "intentionally-wrong"` 后 `corepack pnpm gate` 退出码 2，输出 `[gate] failed at typecheck (exit 2, 1.8s)`；`git checkout HEAD -- server/_core/fidelity-gate.ts` 改回。 |
 | P0.3 | ✅ | e506484 | `server/chat/prompt-golden.test.ts` 10 通过；快照文件 9 份 `exports[`. 改 `shared/copy/prompt.ts` 的 `prompt.identityVolunteers` zh「【AI 身份】」为「【AI 身份x】」后 8 个快照红（`Snapshot mismatched`）；`git checkout HEAD -- shared/copy/prompt.ts` 后 10 通过。`corepack pnpm gate` 全绿：259 passed \| 2 skipped (261)，2499 passed \| 8 skipped (2507)。 |
 | P0.4 | ✅ | 1e44f5d (data); e59ec6d (routes/UI) | 临时库四步+升级路径：rollback 后 `settings`/`styleProfile` 消失，再 migrate 回来；升级路径 DROP 两列并删 `schema_migrations` 的 0044 后再 migrate，两列出现。`shared/persona-settings.test.ts` 5 通过（空值默认、`twoStage: "yes"` 回落、未知键丢弃、`maxDelayMinutes: 9999` 钳到 360、深合并）。`server/routers.persona-settings.test.ts` 3 通过（别人的分身 `NOT_FOUND`、patch 后读回、`withPersonaDataLock` 源码位置）。`server/schema-coverage.test.ts`、`schema-parity.test.ts` 通过。P0.3 黄金快照 10 通过未改。`corepack pnpm gate` 全绿：264 passed \| 2 skipped (266)，2514 passed \| 8 skipped (2522)。 |
-| P0.5 | ⬜ | b1fe349 | 独立验收 2026-11-16 未过。同一 seed、耗时、generic-line 往返、以及测试里写了的那些比例是绿的；设计值表里追一句的 6–12 分钟、晚间以「晚安」收尾、每场景约 10 轮、回复间隔 σ = 0.8 没有被锁住，量出来也不符。见批次日志。 |
-| P0.6 | ✅ | 1588608 (move); b089be8 (eval) | `server/chat/service.test.ts`、`stream.test.ts`、`fidelity-prompt.test.ts`、`server/eval/run.test.ts`、`server/routers.eval.test.ts`、`server/eval/compare-cli.test.ts` 未改文件、全部通过。P0.3 `prompt-golden.test.ts` 10 通过、快照未改。`server/chat/generate.test.ts`：同一分身/上下文/`now`，`runConversation` 与 `runEval` 发给 provider 的 `messages` 去掉留出句后 `toEqual`；`layerOverridesForEval({ without: ["act"] })` 后 `sampledAct` 为 `null`、`layersUsed` 不含 `act`。`scripts/eval-run.ts` 含 `--without`。搬家后闸门 266 passed \| 2 skipped (268)，2553 passed \| 8 skipped (2561)；评测接入后 267 passed \| 2 skipped (269)，2557 passed \| 8 skipped (2565)。 |
-| P0.7 | ✅ | 16ad889 | `server/egress.test.ts` 4 通过：`server/` 生产文件里每一处 `fetch(` / `new WebSocket(` / `http(s).request(` 都在白名单；在 `server/llm/index.ts` 加 `fetch("https://example.com")` 后失败，输出 `missing: ['server/llm/index.ts']`；删掉后 4 通过。`docs/egress.md` 表体 14 行 = `EGRESS_ITEMS.length`。`EgressList.test.tsx`：每一项的「连到哪」「发什么」和「默认开/关」都渲染出来。`corepack pnpm gate` 全绿：269 passed \| 2 skipped (271)，2562 passed \| 8 skipped (2570)。 |
+| P0.5 | ✅ | b1fe349; c785e6a | 独立验收打回后，`c785e6a` 把主场景改成 10 轮（晚间另加晚安，非冲突场景用户行数正好是 10 或 11），追一句改到全部时间戳稳定之后再插入并平移后续消息，间隔落在 6–12 分钟且中间没有用户消息，晚间最后两行是「晚安」往来。回复间隔不再预先截断，对数标准差与 0.8 相差小于 0.08。表情包按轮次断言 25% / 30%（±5 个百分点）。`xiaoman.test.ts` 35 通过。 |
+| P0.6 | ✅ | 1588608 (move); b089be8 (eval); 58d1123 (tests) | `server/chat/service.test.ts`、`stream.test.ts`、`fidelity-prompt.test.ts`、`server/eval/run.test.ts`、`server/routers.eval.test.ts`、`server/eval/compare-cli.test.ts` 未改文件、全部通过。P0.3 `prompt-golden.test.ts` 10 通过、快照未改。`server/chat/generate.test.ts`：同一分身/上下文/`now`，`runConversation` 与 `runEval` 发给 provider 的 `messages` 去掉留出句后 `toEqual`；`layerOverridesForEval({ without: ["act"] })` 后 `sampledAct` 为 `null`、`layersUsed` 不含 `act`。`scripts/eval-run.ts` 含 `--without`。搬家后闸门 266 passed \| 2 skipped (268)，2553 passed \| 8 skipped (2561)；评测接入后 267 passed \| 2 skipped (269)，2557 passed \| 8 skipped (2565)。 |
+| P0.7 | ✅ | 16ad889; e6e22c1 (scan) | `server/egress.test.ts` 4 通过：`server/` 生产文件里每一处 `fetch(` / `new WebSocket(` / `http(s).request(` 都在白名单；在 `server/llm/index.ts` 加 `fetch("https://example.com")` 后失败，输出 `missing: ['server/llm/index.ts']`；删掉后 4 通过。`docs/egress.md` 表体 14 行 = `EGRESS_ITEMS.length`。`EgressList.test.tsx`：每一项的「连到哪」「发什么」和「默认开/关」都渲染出来。`corepack pnpm gate` 全绿：269 passed \| 2 skipped (271)，2562 passed \| 8 skipped (2570)。 |
 | A1 | ⬜ |  |  |
 | A2 | ⬜ |  |  |
 | A3 | ⬜ |  |  |
@@ -250,11 +250,16 @@
 
 P0.1、P0.2、P0.3、P0.4、P0.6、P0.7 维持 ✅。P0.5 改回 ⬜。
 
-- [ ] P0.5 追一句：`buildXiaomanRecords()` 默认种子下 30 条 `truth.ritual === "follow-up"` 里有 14 条距上一条 TA 文本不到 6 分钟（最短约 1.3 分钟，最长约 9.3 分钟）。生成时写的是 6–12 分钟（`server/test-fixtures/xiaoman.ts` 约 1077–1103 行），随后 `retargetMedian` 改了未锁定行的字数，`fixBurstGaps`（约 1162 行）又按新字数改了连发时间戳，追一句自己没有 `burstId`，间隔就被拉开或挤短。`xiaoman.test.ts` 的「追一句」只断言条数和「人呢 / ？」比例，不看时间。复现：对默认夹具按场景时间排序，取每条 follow-up 与它之前最近一条 assistant 的时间差。
-- [ ] P0.5 早晚的往来：112 个晚间主场景里有 18 个的最后一条不是「晚安」往来。其中 17 个以 follow-up 收尾，1 个以 `ritual === "stock"` 的「听不懂 说人话」收尾。晚安是在主循环里追加的，追一句和股票句在循环之后才插入，时间更晚。`xiaoman.test.ts` 的「早晚的往来」只检查早安场景是两行、以及晚安条数不少于 100。复现：按 `truth.sceneId` 分组，取 `slot === "evening"` 的最后两行。
-- [ ] P0.5 规模：主场景轮次写死 `const rounds = 6`（`xiaoman.ts` 约 860 行）。晚间 / 中午 / 下午场景的用户行数分布是 3 条的 6 天、6 条的 42 天、7 条的 106 天、8 条的 5 天、9 条的 1 天，中位数 7。设计值是每场景约 10 轮。测试只断言活跃日 160 和 TA 行不少于 1400。
-- [ ] P0.5 回复间隔：`delayMs` 把抽样钳在 8 秒到 90 秒（晚间）或 400 秒（中午 / 周三）。默认夹具上晚间回复间隔的对数标准差约 0.70，白天约 0.72，设计值是 σ = 0.8。`xiaoman.test.ts` 只要求晚间中位数落在 25–60 秒、白天落在 80–180 秒。
-- [ ] P0.5 表情包：`xiaoman.test.ts` 只断言两种贴纸条数大于 0、distant 为 0。按 `burstId` 计，happy/playful 约 25.3%（95/376），melancholy 是 25%（12/48），设计值是 25% 和 30%（没写误差时按 ±5 个百分点，30% 的下沿是 25%）。条数掉到 1 这条测试仍会绿。
-- [ ] P0.6 `--without act`：`server/chat/generate.test.ts` 用的分身没有 `actProfile`，`sampledAct` 本来就是 null。`layersUsed` 不含 `act` 这半边是测到的。另用一份 `unconditional: { tease: 80 }`、`samples: 80` 的画像调用 `planTurn`：不开覆盖时 `sampledAct` 为 `tease`，`layerOverridesForEval({ without: ["act"] })` 时为 null 且 `layersUsed` 不含 `act`。行为在，测试没锁住「本来会抽到动作」。
-- [ ] P0.6 留出句：`generate.test.ts` 用 `JSON.stringify(messages).replaceAll(HELD_OUT, "")` 再比较。这句「这是一句留出的话」不在历史里，采集记录是空的，两边提示词里都不会出现它；排除逻辑坏了，这个断言仍然绿。两边消息相等本身，全量测试里这条是过的。
-- [ ] P0.7：在 `server/llm/index.ts` 末尾加上 `void fetch("https://example.com")` 后，`server/egress.test.ts` 的「lists every fetch」失败，输出 `missing` 含 `server/llm/index.ts`，删掉后 4 通过。同一次运行里名为「fails when a new unlisted fetch appears」的用例仍然通过：它只检查正则能匹配一个字符串，以及白名单里没有 `server/invented-egress.ts`，不扫描文件。
+- [x] P0.5 追一句：`c785e6a`。追一句改到 `retargetMedian` 和最后一次 `fixBurstGaps` 之后插入，并平移该场景里更晚的消息。测试断言每条距上一条 TA 在 6–12 分钟，且中间没有用户消息。
+- [x] P0.5 早晚的往来：`c785e6a`。股票、生日、咖啡馆、未结的事、伤人的话改为改写已有行，不再在晚安之后追加。测试断言每个晚间场景的最后两行是「晚安」往来，并且收在同一天。
+- [x] P0.5 规模：`c785e6a`。`roundsPerMainScene` 改为 10。非冲突的中午和下午场景用户行数是 10，晚间是 11（含晚安）。
+- [x] P0.5 回复间隔：`c785e6a`。去掉 8–90 秒 / 8–400 秒的预截断，只在晚间跨过午夜时收到 23:59:50。测试断言晚间和白天的对数标准差与 0.8 相差小于 0.08。
+- [x] P0.5 表情包：`c785e6a`。测试按 `burstId` 断言 happy/playful 25%、melancholy 30%，容差 ±5 个百分点。
+- [x] P0.6 `--without act`：`58d1123`。测试分身带 `samples: 80`、`unconditional: { tease: 80 }`。不覆盖时 `sampledAct` 为 `tease`，`--without act` 时为 null，且 `layersUsed` 不含 `act`。
+- [x] P0.6 留出句：`58d1123`。采集记录里放进这句留出的话。聊天提示词含它，评测提示词不含它；拿掉聊天侧那一整段示范之后，两边消息 `toEqual`。
+- [x] P0.7：`e6e22c1`。未登记用例把 `server/invented-egress.ts` 里的 `fetch("https://example.com")` 放进同一次扫描，断言缺的就是这个文件。扫描函数与磁盘上的白名单检查是同一个。
+
+### WP0 · 实现会话 · 2026-11-16 · 验收问题
+
+- `c785e6a` 修 P0.5。`58d1123` 修 P0.6 的两条测试。`e6e22c1` 修 P0.7 的扫描测试。
+- 修完后 `corepack pnpm gate` 退出码 0：`269 passed | 2 skipped (271)` 个文件，`2562 passed | 8 skipped (2570)` 个用例。通过数没有减少，跳过数没有增加。
