@@ -17,7 +17,8 @@ export type FixtureFormat =
   | "qq-mht"
   | "telegram-json"
   | "whatsapp-txt"
-  | "line-txt";
+  | "line-txt"
+  | "kakao-txt";
 
 function textRows(records: FixtureRecord[]): FixtureRecord[] {
   return records.filter((row) => row.kind === "text" && row.content.trim());
@@ -85,6 +86,26 @@ function renderQqTxt(records: FixtureRecord[]): string {
     "",
     body,
   ].join("\n");
+}
+
+/** i18n:allow-input — KakaoTalk 12-hour words written into the export. */
+function merHour(stamp: string): { mer: "오전" | "오후"; hour: number; minute: string } {
+  const hour24 = Number(stamp.slice(11, 13));
+  const minute = stamp.slice(14, 16);
+  const mer = hour24 < 12 ? "오전" : "오후";
+  const hour = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return { mer, hour, minute };
+}
+
+function renderKakaoTxt(records: FixtureRecord[]): string {
+  return textRows(records)
+    .map((row) => {
+      const stamp = formatShanghai(row.timestamp);
+      const { mer, hour, minute } = merHour(stamp);
+      const day = `${stamp.slice(0, 4)}. ${Number(stamp.slice(5, 7))}. ${Number(stamp.slice(8, 10))}.`;
+      return `${day} ${mer} ${hour}:${minute}, ${row.speaker} : ${row.content.trim()}`;
+    })
+    .join("\n");
 }
 
 /** i18n:allow-identifier — LINE export chat title; the parser matches these bytes. */
@@ -178,6 +199,8 @@ export function renderFixture(records: FixtureRecord[], format: FixtureFormat | 
       return renderWhatsappTxt(records);
     case "line-txt":
       return renderLineTxt(records);
+    case "kakao-txt":
+      return renderKakaoTxt(records);
     default:
       throw new Error(`renderFixture: format "${format}" is not implemented yet (C1.1)`);
   }

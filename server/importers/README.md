@@ -130,3 +130,15 @@ time field. Bodies with line breaks are wrapped in double quotes.
 
 - Sample (synthetic): `server/test-fixtures/exports/line-txt/sample.txt`.
 - Known limit: the file has no seconds; roundtrip compares times to the minute.
+
+## kakao-txt
+
+Checked 2026-11-16 against recorded KakaoTalk exports
+([talkinsight](https://talkinsight.kr/guide/export-file-format.html),
+[TalkCut](https://talkcut.kr/en/use-cases/export-text)).
+Mobile: `YYYY. M. D. 오전 H:mm, Name : text`. PC: a `YYYY년 M월 D일`
+rule then `[Name] [오전 H:mm] text`. Mac: CSV `Date,User,Message`.
+Continuation lines have no clock.
+
+- Sample (synthetic): `server/test-fixtures/exports/kakao-txt/sample.txt`.
+- Known limit: the clock has no seconds; roundtrip compares times to the minute.

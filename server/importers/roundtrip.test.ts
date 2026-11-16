@@ -28,6 +28,7 @@ const TEXT_FORMATS: Array<{ id: ImportFormatId & FixtureFormat; time: "second" |
   { id: "telegram-json", time: "second" },
   { id: "whatsapp-txt", time: "second" },
   { id: "line-txt", time: "minute" },
+  { id: "kakao-txt", time: "minute" },
 ];
 
 describe("importer roundtrip", () => {

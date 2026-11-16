@@ -52,4 +52,8 @@ export const V6 = {
     zh: "LINE 导出的 TXT",
     en: "LINE exported TXT",
   },
+  "import.format.kakaoTxt": {
+    zh: "KakaoTalk 导出的记录",
+    en: "KakaoTalk exported chat",
+  },
 } as const satisfies CopyTable;
