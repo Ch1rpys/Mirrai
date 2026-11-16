@@ -22,41 +22,7 @@ const RESERVED_NAMES = new Set([
 const MAX_NAME_LENGTH = 120;
 
 /**
- * The extensions each kind of upload may carry.
- *
- * The uploads directory is served from the app's own origin, so an uploaded
- * `.html` file would run as a page on that origin. Only the kinds the app
- * actually reads are allowed.
- */
-export const ALLOWED_EXTENSIONS: Record<string, string[]> = {
-  chat_txt: [".txt"],
-  chat_csv: [".csv"],
-  image: [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".heif"],
-  video: [".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"],
-  audio: [".webm", ".mp3", ".wav", ".ogg", ".oga", ".opus", ".m4a", ".aac", ".mp4", ".amr"],
-  /**
-   * The file a collector reads.
-   *
-   * It is whatever the export produced: a mail export is an `.eml` or
-   * an `.mbox`, a WeChat export is a `.json`, and a plain transcript is
-   * a `.txt` or a `.csv`.
-   *
-   * The list is a list — the picker offered five extensions and the
-   * server allowed one, so four of the five were refused after the
-   * upload. And the list is not "anything": the uploads directory is
-   * served from the app's own origin, so a file the browser would run
-   * as a page is a page on that origin.
-   */
-  collected: [".txt", ".csv", ".json", ".eml", ".mbox"],
-  /** A chat export that is not a zip. C1.1 widens this as formats land. */
-  chat_export: [".txt", ".csv", ".json"],
-  archive: [".zip"],
-};
-
-/**
- * Chat files a zip may unpack. Kept here so the upload route and the
- * unpacker share one list; `chat_export` on the upload surface is
- * widened to this in the streaming-upload step.
+ * Chat files a zip may unpack, and a `chat_export` upload may carry.
  */
 export const IMPORT_CHAT_EXTENSIONS = [
   ".txt",
@@ -93,6 +59,38 @@ export const IMPORT_MEDIA_EXTENSIONS = [
 ] as const;
 
 export const IMPORT_ARCHIVE_EXTENSIONS = [".zip"] as const;
+
+/**
+ * The extensions each kind of upload may carry.
+ *
+ * The uploads directory is served from the app's own origin, so an uploaded
+ * `.html` file would run as a page on that origin. Only the kinds the app
+ * actually reads are allowed. Chat HTML is stored under `/uploads` and
+ * served only to its owner; the wizard never navigates to it as a page.
+ */
+export const ALLOWED_EXTENSIONS: Record<string, string[]> = {
+  chat_txt: [".txt"],
+  chat_csv: [".csv"],
+  image: [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".heif"],
+  video: [".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"],
+  audio: [".webm", ".mp3", ".wav", ".ogg", ".oga", ".opus", ".m4a", ".aac", ".mp4", ".amr"],
+  /**
+   * The file a collector reads.
+   *
+   * It is whatever the export produced: a mail export is an `.eml` or
+   * an `.mbox`, a WeChat export is a `.json`, and a plain transcript is
+   * a `.txt` or a `.csv`.
+   *
+   * The list is a list — the picker offered five extensions and the
+   * server allowed one, so four of the five were refused after the
+   * upload. And the list is not "anything": the uploads directory is
+   * served from the app's own origin, so a file the browser would run
+   * as a page is a page on that origin.
+   */
+  collected: [".txt", ".csv", ".json", ".eml", ".mbox"],
+  chat_export: [...IMPORT_CHAT_EXTENSIONS],
+  archive: [...IMPORT_ARCHIVE_EXTENSIONS],
+};
 
 const IMPORT_CHAT_SET = new Set<string>(IMPORT_CHAT_EXTENSIONS);
 const IMPORT_MEDIA_SET = new Set<string>(IMPORT_MEDIA_EXTENSIONS);

@@ -24,6 +24,18 @@ export const V6 = {
     zh: "这个压缩包解开之后太大，没有留下文件。",
     en: "That zip archive would unpack to more than the size limit, so nothing was kept.",
   },
+  "errors.importPersonaNotFound": {
+    zh: "这个分身不存在，或者不属于你。",
+    en: "That persona does not exist, or it is not yours.",
+  },
+  "errors.importTooManyRequests": {
+    zh: "传得太快了——等一下再试。",
+    en: "You are uploading too fast — wait a moment and try again.",
+  },
+  "errors.importUploadEmpty": {
+    zh: "这份文件是空的。",
+    en: "That file is empty.",
+  },
   "import.format.genericLine": {
     zh: "一行一条的聊天记录",
     en: "One message per line",

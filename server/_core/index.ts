@@ -14,6 +14,7 @@ import { securityHeaders } from "./security-headers";
 import { initRateLimiter } from "./rate-limit";
 import { uploadsAuthGuard } from "./uploads";
 import { registerChatStreamRoute } from "../chat/stream-route";
+import { registerImportUploadRoute } from "../importers/upload-route";
 import { bootstrapAdminAccount } from "../bootstrap/bootstrap";
 import { migrateLegacyTTSFiles } from "./tts";
 
@@ -120,6 +121,7 @@ async function startServer() {
   app.use("/api", csrfGuard);
 
   registerAuthRoutes(app);
+  registerImportUploadRoute(app);
 
   app.use(
     "/api/trpc",

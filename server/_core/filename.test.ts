@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { sanitizeFileName, resolveUploadPath, importEntryKind } from "./filename";
+import {
+  sanitizeFileName,
+  resolveUploadPath,
+  importEntryKind,
+  ALLOWED_EXTENSIONS,
+} from "./filename";
 
 describe("sanitizeFileName", () => {
   it("keeps an ordinary name", () => {
@@ -56,6 +61,13 @@ describe("importEntryKind", () => {
   it("rejects an extension the unpacker will not write", () => {
     expect(importEntryKind("secret.exe")).toBeNull();
     expect(importEntryKind("notes")).toBeNull();
+  });
+
+  it("lets a chat_export carry the unpacked chat extensions", () => {
+    expect(ALLOWED_EXTENSIONS.chat_export).toEqual(
+      expect.arrayContaining([".txt", ".csv", ".json", ".html", ".htm", ".xml", ".db", ".mht"]),
+    );
+    expect(ALLOWED_EXTENSIONS.archive).toEqual([".zip"]);
   });
 });
 

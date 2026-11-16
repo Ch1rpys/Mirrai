@@ -19,6 +19,8 @@ import { cappedWarnings } from "./normalize";
 import type { ParseWarning } from "./types";
 
 const GiB = 1024 * 1024 * 1024;
+/** Signed int4 ceiling: `persona_files.fileSize` cannot hold a full 2 GiB. */
+const INT4_MAX = 2147483647;
 
 export const DEFAULT_MAX_ARCHIVE_ENTRIES = 200_000;
 export const DEFAULT_MAX_UNPACKED_BYTES = 8 * GiB;
@@ -79,7 +81,7 @@ export function maxImportUnpackedBytes(): number {
 }
 
 export function maxImportFileBytes(): number {
-  return readLimit("MAX_IMPORT_BYTES", DEFAULT_MAX_FILE_BYTES);
+  return Math.min(readLimit("MAX_IMPORT_BYTES", DEFAULT_MAX_FILE_BYTES), INT4_MAX);
 }
 
 /**
