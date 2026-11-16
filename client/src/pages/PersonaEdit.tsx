@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  ArrowLeft, Save, Eye, X, Plus, Download, Upload, PauseCircle, PlayCircle
+  ArrowLeft, Save, Eye, Download, Upload, PauseCircle, PlayCircle
 } from "lucide-react";
 import { toast } from "sonner";
 import PageLoader from "@/components/PageLoader";
@@ -24,6 +24,7 @@ import MicroRulesEditor from "@/components/MicroRulesEditor";
 import ImperfectionEditor from "@/components/ImperfectionEditor";
 import V5FidelityEditors from "@/components/V5FidelityEditors";
 import PersonaSwitches from "@/components/v6/PersonaSwitches";
+import TagInput from "@/components/v6/TagInput";
 import { useLocale } from "@/contexts/LocaleContext";
 import { copy } from "@shared/copy";
 
@@ -68,76 +69,6 @@ function downloadBase64(fileName: string, base64: string): void {
   anchor.remove();
   // The download starts asynchronously, so the URL is released a moment later.
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function TagInput({
-  tags,
-  onChange,
-  id,
-  label,
-}: {
-  tags: string[];
-  onChange: (t: string[]) => void;
-  /** The name of the field, so a screen reader knows what is being typed. */
-  id: string;
-  label: string;
-}) {
-  const { t } = useLocale();
-  const [input, setInput] = useState("");
-  const add = () => {
-    const v = input.trim();
-    if (v && !tags.includes(v)) { onChange([...tags, v]); setInput(""); }
-  };
-  return (
-    <div className="space-y-2.5">
-      {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {tags.map((tag, i) => (
-            <span key={i} className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-border bg-card text-foreground/80">
-              {tag}
-              <button onClick={() => onChange(tags.filter((_, j) => j !== i))}
-                aria-label={`${label}: ${tag}`}
-                /**
-                 * The button is big enough to hit.
-                 *
-                 * It was a twelve-pixel cross with nothing around it —
-                 * so the thing that removes a tag was the smallest
-                 * thing on the screen, and it was hard to hit on a
-                 * touch screen and hard to hit at all with a hand
-                 * that shakes. The target is now at least twenty-four
-                 * pixels across, which is what the accessibility rules
-                 * ask for.
-                 *
-                 * The size is set in the style, so it does not depend
-                 * on a class that a later change could quietly shrink.
-                 */
-                style={{ minWidth: "1.5rem", minHeight: "1.5rem" }}
-                className="text-muted-foreground hover:text-destructive transition-colors inline-flex items-center justify-center w-6 h-6 -m-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="flex gap-2">
-        <Input id={id} value={input} onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
-          aria-label={label}
-          placeholder={t("personaEdit.tagPlaceholder")} className="h-8 text-sm flex-1" />
-        <Button size="sm" variant="ghost" onClick={add} className="h-8 px-2 rounded-md"
-          /**
-           * The button says what it does.
-           *
-           * It had the same name as the field beside it — so a screen
-           * reader announced a text field and a button, both called
-           * 「口头禅」, with nothing to say that the button adds a tag.
-           */
-          aria-label={t("personaEdit.addTag", { label })}>
-          <Plus className="w-3.5 h-3.5" />
-        </Button>
-      </div>
-    </div>
-  );
 }
 
 export default function PersonaEdit() {

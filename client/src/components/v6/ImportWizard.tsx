@@ -7,6 +7,8 @@ import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { formatDateTimeInZone } from "@/lib/dates";
 import { renderRecordContent } from "@shared/records";
+import { isKeptName, redactRecords } from "@shared/redact";
+import TagInput from "./TagInput";
 
 type RoleChoice = "me" | "them" | "other";
 
@@ -71,6 +73,7 @@ function guessColumnMap(headers: string[]): ColumnMapState {
 export default function ImportWizard(props: {
   fileId: number;
   personaName: string;
+  userName?: string | null;
   timezone?: string | null;
 }) {
   const { t, locale } = useLocale();
@@ -81,6 +84,12 @@ export default function ImportWizard(props: {
   const [chatId, setChatId] = useState("");
   const [roles, setRoles] = useState<Record<string, RoleChoice>>({});
   const [columnGuessed, setColumnGuessed] = useState(false);
+  const [hidePhones, setHidePhones] = useState(false);
+  const [hideIds, setHideIds] = useState(false);
+  const [hideEmails, setHideEmails] = useState(false);
+  const [hideCards, setHideCards] = useState(false);
+  const [hideNames, setHideNames] = useState<string[]>([]);
+  const [keepHint, setKeepHint] = useState("");
 
   const statusQuery = trpc.import.status.useQuery(
     { fileId: props.fileId },
@@ -110,6 +119,12 @@ export default function ImportWizard(props: {
   );
   const hasMe = meNames.length > 0;
   const hasThem = themNames.length > 0;
+  const keepNames = useMemo(
+    () => [props.personaName, props.userName, ...meNames, ...themNames].filter(
+      (name): name is string => Boolean(name && name.trim()),
+    ),
+    [props.personaName, props.userName, meNames, themNames],
+  );
   const formatId = selectedFormat || report?.format || "";
   const columnPayload = useMemo(() => payloadOf(columnMap), [columnMap]);
   const showColumnMap = columnMapOpen || formatId === "column-map";
@@ -178,6 +193,7 @@ export default function ImportWizard(props: {
 
   const confirmImport = () => {
     if (!formatId || !hasMe || !hasThem) return;
+    const hiding = hidePhones || hideIds || hideEmails || hideCards || hideNames.length > 0;
     void confirmMutation.mutateAsync({
       fileId: props.fileId,
       format: formatId as "generic-line",
@@ -185,6 +201,15 @@ export default function ImportWizard(props: {
       them: themNames,
       chatId: chatId || undefined,
       columnMap: showColumnMap ? columnPayload : undefined,
+      redaction: hiding
+        ? {
+            phones: hidePhones,
+            ids: hideIds,
+            emails: hideEmails,
+            cards: hideCards,
+            names: hideNames,
+          }
+        : undefined,
     });
   };
 
@@ -372,6 +397,26 @@ export default function ImportWizard(props: {
               personaName={props.personaName}
               locale={locale}
               onTimezone={goToTimezone}
+              keepNames={keepNames}
+              hidePhones={hidePhones}
+              hideIds={hideIds}
+              hideEmails={hideEmails}
+              hideCards={hideCards}
+              hideNames={hideNames}
+              keepHint={keepHint}
+              onHidePhones={setHidePhones}
+              onHideIds={setHideIds}
+              onHideEmails={setHideEmails}
+              onHideCards={setHideCards}
+              onHideNames={(names) => {
+                setHideNames(names);
+                setKeepHint("");
+              }}
+              onRejectName={(name) => {
+                if (!isKeptName(name, keepNames)) return false;
+                setKeepHint(t("importWizard.redactKeepHint", { name: name.trim() }));
+                return true;
+              }}
             />
           )}
           <Button
@@ -582,6 +627,19 @@ function PreviewPanel(props: {
   personaName: string;
   locale: string;
   onTimezone: () => void;
+  keepNames: string[];
+  hidePhones: boolean;
+  hideIds: boolean;
+  hideEmails: boolean;
+  hideCards: boolean;
+  hideNames: string[];
+  keepHint: string;
+  onHidePhones: (value: boolean) => void;
+  onHideIds: (value: boolean) => void;
+  onHideEmails: (value: boolean) => void;
+  onHideCards: (value: boolean) => void;
+  onHideNames: (names: string[]) => void;
+  onRejectName: (name: string) => boolean;
 }) {
   const { t } = useLocale();
   const report = props.report;
@@ -589,6 +647,14 @@ function PreviewPanel(props: {
     .map(([kind, count]) => `${kind} ${count}`)
     .join(" · ");
   const warnings = (report?.warnings ?? []).slice(0, 5);
+  const shown = redactRecords(props.rows, {
+    phones: props.hidePhones,
+    ids: props.hideIds,
+    emails: props.hideEmails,
+    cards: props.hideCards,
+    names: props.hideNames,
+    keepNames: props.keepNames,
+  }).records;
 
   return (
     <div className="space-y-2 rounded-md border border-border/70 p-3">
@@ -646,7 +712,55 @@ function PreviewPanel(props: {
           {t("importWizard.settingsTimezone")}
         </button>
       </p>
-      {props.rows.length > 0 && (
+      <fieldset className="space-y-2 rounded-md border border-border/70 p-3">
+        <legend className="px-1 text-sm text-foreground">{t("importWizard.redactTitle")}</legend>
+        <p className="text-xs text-muted-foreground leading-relaxed">{t("importWizard.redactLead")}</p>
+        <div className="flex flex-wrap gap-4">
+          <label className="inline-flex items-center gap-1.5 text-sm">
+            <input
+              type="checkbox"
+              checked={props.hidePhones}
+              onChange={(e) => props.onHidePhones(e.target.checked)}
+            />
+            {t("importWizard.redactPhones")}
+          </label>
+          <label className="inline-flex items-center gap-1.5 text-sm">
+            <input
+              type="checkbox"
+              checked={props.hideIds}
+              onChange={(e) => props.onHideIds(e.target.checked)}
+            />
+            {t("importWizard.redactIds")}
+          </label>
+          <label className="inline-flex items-center gap-1.5 text-sm">
+            <input
+              type="checkbox"
+              checked={props.hideEmails}
+              onChange={(e) => props.onHideEmails(e.target.checked)}
+            />
+            {t("importWizard.redactEmails")}
+          </label>
+          <label className="inline-flex items-center gap-1.5 text-sm">
+            <input
+              type="checkbox"
+              checked={props.hideCards}
+              onChange={(e) => props.onHideCards(e.target.checked)}
+            />
+            {t("importWizard.redactCards")}
+          </label>
+        </div>
+        <TagInput
+          id={`import-redact-names-${props.personaName}`}
+          label={t("importWizard.redactNames")}
+          tags={props.hideNames}
+          onChange={props.onHideNames}
+          reject={props.onRejectName}
+        />
+        {props.keepHint ? (
+          <p className="text-xs text-muted-foreground">{props.keepHint}</p>
+        ) : null}
+      </fieldset>
+      {shown.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
@@ -657,7 +771,7 @@ function PreviewPanel(props: {
               </tr>
             </thead>
             <tbody>
-              {props.rows.map((row, i) => (
+              {shown.map((row, i) => (
                 <tr key={i} className="border-t border-border/70 align-top">
                   <td className="py-1 pr-2 whitespace-nowrap text-muted-foreground">
                     {row.timestamp

@@ -1,4 +1,5 @@
 import type { ParsedRecord, RecordKind } from "@shared/records";
+import type { RedactionReport } from "@shared/redact";
 
 export type ImportFormatId =
   | "generic-line"
@@ -104,6 +105,8 @@ export interface ParseReport {
   rawTable?: { headers: string[]; rows: string[][] };
   /** Rows the writer skipped because they were already in the table. */
   existing?: number;
+  /** Which redaction flags ran, and how many replacements each made. */
+  redaction?: RedactionReport;
 }
 
 export type { ParsedRecord, RecordKind };

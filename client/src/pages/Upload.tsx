@@ -800,6 +800,7 @@ export default function Upload() {
                     <ImportWizard
                       fileId={f.id}
                       personaName={persona?.name ?? ""}
+                      userName={(user as { name?: string | null } | null)?.name}
                       timezone={(user as { timezone?: string | null } | null)?.timezone}
                     />
                   )}

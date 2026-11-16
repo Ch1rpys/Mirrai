@@ -112,9 +112,6 @@ export const importRouter = router({
           message: copy(ctx.locale, "errors.importRolesRequired"),
         });
       }
-      // redaction is applied in C1.7; the field is accepted so the wizard
-      // can send it without a second signature change.
-      void input.redaction;
       return startImport({
         fileId: input.fileId,
         userId: ctx.user.id,
@@ -124,6 +121,7 @@ export const importRouter = router({
         them: input.them,
         chatId: input.chatId,
         columnMap: input.columnMap,
+        redaction: input.redaction,
       });
     }),
 

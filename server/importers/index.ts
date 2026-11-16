@@ -41,6 +41,12 @@ import {
 } from "./normalize";
 import { importerById } from "./registry";
 import { assignRoles, guessRoles } from "./roles";
+import {
+  isRedactionActive,
+  redactRecords,
+  redactionReportOf,
+  type RedactionOptions,
+} from "./redact";
 import type {
   ColumnMap,
   ImportFormatId,
@@ -71,6 +77,7 @@ export interface StartImportInput {
   them?: string[];
   chatId?: string;
   columnMap?: ColumnMap;
+  redaction?: Omit<RedactionOptions, "keepNames">;
 }
 
 export interface StartImportResult {
@@ -362,9 +369,27 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
   }
 
   const assigned = assignRoles(parsed.records, mapping);
-  const withRoles = {
+  const keepNames = [
+    ...(mapping.me ?? []),
+    ...(mapping.them ?? []),
+    persona?.name,
+    user?.name,
+  ].filter((name): name is string => Boolean(name && name.trim()));
+  const redactionOptions: RedactionOptions = {
+    ...(input.redaction ?? {}),
+    keepNames,
+  };
+  const redacted = isRedactionActive(input.redaction)
+    ? redactRecords(assigned, redactionOptions)
+    : { records: assigned, counts: undefined };
+  const toWrite = redacted.records;
+  const redactionReport = redacted.counts
+    ? redactionReportOf(redactionOptions, redacted.counts)
+    : undefined;
+  const withRoles: ParseReport = {
     ...baseReport,
     roleCounts: countBy(assigned.map((row) => row.role)),
+    ...(redactionReport ? { redaction: redactionReport } : {}),
   };
 
   await updatePersonaFile(file.id, input.userId, {
@@ -378,7 +403,7 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
       userId: input.userId,
       source: importer.source,
       fileId: file.id,
-      records: assigned,
+      records: toWrite,
       onProgress: async (soFar, total) => {
         await updatePersonaFile(file.id, input.userId, {
           parseStatus: "importing",
@@ -395,7 +420,7 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
       parseReport: reportOf({
         ...withRoles,
         written,
-        existing: assigned.length - written,
+        existing: toWrite.length - written,
         progress: 100,
       }),
     });

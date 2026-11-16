@@ -1201,6 +1201,14 @@ export const en = {
     what: "What",
     kinds: "By kind: {{summary}}",
     sides: "You {{me}}, {{name}} {{them}}",
+    redactTitle: "Hide these",
+    redactLead: "Logs often mention people and numbers that are not the two of you. Anything you tick is replaced with a token before the rows are stored. After that, the original cannot be recovered.",
+    redactPhones: "Phone numbers",
+    redactIds: "ID numbers",
+    redactEmails: "Email addresses",
+    redactCards: "Card numbers",
+    redactNames: "These names",
+    redactKeepHint: "「{{name}}」 is your name or TA's, so it will not be hidden.",
   },
 
   diary: {

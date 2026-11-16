@@ -151,6 +151,36 @@ describe("the import wizard", () => {
     });
   });
 
+  it("replaces a phone number in the preview table when that box is ticked", async () => {
+    const user = userEvent.setup();
+    status = fileStatus("needs_roles", {
+      format: "generic-line",
+      speakers: [
+        { name: "小满", count: 1 },
+        { name: "阿树", count: 1 },
+      ],
+    });
+    preview = {
+      status: "ok",
+      total: 1,
+      records: [
+        { timestamp: "2022-03-01T12:00:00.000Z", speaker: "小满", content: "打 13800138000", kind: "text", lineNo: 1 },
+      ],
+      report: { format: "generic-line", roleCounts: { user: 1, assistant: 1 } },
+    };
+    render(<ImportWizard fileId={11} personaName="小满" timezone="Asia/Shanghai" />);
+
+    const them = screen.getByRole("group", { name: /小满/ });
+    const me = screen.getByRole("group", { name: /阿树/ });
+    await user.click(within(them).getByRole("radio", { name: translate("zh", "importWizard.role.them") }));
+    await user.click(within(me).getByRole("radio", { name: translate("zh", "importWizard.role.me") }));
+
+    expect(screen.getByText("打 13800138000")).toBeTruthy();
+    await user.click(screen.getByRole("checkbox", { name: translate("zh", "importWizard.redactPhones") }));
+    expect(screen.getByText("打 [phone]")).toBeTruthy();
+    expect(screen.queryByText("打 13800138000")).toBeNull();
+  });
+
   it("says how many rows were added when the import is done", () => {
     status = fileStatus("done", {
       written: 12,

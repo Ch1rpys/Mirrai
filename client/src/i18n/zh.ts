@@ -1196,6 +1196,14 @@ export const zh = {
     what: "内容",
     kinds: "各类型：{{summary}}",
     sides: "你 {{me}} 条，{{name}} {{them}} 条",
+    redactTitle: "隐去这些",
+    redactLead: "记录里常有不相干的人和号码。勾上的会在入库前换成记号，换掉之后找不回来。",
+    redactPhones: "手机号",
+    redactIds: "身份证号",
+    redactEmails: "邮箱",
+    redactCards: "银行卡号",
+    redactNames: "这些人的名字",
+    redactKeepHint: "「{{name}}」是你或 TA 的名字，不会隐去。",
   },
 
   diary: {

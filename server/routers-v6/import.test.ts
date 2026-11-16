@@ -222,6 +222,33 @@ describe("import.status / preview / confirm / cancel", () => {
     expect(createCollectedMessages).toHaveBeenCalled();
   });
 
+  it("writes redacted content when confirm asks to hide phones", async () => {
+    const withPhone = [
+      "[2022-03-01 20:00:00] 小满：打 13800138000",
+      "[2022-03-01 20:00:05] 阿树：在的",
+    ].join("\n");
+    readFile.mockResolvedValue(Buffer.from(withPhone, "utf-8"));
+    const result = await appRouter.createCaller(ctxFor(1)).import.confirm({
+      fileId: 11,
+      format: "generic-line",
+      me: ["阿树"],
+      them: ["小满"],
+      redaction: { phones: true },
+    });
+    expect(result).toMatchObject({ status: "done", written: 2 });
+    const rows = createCollectedMessages.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(rows.map((row) => row.content)).toEqual(["打 [phone]", "在的"]);
+    expect(JSON.stringify(rows)).not.toContain("13800138000");
+    const done = updatePersonaFile.mock.calls
+      .map((call) => call[2] as { parseStatus?: string; parseReport?: Record<string, unknown> })
+      .find((patch) => patch.parseStatus === "done");
+    expect(done?.parseReport?.redaction).toMatchObject({
+      phones: true,
+      replaced: expect.objectContaining({ phones: 1 }),
+    });
+    expect(JSON.stringify(done?.parseReport)).not.toContain("13800138000");
+  });
+
   it("marks a cancelled import as failed", async () => {
     const result = await appRouter.createCaller(ctxFor(1)).import.cancel({ fileId: 11 });
     expect(result).toEqual({ status: "failed" });
