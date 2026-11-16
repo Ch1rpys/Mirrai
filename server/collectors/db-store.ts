@@ -21,6 +21,7 @@ import type { CollectorAuthState, CollectorCredentials, CollectInput, SourceConn
 import type { CollectorJob, CollectorJobStatus } from "./jobs";
 import { copy } from "@shared/copy";
 import type { ParsedRecord, RecordRole } from "@shared/records";
+import { zonedDateKey, zonedHour, zonedMinute } from "@shared/timezone";
 
 /**
  * The write chain, per job.
@@ -532,6 +533,42 @@ export function toTranscript(
 ): string {
   return messages
     .map((m) => `${collectedSpeaker(m.role, locale)}${m.content}`)
+    .join("\n");
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function formatRecordStamp(date: Date, timeZone?: string | null): string {
+  return `${zonedDateKey(date, timeZone)} ${pad2(zonedHour(date, timeZone))}:${pad2(zonedMinute(date, timeZone))}`;
+}
+
+/**
+ * The same transcript, with a wall-clock time in front of each line.
+ *
+ * Distillation used to drop the time, so the period miner never saw a
+ * silence. The analysis stages that still read text get this shape
+ * until they read structured rows too.
+ */
+export function toTimedTranscript(
+  messages: Array<{ role: string; content: string; timestamp?: Date | string | null }>,
+  locale: "zh" | "en" = "zh",
+  timeZone?: string | null,
+): string {
+  return messages
+    .map((m) => {
+      const at =
+        m.timestamp instanceof Date
+          ? m.timestamp
+          : typeof m.timestamp === "string" && m.timestamp.trim()
+            ? new Date(m.timestamp)
+            : null;
+      const stamp =
+        at && !Number.isNaN(at.getTime()) ? formatRecordStamp(at, timeZone) : "";
+      const line = `${collectedSpeaker(m.role, locale)}${m.content}`;
+      return stamp ? `${stamp} ${line}` : line;
+    })
     .join("\n");
 }
 

@@ -185,4 +185,18 @@ describe("the v5 seam on a named transcript", () => {
     await runSkillPipeline(baseInput);
     expectMinedV5(writtenPersona());
   }, 60_000);
+
+  it("mines the same layers from structured records, with the fixture's own times", async () => {
+    await runSkillPipeline({
+      ...baseInput,
+      records: fixture.map((row) => ({
+        id: row.id,
+        role: row.role,
+        content: row.content,
+        timestamp: row.timestamp,
+        kind: row.kind,
+      })),
+    });
+    expectMinedV5(writtenPersona(), firstAfterSilenceIso());
+  }, 60_000);
 });

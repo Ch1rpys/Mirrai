@@ -73,6 +73,7 @@ import {
   saveCollectionSource,
   saveConnectorSource,
   toTranscript,
+  toTimedTranscript,
 } from "./db-store";
 
 describe("importCollectedMessages", () => {
@@ -471,6 +472,24 @@ describe("toTranscript", () => {
 
   it("handles an empty list", () => {
     expect(toTranscript([])).toBe("");
+  });
+});
+
+describe("toTimedTranscript", () => {
+  it("writes a wall-clock time in front of each line", () => {
+    expect(
+      toTimedTranscript(
+        [
+          {
+            role: "user",
+            content: "在吗",
+            timestamp: new Date("2023-07-12T08:16:09.000Z"),
+          },
+        ],
+        "zh",
+        "Asia/Shanghai",
+      ),
+    ).toBe("2023-07-12 16:16 我：在吗");
   });
 });
 

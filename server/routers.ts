@@ -126,6 +126,7 @@ import {
   sampledActFromMetadata,
 } from "./skill-engine/feedback-aggregate";
 import { mayReachOut } from "@shared/graduation-mode";
+import { isRecordKind } from "@shared/records";
 import { hashPassword, verifyPassword } from "./_core/password";
 import { extractJsonArray, extractJsonObject } from "./_core/json";
 import {
@@ -168,7 +169,7 @@ import {
   getCollectorJob,
   listCollectorJobs,
 } from "./collectors";
-import { listPersistedCollectorJobs, getPersistedCollectorJob, collectedSpeaker } from "./collectors/db-store";
+import { listPersistedCollectorJobs, getPersistedCollectorJob, toTimedTranscript } from "./collectors/db-store";
 
 /**
  * Resolves a persona's picture to PNG bytes for the character-card export.
@@ -398,7 +399,7 @@ async function startPersonaDistillation(params: {
     // The distillation needs the extracted text of every file.
     const material = params.material ?? (await readDistillationMaterial(personaId, userId));
     const files = material.files;
-    const chatContent = files
+    const uploadedText = files
       .filter((f) => f.fileType === "chat_txt" || f.fileType === "chat_csv")
       .map((f) => f.extractedMemory || "")
       .join("\n\n---\n\n")
@@ -410,6 +411,12 @@ async function startPersonaDistillation(params: {
 
     // Messages pulled in by the collectors are part of the history too.
     const collected = material.collected;
+    let timezone: string | null = null;
+    try {
+      timezone = await getUserTimezone(userId);
+    } catch {
+      timezone = null;
+    }
     /**
      * The collected transcript has a ceiling too.
      *
@@ -420,11 +427,34 @@ async function startPersonaDistillation(params: {
      * and expensive.
      */
     const collectedTranscript = collected.length > 0
-      ? collected
-          .map((m) => `${collectedSpeaker(m.role, locale)}${m.content}`)
-          .join("\n")
-          .slice(0, MAX_DISTILLATION_CHARS)
+      ? toTimedTranscript(collected, locale, timezone).slice(0, MAX_DISTILLATION_CHARS)
       : "";
+    const records = collected.length > 0
+      ? collected.map((row) => {
+          const role: "user" | "assistant" | "other" =
+            row.role === "user" || row.role === "assistant" || row.role === "other"
+              ? row.role
+              : "other";
+          return {
+            id: row.id,
+            role,
+            content: row.content,
+            timestamp: row.timestamp ?? null,
+            kind: isRecordKind(row.kind) ? row.kind : ("text" as const),
+          };
+        })
+      : undefined;
+    /**
+     * Structured rows win.
+     *
+     * When the persona has records, the miners read those and the
+     * analysis stages that still want text get a timed rendering of
+     * the same rows. An old upload with no rows keeps the extracted
+     * file text.
+     */
+    const chatContent = records
+      ? collectedTranscript
+      : [uploadedText, collectedTranscript].filter(Boolean).join("\n\n---\n\n");
 
     /**
      * Nothing to read.
@@ -455,7 +485,8 @@ async function startPersonaDistillation(params: {
       // name a preset; the pipeline resolves the preset first.
       characterFamily: params.characterFamily,
       name,
-      chatContent: [chatContent, collectedTranscript].filter(Boolean).join("\n\n---\n\n"),
+      chatContent,
+      records,
       imageUrls,
       researchProfile: params.researchProfile ?? undefined,
       mode: params.mode ?? undefined,

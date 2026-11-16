@@ -71,6 +71,7 @@ import {
   parseTranscriptMessages,
 } from "./micro-rules";
 import { toMinerRows } from "./roles";
+import { isTextRecord, type RecordKind } from "@shared/records";
 import { copy, type CopyKey, type Locale } from "@shared/copy";
 import { extractMemories } from "../chat/memory-extract";
 import { storageToDataUrl } from "../storage";
@@ -126,12 +127,29 @@ async function invokePipeline(params: {
   return outcome.text;
 }
 
+export type PipelineRecord = {
+  id: number;
+  role: "user" | "assistant" | "other";
+  content: string;
+  timestamp: Date | null;
+  kind: RecordKind;
+};
+
 export type PipelineInput = {
   personaId: number;
   userId: number;
   characterFamily: CharacterFamily;
   name: string;
   chatContent: string;
+  /**
+   * Structured rows from the record table.
+   *
+   * When they are present the v5 miners read them directly. The
+   * transcript text stays for the analysis stages that have not been
+   * rewritten yet. A persona that only has an old upload, and no rows,
+   * keeps the text path.
+   */
+  records?: PipelineRecord[];
   /** Image URLs to describe and fold into the persona memories. */
   imageUrls?: string[];
   intakeMeta?: Record<string, unknown>;
@@ -847,6 +865,15 @@ function transcriptRowsFrom(input: PipelineInput): Array<{
   content: string;
   timestamp: Date | null;
 }> {
+  if (input.records && input.records.length > 0) {
+    return input.records
+      .filter((row) => (row.role === "user" || row.role === "assistant") && isTextRecord(row))
+      .map((row) => ({
+        role: row.role,
+        content: row.content,
+        timestamp: coerceTimestamp(row.timestamp),
+      }));
+  }
   return toMinerRows(
     parseTranscriptMessages(input.chatContent, { personaName: input.name }),
     input.name,
