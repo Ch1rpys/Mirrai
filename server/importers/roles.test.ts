@@ -25,6 +25,16 @@ describe("guessRoles", () => {
     expect(guessRoles(["小满", "阿树", "同事"], { personaName: "小满" })).toBeNull();
   });
 
+  it("keeps fromMe when both sides share a display name", () => {
+    const records: ParsedRecord[] = [
+      line("小满", { fromMe: true }),
+      line("小满", { fromMe: false }),
+    ];
+    const mapping = guessRoles(["小满"], {}, records);
+    expect(mapping).toEqual({ me: ["小满"], them: ["小满"] });
+    expect(assignRoles(records, mapping!).map((row) => row.role)).toEqual(["user", "assistant"]);
+  });
+
   it("takes fromMe on the records before matching names", () => {
     const records: ParsedRecord[] = [
       line("小满", { fromMe: true }),

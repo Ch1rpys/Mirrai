@@ -37,10 +37,26 @@ export function guessRoles(
   };
 
   if (records) {
+    const meSeen = new Set<string>();
+    const themSeen = new Set<string>();
     for (const row of records) {
-      if (row.fromMe === true) take(me, row.speaker);
-      else if (row.fromMe === false) take(them, row.speaker);
+      const name = row.speaker.trim();
+      if (!name) continue;
+      const key = keyOf(name);
+      if (row.fromMe === true && !meSeen.has(key)) {
+        me.push(name);
+        meSeen.add(key);
+      }
+      if (row.fromMe === false && !themSeen.has(key)) {
+        them.push(name);
+        themSeen.add(key);
+      }
     }
+    for (const key of [...meSeen, ...themSeen]) seen.add(key);
+    // A format that tagged every row (WeChat CSV IsSender, SMS type)
+    // has already named the two sides, even when both rows carry the
+    // same display name.
+    if (me.length > 0 && them.length > 0) return { me, them };
   }
 
   const leftover: string[] = [];
@@ -76,8 +92,10 @@ export function assignRoles(
   return records.map((row) => {
     const key = keyOf(row.speaker);
     let role: RecordRole = "other";
-    if (row.fromMe === true || me.has(key)) role = "user";
-    else if (row.fromMe === false || them.has(key)) role = "assistant";
+    if (row.fromMe === true) role = "user";
+    else if (row.fromMe === false) role = "assistant";
+    else if (me.has(key)) role = "user";
+    else if (them.has(key)) role = "assistant";
     return { ...row, role };
   });
 }

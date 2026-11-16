@@ -41,6 +41,16 @@ describe("detectFormat", () => {
     expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
   });
 
+  it("claims the wechat-csv sample as itself", () => {
+    const sample = readFileSync(
+      path.resolve(import.meta.dirname, "../test-fixtures/exports/wechat-csv/sample.csv"),
+      "utf8",
+    );
+    const hits = detectFormat(source("chat.csv", sample));
+    expect(hits[0]?.id).toBe("wechat-csv");
+    expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
+  });
+
   it("does not claim a prose paragraph", () => {
     const prose = [
       "The evening was quiet.",

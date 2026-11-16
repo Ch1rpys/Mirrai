@@ -1,6 +1,7 @@
 import { genericLineImporter } from "./formats/generic-line";
 import { wechatTxt2LineImporter } from "./formats/wechat-txt-2line";
 import { wechatTxtParenImporter } from "./formats/wechat-txt-paren";
+import { wechatCsvImporter } from "./formats/wechat-csv";
 import type { ImportFormatId, Importer } from "./types";
 
 /**
@@ -13,6 +14,7 @@ export const IMPORTERS: Importer[] = [
   genericLineImporter,
   wechatTxt2LineImporter,
   wechatTxtParenImporter,
+  wechatCsvImporter,
 ];
 
 export function importerById(id: ImportFormatId | string): Importer | undefined {

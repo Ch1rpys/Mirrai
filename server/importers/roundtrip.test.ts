@@ -16,6 +16,7 @@ const TEXT_FORMATS: Array<{ id: ImportFormatId & FixtureFormat; time: "second" }
   { id: "generic-line", time: "second" },
   { id: "wechat-txt-2line", time: "second" },
   { id: "wechat-txt-paren", time: "second" },
+  { id: "wechat-csv", time: "second" },
 ];
 
 describe("importer roundtrip", () => {

@@ -43,3 +43,16 @@ Checked 2026-11-16 against
 the next lines.
 
 - Sample (synthetic): `server/test-fixtures/exports/wechat-txt-paren/sample.txt`.
+
+## wechat-csv
+
+Checked 2026-11-16 against WeChatMsg / PyWxDump MSG columns:
+[wx-core MSG.md](https://docs.rs/crate/wx-core/latest/source/src/orm_types/MSG.md)
+and [PyWxDump message types](https://deepwiki.com/chenrgSix/PyWxDump/6.3-message-type-handling).
+
+Headers include `IsSender`, `StrContent`, `StrTime`, `Type`, `SubType`,
+`NickName`. `IsSender = 1` is the user. Type 1 text, 3 image, 34 voice,
+43 video, 47 sticker, 48 location, 49 app (subtype 5 link, 6 file, 2000
+transfer), 50 call, 10000 system (pat / recall from the wording).
+
+- Sample (synthetic): `server/test-fixtures/exports/wechat-csv/sample.csv`.
