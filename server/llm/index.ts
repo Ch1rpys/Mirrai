@@ -69,6 +69,23 @@ registry.registerFactory(
 );
 
 registry.registerFactory(
+  "DemonRoute",
+  (cfg) =>
+    new OpenAIProvider(
+      "DemonRoute",
+      cfg.apiKey ?? "",
+      cfg.baseUrl ?? "https://api.demonroute.com/v1",
+      cfg.model ?? "Qwen/Qwen3-30B-A3B-Instruct-2507",
+      cfg.systemMessage,
+    ),
+  {
+    apiKey: ENV.demonRouteApiKey,
+    baseUrl: ENV.demonRouteBaseUrl,
+    model: ENV.demonRouteModel,
+  },
+);
+
+registry.registerFactory(
   "Kimi",
   (cfg) =>
     new OpenAIProvider(
