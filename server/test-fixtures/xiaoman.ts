@@ -10,25 +10,11 @@
  * and import these records the same way they will mine a user's.
  */
 import { seededRandom } from "../_core/behavior-profile";
+import type { RecordKind } from "@shared/records";
 import type { SpeechAct } from "@shared/speech-acts";
 
-/** Message kinds from §3.1. `shared/records.ts` will own this in A1. */
-export type FixtureKind =
-  | "text"
-  | "sticker"
-  | "image"
-  | "voice"
-  | "video"
-  | "location"
-  | "link"
-  | "music"
-  | "transfer"
-  | "redpacket"
-  | "pat"
-  | "recall"
-  | "call"
-  | "file"
-  | "system";
+/** Message kinds from `shared/records.ts`. */
+export type FixtureKind = RecordKind;
 
 export type FixtureState =
   | "warm"

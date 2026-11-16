@@ -4,7 +4,7 @@ import { boolean, index, integer, pgEnum, pgTable, serial, text, timestamp, uniq
 export const roleEnum = pgEnum("role", ["user", "admin"]);
 export const analysisStatusEnum = pgEnum("analysis_status", ["pending", "analyzing", "ready", "error"]);
 export const emotionalStateEnum = pgEnum("emotional_state", ["warm", "playful", "nostalgic", "melancholy", "happy", "distant"]);
-export const fileTypeEnum = pgEnum("file_type", ["chat_txt", "chat_csv", "image", "video", "collected"]);
+export const fileTypeEnum = pgEnum("file_type", ["chat_txt", "chat_csv", "image", "video", "collected", "chat_export", "archive"]);
 export const processStatusEnum = pgEnum("process_status", ["uploaded", "processing", "done", "failed"]);
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant"]);
 export const channelEnum = pgEnum("channel", ["web", "wechat", "feishu"]);
@@ -294,6 +294,8 @@ export const personaFiles = pgTable("persona_files", {
   fileSize: integer("fileSize").notNull(),
   extractedMemory: text("extractedMemory"),
   processStatus: processStatusEnum().default("uploaded").notNull(),
+  parseStatus: varchar("parseStatus", { length: 16 }),
+  parseReport: jsonb("parseReport"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => ({
   /**
@@ -1141,6 +1143,21 @@ export const collectedMessages = pgTable("collected_messages", {
    * existed have none, and giving them one would mean guessing.
    */
   sourceMessageId: text("sourceMessageId"),
+  /**
+   * What kind of message this is.
+   *
+   * Text is the default so rows collected before this column existed
+   * stay ordinary chat lines. The closed set lives in `shared/records.ts`.
+   */
+  kind: varchar("kind", { length: 16 }).default("text").notNull(),
+  /** The name the export file wrote for this speaker. */
+  speaker: varchar("speaker", { length: 100 }),
+  /** The `persona_files` row this line was parsed from. Collectors leave it empty. */
+  fileId: integer("fileId"),
+  /** The line or sequence number in the source file. */
+  lineNo: integer("lineNo"),
+  /** Kind-specific extras, and the register (`private` / `public` / `written` / `group`). */
+  meta: jsonb("meta"),
 }, (table) => ({
   /**
    * The collected history of one persona.
@@ -1156,6 +1173,8 @@ export const collectedMessages = pgTable("collected_messages", {
   idempotencyUniqueIdx: uniqueIndex("collected_messages_idempotency_unique_idx")
     .on(table.personaId, table.userId, table.idempotencyKey)
     .where(sql`${table.idempotencyKey} IS NOT NULL`),
+  personaTimeIdx: index("collected_messages_persona_time_idx").on(table.personaId, table.userId, table.timestamp),
+  fileIdx: index("collected_messages_file_idx").on(table.personaId, table.userId, table.fileId),
 }));
 
 export type CollectedMessage = typeof collectedMessages.$inferSelect;

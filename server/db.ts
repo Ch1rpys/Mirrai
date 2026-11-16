@@ -1,4 +1,4 @@
-import { eq, desc, and, or, sql, count, sum, gte, ilike, asc, lt, lte, max, inArray, isNull } from "drizzle-orm";
+import { eq, desc, and, or, sql, count, sum, gte, ilike, asc, lt, lte, max, min, inArray, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import {
   InsertUser, users,
@@ -15,7 +15,7 @@ import {
   InsertMemory, InsertEmotionSnapshot, InsertDiaryEntry, InsertScene,
   InsertChatSummary, InsertSafetyEvent, InsertGraduationAssessment,
   InsertPersonaTemplate, InsertPersonaQuestionnaireAnswer,
-  InsertResearchProfile, InsertCollectedMessage,
+  InsertResearchProfile, InsertCollectedMessage, CollectedMessage,
   InsertCollectionJob,
   InsertEvalCase, InsertEvalRun, InsertOutboundLetter, InsertFidelityFeedback,
   userMoods, relationshipEvents, letters, memoryExtractions,
@@ -1564,6 +1564,8 @@ export async function getFilesByPersonaId(
     fileUrl: personaFiles.fileUrl,
     fileSize: personaFiles.fileSize,
     processStatus: personaFiles.processStatus,
+    parseStatus: personaFiles.parseStatus,
+    parseReport: personaFiles.parseReport,
     createdAt: personaFiles.createdAt,
   };
   /**
@@ -4324,6 +4326,9 @@ export async function getCollectedMessageSources(
  */
 export const MAX_COLLECTED_MESSAGES = 20_000;
 
+/** How many records one persona may hold. The in-memory read cap stays at `MAX_COLLECTED_MESSAGES`. */
+export const MAX_RECORDS_PER_PERSONA = 1_000_000;
+
 export async function getCollectedMessagesForPersona(
   personaId: number,
   userId: number,
@@ -4380,6 +4385,293 @@ export async function countCollectedMessagesForPersona(
     ...(source ? [eq(collectedMessages.source, source)] : []),
   ));
   return result?.c || 0;
+}
+
+export interface IterateRecordsOptions {
+  pageSize?: number;
+  role?: string;
+  kinds?: string[];
+  from?: Date;
+  to?: Date;
+  /** Missing means private only — later imports of moments, letters, or group chats must not quietly change the one-to-one voice. */
+  register?: string;
+}
+
+function spokenAtColumn() {
+  return sql`COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt})`;
+}
+
+function recordsWhere(
+  personaId: number,
+  userId: number,
+  options: IterateRecordsOptions = {},
+) {
+  const register = options.register ?? "private";
+  const registerFilter =
+    register === "private"
+      ? sql`(
+          ${collectedMessages.meta} IS NULL
+          OR ${collectedMessages.meta}->>'register' IS NULL
+          OR ${collectedMessages.meta}->>'register' = 'private'
+        )`
+      : sql`${collectedMessages.meta}->>'register' = ${register}`;
+  return and(
+    eq(collectedMessages.personaId, personaId),
+    eq(collectedMessages.userId, userId),
+    registerFilter,
+    ...(options.role ? [eq(collectedMessages.role, options.role)] : []),
+    ...(options.kinds && options.kinds.length > 0
+      ? [inArray(collectedMessages.kind, options.kinds)]
+      : []),
+    ...(options.from ? [gte(collectedMessages.timestamp, options.from)] : []),
+    ...(options.to ? [lte(collectedMessages.timestamp, options.to)] : []),
+  );
+}
+
+/**
+ * Pages through a persona's records in the order they were said.
+ *
+ * Anything that has to read the whole history must go through here —
+ * a million-row import cannot be loaded at once. Each page is one
+ * query; the caller can `await` between them so the event loop stays
+ * free.
+ *
+ * The default register is private. Moments, letters, and group chats
+ * have to ask for themselves.
+ */
+export async function* iterateRecords(
+  personaId: number,
+  userId: number,
+  options: IterateRecordsOptions = {},
+): AsyncGenerator<CollectedMessage, void, unknown> {
+  const db = await getDb();
+  if (!db) return;
+  const pageSize = Math.max(1, options.pageSize ?? 5000);
+  const filter = recordsWhere(personaId, userId, options);
+  const spokenAt = spokenAtColumn();
+  let cursorId = 0;
+  for (;;) {
+    const page = await db
+      .select()
+      .from(collectedMessages)
+      .where(
+        and(
+          eq(collectedMessages.personaId, personaId),
+          eq(collectedMessages.userId, userId),
+          filter,
+          ...(cursorId
+            ? [
+                sql`(
+                  ${spokenAt},
+                  ${collectedMessages.id}
+                ) > (
+                  SELECT COALESCE(c."timestamp", c."createdAt"), c."id"
+                  FROM "collected_messages" c
+                  WHERE c."id" = ${cursorId}
+                )`,
+              ]
+            : []),
+        ),
+      )
+      .orderBy(asc(spokenAt), asc(collectedMessages.id))
+      .limit(pageSize);
+    if (page.length === 0) return;
+    for (const row of page) yield row;
+    if (page.length < pageSize) return;
+    cursorId = page[page.length - 1].id;
+  }
+}
+
+export async function countRecords(
+  personaId: number,
+  userId: number,
+  options: IterateRecordsOptions = {},
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [result] = await db
+    .select({ c: count() })
+    .from(collectedMessages)
+    .where(
+      and(
+        eq(collectedMessages.personaId, personaId),
+        eq(collectedMessages.userId, userId),
+        recordsWhere(personaId, userId, options),
+      ),
+    );
+  return Number(result?.c ?? 0);
+}
+
+export async function getRecordsByIds(
+  ids: number[],
+  userId: number,
+): Promise<CollectedMessage[]> {
+  const db = await getDb();
+  if (!db || ids.length === 0) return [];
+  return db
+    .select()
+    .from(collectedMessages)
+    .where(and(inArray(collectedMessages.id, ids), eq(collectedMessages.userId, userId)))
+    .orderBy(asc(spokenAtColumn()), asc(collectedMessages.id));
+}
+
+export interface RecordsAround {
+  target: CollectedMessage | undefined;
+  before: CollectedMessage[];
+  after: CollectedMessage[];
+}
+
+export async function getRecordsAround(
+  recordId: number,
+  userId: number,
+  before: number,
+  after: number,
+): Promise<RecordsAround> {
+  const db = await getDb();
+  if (!db) return { target: undefined, before: [], after: [] };
+  const [target] = await db
+    .select()
+    .from(collectedMessages)
+    .where(and(eq(collectedMessages.id, recordId), eq(collectedMessages.userId, userId)))
+    .limit(1);
+  if (!target) return { target: undefined, before: [], after: [] };
+  const spokenAt = spokenAtColumn();
+  const earlier =
+    before > 0
+      ? await db
+          .select()
+          .from(collectedMessages)
+          .where(
+            and(
+              eq(collectedMessages.personaId, target.personaId),
+              eq(collectedMessages.userId, userId),
+              sql`(
+                ${spokenAt},
+                ${collectedMessages.id}
+              ) < (
+                SELECT COALESCE(c."timestamp", c."createdAt"), c."id"
+                FROM "collected_messages" c
+                WHERE c."id" = ${target.id}
+              )`,
+            ),
+          )
+          .orderBy(desc(spokenAt), desc(collectedMessages.id))
+          .limit(before)
+      : [];
+  const later =
+    after > 0
+      ? await db
+          .select()
+          .from(collectedMessages)
+          .where(
+            and(
+              eq(collectedMessages.personaId, target.personaId),
+              eq(collectedMessages.userId, userId),
+              sql`(
+                ${spokenAt},
+                ${collectedMessages.id}
+              ) > (
+                SELECT COALESCE(c."timestamp", c."createdAt"), c."id"
+                FROM "collected_messages" c
+                WHERE c."id" = ${target.id}
+              )`,
+            ),
+          )
+          .orderBy(asc(spokenAt), asc(collectedMessages.id))
+          .limit(after)
+      : [];
+  return { target, before: earlier.reverse(), after: later };
+}
+
+export async function deleteRecordsByFile(
+  personaId: number,
+  userId: number,
+  fileId: number,
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const deleted = await db
+    .delete(collectedMessages)
+    .where(
+      and(
+        eq(collectedMessages.personaId, personaId),
+        eq(collectedMessages.userId, userId),
+        eq(collectedMessages.fileId, fileId),
+      ),
+    )
+    .returning({ id: collectedMessages.id });
+  return deleted.length;
+}
+
+export async function deleteRecordsBySource(
+  personaId: number,
+  userId: number,
+  source: string,
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const deleted = await db
+    .delete(collectedMessages)
+    .where(
+      and(
+        eq(collectedMessages.personaId, personaId),
+        eq(collectedMessages.userId, userId),
+        eq(collectedMessages.source, source),
+      ),
+    )
+    .returning({ id: collectedMessages.id });
+  return deleted.length;
+}
+
+export interface RecordSourceSummary {
+  source: string;
+  fileId: number | null;
+  count: number;
+  firstAt: Date | null;
+  lastAt: Date | null;
+}
+
+export async function getRecordSourceSummary(
+  personaId: number,
+  userId: number,
+): Promise<RecordSourceSummary[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({
+      source: collectedMessages.source,
+      fileId: collectedMessages.fileId,
+      count: count(),
+      firstAt: min(collectedMessages.timestamp),
+      lastAt: max(collectedMessages.timestamp),
+    })
+    .from(collectedMessages)
+    .where(
+      and(eq(collectedMessages.personaId, personaId), eq(collectedMessages.userId, userId)),
+    )
+    .groupBy(collectedMessages.source, collectedMessages.fileId);
+  return rows.map((row) => ({
+    source: row.source,
+    fileId: row.fileId,
+    count: Number(row.count),
+    firstAt: row.firstAt,
+    lastAt: row.lastAt,
+  }));
+}
+
+export async function updatePersonaFile(
+  id: number,
+  userId: number,
+  data: Partial<InsertPersonaFile>,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .update(personaFiles)
+    .set(data)
+    .where(and(eq(personaFiles.id, id), eq(personaFiles.userId, userId)))
+    .returning({ id: personaFiles.id });
+  return rows.length > 0;
 }
 
 // ─── Collection source helpers ────────────────────────────────────────────

@@ -3,6 +3,7 @@ import {
   dayShiftHours,
   dayShiftMinutes,
   localDateKey,
+  parseZoneless,
   previousDateKey,
   shiftDateKey,
   zonedDateKey,
@@ -136,5 +137,23 @@ describe("the day in a given time zone", () => {
   it("falls back rather than throwing on a zone it does not know", () => {
     const moment = new Date("2026-01-01T16:00:00.000Z");
     expect(zonedDateKey(moment, "Not/AZone")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("a wall clock with no zone", () => {
+  it("reads the clock in the given zone", () => {
+    const at = parseZoneless("2022-03-01 20:00:00", "Asia/Shanghai");
+    expect(at).not.toBeNull();
+    expect(at!.toISOString()).toBe("2022-03-01T12:00:00.000Z");
+  });
+
+  it("accepts a T between the day and the time", () => {
+    const at = parseZoneless("2022-03-01T07:30", "Asia/Shanghai");
+    expect(at!.toISOString()).toBe("2022-02-28T23:30:00.000Z");
+  });
+
+  it("returns null when the value is not a wall clock", () => {
+    expect(parseZoneless("not a date", "Asia/Shanghai")).toBeNull();
+    expect(parseZoneless("2022-03-01T12:00:00Z", "Asia/Shanghai")).toBeNull();
   });
 });

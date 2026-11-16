@@ -11,7 +11,7 @@
 import { spawn, type ChildProcess } from "child_process";
 import { ENV } from "../_core/env";
 import { subprocessEnvironment } from "../_core/subprocess-env";
-import { zonedOffsetMinutes } from "@shared/timezone";
+import { parseZoneless } from "@shared/timezone";
 import { copy } from "@shared/copy";
 import type { CollectedMessage, CollectorSourceId, CollectResult } from "./types";
 
@@ -512,44 +512,6 @@ function fromEpoch(value: number): string | undefined {
   return date.toISOString();
 }
 
-/**
- * A timestamp that names a wall clock but no zone.
- *
- * "2026-03-01 14:30" is the user's own clock — it is their chat
- * history. It used to be read in the *server's* zone, so on a server
- * in another country every message landed at the wrong hour, and
- * often on the wrong day.
- */
-const ZONELESS = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?$/;
-
-/**
- * Reads a zone-less timestamp as a wall clock in the given zone.
- *
- * Returns null when the zone is not known, or when the value is not a
- * wall clock after all.
- */
-function parseZoneless(value: string, timeZone?: string): Date | null {
-  const match = ZONELESS.exec(value.trim());
-  if (!match) return null;
-  const [, year, month, day, hour, minute, second] = match;
-  const asUtc = Date.UTC(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    Number(hour ?? "0"),
-    Number(minute ?? "0"),
-    Number(second ?? "0"),
-  );
-  if (Number.isNaN(asUtc)) return null;
-  // The offset of the zone at that wall clock. It is worked out twice:
-  // once for the wall clock read as UTC, and once for the instant it
-  // names — the difference is the offset, and it is right across a
-  // daylight-saving change.
-  const firstGuess = zonedOffsetMinutes(new Date(asUtc), timeZone);
-  const settled = zonedOffsetMinutes(new Date(asUtc - firstGuess * 60_000), timeZone);
-  return new Date(asUtc - settled * 60_000);
-}
-
 /** Normalises a timestamp of unknown shape to ISO 8601, when it can be parsed. */
 function toIsoTimestamp(value: unknown, timeZone?: string): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
@@ -559,10 +521,8 @@ function toIsoTimestamp(value: unknown, timeZone?: string): string | undefined {
   if (!trimmed) return undefined;
   if (/^\d+$/.test(trimmed)) return fromEpoch(Number(trimmed));
   // A wall clock with no zone is read in the reader's own zone.
-  if (ZONELESS.test(trimmed)) {
-    const zoned = parseZoneless(trimmed, timeZone);
-    if (zoned) return zoned.toISOString();
-  }
+  const zoned = parseZoneless(trimmed, timeZone);
+  if (zoned) return zoned.toISOString();
   const parsed = Date.parse(trimmed);
   if (Number.isNaN(parsed)) return undefined;
   return new Date(parsed).toISOString();

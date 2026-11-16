@@ -52,6 +52,46 @@ export function zonedMinute(date: Date, timeZone?: string | null): number {
 }
 
 /**
+ * A timestamp that names a wall clock but no zone.
+ *
+ * "2026-03-01 14:30" is the user's own clock — it is their chat
+ * history. It used to be read in the *server's* zone, so on a server
+ * in another country every message landed at the wrong hour, and
+ * often on the wrong day.
+ */
+const ZONELESS = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?$/;
+
+/**
+ * Reads a zone-less timestamp as a wall clock in the given zone.
+ *
+ * Importers and collectors share this: an export file's times are
+ * wall clocks, and they are the user's own.
+ *
+ * Returns null when the value is not a wall clock after all.
+ */
+export function parseZoneless(value: string, timeZone?: string | null): Date | null {
+  const match = ZONELESS.exec(value.trim());
+  if (!match) return null;
+  const [, year, month, day, hour, minute, second] = match;
+  const asUtc = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour ?? "0"),
+    Number(minute ?? "0"),
+    Number(second ?? "0"),
+  );
+  if (Number.isNaN(asUtc)) return null;
+  // The offset of the zone at that wall clock. It is worked out twice:
+  // once for the wall clock read as UTC, and once for the instant it
+  // names — the difference is the offset, and it is right across a
+  // daylight-saving change.
+  const firstGuess = zonedOffsetMinutes(new Date(asUtc), timeZone);
+  const settled = zonedOffsetMinutes(new Date(asUtc - firstGuess * 60_000), timeZone);
+  return new Date(asUtc - settled * 60_000);
+}
+
+/**
  * The offset of a time zone from UTC, in minutes.
  *
  * Minutes, not hours: half-hour zones exist. India is at +5:30,

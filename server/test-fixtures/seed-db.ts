@@ -34,6 +34,10 @@ export async function seedXiaoman(
         role: row.role,
         content: row.content,
         timestamp: row.timestamp,
+        kind: row.kind,
+        speaker: row.speaker,
+        lineNo: row.id,
+        meta: row.meta ?? null,
         idempotencyKey: createHash("md5").update(key).digest("hex"),
       };
     });
