@@ -22,3 +22,14 @@ already reads.
   Covers a continuation line, a colon inside the content, and a line of
   content that looks like a message header.
 - Known variants: ASCII `:` or fullwidth `：`. Date particles `年/月/日`.
+
+## wechat-txt-2line
+
+WeChatMsg / MemoTrace TXT export. Checked 2026-11-16 against
+[`xxxxshuai/WeChatMsg` `exporter/exporter_txt.py`](https://raw.githubusercontent.com/xxxxshuai/WeChatMsg/master/exporter/exporter_txt.py):
+`{str_time} {display_name}\\n{message.to_text()}` joined by a blank line.
+A system message's header is the timestamp alone.
+
+- Sample (synthetic): `server/test-fixtures/exports/wechat-txt-2line/sample.txt`.
+- Known variants: body may be several lines; a colon inside the body is
+  not a new header.

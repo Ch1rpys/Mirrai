@@ -265,6 +265,36 @@ export function headerRatio(
   return hits / lines.length;
 }
 
+/**
+ * Confidence for a format whose message is a header line plus a body.
+ *
+ * Counting headers against every nonempty line would cap a two-line
+ * export at ~0.5, which fails the "sample ≥ 0.6" check even when every
+ * block is well formed. Body lines that belong to the header above are
+ * not stray, so they stay out of the denominator.
+ */
+export function blockHeaderRatio(
+  text: string,
+  isHeader: (line: string) => boolean,
+  maxLines = 300,
+): number {
+  const lines = nonemptyLines(text, maxLines);
+  if (lines.length === 0) return 0;
+  let headers = 0;
+  let stray = 0;
+  let inMessage = false;
+  for (const line of lines) {
+    if (isHeader(line)) {
+      headers += 1;
+      inMessage = true;
+    } else if (!inMessage) {
+      stray += 1;
+    }
+  }
+  const denom = headers + stray;
+  return denom === 0 ? 0 : headers / denom;
+}
+
 export function collectSpeakers(
   records: ParsedRecord[],
 ): ParseResult["speakers"] {

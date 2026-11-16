@@ -16,4 +16,8 @@ export const V6 = {
     zh: "一行一条的聊天记录",
     en: "One message per line",
   },
+  "import.format.wechatTxt2Line": {
+    zh: "微信 TXT（时间与昵称一行）",
+    en: "WeChat TXT (time and name on one line)",
+  },
 } as const satisfies CopyTable;
