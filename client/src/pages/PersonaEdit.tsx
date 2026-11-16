@@ -23,6 +23,7 @@ import LetterBox from "@/components/LetterBox";
 import MicroRulesEditor from "@/components/MicroRulesEditor";
 import ImperfectionEditor from "@/components/ImperfectionEditor";
 import V5FidelityEditors from "@/components/V5FidelityEditors";
+import PersonaSwitches from "@/components/v6/PersonaSwitches";
 import { useLocale } from "@/contexts/LocaleContext";
 import { copy } from "@shared/copy";
 
@@ -619,6 +620,7 @@ export default function PersonaEdit() {
                 </span>
               </span>
             </label>
+            <PersonaSwitches />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="persona-reachability" className="text-xs text-muted-foreground">{t("reachability.label")}</Label>

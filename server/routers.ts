@@ -65,6 +65,7 @@ import {
   getCollectedMessagesForPersona as getCollectedMessagesForPersonaRows,
   getEvalRuns,
   setPersonaBehaviorProfile, getPersonaBehaviorProfile,
+  getPersonaSettings, setPersonaSettings,
   createSafetyEvent, countSafetyEvents,
 } from "./db";
 import { nanoid } from "nanoid";
@@ -97,6 +98,9 @@ import { labelEvalCases } from "./eval/act-labels";
 import { runEval } from "./eval/run";
 import { collectOutboundCandidates } from "./chat/outbound";
 import { loadBehaviorProfile, measureAndSaveBehaviorProfile } from "./_core/behavior-profile";
+import { mergePersonaSettings, normalizePersonaSettings } from "@shared/persona-settings";
+import { personaSettingsPatchSchema } from "./routers-v6/persona-settings-patch";
+import { styleRouter } from "./routers-v6/style";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
 import { normalizeMicroRules } from "@shared/micro-rules";
@@ -924,6 +928,29 @@ export const appRouter = router({
         const persona = await getPersonaById(input.id, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         return persona;
+      }),
+
+    getSettings: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.id, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const settings = await getPersonaSettings(input.id, ctx.user.id);
+        return settings ?? normalizePersonaSettings(null);
+      }),
+
+    updateSettings: protectedProcedure
+      .input(z.object({ id: z.number(), patch: personaSettingsPatchSchema }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.id, async () => {
+          const persona = await getPersonaById(input.id, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const current = await getPersonaSettings(input.id, ctx.user.id);
+          const next = mergePersonaSettings(current, input.patch);
+          const written = await setPersonaSettings(input.id, ctx.user.id, next);
+          if (!written) throw new TRPCError({ code: "NOT_FOUND" });
+          return next;
+        });
       }),
 
     /**
@@ -5455,6 +5482,8 @@ export const appRouter = router({
         return { profile };
       }),
   }),
+
+  style: styleRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {

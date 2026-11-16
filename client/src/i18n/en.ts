@@ -1259,6 +1259,8 @@ export const en = {
     rerankNote: "About four times the reply cost. The screen says they are thinking, then the chosen line arrives whole. Off by default.",
     timing: "On their time",
     timingNote: "The wait before a reply, bursts, and a turn with no reply. It cannot be turned on without a behaviour profile. Off by default.",
+    switchesTitle: "Switches for this persona",
+    switchesHint: "The first group costs nothing extra and takes effect once there are records. The second group costs more, waits longer, or needs the network, so it stays off.",
     dataTitle: "Persona data",
     dataNote: "The portrait the AI wrote — correct it line by line.",
     preview: "Preview",

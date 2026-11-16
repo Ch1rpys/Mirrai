@@ -1260,6 +1260,8 @@ export const zh = {
     rerankNote: "大约四倍回复费用。打开后这一轮先显示「在想」，再一次交出选中的全文。默认关。",
     timing: "按 TA 的时间",
     timingNote: "回复前的等待、连发、以及这一轮可以不回。没有画像时开不了。默认关。",
+    switchesTitle: "这个分身的开关",
+    switchesHint: "上面一组不多花钱，有记录就会生效。下面一组会多花钱、多等一会儿，或者需要联网，所以默认关着。",
     dataTitle: "人设数据",
     dataNote: "AI 解析生成的人格画像，可以逐条修正。",
     preview: "预览",
