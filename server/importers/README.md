@@ -164,3 +164,13 @@ A channel file is `{ guild, channel, messages }`. Each message has ISO
 (`fileName` / `url`), `stickers[]` (`name`).
 
 - Sample (synthetic): `server/test-fixtures/exports/discord-json/sample.json`.
+
+## sms-xml
+
+Checked 2026-11-16 against SyncTech
+([Fields in XML backup files](https://www.synctech.com.au/sms-backup-restore/fields-in-xml-backup-files/)).
+Each `<sms>` is a self-closing tag: `address`, `date` (Unix ms), `type`
+(1 received, 2 sent), `body`, optional `contact_name`. Drafts (type 3+)
+are skipped. Newlines in `body` are `&#10;`.
+
+- Sample (synthetic): `server/test-fixtures/exports/sms-xml/sample.xml`.

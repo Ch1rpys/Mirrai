@@ -64,4 +64,8 @@ export const V6 = {
     zh: "Discord 导出的 JSON",
     en: "Discord exported JSON",
   },
+  "import.format.smsXml": {
+    zh: "短信备份的 XML",
+    en: "SMS Backup XML",
+  },
 } as const satisfies CopyTable;

@@ -13,7 +13,8 @@ export type ImportFormatId =
   | "line-txt"
   | "kakao-txt"
   | "meta-json"
-  | "discord-json";
+  | "discord-json"
+  | "sms-xml";
 
 export type ImportSourceName =
   | "wechat_export"

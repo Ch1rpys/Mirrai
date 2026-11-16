@@ -81,6 +81,16 @@ describe("detectFormat", () => {
     expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
   });
 
+  it("claims the sms-xml sample as itself", () => {
+    const sample = readFileSync(
+      path.resolve(import.meta.dirname, "../test-fixtures/exports/sms-xml/sample.xml"),
+      "utf8",
+    );
+    const hits = detectFormat(source("sms.xml", sample));
+    expect(hits[0]?.id).toBe("sms-xml");
+    expect(hits[0]?.confidence).toBeGreaterThanOrEqual(0.6);
+  });
+
   it("claims the discord-json sample as itself", () => {
     const sample = readFileSync(
       path.resolve(import.meta.dirname, "../test-fixtures/exports/discord-json/sample.json"),

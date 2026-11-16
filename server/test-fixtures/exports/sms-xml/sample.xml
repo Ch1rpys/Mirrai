@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<smses count="12">
+  <sms address="+86100" date="1646136000000" type="1" body="在吗" contact_name="小满" />
+  <sms address="+86100" date="1646136005000" type="2" body="在的呀&#10;还没睡" contact_name="阿树" />
+  <sms address="+86100" date="1646136012000" type="1" body="他说：先这样" contact_name="小满" />
+  <sms address="+86100" date="1646136020000" type="2" body="好" contact_name="阿树" />
+  <sms address="+86100" date="1646136060000" type="1" body="内容里写着 2022-03-01 20:02:00 这不是新消息" contact_name="小满" />
+  <sms address="+86100" date="1646136068000" type="2" body="看到了" contact_name="阿树" />
+  <sms address="+86100" date="1646177700000" type="1" body="早" contact_name="小满" />
+  <sms address="+86100" date="1646177710000" type="2" body="早" contact_name="阿树" />
+  <sms address="+86100" date="1646193600000" type="1" body="中午吃面吗" contact_name="小满" />
+  <sms address="+86100" date="1646193620000" type="2" body="吃" contact_name="阿树" />
+  <sms address="+86100" date="1646227800000" type="1" body="人呢" contact_name="小满" />
+  <sms address="+86100" date="1646227840000" type="2" body="在" contact_name="阿树" />
+</smses>

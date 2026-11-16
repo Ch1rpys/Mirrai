@@ -20,7 +20,8 @@ export type FixtureFormat =
   | "line-txt"
   | "kakao-txt"
   | "meta-json"
-  | "discord-json";
+  | "discord-json"
+  | "sms-xml";
 
 function textRows(records: FixtureRecord[]): FixtureRecord[] {
   return records.filter((row) => row.kind === "text" && row.content.trim());
@@ -97,6 +98,25 @@ function merHour(stamp: string): { mer: "오전" | "오후"; hour: number; minut
   const mer = hour24 < 12 ? "오전" : "오후";
   const hour = hour24 % 12 === 0 ? 12 : hour24 % 12;
   return { mer, hour, minute };
+}
+
+function xmlAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/\n/g, "&#10;");
+}
+
+function renderSmsXml(records: FixtureRecord[]): string {
+  const rows = textRows(records)
+    .map((row) => {
+      const type = row.role === "user" ? "2" : "1";
+      return `  <sms address="+86100" date="${row.timestamp.getTime()}" type="${type}" body="${xmlAttr(row.content.trim())}" contact_name="${xmlAttr(row.speaker)}" />`;
+    })
+    .join("\n");
+  return `<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>\n<smses count="${textRows(records).length}">\n${rows}\n</smses>\n`;
 }
 
 function renderDiscordJson(records: FixtureRecord[]): string {
@@ -228,6 +248,8 @@ export function renderFixture(records: FixtureRecord[], format: FixtureFormat | 
       return renderMetaJson(records);
     case "discord-json":
       return renderDiscordJson(records);
+    case "sms-xml":
+      return renderSmsXml(records);
     default:
       throw new Error(`renderFixture: format "${format}" is not implemented yet (C1.1)`);
   }
