@@ -36,7 +36,7 @@
 | A6 | ✅ | 8614668 | 先红后绿：`Lobby.test.tsx` 三条在改代码前红——quiet 分身页面有「很想你」；`getByRole("heading", { name: "接着聊" })` 找不到推荐标题；卡片没有「上次联系 3 天前」。改后该文件 14 通过。`lobby-eligibility.test.ts` 5 通过（未就绪 / 已毕业 / quiet / unreachable / relationshipEnded 各一条反例）。`db-behaviour.test.ts`：`relationship_events` 一次 `DISTINCT ON (personaId)`，breakup 与 `togetherTo` 都令 `relationshipEnded` 为真。`rg -n "missYou|getMissYouLevel" client/` 无结果。闸门 `311 passed \| 3 skipped (314)` 文件，`2847 passed \| 16 skipped (2863)` 用例。 |
 | A7 | ✅ | 8ceb9b8 (remove); 3b5575e (milestones) | 先红后绿：`Lobby.test.tsx` `does not keep a streak, achievement badges, or a conversation ranking` 旧代码红在 `expected '连续对话 2 天' not to be null`；改后该文件 15 通过。`Analytics.test.tsx` `does not keep a longest-streak tile` 无「最长连续」。`rg -n "ChatStreak\|AchievementBadges\|PersonaLeaderboard\|ACHIEVEMENTS" client/` 无结果。`Milestones.test.tsx` 3 通过：三日期都 null 不渲染；只有 `firstLetterAt` 时只出现「写下了第一封信」。`routers.milestones.test.ts` 2 通过：user 1 / 2 各自只看到自己的日期，procedure 调 `getUserMilestones(ctx.user.id)`。闸门 `313 passed \| 3 skipped (316)` 文件，`2854 passed \| 16 skipped (2870)` 用例。 |
 | A8 | ✅ | 2cfd462 (extract); 0be929c (review) | 先红后绿：`memory-extract-source.test.ts` `does not store a fact the persona said` 旧代码红在 `createMemory` 被调用、`fromPersona` 为 undefined。改后该文件 4 通过（分身行不存 / 用户行存 / 无 line 丢弃 / 上传记录里 TA 的行照常存）。`memory-extract.test.ts` 与 `memory-extract.test.ts`（根下）通过；原有 mock 补了 `line`。`MemoryReview.test.tsx` 3 通过：空列表不渲染；「留着」调 `keepFromPersona({ id: 7 })`；「删掉」调 `delete({ id: 7 })`。闸门 `315 passed \| 3 skipped (318)` 文件，`2861 passed \| 16 skipped (2877)` 用例。 |
-| A9 | ⬜ |  |  |
+| A9 | ✅ | 6ebeea3 | 四条都核到了，`KNOWN_UNVERIFIED` 为空，未验证清单无 A9 行。`resources.test.ts` 6 通过（含 source 以 `https://` 开头、`lastVerified` 不是 `2026-01-01`、KNOWN_UNVERIFIED 与进度未验证清单一致）。`egress.test.ts` 4 通过。闸门 `315 passed \| 3 skipped (318)` 文件，`2863 passed \| 16 skipped (2879)` 用例。核对摘要见批次日志。 |
 | B1.1 | ⬜ |  |  |
 | B1.2 | ⬜ |  |  |
 | B1.3 | ⬜ |  |  |
@@ -260,6 +260,7 @@
 | 56 | C1.1 | 日月都看不出时两种顺序都对 | 短日期默认按月日，也就是手册里的 Android `M/D/YY`。文件里有大于 12 的日或月时，整份按那个证据 | 没有证据时必须选一边。原先默认日月，把 `3/1/22` 读成 1 月 3 日。 |
 | 57 | A6 | 验收写卡片显示「上次联系 3 天」 | 复用已有 `chat.lastContact`，渲染成「上次联系 3 天前」 | 做法明确写复用聊天页同一条文案；验收那句是做法里的中性说法。 |
 | 58 | A7 | `letters` 最早一行 | `getUserMilestones` 只取 `kind = "letter"` 的最早 `createdAt` | 同表里还有「等 TA 回来再说」的 todo；`countLetters` 已经排除它们。「写下了第一封信」不该点亮在一条待办上。 |
+| 59 | A9 | `source` 指向运营方自己的官方页面 | `cn-national` 的 `source` 是疾控局新闻发布会页，不是卫健委设号通知原文 | nhc.gov.cn 这条通知本机 HTTP 412；疾控局页面（curl 200）写明全国 31 省已开通 12356。设号通知的全文是检索结果里拿到的，不当作本机打开的来源。 |
 
 ## 未验证清单
 
@@ -476,3 +477,17 @@ A1、A2、A3、C1.3、C1.4、C1.5、C1.6、C1.7 维持 ✅。C1.1、A4、C1.2 �
 - 闸门 `315 passed | 3 skipped (318)` 文件，`2861 passed | 16 skipped (2877)` 用例，`all six steps passed`。相对 A7（313/3 文件、2854/16 用例）：通过文件 +2、通过用例 +7；跳过数不变。
 - `mirrai_live` 未碰。本条无临时库。
 - A8 标 ✅。A9 起未做。
+
+### WP2 · 实现会话 · 2026-11-17 · A9
+
+- A9 一个提交：`6ebeea3`。`CrisisResource` 加 `source`。四条都核到，`lastVerified` 改为 2026-11-17。`KNOWN_UNVERIFIED` 为空。
+- 亲自打开并看到的页面：
+  - `cn-national` 12356：https://www.ndcpa.gov.cn/jbkzzx/c100009/common/content/content_1925026893781176320.html（curl 200）「全国 31 个省（区、市）均已开通运行“12356”心理援助热线」。卫健委设号通知 https://www.nhc.gov.cn/yzygj/c100068/202412/49a1a65386cd4be582d4702fd0926ee8.shtml 本机 412，检索结果里有全文（国卫医政函〔2024〕259 号设 12356），不当作打开的来源。
+  - `cn-beijing` 010-8295-1332：https://www.crisis.org.cn/lists/5.html 「手机：010-82951332」，描述仍是心理危机研究与干预中心。号码分组写法未改。
+  - `intl-directory` https://findahelpline.com：打开 https://findahelpline.com/ ，目录在线；IASP https://www.iasp.info/crisis-centres-helplines/ 写明与 ThroughLine / Find A Helpline 合作。
+  - `us-ca` 988：https://988lifeline.org/ 「national mental health hotline: 988」；SAMHSA https://www.samhsa.gov/mental-health/988 Last Updated 09/26/2025；加拿大 https://www.canada.ca/en/public-health/services/suicide-prevention/government-canada-doing-help-prevent-suicide.html 「call or text 9-8-8」。
+- `egress.test.ts` 4 通过。应用仍不联网取这些号码。
+- 闸门 `315 passed | 3 skipped (318)` 文件，`2863 passed | 16 skipped (2879)` 用例，`all six steps passed`。相对 A8（315/3 文件、2861/16 用例）：通过用例 +2；跳过数不变。
+- `mirrai_live` 未碰。本条无临时库。
+- 偏差 59：12356 的 `source` 用疾控局发布会页。未验证清单无新增。待用户决定无新增。
+- A9 标 ✅。WP2 可做条目全部完成。独立验收另开会话。
