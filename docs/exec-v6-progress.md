@@ -57,7 +57,7 @@
 | B2.8 | ⬜ |  |  |
 | B2.9 | ⬜ |  |  |
 | B3.1 | ✅ | 00d6e7a (measure); e774ee2 (UI) | `shared/style-fingerprint.test.ts` 24 通过：`endingClassOf` 每类至少两个用例（含「好的。。。」ellipsis、「好的。」period、「好的」other、「好呀~」tilde、「好呀」particle）；夹具 `endings.period` 在 distant 占比×0.9 的 ±0.02 内；`laugh.haRuns[4]` 最大；`ellipsisForms.unicode === 0`；`emoji.rate === 0`；39 行返回 `null`；`perState.distant.endings.period` 在 0.9±0.05，`warm.endings.period === 0`，distant 有「陈树」、warm 没有；`perPeriod` p1/p2 中位字数 10±1 与 6±1。`FingerprintView.test.tsx` 2 通过：夹具渲染「几乎不以句号结尾」；句号占多数时该项不出现。闸门 `341 passed \| 4 skipped (345)` 文件，`3037 passed \| 18 skipped (3055)` 用例。`particles["呢"]` 与 `haRuns` 仅长度 4 见偏差 70、71。 |
-| B3.2 | ⬜ |  |  |
+| B3.2 | ✅ | 2e05643 | `shared/style-fingerprint.test.ts`：`is small when the generated lines are the person's own` 通过（夹具 200 句 `total < 0.1`；末尾加「。」后 `endings > 0.5` 且 `total` 变大；80 字长句 `length === 1`）；`treats a period line as more surprising in warm than in distant` 通过。「哦。」对 warm 的 `lineSurprise` 大于 distant。`metrics.test.ts`：`fills styleDistance when a fingerprint is given` 通过；`leaves styleDistance null when there is no fingerprint` 通过，且 overlap / likelihoodGap / emotionAccuracy / cases / lengthDistance 与有指纹时相同。`compare-cli.test.ts`：`includes style in the comparison` 通过（源码含 `row("style"`、`[eval] style`、`tolerance-style`）。闸门 `341 passed \| 4 skipped (345)` 文件，`3042 passed \| 18 skipped (3060)` 用例，`all six steps passed`。 |
 | B3.3 | ⬜ |  |  |
 | B3.4 | ⬜ |  |  |
 | B3.5 | ⬜ |  |  |
@@ -647,3 +647,10 @@ B1.1、B1.3、B1.4、B1.5、C10.1、B1.6、B1.7、B1.8、B1.10 维持 ✅。B1.2
 - 闸门 `341 passed | 4 skipped (345)` 文件，`3037 passed | 18 skipped (3055)` 用例，`all six steps passed`。相对 WP3 收尾（339/4 文件、3010/18 用例）：通过文件 +2、通过用例 +27；跳过数不变。
 - 偏差 70、71。未验证清单、待用户决定无新增。
 - B3.1 标 ✅。下一条 B3.2。
+
+### WP4 · 实现会话 · 2026-11-17 · B3.2
+
+- `2e05643`：`styleDistance` / `lineSurprise` 进尺子；`aggregateScores` 有指纹才填、没有为 `null`；CLI 打印 `style`，`--compare` 列入对比，闸门容差 `--tolerance-style` 默认 0.05。`docs/eval/baseline.md` 第二节表加一行、第九节空表加 `style` 列。
+- 闸门 `341 passed | 4 skipped (345)` 文件，`3042 passed | 18 skipped (3060)` 用例，`all six steps passed`。相对 B3.1（341/4 文件、3037/18 用例）：通过用例 +5；跳过数不变。
+- 偏差、未验证清单、待用户决定无新增。
+- B3.2 标 ✅。下一条 B8.7。
