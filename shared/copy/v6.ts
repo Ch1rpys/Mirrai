@@ -212,4 +212,32 @@ export const V6 = {
     zh: "我",
     en: "me",
   },
+  "prompts.distill.observationCard": {
+    zh: [
+      "你在读 {{name}} 的一段聊天记录。只根据这一段里看得到的内容，写出最多 8 条观察。",
+      "只写这一段里发生的事，不要概括整个人，不要用这段之外的记忆。",
+      "每条观察必须引用这段里的行号（# 后面的数字）。引用必须真实存在。",
+      "expression 和 habit 两类必须至少引用一行 {{name}} 自己说的话。",
+      "claim 一句话，不超过 60 字。没有可写的就返回空数组。",
+      "只输出 JSON，不要解释：",
+      '{ "observations": [{ "dimension": "expression|trigger|conflict|care|memory|habit", "claim": "", "quotes": [123] }] }',
+    ].join("\n"),
+    en: [
+      "You are reading one stretch of {{name}}'s chat. Write at most 8 observations from only what this stretch shows.",
+      "Stay inside this stretch. Do not summarise the whole person. Do not use anything from outside it.",
+      "Every observation must cite line numbers from this stretch (the number after #). The ids must be real.",
+      "The expression and habit dimensions must cite at least one line {{name}} said.",
+      "Each claim is one sentence, at most 60 characters. If there is nothing to write, return an empty array.",
+      "Return JSON only, with no explanation:",
+      '{ "observations": [{ "dimension": "expression|trigger|conflict|care|memory|habit", "claim": "", "quotes": [123] }] }',
+    ].join("\n"),
+  },
+  "distill.readingChunk": {
+    zh: "正在读第 {{done}} / {{total}} 段",
+    en: "Reading block {{done}} / {{total}}",
+  },
+  "distill.tooManyChunkFailures": {
+    zh: "有 {{failed}} / {{total}} 段读不出来，超过了三成，这一次没有继续。",
+    en: "{{failed}} of {{total}} blocks could not be read — more than a third — so this run stopped.",
+  },
 } as const satisfies CopyTable;

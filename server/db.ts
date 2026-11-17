@@ -18,6 +18,7 @@ import {
   InsertPersonaTemplate, InsertPersonaQuestionnaireAnswer,
   InsertResearchProfile, InsertCollectedMessage, CollectedMessage,
   InsertCollectionJob,
+  InsertDistillationChunk, InsertDistillationCard,
   InsertEvalCase, InsertEvalRun, InsertOutboundLetter, InsertFidelityFeedback,
   userMoods, relationshipEvents, letters, memoryExtractions,
   InsertUserMood, InsertRelationshipEvent, InsertLetter,
@@ -5791,4 +5792,66 @@ export async function updateOutboundLetterText(
     eq(outboundLetters.userId, userId),
   )).returning({ id: outboundLetters.id });
   return rows.length > 0;
+}
+
+// ─── Distillation blocks and cards ────────────────────────────────────────
+
+export async function createDistillationChunk(data: InsertDistillationChunk) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db
+    .insert(distillationChunks)
+    .values(data)
+    .onConflictDoNothing()
+    .returning({ id: distillationChunks.id });
+  return row?.id;
+}
+
+export async function createDistillationCard(data: InsertDistillationCard) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db
+    .insert(distillationCards)
+    .values(data)
+    .returning({ id: distillationCards.id });
+  return row?.id;
+}
+
+export async function listDistillationChunks(
+  personaId: number,
+  userId: number,
+  phase?: string,
+) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(distillationChunks)
+    .where(
+      and(
+        eq(distillationChunks.personaId, personaId),
+        eq(distillationChunks.userId, userId),
+        ...(phase ? [eq(distillationChunks.phase, phase)] : []),
+      ),
+    );
+}
+
+export async function listDistillationCards(
+  personaId: number,
+  userId: number,
+  options: { kind?: string; chunkHash?: string } = {},
+) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(distillationCards)
+    .where(
+      and(
+        eq(distillationCards.personaId, personaId),
+        eq(distillationCards.userId, userId),
+        ...(options.kind ? [eq(distillationCards.kind, options.kind)] : []),
+        ...(options.chunkHash ? [eq(distillationCards.chunkHash, options.chunkHash)] : []),
+      ),
+    );
 }

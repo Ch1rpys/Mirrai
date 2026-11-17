@@ -103,9 +103,18 @@ function formatChunkStamp(
 
 function lineChars(
   row: RecordLine,
-  options: { locale?: Locale; timeZone?: string | null; meName?: string; themName?: string },
+  options: { locale?: Locale; meName?: string; themName?: string },
 ): number {
-  return formatChunkLine(row, options).length;
+  // Same length as `formatChunkLine`, without constructing a zoned stamp
+  // for every row — packing a few thousand lines would otherwise sit in
+  // `Intl` for seconds.
+  const locale = options.locale ?? "zh";
+  const meName = options.meName ?? copy(locale, "distill.speakerMe");
+  const themName = options.themName ?? "TA";
+  const name = row.role === "user" ? meName : themName;
+  const body = lineBody(row, locale);
+  const stamp = row.timestamp ? 12 : 0;
+  return 1 + String(row.id).length + stamp + 1 + name.length + 1 + body.length;
 }
 
 function hashRows(rows: RecordLine[]): string {
@@ -296,6 +305,20 @@ export function renderChunkBody(
     }
   }
   return parts.join("\n");
+}
+
+/**
+ * Caps the blocks a preset is allowed to read.
+ *
+ * Which blocks are kept is still "the first N" here. B1.2 replaces
+ * that with a stratified draw that always includes the newest ones.
+ */
+export function takeChunkBudget(
+  chunks: RecordChunk[],
+  budget: number | "all",
+): RecordChunk[] {
+  if (budget === "all" || budget >= chunks.length) return chunks;
+  return chunks.slice(0, Math.max(0, budget));
 }
 
 /** The block as a fenced user message for the model. */

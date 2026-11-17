@@ -163,6 +163,9 @@ describe("the preset list", () => {
       expect(preset.chatSampleLimit).toBeGreaterThan(0);
       expect(preset.maxImages).toBeGreaterThan(0);
       expect(preset.approxCalls).toBeGreaterThan(0);
+      if (preset.chunkBudget !== "all") {
+        expect(preset.chunkBudget).toBeGreaterThan(0);
+      }
       expect(preset.analysisTemperature).toBeGreaterThan(0);
       expect(preset.analysisTemperature).toBeLessThan(1);
     }

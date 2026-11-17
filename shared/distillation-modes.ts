@@ -70,6 +70,13 @@ export interface DistillationPreset {
   /** How much of the chat history the analysis stages may read. */
   chatSampleLimit: number;
   /**
+   * How many hashed blocks the map stage may read.
+   *
+   * `"all"` reads every block. A number is a cap; which blocks are
+   * kept is decided when they are selected (B1.2).
+   */
+  chunkBudget: number | "all";
+  /**
    * The temperature of the extraction stages.
    *
    * These stages pull facts out of the material, so a lower temperature
@@ -92,6 +99,7 @@ export const DISTILLATION_PRESETS: DistillationPreset[] = [
     characterFamily: "relationship",
     researchProfile: null,
     chatSampleLimit: 4000,
+    chunkBudget: 12,
     analysisTemperature: 0.2,
     maxImages: 3,
     approxCalls: 4,
@@ -103,6 +111,7 @@ export const DISTILLATION_PRESETS: DistillationPreset[] = [
     characterFamily: "relationship",
     researchProfile: null,
     chatSampleLimit: 10000,
+    chunkBudget: 40,
     analysisTemperature: 0.3,
     maxImages: 6,
     approxCalls: 4,
@@ -114,6 +123,7 @@ export const DISTILLATION_PRESETS: DistillationPreset[] = [
     characterFamily: "relationship",
     researchProfile: null,
     chatSampleLimit: 30000,
+    chunkBudget: "all",
     analysisTemperature: 0.3,
     maxImages: 12,
     approxCalls: 4,
@@ -125,6 +135,7 @@ export const DISTILLATION_PRESETS: DistillationPreset[] = [
     characterFamily: "colleague",
     researchProfile: null,
     chatSampleLimit: 10000,
+    chunkBudget: 40,
     analysisTemperature: 0.3,
     maxImages: 6,
     approxCalls: 6,
@@ -136,6 +147,7 @@ export const DISTILLATION_PRESETS: DistillationPreset[] = [
     characterFamily: "celebrity",
     researchProfile: "budget-unfriendly",
     chatSampleLimit: 30000,
+    chunkBudget: "all",
     analysisTemperature: 0.3,
     maxImages: 12,
     approxCalls: 15,
