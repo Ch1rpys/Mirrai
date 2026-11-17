@@ -46,7 +46,7 @@
 | B1.7 | ✅ | 8499939 | `pipeline-chunked.test.ts`：同一份记录蒸两次，第二次 map 0 次、归并次数与第一次相同；追加 400 行后 map 次数等于 `chunkRecords` 里 hash 不在上次切块集合中的块数；第二次之后 `cardRows` 的 `chunkHash` 都在当前切块集合里。`observations.test.ts` 已读过的块不调模型。闸门 `333 passed \| 3 skipped (336)` 文件，`2990 passed \| 16 skipped (3006)` 用例。 |
 | B1.8 | ✅ | 420ef23 | `shared/evidence-map.test.ts` 4 通过：字段-维度对应、缺 `recordId` 的引用丢弃、每维最多 30 张且时间倒序、`attachmentStyle`/`loveLanguage` 恒推断。`routers.evidence.test.ts` 2 通过：原话按 `recordId` 对上「在的呀」、别人的分身 `NOT_FOUND`。`EvidenceList.test.tsx` 2 通过：有卡可展开短句；`attachmentStyle` 恒「推断」。`PersonaProfile.test.tsx`：老分身 8 层都标「推断」且无展开按钮；`attachmentStyle` 有推断无依据按钮。闸门 `336 passed \| 3 skipped (339)` 文件，`3000 passed \| 16 skipped (3016)` 用例。 |
 | B1.9 | ✅ | f965f92 (db); 298a524 (routes/UI) | 临时库 `mirrai_v6_scratch` 上 `db-persona-versions.test.ts` 2 通过：蒸馏写回前后各一版（前「短句」、后「更短」）；第 21 版写入后最旧一版被清掉。库已 `dropdb`。`persona-version.test.ts` 4 通过：`restore` 后 `personaData` 等于那一版、新增 `reason: "restore"`；别人的版本 `NOT_FOUND`；改了 `speakingStyle` 的两版 diff 旧值「短句」现值「更短」。`db-delete-coverage.test.ts` 通过。`VersionHistory.test.tsx`：点恢复出确认框，确认后 `restore({ id: 5, versionId: 10 })`。闸门 `338 passed \| 4 skipped (342)` 文件，`3006 passed \| 18 skipped (3024)` 用例。 |
-| B1.10 | ⬜ |  |  |
+| B1.10 | ✅ | 26df59c | `shared/user-side-profile.test.ts` 2 通过：48 条用户文本 `samples` 相等、`sampleLines` 恰好 12 句且都是用户原话；39 条返回 `null`。`generate.test.ts`：`planTurn` 的 `messages` 不含 `sampleLines` 里那句独特原话。`measureStyleProfile` 写入 `styleProfile.userSide`。指纹等 B3.1。闸门 `339 passed \| 4 skipped (343)` 文件，`3009 passed \| 18 skipped (3027)` 用例。 |
 | B2.1 | ⬜ |  |  |
 | B2.2 | ⬜ |  |  |
 | B2.3 | ⬜ |  |  |
@@ -607,3 +607,10 @@ A5、A7、A9 维持 ✅。A6、A8 改回 ⬜。
 - 闸门 `338 passed | 4 skipped (342)` 文件，`3006 passed | 18 skipped (3024)` 用例，`all six steps passed`。相对 B1.8（336/3 文件、3000/16 用例）：通过文件 +2、通过用例 +6；跳过文件 +1、跳过用例 +2（偏差 69）。
 - 偏差 69。未验证清单、待用户决定无新增。
 - B1.9 标 ✅。下一条 B1.10。
+
+### WP3 · 实现会话 · 2026-11-17 · B1.10
+
+- `26df59c` `measureUserSide`（满 40 条用户文本才出画像；12 句长度在四分位距内、按时间均匀取）；`measureStyleProfile` 写入 `styleProfile.userSide`。不进提示词。指纹等 B3.1。
+- 闸门 `339 passed | 4 skipped (343)` 文件，`3009 passed | 18 skipped (3027)` 用例，`all six steps passed`。相对 B1.9（338/4 文件、3006/18 用例）：通过文件 +1、通过用例 +3；跳过数不变。
+- 偏差无新增。未验证清单、待用户决定无新增。
+- B1.10 标 ✅。WP3 的 B1.1–B1.10、C10.1 全部完成。不开始 WP4。
