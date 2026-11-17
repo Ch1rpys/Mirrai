@@ -106,7 +106,7 @@
 | B7.15 | ⬜ |  |  |
 | B8.1 | ✅ | e61eca3 (model); cc0fa59 (CLI/UI) | `discriminator.test.ts`：200 句真句 vs 末尾加「。」AUC > 0.95，前三特征含 `ending.period` 且 `side === "persona"`；同一池随机对分 AUC 在 0.4–0.6；59 对 `insufficient` 且不训练；同输入同种子两次 AUC 全等；`splitPairFolds` 同一对不会跨训练/测试折。`compare-cli.test.ts`：源码含 `--discriminator`、`pairsFromEvalRuns(historical, version?.createdAt ?? null)`。`DiscriminatorView.test.tsx` 渲染「以句号结尾」和 AUC 文案；59 对显示「样本不够（59 / 60）。」。`FidelityPanel.test.tsx`：最近一次带 `metricsJson.discriminator` 时显示 AUC。闸门 `343 passed \| 4 skipped (347)` 文件，`3067 passed \| 18 skipped (3085)` 用例。特征 id 见偏差 73。 |
 | B8.2 | ✅ | c74ebb7 (server); 906d812 (page); 9936193 (guest) | `routers.blind.test.ts`：`does not tell the sitter which line is real` 序列化不含 `real`/`said`/`expected`/`generated`；别人的分身 `NOT_FOUND`；对子不足返回「先跑一次评测。」。访客：坏 token `NOT_FOUND`、过期/已完成拒绝；token A 不能写进另一场；第 11 次 `guestLoad` 为 `TOO_MANY_REQUESTS`。`finish` 三比例之和为 1。`exportRecord` 不含原文「我今天去了拾光咖啡喝桂花拿铁」。`BlindTest.test.tsx` / `BlindGuest.test.tsx`：答完一组才出现下一组，全部答完才出现结果。临时库 `mirrai_v6_scratch` 0048 四步+升级路径：push 后 migrate 应用到 `0048_blind_sessions`；`--replay` `replayed 46 migration(s)`；`--rollback 1` 后无 `blind_sessions`；再 migrate 回来；DROP 表并删 journal 后再 migrate，表出现。库已 `dropdb`。`db-delete-coverage` 通过。`git show c74ebb7 -- docs/eval/blind-test.md` 只有追加。闸门 `347 passed \| 4 skipped (351)` 文件，`3087 passed \| 18 skipped (3105)` 用例。 |
-| B8.3 | ⬜ |  |  |
+| B8.3 | ✅ | 9babf31 | `drift.test.ts`：`rises after twenty in-character turns, and does not write` 通过，`slope > 0`、`firstWindowOver === 2`、写库 helper 0 次；`stays flat when every reply is one of theirs` 通过，`|slope| < 0.01`、`firstWindowOver === null`。`puts the sample lines inside the material fence` 与 `prompt-fences.test.ts` `keeps the other person's lines inside the fence`：`sampleLines` 只在 `MATERIAL>>>` 围栏内。`compare-cli.test.ts`：源码含 `--drift`、`variant: "drift"`。闸门 `348 passed \| 4 skipped (352)` 文件，`3094 passed \| 18 skipped (3112)` 用例。 |
 | B8.4 | ⬜ |  |  |
 | B8.5 | ⬜ |  |  |
 | B8.6 | ✅ | 9c13769 | `metrics.test.ts`：`gives the same interval when the same scores are aggregated twice` 通过；`collapses the interval to a point when there is only one case` 通过。`compare-cli.test.ts`：`calls overlapping intervals within noise` 通过；`calls a separated improvement better` 通过。`run.test.ts`：`generates k lines for each case when asked` 通过，`samplesPerCase: 3` 时 2 个标答 `invokeWithProvider` 6 次。`uses saved tolerances rather than the defaults`：默认容差下 overlap 0.5→0.35 记退步，保存容差 0.2 后不记。闸门 `341 passed \| 4 skipped (345)` 文件，`3054 passed \| 18 skipped (3072)` 用例。 |
@@ -687,3 +687,10 @@ B1.1、B1.3、B1.4、B1.5、C10.1、B1.6、B1.7、B1.8、B1.10 维持 ✅。B1.2
 - 闸门 `347 passed | 4 skipped (351)` 文件，`3087 passed | 18 skipped (3105)` 用例，`all six steps passed`。相对 B8.1（343/4 文件、3067/18 用例）：通过文件 +4、通过用例 +20；跳过数不变。
 - 偏差、未验证清单、待用户决定无新增。
 - B8.2 标 ✅。下一条 B8.3。
+
+### WP4 · 实现会话 · 2026-11-17 · B8.3
+
+- `9babf31`：`runDrift` 从一条标答的上下文起步，模拟用户与分身交替 50 轮，按 10 轮一窗记 surprise / 残渣 / `styleDistance`，输出斜率与第一个高出首窗 0.1 的窗。历史只在内存里。没有 `userSide.sampleLines` 时报「记录里你这一侧的话不够，模拟不了」。CLI `--drift [--turns N]`，`--save` 的 `variant` 为 `drift`。
+- 闸门 `348 passed | 4 skipped (352)` 文件，`3094 passed | 18 skipped (3112)` 用例，`all six steps passed`。相对 B8.2（347/4 文件、3087/18 用例）：通过文件 +1、通过用例 +7；跳过数不变。
+- 偏差、未验证清单、待用户决定无新增。
+- B8.3 标 ✅。下一条 B8.4。
