@@ -61,6 +61,8 @@ export interface DiscriminatorPair {
   real: string;
   fake: string;
 }
+/** The handbook's name for a real/fake pair. */
+export type Pair = DiscriminatorPair;
 
 export interface DiscriminatorTell {
   feature: string;
@@ -188,6 +190,88 @@ export function trainDiscriminator(
 /**
  * Probability that `text` is a real line, according to the fitted model.
  */
+/**
+ * The real/fake pairs sitting on one evaluation run's scores.
+ *
+ * `generatedSamples` is the k lines from `--k`; each one is a pair
+ * against the same real line. A score with neither a sample nor a
+ * generated line is skipped.
+ */
+export function pairsFromScores(
+  scores: Array<{
+    expectedText?: string;
+    generatedText?: string;
+    generatedSamples?: string[];
+  }>,
+): DiscriminatorPair[] {
+  const pairs: DiscriminatorPair[] = [];
+  for (const score of scores) {
+    const real = score.expectedText?.trim();
+    if (!real) continue;
+    const fakes =
+      score.generatedSamples && score.generatedSamples.length > 0
+        ? score.generatedSamples
+        : score.generatedText
+          ? [score.generatedText]
+          : [];
+    for (const fake of fakes) {
+      const trimmed = fake.trim();
+      if (trimmed) pairs.push({ real, fake: trimmed });
+    }
+  }
+  return pairs;
+}
+
+/**
+ * Pairs from every evaluation run at or after `since`.
+ *
+ * "This persona version" is the cut: a run from before the current
+ * snapshot is a different persona, and mixing the two would train on
+ * somebody else.
+ */
+export function pairsFromEvalRuns(
+  runs: Array<{ metricsJson?: unknown; createdAt?: Date | string | null }>,
+  since?: Date | string | null,
+): DiscriminatorPair[] {
+  const sinceMs = since ? new Date(since).getTime() : Number.NaN;
+  const out: DiscriminatorPair[] = [];
+  for (const run of runs) {
+    if (Number.isFinite(sinceMs) && run.createdAt) {
+      const at = new Date(run.createdAt).getTime();
+      if (Number.isFinite(at) && at < sinceMs) continue;
+    }
+    const metrics = run.metricsJson;
+    if (!metrics || typeof metrics !== "object" || Array.isArray(metrics)) continue;
+    const scores = (metrics as { scores?: unknown }).scores;
+    if (!Array.isArray(scores)) continue;
+    out.push(
+      ...pairsFromScores(
+        scores as Array<{
+          expectedText?: string;
+          generatedText?: string;
+          generatedSamples?: string[];
+        }>,
+      ),
+    );
+  }
+  return out;
+}
+
+/**
+ * What the evaluation run stores: the report, without the weights.
+ */
+export function discriminatorForMetrics(
+  report: DiscriminatorReport,
+): DiscriminatorReport {
+  return {
+    pairs: report.pairs,
+    auc: report.auc,
+    aucStd: report.aucStd,
+    tells: report.tells,
+    insufficient: report.insufficient,
+  };
+}
+
 export function scoreReal(
   model: SparseModel,
   text: string,

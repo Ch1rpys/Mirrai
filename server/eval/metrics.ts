@@ -163,6 +163,19 @@ export interface EvalMetrics {
     emotionAccuracy?: number;
     style?: number;
   };
+  /**
+   * The small model that tried to tell a real line from a rebuilt one.
+   *
+   * Present after `--discriminator`. The weights themselves live on the
+   * style profile; this is the AUC and the tells.
+   */
+  discriminator?: {
+    pairs: number;
+    auc: number;
+    aucStd: number;
+    tells: Array<{ feature: string; weight: number; side: "persona" | "real" }>;
+    insufficient: boolean;
+  };
 }
 
 /**

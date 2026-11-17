@@ -6,6 +6,9 @@ import { toast } from "sonner";
 import { Gauge, Timer, Play } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import FingerprintView from "@/components/v6/FingerprintView";
+import DiscriminatorView, {
+  type DiscriminatorReportView,
+} from "@/components/v6/DiscriminatorView";
 
 /**
  * The ruler, and the timing.
@@ -78,7 +81,42 @@ function formatRunDate(value: unknown, locale: string, timeZone?: string | null)
   }
 }
 
-export default function FidelityPanel({ personaId }: { personaId: number }) {
+function discriminatorOf(raw: unknown): DiscriminatorReportView | null {
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+  const report = record.discriminator;
+  if (!report || typeof report !== "object") return null;
+  const body = report as Record<string, unknown>;
+  const tells = Array.isArray(body.tells)
+    ? body.tells.flatMap((tell) => {
+        if (!tell || typeof tell !== "object") return [];
+        const row = tell as Record<string, unknown>;
+        if (typeof row.feature !== "string" || typeof row.weight !== "number") return [];
+        return [
+          {
+            feature: row.feature,
+            weight: row.weight,
+            side: row.side === "persona" ? ("persona" as const) : ("real" as const),
+          },
+        ];
+      })
+    : [];
+  return {
+    pairs: typeof body.pairs === "number" ? body.pairs : 0,
+    auc: typeof body.auc === "number" ? body.auc : 0,
+    aucStd: typeof body.aucStd === "number" ? body.aucStd : undefined,
+    tells,
+    insufficient: body.insufficient === true,
+  };
+}
+
+export default function FidelityPanel({
+  personaId,
+  name,
+}: {
+  personaId: number;
+  name?: string;
+}) {
   const { t, locale } = useLocale();
   /**
    * The user's own calendar.
@@ -170,6 +208,7 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
    * which blanked the whole profile page.
    */
   const metrics = normaliseMetrics(latest?.run?.metricsJson);
+  const discriminator = discriminatorOf(latest?.run?.metricsJson);
   const profile = behavior?.profile ?? null;
 
   return (
@@ -380,6 +419,7 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
               </dd>
             </div>
           </dl>
+          <DiscriminatorView report={discriminator} name={name} />
           </>
         ) : (
           <p className="text-xs text-muted-foreground">{t("fidelity.noRun")}</p>

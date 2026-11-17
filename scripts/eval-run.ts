@@ -36,6 +36,15 @@ import {
   resolveGateTolerances,
   type EvalMetrics,
 } from "../server/eval/metrics";
+import { copy } from "@shared/copy";
+import { normalizeStyleProfile } from "@shared/style-profile";
+import {
+  DISCRIMINATOR_MIN_PAIRS,
+  discriminatorForMetrics,
+  pairsFromEvalRuns,
+  pairsFromScores,
+  trainDiscriminator,
+} from "../server/eval/discriminator";
 
 const args = process.argv.slice(2);
 
@@ -95,6 +104,13 @@ const maxFlag = flag("max");
 const maxCases = maxFlag !== undefined ? Number(maxFlag) : undefined;
 const samplesPerCase = Math.max(1, Number(flag("k") ?? 1));
 /**
+ * Train the small model that tries to tell a real line from a rebuilt one.
+ *
+ * The evaluation has to run first so there are pairs to learn from.
+ * `--k 3` is the suggested way to get enough of them.
+ */
+const wantDiscriminator = args.includes("--discriminator");
+/**
  * The language the records are written in.
  *
  * The emotion is read off the words, so it is read with the trigger
@@ -136,7 +152,7 @@ const flagTolerances = {
 
 if (!Number.isFinite(personaId) || !Number.isFinite(userId)) {
   console.error(
-    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--k n] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n] [--tolerance-style n]",
+    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--k n] [--discriminator] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n] [--tolerance-style n]",
   );
   process.exit(1);
 }
@@ -494,6 +510,33 @@ const metrics = await runEval({
   samplesPerCase,
 });
 
+if (wantDiscriminator) {
+  const version = await db.getLatestPersonaVersion(personaId, userId);
+  const historical = await db.getEvalRuns(personaId, userId, 20);
+  const pairs = [
+    ...pairsFromEvalRuns(historical, version?.createdAt ?? null),
+    ...pairsFromScores(metrics.scores),
+  ];
+  const fingerprint = normalizeStyleProfile(persona.styleProfile).fingerprint ?? null;
+  const trained = trainDiscriminator(pairs, fingerprint, `eval-discriminator:${personaId}`);
+  metrics.discriminator = discriminatorForMetrics(trained);
+  if (!trained.insufficient) {
+    const current = await db.getPersonaStyleProfile(personaId, userId);
+    await db.setPersonaStyleProfile(
+      personaId,
+      userId,
+      normalizeStyleProfile({
+        ...(current ?? {}),
+        discriminator: {
+          ...discriminatorForMetrics(trained),
+          model: trained.model,
+          trainedAt: new Date().toISOString(),
+        },
+      }),
+    );
+  }
+}
+
 console.log("");
 console.log(`[eval] variant: ${variant}`);
 console.log(`[eval] cases scored : ${metrics.cases}`);
@@ -507,6 +550,22 @@ const styleTotal = metrics.styleDistance?.total;
 console.log(
   `[eval] style        : ${styleTotal == null ? "n/a" : styleTotal.toFixed(4)}  (smaller is closer)`,
 );
+if (metrics.discriminator?.insufficient) {
+  console.log(
+    `[eval] discriminator: ${copy(locale, "eval.discriminator.insufficient", {
+      n: metrics.discriminator.pairs,
+      need: DISCRIMINATOR_MIN_PAIRS,
+    })}`,
+  );
+} else if (metrics.discriminator) {
+  console.log(
+    `[eval] discriminator AUC : ${metrics.discriminator.auc.toFixed(4)} ± ${metrics.discriminator.aucStd.toFixed(4)}  (n=${metrics.discriminator.pairs})`,
+  );
+  console.log("[eval] tells:");
+  for (const tell of metrics.discriminator.tells) {
+    console.log(`  · ${tell.feature.padEnd(24)} ${tell.side.padEnd(8)} ${tell.weight.toFixed(3)}`);
+  }
+}
 if (metrics.variant?.includes("picked")) {
   console.log(`[eval] why it won   : ${metrics.variant}`);
 }

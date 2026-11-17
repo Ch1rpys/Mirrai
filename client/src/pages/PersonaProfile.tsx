@@ -368,7 +368,7 @@ export default function PersonaProfile() {
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
           className="surface p-5 sm:p-6"
         >
-          <FidelityPanel personaId={personaId} />
+          <FidelityPanel personaId={personaId} name={persona.name} />
         </motion.section>
 
         <motion.p

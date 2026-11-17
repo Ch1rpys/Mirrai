@@ -55,4 +55,11 @@ describe("pnpm eval --compare", () => {
   it("uses the last saved tolerances for the gate", () => {
     expect(src).toContain("resolveGateTolerances(flagTolerances, storedBaseline?.tolerances)");
   });
+
+  it("trains the discriminator on pairs from this persona version", () => {
+    expect(src).toContain("--discriminator");
+    expect(src).toContain("pairsFromEvalRuns(historical, version?.createdAt ?? null)");
+    expect(src).toContain("metrics.discriminator = discriminatorForMetrics(trained)");
+    expect(src).toContain("discriminator:");
+  });
 });

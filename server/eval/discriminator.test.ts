@@ -4,6 +4,8 @@ import { measureFingerprint } from "@shared/style-fingerprint";
 import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
 import {
   DISCRIMINATOR_MIN_PAIRS,
+  pairsFromEvalRuns,
+  pairsFromScores,
   scoreReal,
   splitPairFolds,
   trainDiscriminator,
@@ -88,6 +90,38 @@ describe("the discriminator", () => {
       expect(train.length + test.length).toBe(80);
     }
     expect(seen.size).toBe(80);
+  });
+
+  it("turns each generated sample into a pair against the real line", () => {
+    expect(
+      pairsFromScores([
+        {
+          expectedText: "还行吧",
+          generatedText: "ignored",
+          generatedSamples: ["好的。", "嗯。"],
+        },
+      ]),
+    ).toEqual([
+      { real: "还行吧", fake: "好的。" },
+      { real: "还行吧", fake: "嗯。" },
+    ]);
+  });
+
+  it("drops runs from before this persona version", () => {
+    const pairs = pairsFromEvalRuns(
+      [
+        {
+          createdAt: "2020-01-01T00:00:00.000Z",
+          metricsJson: { scores: [{ expectedText: "old", generatedText: "old-fake" }] },
+        },
+        {
+          createdAt: "2026-06-01T00:00:00.000Z",
+          metricsJson: { scores: [{ expectedText: "new", generatedText: "new-fake" }] },
+        },
+      ],
+      "2026-01-01T00:00:00.000Z",
+    );
+    expect(pairs).toEqual([{ real: "new", fake: "new-fake" }]);
   });
 
   it("scores a period-suffixed line as less real after training", () => {

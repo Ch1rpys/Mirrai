@@ -264,6 +264,30 @@ describe("the ruler and the timing", () => {
     await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ personaId: 1 }));
   });
 
+  it("shows the last run's discriminator AUC", () => {
+    lastRun = {
+      metricsJson: {
+        cases: 12,
+        overlap: 0.312,
+        likelihoodGap: -1.25,
+        lengthDistance: 14.5,
+        emotionAccuracy: 0.75,
+        perState: {},
+        scores: [],
+        discriminator: {
+          pairs: 80,
+          auc: 0.91,
+          aucStd: 0.02,
+          insufficient: false,
+          tells: [{ feature: "ending.period", weight: -1.2, side: "persona" }],
+        },
+      },
+    };
+    render(<FidelityPanel personaId={1} name="小满" />);
+    expect(screen.getByText(/判别器在 80 组真假句上的 AUC 是 0.910/)).toBeInTheDocument();
+    expect(screen.getByText("以句号结尾")).toBeInTheDocument();
+  });
+
   it("runs the control — the same persona without its rules", async () => {
     render(<FidelityPanel personaId={1} />);
     await userEvent.click(screen.getByText(translate("zh", "fidelity.withRules")));

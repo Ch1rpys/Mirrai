@@ -408,4 +408,8 @@ export const V6 = {
   "clarify.conflictFirst.them": { zh: "一般是 {{name}} 先开口", en: "{{name}} usually speaks first" },
   "clarify.conflictFirst.me": { zh: "一般是我先开口", en: "I usually speak first" },
   "clarify.conflictFirst.either": { zh: "不一定谁先开口", en: "It is not always the same person who speaks first" },
+  "eval.discriminator.insufficient": {
+    zh: "样本不够（{{n}} / {{need}}）。",
+    en: "Not enough samples ({{n}} / {{need}}).",
+  },
 } as const satisfies CopyTable;
