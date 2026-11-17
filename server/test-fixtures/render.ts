@@ -214,18 +214,60 @@ function renderWechatJson(records: FixtureRecord[]): string {
   return JSON.stringify(rows, null, 2);
 }
 
+function clockOf(seconds: number): string {
+  const sec = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
+}
+
+function asText(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function asNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * One WeChat CSV row.
+ *
+ * Text stays type 1. Stickers, voice notes, and calls use the native
+ * type numbers, and the extra columns carry the meta a text cell
+ * cannot: sticker key, transcript, call direction and mode.
+ *
+ * i18n:allow-input — `秒` and `时长` are the words in a WeChat export cell.
+ */
+function wechatCsvCells(row: FixtureRecord): string[] {
+  const sender = row.role === "user" ? "1" : "0";
+  const time = formatShanghai(row.timestamp);
+  const name = row.speaker;
+  const tail = ["", "", "", ""];
+  if (row.kind === "sticker") {
+    tail[0] = asText(row.meta?.stickerKey);
+    return [sender, csvCell(asText(row.meta?.label)), csvCell(time), "47", "0", csvCell(name), ...tail.map(csvCell)];
+  }
+  if (row.kind === "voice") {
+    const sec = asNumber(row.meta?.durationSec) ?? 0;
+    tail[1] = asText(row.meta?.transcript);
+    return [sender, csvCell(`${sec}秒`), csvCell(time), "34", "0", csvCell(name), ...tail.map(csvCell)];
+  }
+  if (row.kind === "call") {
+    const sec = asNumber(row.meta?.durationSec) ?? 0;
+    const mode = asText(row.meta?.mode) === "video" ? "video" : "voice";
+    tail[2] = asText(row.meta?.direction);
+    tail[3] = mode;
+    return [sender, csvCell(`时长 ${clockOf(sec)}`), csvCell(time), "50", "0", csvCell(name), ...tail.map(csvCell)];
+  }
+  return [sender, csvCell(row.content.trim()), csvCell(time), "1", "0", csvCell(name), ...tail.map(csvCell)];
+}
+
 function renderWechatCsv(records: FixtureRecord[]): string {
-  const header = "IsSender,StrContent,StrTime,Type,SubType,NickName";
-  const lines = textRows(records).map((row) =>
-    [
-      row.role === "user" ? "1" : "0",
-      csvCell(row.content.trim()),
-      csvCell(formatShanghai(row.timestamp)),
-      "1",
-      "0",
-      csvCell(row.speaker),
-    ].join(","),
-  );
+  const header = "IsSender,StrContent,StrTime,Type,SubType,NickName,StickerKey,Transcript,Direction,Mode";
+  const lines = records
+    .filter((row) => row.content.trim() || row.kind === "sticker" || row.kind === "voice" || row.kind === "call")
+    .map((row) => wechatCsvCells(row).join(","));
   return [header, ...lines].join("\n");
 }
 

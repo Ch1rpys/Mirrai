@@ -3,6 +3,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { detectFormat } from "../detect";
 import { importSourceFrom } from "../normalize";
+import { buildXiaomanRecords } from "../../test-fixtures/xiaoman";
+import { renderFixture } from "../../test-fixtures/render";
 import { parseWechatCsv } from "./wechat-csv";
 
 const SAMPLE = readFileSync(
@@ -43,6 +45,23 @@ describe("wechat-csv", () => {
       content: "[call:voice:2592]",
       meta: expect.objectContaining({ mode: "voice", durationSec: 2592 }),
     });
+  });
+
+  it("keeps fixture stickers, voice notes, and calls through a round trip", async () => {
+    const original = buildXiaomanRecords().filter(
+      (row) => row.kind === "sticker" || row.kind === "voice" || row.kind === "call",
+    );
+    const text = renderFixture(buildXiaomanRecords(), "wechat-csv");
+    const parsed = await parseWechatCsv(text, { timeZone: "Asia/Shanghai" });
+    const got = parsed.records.filter(
+      (row) => row.kind === "sticker" || row.kind === "voice" || row.kind === "call",
+    );
+    expect(got).toHaveLength(original.length);
+    for (let i = 0; i < original.length; i++) {
+      expect(got[i]?.kind, `${original[i]?.kind} ${i}`).toBe(original[i]?.kind);
+      expect(got[i]?.content, `${original[i]?.kind} ${i}`).toBe(original[i]?.content);
+      expect(got[i]?.meta, `${original[i]?.kind} ${i}`).toEqual(original[i]?.meta);
+    }
   });
 
   it("is detected from its sample with confidence of at least 0.6", () => {

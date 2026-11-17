@@ -43,6 +43,7 @@ function kindFromType(type: number, subType: number, content: string): RecordKin
 function tokenFor(
   kind: RecordKind,
   content: string,
+  extras?: { mode?: string },
 ): { content: string; meta?: Record<string, unknown> } {
   if (kind === "text" || kind === "system") {
     const hit = parseTextPlaceholder(content);
@@ -67,9 +68,10 @@ function tokenFor(
   if (kind === "call") {
     const clock = content.match(/(\d{1,2}:\d{2}(?::\d{2})?)/)?.[1];
     const durationSec = clock ? parseDurationSeconds(clock) ?? 0 : 0;
+    const mode = extras?.mode === "video" ? "video" : "voice";
     return {
-      content: `[call:voice:${durationSec}]`,
-      meta: { mode: "voice", durationSec },
+      content: `[call:${mode}:${durationSec}]`,
+      meta: { mode, durationSec },
     };
   }
   if (kind === "video") return { content: "[video]" };
@@ -95,6 +97,10 @@ export async function parseWechatCsv(text: string, options: ParseOptions = {}): 
   const iType = headerIndex(headers, ["Type", "type"]);
   const iSub = headerIndex(headers, ["SubType", "sub_type", "Subtype"]);
   const iName = headerIndex(headers, ["NickName", "nickname", "Sender", "sender", "Remark"]);
+  const iStickerKey = headerIndex(headers, ["StickerKey", "stickerKey"]);
+  const iTranscript = headerIndex(headers, ["Transcript", "transcript"]);
+  const iDirection = headerIndex(headers, ["Direction", "direction"]);
+  const iMode = headerIndex(headers, ["Mode", "mode"]);
   const warnings: ParseWarning[] = [];
   const records = [];
   let skipped = 0;
@@ -134,7 +140,17 @@ export async function parseWechatCsv(text: string, options: ParseOptions = {}): 
           continue;
         }
       }
-      const token = tokenFor(kind, rawContent);
+      const mode = iMode >= 0 ? (row[iMode] ?? "").trim() : "";
+      const token = tokenFor(kind, rawContent, mode ? { mode } : undefined);
+      const meta: Record<string, unknown> = { ...(token.meta ?? {}) };
+      const stickerKey = iStickerKey >= 0 ? (row[iStickerKey] ?? "").trim() : "";
+      const transcript = iTranscript >= 0 ? (row[iTranscript] ?? "").trim() : "";
+      const direction = iDirection >= 0 ? (row[iDirection] ?? "").trim() : "";
+      if (kind === "sticker" && stickerKey) meta.stickerKey = stickerKey;
+      if (kind === "voice" && transcript) meta.transcript = transcript;
+      if (kind === "call" && (direction === "in" || direction === "out" || direction === "missed")) {
+        meta.direction = direction;
+      }
       if (!token.content) {
         skipped += 1;
         continue;
@@ -152,7 +168,7 @@ export async function parseWechatCsv(text: string, options: ParseOptions = {}): 
         timestamp: parseExportTime(iTime >= 0 ? row[iTime] : "", options.timeZone),
         kind: resolvedKind,
         lineNo,
-        meta: { type, subType, ...token.meta },
+        meta: Object.keys(meta).length > 0 ? meta : undefined,
       });
     } catch {
       skipped += 1;
