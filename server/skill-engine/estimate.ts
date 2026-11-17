@@ -11,6 +11,7 @@ import {
 import * as db from "../db";
 import {
   chunkRecords,
+  distillChunkSeed,
   takeChunkBudget,
   type RecordChunk,
   type RecordLine,
@@ -92,9 +93,10 @@ function asRecordLine(row: {
 export function estimateDistillation(
   chunks: RecordChunk[],
   mode?: DistillationMode | null,
+  seed?: string,
 ): DistillationEstimate {
   const preset = getDistillationPreset(mode);
-  const selected = takeChunkBudget(chunks, preset.chunkBudget);
+  const selected = takeChunkBudget(chunks, preset.chunkBudget, seed);
   if (selected.length === 0) {
     return {
       chunks: 0,
@@ -148,5 +150,9 @@ export async function estimateDistillationForPersona(params: {
     timeZone: params.timeZone,
     themName: params.themName,
   });
-  return estimateDistillation(chunks, params.mode);
+  return estimateDistillation(
+    chunks,
+    params.mode,
+    distillChunkSeed(params.personaId, chunks.length),
+  );
 }

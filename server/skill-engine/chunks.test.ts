@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CHUNK_MAX_CHARS, chunkRecords } from "./chunks";
+import { CHUNK_MAX_CHARS, chunkRecords, selectChunks } from "./chunks";
 import { estimateDistillation } from "./estimate";
 import { isTextRecord } from "@shared/records";
 import { buildXiaomanRecords, shanghaiDate } from "../test-fixtures/xiaoman";
@@ -66,5 +66,48 @@ describe("estimateDistillation", () => {
     const estimate = estimateDistillation(chunks, "fast");
     expect(estimate.chunks).toBe(12);
     expect(estimate.mapCalls).toBe(12);
+  });
+});
+
+describe("selectChunks", () => {
+  const rows = buildXiaomanRecords();
+  const chunks = chunkRecords(rows, { timeZone: TIME_ZONE });
+  const seed = `distill:1:${chunks.length}`;
+
+  it("keeps the first block and the last three when the budget is twelve", () => {
+    expect(chunks.length).toBeGreaterThan(12);
+    const selected = selectChunks(chunks, 12, seed);
+    expect(selected).toHaveLength(12);
+    const hashes = new Set(selected.map((chunk) => chunk.hash));
+    expect(hashes.has(chunks[0].hash)).toBe(true);
+    expect(hashes.has(chunks[chunks.length - 1].hash)).toBe(true);
+    expect(hashes.has(chunks[chunks.length - 2].hash)).toBe(true);
+    expect(hashes.has(chunks[chunks.length - 3].hash)).toBe(true);
+    expect(new Set(selected.map((chunk) => chunk.periodId)).size).toBeGreaterThanOrEqual(2);
+    expect(selected.some((chunk) => chunk.dayPart === "day")).toBe(true);
+    expect(selected.some((chunk) => chunk.dayPart === "night")).toBe(true);
+    const again = selectChunks(chunks, 12, seed);
+    expect(again.map((chunk) => chunk.hash)).toEqual(selected.map((chunk) => chunk.hash));
+  });
+
+  it("returns every block when the budget is larger than the log", () => {
+    expect(selectChunks(chunks, chunks.length + 5, seed)).toEqual(chunks);
+    expect(selectChunks(chunks, "all", seed)).toEqual(chunks);
+  });
+
+  it("puts the latest selected block inside the last five percent of the record", () => {
+    const times = rows
+      .filter((row) => row.role === "user" || row.role === "assistant")
+      .map((row) => row.timestamp.getTime())
+      .sort((a, b) => a - b);
+    const start = times[0];
+    const end = times[times.length - 1];
+    const cutoff = start + (end - start) * 0.95;
+    const selected = selectChunks(chunks, 12, seed);
+    const latest = selected.reduce((best, chunk) => {
+      const at = chunk.to?.getTime() ?? 0;
+      return at > best ? at : best;
+    }, 0);
+    expect(latest).toBeGreaterThanOrEqual(cutoff);
   });
 });

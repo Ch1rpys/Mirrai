@@ -13,6 +13,7 @@ import { isTextRecord, renderRecordContent } from "@shared/records";
 import { splitScenes, toTurns } from "@shared/scenes";
 import { findPeriodSplits, periodsFromSplits } from "@shared/periods";
 import { zonedDateKey, zonedHour, zonedMinute } from "@shared/timezone";
+import { seededRandom } from "../_core/behavior-profile";
 
 export const CHUNK_TARGET_CHARS = 6000;
 export const CHUNK_MAX_CHARS = 9000;
@@ -307,18 +308,182 @@ export function renderChunkBody(
   return parts.join("\n");
 }
 
+/** The seed that makes the same record pick the same blocks again. */
+export function distillChunkSeed(personaId: number, chunkCount: number): string {
+  return `distill:${personaId}:${chunkCount}`;
+}
+
+function medianOf(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[mid] ?? 0;
+  return ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2;
+}
+
+function pickUniform(indices: number[], count: number, rng: () => number): number[] {
+  const copy = indices.slice();
+  const n = Math.min(Math.max(0, count), copy.length);
+  for (let i = 0; i < n; i++) {
+    const j = i + Math.floor(rng() * (copy.length - i));
+    const swap = copy[i];
+    copy[i] = copy[j] ?? swap;
+    copy[j] = swap ?? copy[j];
+  }
+  return copy.slice(0, n);
+}
+
+/**
+ * Shares `seats` across groups in proportion to their sizes, never
+ * more than the group still has, leftover going to the largest remainders.
+ */
+function allocateProportional(sizes: number[], seats: number): number[] {
+  const n = sizes.length;
+  const out = Array.from({ length: n }, () => 0);
+  if (n === 0 || seats <= 0) return out;
+  const total = sizes.reduce((sum, size) => sum + size, 0);
+  if (total <= 0) return out;
+  const raw = sizes.map((size) => (size / total) * seats);
+  for (let i = 0; i < n; i++) {
+    out[i] = Math.min(sizes[i] ?? 0, Math.floor(raw[i] ?? 0));
+  }
+  let used = out.reduce((sum, value) => sum + value, 0);
+  const order = raw
+    .map((value, i) => ({ i, remainder: value - Math.floor(value) }))
+    .sort((a, b) => b.remainder - a.remainder || a.i - b.i);
+  while (used < seats) {
+    let progressed = false;
+    for (const { i } of order) {
+      if (used >= seats) break;
+      if ((out[i] ?? 0) < (sizes[i] ?? 0)) {
+        out[i] = (out[i] ?? 0) + 1;
+        used += 1;
+        progressed = true;
+      }
+    }
+    if (!progressed) break;
+  }
+  return out;
+}
+
+function layerKey(chunk: RecordChunk, sceneCount: number, median: number): string {
+  const density = sceneCount > median ? "dense" : "sparse";
+  return `${chunk.periodId ?? ""}|${chunk.dayPart}|${density}`;
+}
+
+function byTimeThenIndex(chunks: RecordChunk[], a: number, b: number): number {
+  const left = chunks[a]?.from?.getTime() ?? 0;
+  const right = chunks[b]?.from?.getTime() ?? 0;
+  if (left !== right) return left - right;
+  return a - b;
+}
+
+/**
+ * Picks which blocks a budgeted run will actually read.
+ *
+ * The first block and the last three are kept so a short sample still
+ * covers the start and the present. The rest of the seats are spread
+ * across period × day/night × how busy the scene was, so a fast run
+ * does not collapse onto one stretch. Emotion is a later axis — B1.5
+ * has to write it first.
+ */
+export function selectChunks(
+  chunks: RecordChunk[],
+  budget: number | "all",
+  seed: string,
+): RecordChunk[] {
+  if (chunks.length === 0) return [];
+  if (budget === "all" || (typeof budget === "number" && budget >= chunks.length)) {
+    return chunks;
+  }
+  const n = Math.max(0, Math.floor(budget));
+  if (n === 0) return [];
+
+  const selected = new Set<number>();
+  if (chunks.length > 0) selected.add(0);
+  for (let i = chunks.length - 1; i >= 0 && selected.size < Math.min(n, 4); i--) {
+    selected.add(i);
+  }
+  if (selected.size > n) {
+    const preferred = [0, chunks.length - 1, chunks.length - 2, chunks.length - 3]
+      .filter((index) => index >= 0);
+    selected.clear();
+    for (const index of preferred) {
+      if (selected.size >= n) break;
+      selected.add(index);
+    }
+  }
+
+  const sceneCounts = chunks.map((chunk) => splitScenes(chunk.rows).length);
+  const median = medianOf(sceneCounts);
+  const layers = new Map<string, number[]>();
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    if (!chunk) continue;
+    const key = layerKey(chunk, sceneCounts[i] ?? 0, median);
+    const list = layers.get(key) ?? [];
+    list.push(i);
+    layers.set(key, list);
+  }
+  const layerKeys = [...layers.keys()].sort();
+  const rng = seededRandom(seed);
+
+  for (const key of layerKeys) {
+    if (selected.size >= n) break;
+    const indices = layers.get(key) ?? [];
+    if (indices.some((index) => selected.has(index))) continue;
+    const [pick] = pickUniform(indices, 1, rng);
+    if (pick !== undefined) selected.add(pick);
+  }
+
+  const leftover = n - selected.size;
+  if (leftover > 0) {
+    const remaining = layerKeys
+      .map((key) => ({
+        key,
+        indices: (layers.get(key) ?? []).filter((index) => !selected.has(index)),
+      }))
+      .filter((layer) => layer.indices.length > 0);
+    const quotas = allocateProportional(
+      remaining.map((layer) => layer.indices.length),
+      leftover,
+    );
+    for (let i = 0; i < remaining.length; i++) {
+      const layer = remaining[i];
+      const quota = quotas[i] ?? 0;
+      if (!layer || quota <= 0) continue;
+      for (const pick of pickUniform(layer.indices, quota, rng)) selected.add(pick);
+    }
+  }
+
+  if (selected.size < n) {
+    const rest: number[] = [];
+    for (let i = 0; i < chunks.length; i++) {
+      if (!selected.has(i)) rest.push(i);
+    }
+    for (const pick of pickUniform(rest, n - selected.size, rng)) selected.add(pick);
+  }
+
+  return [...selected]
+    .sort((a, b) => byTimeThenIndex(chunks, a, b))
+    .flatMap((index) => {
+      const chunk = chunks[index];
+      return chunk ? [chunk] : [];
+    });
+}
+
 /**
  * Caps the blocks a preset is allowed to read.
  *
- * Which blocks are kept is still "the first N" here. B1.2 replaces
- * that with a stratified draw that always includes the newest ones.
+ * The draw is the stratified one: newest blocks stay in, and the rest
+ * of the seats are spread across the log rather than taken from the start.
  */
 export function takeChunkBudget(
   chunks: RecordChunk[],
   budget: number | "all",
+  seed?: string,
 ): RecordChunk[] {
-  if (budget === "all" || budget >= chunks.length) return chunks;
-  return chunks.slice(0, Math.max(0, budget));
+  return selectChunks(chunks, budget, seed ?? distillChunkSeed(0, chunks.length));
 }
 
 /** The block as a fenced user message for the model. */

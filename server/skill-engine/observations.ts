@@ -7,6 +7,7 @@ import { copy, type Locale } from "@shared/copy";
 import { getDistillationPreset, type DistillationMode } from "@shared/distillation-modes";
 import type { LLMMessage } from "../llm/types";
 import {
+  distillChunkSeed,
   renderChunkForModel,
   takeChunkBudget,
   type RecordChunk,
@@ -201,7 +202,11 @@ export async function mapObservationCards(
 ): Promise<ObservationCard[]> {
   const locale = input.locale ?? "zh";
   const preset = getDistillationPreset(input.mode);
-  const selected = takeChunkBudget(input.chunks, preset.chunkBudget);
+  const selected = takeChunkBudget(
+    input.chunks,
+    preset.chunkBudget,
+    distillChunkSeed(input.personaId, input.chunks.length),
+  );
   const store = input.store ?? defaultStore;
   const total = selected.length;
   if (total === 0) return [];
