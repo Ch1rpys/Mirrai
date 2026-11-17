@@ -56,7 +56,7 @@
 | B2.7 | ⬜ |  |  |
 | B2.8 | ⬜ |  |  |
 | B2.9 | ⬜ |  |  |
-| B3.1 | ⬜ |  |  |
+| B3.1 | ✅ | 00d6e7a (measure); e774ee2 (UI) | `shared/style-fingerprint.test.ts` 24 通过：`endingClassOf` 每类至少两个用例（含「好的。。。」ellipsis、「好的。」period、「好的」other、「好呀~」tilde、「好呀」particle）；夹具 `endings.period` 在 distant 占比×0.9 的 ±0.02 内；`laugh.haRuns[4]` 最大；`ellipsisForms.unicode === 0`；`emoji.rate === 0`；39 行返回 `null`；`perState.distant.endings.period` 在 0.9±0.05，`warm.endings.period === 0`，distant 有「陈树」、warm 没有；`perPeriod` p1/p2 中位字数 10±1 与 6±1。`FingerprintView.test.tsx` 2 通过：夹具渲染「几乎不以句号结尾」；句号占多数时该项不出现。闸门 `341 passed \| 4 skipped (345)` 文件，`3037 passed \| 18 skipped (3055)` 用例。`particles["呢"]` 与 `haRuns` 仅长度 4 见偏差 70、71。 |
 | B3.2 | ⬜ |  |  |
 | B3.3 | ⬜ |  |  |
 | B3.4 | ⬜ |  |  |
@@ -271,6 +271,8 @@
 | 67 | B1.5 | 情绪取样只写 fast 不调 / standard 600 / deep 全部 | `colleague` 按 600，`celebrity` 按全部 | 与偏差 66 同一理由。 |
 | 68 | B1.6 | 跳过记在 `personaData.clarified`，不再问 | 卡片上点「跳过」只在本会话隐藏该题，不调 `answerClarification` | 验收写「跳过不调用写入」；做法第 2 步写跳过也记入 `clarified`。按验收。刷新页面还会再问。路由仍接受 `skip: true` 供以后持久化。 |
 | 69 | B1.9 | 闸门跳过数不能增加 | 无 `DATABASE_URL` 时 `db-persona-versions.test.ts` 2 条 `skipIf`，跳过文件 4、跳过用例 18 | 手册 2.3 要求库测试 `skipIf(!DATABASE_URL)`。带临时库跑这 2 条全过。与偏差 20、47、49、51 同类。 |
+| 70 | B3.1 | 夹具 `particles["呢"] === 0` | 约为 0.0067，全部来自追一句「人呢」 | P0.5 偏差 9：设计表既写了从不用「呢」，又写了追一句 70% 是「人呢」。`lastParticleOf` 按手册剥完标点后看最后一个字。 |
+| 71 | B3.1 | `laugh.haRuns` 只有长度 4 那一格非零 | 长度 4 是绝大多数（124）；另有少量 2（2）和 3（9） | 夹具把「呵呵」换成「哈哈」，以及 `fitLength` 在句末前插入衬字，会把「哈哈哈哈」拆开。不改夹具。 |
 
 ## 未验证清单
 
@@ -637,3 +639,11 @@ B1.1、B1.3、B1.4、B1.5、C10.1、B1.6、B1.7、B1.8、B1.10 维持 ✅。B1.2
 - 闸门 `339 passed | 4 skipped (343)` 文件，`3010 passed | 18 skipped (3028)` 用例，`all six steps passed`。通过数比验收时的 3009 多 1，跳过数仍是 18。
 - 临时库 `mirrai_v6_verify` 上 `db-persona-versions.test.ts` 2 通过。库已 `dropdb`。`mirrai_live` 未碰。
 - B1.2、B1.9 改回 ✅。
+
+### WP4 · 实现会话 · 2026-11-17 · B3.1
+
+- 独立验收留下的 `- [ ]` 无。进度表里没有「等 xxx」的推迟项。
+- `00d6e7a` 测量：`shared/style-fingerprint.ts`，`measureStyleProfile` 写入 `styleProfile.fingerprint` 和 `userSide.fingerprint`。`e774ee2` 界面：`FingerprintView` 挂在保真面板。
+- 闸门 `341 passed | 4 skipped (345)` 文件，`3037 passed | 18 skipped (3055)` 用例，`all six steps passed`。相对 WP3 收尾（339/4 文件、3010/18 用例）：通过文件 +2、通过用例 +27；跳过数不变。
+- 偏差 70、71。未验证清单、待用户决定无新增。
+- B3.1 标 ✅。下一条 B3.2。
