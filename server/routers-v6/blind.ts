@@ -148,7 +148,11 @@ export const blindRouter = router({
       });
       const arranged = arrangeBlindGroups(asStoredGroups(created.groups), created.id);
       await updateBlindSession(created.id, ctx.user.id, { groups: arranged });
-      return publicSitting(arranged, persona.name, { sessionId: created.id, subject: input.subject });
+      return {
+        sessionId: created.id,
+        subject: input.subject,
+        ...publicSitting(arranged, persona.name),
+      };
     }),
 
   answer: protectedProcedure

@@ -4,6 +4,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Gauge, Timer, Play } from "lucide-react";
+import { Link } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import FingerprintView from "@/components/v6/FingerprintView";
 import DiscriminatorView, {
@@ -348,6 +349,11 @@ export default function FidelityPanel({
           </div>
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed">{t("fidelity.hint")}</p>
+        <p className="text-xs">
+          <Link href={`/persona/${personaId}/blind-test`} className="underline underline-offset-2">
+            {t("fidelity.blind.title")}
+          </Link>
+        </p>
         {/* The second measure is the least obvious of the four, so it
             says what it does — in a sentence, not in a name. */}
         <p className="text-[11px] text-muted-subtle leading-relaxed">
