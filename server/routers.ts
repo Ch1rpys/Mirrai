@@ -21,7 +21,7 @@ import {
 import { storagePut, storageDelete, storageDeleteTree } from "./storage";
 import {
   createPersona, getPersonasByUserId, getPersonaById, updatePersona, deletePersona,
-  getPersonasWithStats, getUserStats, getRecentActivity, getDailyChatCounts,
+  getPersonasWithStats, getUserStats, getUserMilestones, getRecentActivity, getDailyChatCounts,
   createPersonaFile, getFilesByPersonaId, deletePersonaFile,
   createMessage,
   getPersonaFileById, getMessagesByPersonaId, getMessagesByPersonaIdPaged, clearMessagesByPersonaId, searchMessages,
@@ -933,6 +933,14 @@ export const appRouter = router({
       }),
 
     getAccountStats: protectedProcedure.query(async ({ ctx }) => getAccountStats(ctx.user.id)),
+
+    /**
+     * The three dates that are not about how much the user chatted.
+     *
+     * First letter, first sentence taken back to them, first goodbye.
+     * Each is null until it has happened.
+     */
+    milestones: protectedProcedure.query(async ({ ctx }) => getUserMilestones(ctx.user.id)),
 
     exportData: protectedProcedure.mutation(async ({ ctx }) => {
       const data = await exportUserData(ctx.user.id);

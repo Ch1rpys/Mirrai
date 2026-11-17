@@ -79,6 +79,15 @@ vi.mock("@/lib/trpc", () => ({
       list: { useQuery: () => ({ data: [] }) },
       instantiate: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    user: {
+      milestones: {
+        useQuery: () => ({
+          data: { firstLetterAt: null, firstOutboundSentAt: null, firstFarewellAt: null },
+          isLoading: false,
+          isError: false,
+        }),
+      },
+    },
   },
 }));
 

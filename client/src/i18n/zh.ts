@@ -426,6 +426,12 @@ export const zh = {
       less: "少",
       more: "多",
     },
+    walkedHere: {
+      title: "走到这里",
+      firstLetter: "{{date}}　写下了第一封信",
+      firstOutbound: "{{date}}　把一句话带回给了 TA 本人",
+      firstFarewell: "{{date}}　好好说了一次再见",
+    },
     starters: {
       kicker: "开场白",
       title: "今日话题",

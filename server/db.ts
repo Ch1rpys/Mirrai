@@ -1294,6 +1294,52 @@ export async function getUserStats(userId: number, timezone?: string | null) {
   };
 }
 
+/**
+ * The three things that are not about how much the user chatted.
+ *
+ * First letter written, first sentence taken back to the real person,
+ * first goodbye. Dates only; nothing that has not happened yet.
+ */
+export type UserMilestones = {
+  firstLetterAt: Date | null;
+  firstOutboundSentAt: Date | null;
+  firstFarewellAt: Date | null;
+};
+
+export async function getUserMilestones(userId: number): Promise<UserMilestones> {
+  const empty: UserMilestones = {
+    firstLetterAt: null,
+    firstOutboundSentAt: null,
+    firstFarewellAt: null,
+  };
+  const db = await getDb();
+  if (!db) return empty;
+  /**
+   * Only the letters.
+   *
+   * The notes for later live in the same table, and they are not a
+   * letter. "Wrote the first letter" would otherwise light up on a
+   * todo the user left for themselves.
+   */
+  const [letterRow, outboundRow, farewellRow] = await Promise.all([
+    db.select({ at: min(letters.createdAt) }).from(letters).where(and(
+      eq(letters.userId, userId),
+      eq(letters.kind, "letter"),
+    )).then((rows) => rows[0]),
+    db.select({ at: min(outboundLetters.sentAt) }).from(outboundLetters).where(
+      eq(outboundLetters.userId, userId),
+    ).then((rows) => rows[0]),
+    db.select({ at: min(personas.graduatedAt) }).from(personas).where(
+      eq(personas.userId, userId),
+    ).then((rows) => rows[0]),
+  ]);
+  return {
+    firstLetterAt: letterRow?.at ?? null,
+    firstOutboundSentAt: outboundRow?.at ?? null,
+    firstFarewellAt: farewellRow?.at ?? null,
+  };
+}
+
 export async function getRecentActivity(userId: number, limit = 8) {
   const db = await getDb();
   if (!db) return [];

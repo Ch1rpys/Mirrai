@@ -32,6 +32,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { normaliseLoveLanguage } from "@shared/love-language";
 import MoodCheckIn from "@/components/MoodCheckIn";
+import Milestones from "@/components/v6/Milestones";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionDefinition } from "@/lib/emotions";
 import { localDateKey, zonedDateKey, zonedHour, daysSinceContact } from "@shared/timezone";
 import { attachmentStyleLabel, loveLanguageLabel } from "@/lib/persona-options";
@@ -2159,6 +2160,7 @@ export default function Lobby() {
                 <ActivityHeatmap />
                 <MiniCalendar />
                 <MemoryHighlights personas={personas as any[]} />
+                <Milestones />
               </div>
               <QuickChatBar personas={personas as any[]} onChat={(id) => navigate(`/chat/${id}`)} />
               <PersonaConstellation personas={personas as any[]} onChat={(id) => navigate(`/chat/${id}`)} />

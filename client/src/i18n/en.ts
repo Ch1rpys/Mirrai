@@ -427,6 +427,12 @@ export const en = {
       less: "Less",
       more: "More",
     },
+    walkedHere: {
+      title: "This far",
+      firstLetter: "{{date}}  wrote the first letter",
+      firstOutbound: "{{date}}  took a sentence back to them",
+      firstFarewell: "{{date}}  said a proper goodbye",
+    },
     starters: {
       kicker: "Openers",
       title: "Today's topics",
