@@ -33,9 +33,9 @@
 | A3 | ✅ | 267d8c6 (with C1.2 wizard) | `csv-not-unlabelled.test.ts`：`renderFixture(buildXiaomanRecords(), "wechat-csv")` 经 wechat-csv 解析再 `guessRoles`/`assignRoles`，每行 `role` 为 `user` 或 `assistant`，`content` 不含 `IsSender`/`StrContent`/`StrTime`，`lineNo > 1`。先红后绿见偏差 40。闸门随 C1.2。 |
 | A4 | ✅ | 042d0bf (normalize); 507c44c (records) | `pipeline-v5-seam.test.ts` 2 通过。文本路径与 `records` 路径：`actProfile.samples ≥ 40`；相邻两段 `to`/`from` 同为静默后第一条的 ISO（夹具 p2 首条 `2023-07-12T08:16:09.000Z`）；该段 `suppressionsDelta` 含 `no_question_ending`；`openingProfile.samples > 0`；「下次带你去吃那家面」`whoSaid=them`，「说好的 周末看电影」`whoSaid=me`。先红后绿：提交 `042d0bf` 之前跑同一文件，`actProfile` 为 `null`。`db-store.test.ts` `toTimedTranscript`：`2023-07-12T08:16:09.000Z` + `Asia/Shanghai` → `2023-07-12 16:16 我：在吗`。`server/skill-engine/` 原有测试 + `prompt-golden.test.ts` 10 通过、快照未改。闸门 `303 passed \| 3 skipped (306)` 文件，`2796 passed \| 13 skipped (2809)` 用例。时期条数见偏差 46。 |
 | A5 | ✅ | 21981ee | 先红后绿：`Lobby.test.tsx` `does not put a daily letter in a persona's mouth` 旧代码红在 `expected <h2 class="section-title">TA 想对你说</h2> to be null`；改后该文件 11 通过。`rg -n "lobby\\.daily|DailyMessages" client/` 无结果。`i18n.test.ts` 与 Lobby 一起 26 通过。闸门 `310 passed \| 3 skipped (313)` 文件，`2837 passed \| 16 skipped (2853)` 用例，`all six steps passed`。 |
-| A6 | ⬜ | 8614668 | 先红后绿：`Lobby.test.tsx` 三条在改代码前红——quiet 分身页面有「很想你」；`getByRole("heading", { name: "接着聊" })` 找不到推荐标题；卡片没有「上次联系 3 天前」。改后该文件 14 通过。`lobby-eligibility.test.ts` 5 通过（未就绪 / 已毕业 / quiet / unreachable / relationshipEnded 各一条反例）。`db-behaviour.test.ts`：`relationship_events` 一次 `DISTINCT ON (personaId)`，breakup 与 `togetherTo` 都令 `relationshipEnded` 为真。`rg -n "missYou|getMissYouLevel" client/` 无结果。闸门 `311 passed \| 3 skipped (314)` 文件，`2847 passed \| 16 skipped (2863)` 用例。 |
-| A7 | ✅ | 8ceb9b8 (remove); 3b5575e (milestones) | 先红后绿：`Lobby.test.tsx` `does not keep a streak, achievement badges, or a conversation ranking` 旧代码红在 `expected '连续对话 2 天' not to be null`；改后该文件 15 通过。`Analytics.test.tsx` `does not keep a longest-streak tile` 无「最长连续」。`rg -n "ChatStreak\|AchievementBadges\|PersonaLeaderboard\|ACHIEVEMENTS" client/` 无结果。`Milestones.test.tsx` 3 通过：三日期都 null 不渲染；只有 `firstLetterAt` 时只出现「写下了第一封信」。`routers.milestones.test.ts` 2 通过：user 1 / 2 各自只看到自己的日期，procedure 调 `getUserMilestones(ctx.user.id)`。闸门 `313 passed \| 3 skipped (316)` 文件，`2854 passed \| 16 skipped (2870)` 用例。 |
-| A8 | ⬜ | 2cfd462 (extract); 0be929c (review) | 先红后绿：`memory-extract-source.test.ts` `does not store a fact the persona said` 旧代码红在 `createMemory` 被调用、`fromPersona` 为 undefined。改后该文件 4 通过（分身行不存 / 用户行存 / 无 line 丢弃 / 上传记录里 TA 的行照常存）。`memory-extract.test.ts` 与 `memory-extract.test.ts`（根下）通过；原有 mock 补了 `line`。`MemoryReview.test.tsx` 3 通过：空列表不渲染；「留着」调 `keepFromPersona({ id: 7 })`；「删掉」调 `delete({ id: 7 })`。闸门 `315 passed \| 3 skipped (318)` 文件，`2861 passed \| 16 skipped (2877)` 用例。 |
+| A6 | ✅ | 8614668; d9f679d (quotes) | 先红后绿：`Lobby.test.tsx` 三条在改代码前红——quiet 分身页面有「很想你」；`getByRole("heading", { name: "接着聊" })` 找不到推荐标题；卡片没有「上次联系 3 天前」。改后该文件 14 通过。`lobby-eligibility.test.ts` 5 通过（未就绪 / 已毕业 / quiet / unreachable / relationshipEnded 各一条反例）。`db-behaviour.test.ts`：`relationship_events` 一次 `DISTINCT ON (personaId)`，breakup 与 `togetherTo` 都令 `relationshipEnded` 为真。`rg -n "missYou|getMissYouLevel" client/` 无结果。闸门 `311 passed \| 3 skipped (314)` 文件，`2847 passed \| 16 skipped (2863)` 用例。 |
+| A7 | ✅ | 8ceb9b8 (remove); 3b5575e (milestones) | 先红后绿：`Lobby.test.tsx` `does not keep a streak, achievement badges, or a conversation ranking` 旧代码红在 `expected '连续对话 2 天' not to be null`；改后该文件 15 通过。`Analytics.test.tsx` `does not keep a longest-streak tile` 无「最长连续」。`rg -n "ChatStreak\|AchievementBadges\|PersonaLeaderboard\|ACHIEVEMENTS" client/` 无结果。`Milestones.test.tsx` 3 通过：三日期都 null 不渲染；只有 `firstLetterAt` 时只出现「写下了第一封信」。`routers.milestones.test.ts` 2 通过：user 1 / 2 各自只看到自己的日期，procedure 调 `getUserMilestones(ctx.user.id)`。`1e5dec4`：`db-behaviour.test.ts` 断言三条 SQL 分别按 `letters.userId` 且 `kind = letter`、`outbound_letters.userId`、`personas.userId` 过滤。闸门 `313 passed \| 3 skipped (316)` 文件，`2854 passed \| 16 skipped (2870)` 用例。 |
+| A8 | ✅ | 2cfd462 (extract); 0be929c (review); d14ba9d (upload prompt) | 先红后绿：`memory-extract-source.test.ts` `does not store a fact the persona said` 旧代码红在 `createMemory` 被调用、`fromPersona` 为 undefined。改后该文件 4 通过（分身行不存 / 用户行存 / 无 line 丢弃 / 上传记录里 TA 的行照常存）。`memory-extract.test.ts` 与 `memory-extract.test.ts`（根下）通过；原有 mock 补了 `line`。`MemoryReview.test.tsx` 3 通过：空列表不渲染；「留着」调 `keepFromPersona({ id: 7 })`；「删掉」调 `delete({ id: 7 })`。闸门 `315 passed \| 3 skipped (318)` 文件，`2861 passed \| 16 skipped (2877)` 用例。 |
 | A9 | ✅ | 6ebeea3 | 四条都核到了，`KNOWN_UNVERIFIED` 为空，未验证清单无 A9 行。`resources.test.ts` 6 通过（含 source 以 `https://` 开头、`lastVerified` 不是 `2026-01-01`、KNOWN_UNVERIFIED 与进度未验证清单一致）。`egress.test.ts` 4 通过。闸门 `315 passed \| 3 skipped (318)` 文件，`2863 passed \| 16 skipped (2879)` 用例。核对摘要见批次日志。 |
 | B1.1 | ⬜ |  |  |
 | B1.2 | ⬜ |  |  |
@@ -261,6 +261,7 @@
 | 57 | A6 | 验收写卡片显示「上次联系 3 天」 | 复用已有 `chat.lastContact`，渲染成「上次联系 3 天前」 | 做法明确写复用聊天页同一条文案；验收那句是做法里的中性说法。 |
 | 58 | A7 | `letters` 最早一行 | `getUserMilestones` 只取 `kind = "letter"` 的最早 `createdAt` | 同表里还有「等 TA 回来再说」的 todo；`countLetters` 已经排除它们。「写下了第一封信」不该点亮在一条待办上。 |
 | 59 | A9 | `source` 指向运营方自己的官方页面 | `cn-national` 的 `source` 是疾控局新闻发布会页，不是卫健委设号通知原文 | nhc.gov.cn 这条通知本机 HTTP 412；疾控局页面（curl 200）写明全国 31 省已开通 12356。设号通知的全文是检索结果里拿到的，不当作本机打开的来源。 |
+| 60 | A8 | 「重建出来的」写在 `prompts.memoryExtraction` 里 | 这句单独放在 `prompts.memoryExtractionInApp`，只在应用内抽取时接在共用提示词后面 | 上传记录两边都是真的。共用提示词仍要求 `line`。 |
 
 ## 未验证清单
 
@@ -502,8 +503,14 @@ A1、A2、A3、C1.3、C1.4、C1.5、C1.6、C1.7 维持 ✅。C1.1、A4、C1.2 �
 
 A5、A7、A9 维持 ✅。A6、A8 改回 ⬜。
 
-- [ ] A6 验收要求一个暂停的分身那一页上没有「想你」。`lobby.quotes` 第 1 句是「所谓永恒，就是每一个当下都在想你。」，第 3 句是「想你的时候，连呼吸都是甜的。」`HeroBanner` 用 `Math.random` 抽一句。把 `Lobby.test.tsx` 里该用例的 `mockReturnValue(0.1)` 改成 `0` 再渲染，页面上就是第 1 句。现有用例把随机数固定成 0.1，抽到不含「想你」的第 2 句，所以没拦住。
-- [ ] A8 上传记录走的仍是同一条 `prompts.memoryExtraction`。`extractMemories` 带上 `history` 时，发给模型的系统提示词里有「对方（分身）在这段对话里说的话是重建出来的，不是事实来源」（英文是 reconstructed speech, not a source of facts）。手册要求这条路径两边都是真的、照旧。`fromUpload` 只放过存储：模型如果还是返回了 TA 那一行，会存，现有用例因此是绿的；提示词本身要求模型不要把这些话当事实。`server/chat/memory-extract.ts` 里 `fromUpload` 不换文案。
-- [ ] A7 `server/routers.milestones.test.ts` 把 `getUserMilestones` 整个 mock 掉，只断言路由传入 `ctx.user.id`。SQL 没有被这个测试跑到。临时库上另跑的结果是对的：用户 1 更早的 `kind = "todo"`（2020-01-01）没有点亮第一封信，点亮的是 2024-06-15 的 `letter`；用户 2 更早的信、已发出的信和告别没有混进用户 1；`sentAt` 为空的草稿没有算成「带回」。A7 因此仍是 ✅。这个测试没守住「只统计当前用户」。
+- [x] A6 验收要求一个暂停的分身那一页上没有「想你」。`d9f679d`。引言第 1 句改为「所谓永恒，就是把日子一天一天过完。」，第 3 句改为「安静下来的时候，连呼吸都慢了。」用例改为断言 `lobby.quotes` 每一句都不含「想你」，不再把 `Math.random` 钉死。
+- [x] A8 上传记录走的仍是同一条 `prompts.memoryExtraction`。`d14ba9d`。「重建出来的」挪到 `prompts.memoryExtractionInApp`，只在没有 `history` 时接上。上传路径的系统提示词不含这句，仍要求 `line`。见偏差 60。
+- [x] A7 `server/routers.milestones.test.ts` 把 `getUserMilestones` 整个 mock 掉。`1e5dec4`。`db-behaviour.test.ts` 断言三条查询分别过滤 `letters.userId` 且 `kind = "letter"`、`outbound_letters.userId`、`personas.userId`。路由测试仍只检查把 `ctx.user.id` 传进去。
+
+### WP2 · 实现会话 · 2026-11-17 · 独立验收修复
+
+- `d9f679d` 修 A6。`d14ba9d` 修 A8。`1e5dec4` 修 A7 的查询测试。
+- 闸门 `315 passed | 3 skipped (318)` 文件，`2865 passed | 16 skipped (2881)` 用例，`all six steps passed`。通过数比验收时的 2863 多 2，跳过数仍是 16。
+- A6、A8 改回 ✅。存疑三项未改：快捷栏、美加热线的来源页、已取代的记忆仍进核对列表。
 
 存疑，不改状态。快捷栏 `QuickChatBar` 仍只按已就绪且未毕业过滤，一个 `presence: "quiet"` 的分身会出现在「继续对话」里，这一栏的 kicker 也是「接着聊」。做法只点了推荐和今日话题，这两处按 `mayFeature` 排除了结束的和联系不上的。`us-ca` 的 `source` 只有 https://988lifeline.org/ ，页面写的是美国 988；加拿大是另一条线。另开 https://www.canada.ca/en/public-health/services/suicide-prevention/government-canada-doing-help-prevent-suicide.html ，上面写 call or text 9-8-8。号码两边都是 988，描述用的是美国热线的名字。`getMemoriesFromPersona` 不看 `status`，一条已 `superseded`、来源仍是分身消息的记忆也会进核对列表。手册没有要求按状态滤掉。
