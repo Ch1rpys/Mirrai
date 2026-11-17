@@ -41,6 +41,14 @@ vi.mock("./eval/run", () => ({
   runEval: (...a: unknown[]) => runEval(...a),
 }));
 
+const runAudition = vi.fn();
+const listAuditionProviders = vi.fn();
+
+vi.mock("./eval/audition", () => ({
+  runAudition: (...a: unknown[]) => runAudition(...a),
+  listAuditionProviders: (...a: unknown[]) => listAuditionProviders(...a),
+}));
+
 vi.mock("./eval/act-labels", () => ({
   labelEvalCases: async (cases: unknown) => cases,
 }));
@@ -107,6 +115,11 @@ describe("the fidelity evaluation", () => {
       await new Promise((resolve) => setTimeout(resolve, 30));
       return { score: 0.8 } as any;
     });
+    listAuditionProviders.mockResolvedValue([]);
+    runAudition.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return { results: [], cases: 1, calls: 0 };
+    });
   });
 
   it("does not start a second run while one is going", async () => {
@@ -150,5 +163,23 @@ describe("the fidelity evaluation", () => {
     // Both refusals were for the missing cases, and neither was "a run
     // is already going".
     expect(runEval).not.toHaveBeenCalled();
+  });
+
+  it("does not start a second audition while one is going", async () => {
+    const caller = appRouter.createCaller(ctxFor(1));
+    const first = caller.eval.audition({ personaId: 5, locale: "zh" });
+    const second = caller.eval.audition({ personaId: 5, locale: "zh" });
+    await expect(second).rejects.toMatchObject({ code: "CONFLICT" });
+    await first;
+    expect(runAudition).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not audition someone else's persona", async () => {
+    getPersonaById.mockResolvedValue(null);
+    const caller = appRouter.createCaller(ctxFor(2));
+    await expect(
+      caller.eval.audition({ personaId: 5, locale: "zh" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(runAudition).not.toHaveBeenCalled();
   });
 });

@@ -416,6 +416,10 @@ export const V6 = {
     zh: "记录里你这一侧的话不够，模拟不了",
     en: "There are not enough of your own lines in the record to simulate you.",
   },
+  "eval.audition.failed": {
+    zh: "这个模型没有答出来",
+    en: "This model did not answer.",
+  },
   "eval.blind.needEval": {
     zh: "先跑一次评测。",
     en: "Run an evaluation first.",

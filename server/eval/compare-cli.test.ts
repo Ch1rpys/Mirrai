@@ -56,6 +56,11 @@ describe("pnpm eval --compare", () => {
     expect(src).toContain("resolveGateTolerances(flagTolerances, storedBaseline?.tolerances)");
   });
 
+  it("runs a model audition", () => {
+    expect(src).toContain("--audition");
+    expect(src).toContain("[eval] audition:");
+  });
+
   it("runs a multi-turn drift measurement", () => {
     expect(src).toContain("--drift");
     expect(src).toContain('variant: "drift"');

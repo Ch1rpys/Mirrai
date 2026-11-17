@@ -117,6 +117,7 @@ import { asMaterial } from "./_core/material";
 import { buildEvalCases, casesFromRows, trainingTexts } from "./eval/dataset";
 import { labelEvalCases } from "./eval/act-labels";
 import { runEval } from "./eval/run";
+import { listAuditionProviders, runAudition } from "./eval/audition";
 import { collectOutboundCandidates } from "./chat/outbound";
 import { loadBehaviorProfile, measureAndSaveBehaviorProfile } from "./_core/behavior-profile";
 import { mergePersonaSettings, normalizePersonaSettings } from "@shared/persona-settings";
@@ -5045,6 +5046,82 @@ export const appRouter = router({
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         const run = await getLatestEvalRun(input.personaId, ctx.user.id);
         return { run };
+      }),
+
+    /**
+     * How many models would be tried, and how many calls that is.
+     *
+     * The button has to say the cost before it spends it.
+     */
+    auditionInfo: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const stored = casesFromRows(await getEvalCases(input.personaId, ctx.user.id));
+        const providers = await listAuditionProviders(ctx.user.id);
+        const caseCount = stored.length;
+        return {
+          count: providers.length,
+          cases: caseCount,
+          calls: providers.length * caseCount,
+          candidates: providers.map((slot) => ({
+            id: slot.id,
+            providerName: slot.providerName,
+            model: slot.model,
+          })),
+        };
+      }),
+
+    /**
+     * Tries every model this user can use on the same held-out cases.
+     */
+    audition: protectedProcedure
+      .use(rateLimit(RATE_LIMITS.llmHeavy))
+      .input(z.object({
+        personaId: z.number(),
+        locale: z.enum(["zh", "en"]).default("zh"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const runKey = `${ctx.user.id}:audition`;
+        if (runningEvals.has(runKey)) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: copy(input.locale, "errors.evalAlreadyRunning"),
+          });
+        }
+        runningEvals.add(runKey);
+        try {
+          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id, { newest: true });
+          const messages = rows.map((row) => ({
+            id: row.id,
+            role: row.role === "assistant" ? ("assistant" as const) : ("user" as const),
+            content: row.content,
+            timestamp: row.timestamp ?? null,
+          }));
+          const stored = casesFromRows(await getEvalCases(input.personaId, ctx.user.id));
+          const cut = stored.length
+            ? stored
+            : buildEvalCases(messages, { locale: input.locale });
+          const cases = await labelEvalCases(cut, { userId: ctx.user.id, locale: input.locale });
+          if (!cases.length) {
+            throw new TRPCError({
+              code: "PRECONDITION_FAILED",
+              message: copy(input.locale, "labels.eval.noCases"),
+            });
+          }
+          return await runAudition({
+            persona,
+            userId: ctx.user.id,
+            cases,
+            trainingTexts: trainingTexts(messages, cases),
+            locale: input.locale,
+          });
+        } finally {
+          runningEvals.delete(runKey);
+        }
       }),
   }),
 

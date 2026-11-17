@@ -46,6 +46,7 @@ import {
   trainDiscriminator,
 } from "../server/eval/discriminator";
 import { DriftNeedUserSideError, DRIFT_TURNS_DEFAULT, runDrift } from "../server/eval/drift";
+import { runAudition } from "../server/eval/audition";
 import { resolveProviderForUser } from "../server/llm/user-provider";
 
 const args = process.argv.slice(2);
@@ -121,6 +122,10 @@ const wantDiscriminator = args.includes("--discriminator");
 const drift = args.includes("--drift");
 const driftTurns = Math.max(1, Number(flag("turns") ?? DRIFT_TURNS_DEFAULT));
 /**
+ * Tries every model this user can use on the same held-out cases.
+ */
+const audition = args.includes("--audition");
+/**
  * The language the records are written in.
  *
  * The emotion is read off the words, so it is read with the trigger
@@ -162,7 +167,7 @@ const flagTolerances = {
 
 if (!Number.isFinite(personaId) || !Number.isFinite(userId)) {
   console.error(
-    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--k n] [--discriminator] [--drift] [--turns n] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n] [--tolerance-style n]",
+    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--k n] [--discriminator] [--drift] [--turns n] [--audition] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n] [--tolerance-style n]",
   );
   process.exit(1);
 }
@@ -360,6 +365,48 @@ if (drift) {
     );
     console.log("[eval] run saved");
   }
+  process.exit(0);
+}
+
+if (audition) {
+  if (!cases.length) {
+    console.error("No held-out cases to start from.");
+    process.exit(1);
+  }
+  const report = await runAudition({
+    persona,
+    userId,
+    cases,
+    trainingTexts: training,
+    locale,
+  });
+  console.log("");
+  console.log("[eval] audition:");
+  console.log(
+    "  model".padEnd(28) +
+      "composite".padStart(10) +
+      "overlap".padStart(10) +
+      "style".padStart(10) +
+      "residue".padStart(10) +
+      "chars".padStart(10) +
+      "ms".padStart(10),
+  );
+  for (const row of report.results) {
+    if (row.error) {
+      console.log(`  ${row.label.padEnd(26)}  ${row.error}`);
+      continue;
+    }
+    console.log(
+      `  ${row.label.slice(0, 26).padEnd(26)}` +
+        `${(row.composite ?? 0).toFixed(3).padStart(10)}` +
+        `${(row.overlap ?? 0).toFixed(3).padStart(10)}` +
+        `${(row.styleDistance ?? 0).toFixed(3).padStart(10)}` +
+        `${(row.residueRate ?? 0).toFixed(3).padStart(10)}` +
+        `${(row.avgChars ?? 0).toFixed(1).padStart(10)}` +
+        `${Math.round(row.avgMs ?? 0).toString().padStart(10)}`,
+    );
+  }
+  console.log(`[eval] ${report.cases} cases × ${report.results.length} models ≈ ${report.calls} calls`);
   process.exit(0);
 }
 

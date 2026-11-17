@@ -10,6 +10,7 @@
  * different prompt would be measuring a different product.
  */
 import type { Persona } from "../../drizzle/schema";
+import type { LLMProvider } from "../llm/types";
 import { resolveProviderForUser } from "../llm/user-provider";
 import { executePlan, planTurn } from "../chat/generate";
 import {
@@ -143,6 +144,13 @@ export interface EvalRunOptions {
   now?: Date;
   /** How many lines to generate per case. Averaged; styleDistance uses all of them. */
   samplesPerCase?: number;
+  /**
+   * The provider to measure.
+   *
+   * The audition passes one so each candidate is the one being timed.
+   * Chat and the CLI leave it unset and resolve the user's default.
+   */
+  provider?: LLMProvider;
 }
 
 /**
@@ -155,7 +163,8 @@ export interface EvalRunOptions {
 export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
   const locale = options.locale ?? "zh";
   const variant = options.variant ?? "default";
-  const provider = await resolveProviderForUser({ userId: options.userId });
+  const provider =
+    options.provider ?? (await resolveProviderForUser({ userId: options.userId }));
   if (!provider) {
     throw new Error("No LLM provider is configured for this user.");
   }

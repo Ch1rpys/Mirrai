@@ -158,7 +158,7 @@ export async function resolveProviderForUserWithOwnership(params: {
 /**
  * Builds the provider for one of the user's own configuration rows.
  */
-async function buildUserProvider(
+export async function buildUserProvider(
   userId: number,
   config: Awaited<ReturnType<typeof db.getLlmConfigsByUserId>>[number],
 ): Promise<LLMProvider | undefined> {
