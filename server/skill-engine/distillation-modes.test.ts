@@ -36,6 +36,9 @@ updateSkillJob: (...a: unknown[]) => updateSkillJob(...a),
   createSkillJob: (...a: unknown[]) => createSkillJob(...a),
   getFilesByPersonaId: vi.fn().mockResolvedValue([]),
   createChatSummary: vi.fn(),
+  iterateRecords: async function* () {},
+  createDistillationChunk: vi.fn(),
+  createDistillationCard: vi.fn(),
 }));
 
 vi.mock("./runner", () => ({

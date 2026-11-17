@@ -59,6 +59,16 @@ const SITES: Array<{ file: string; what: string; pattern: RegExp }> = [
     what: "the farewell candidates",
     pattern: /asMaterial\(/,
   },
+  {
+    file: "server/skill-engine/chunks.ts",
+    what: "the distillation blocks",
+    pattern: /asMaterial\(renderChunkBody/,
+  },
+  {
+    file: "server/skill-engine/reduce.ts",
+    what: "the distillation merge",
+    pattern: /asMaterial\(payload, locale\)/,
+  },
 ];
 
 describe("the places the user's own words reach a model", () => {

@@ -76,6 +76,10 @@ import { parseExportTime } from "../importers/normalize";
 import { copy, type CopyKey, type Locale } from "@shared/copy";
 import { extractMemories } from "../chat/memory-extract";
 import { storageToDataUrl } from "../storage";
+import { chunkRecords, type RecordLine } from "./chunks";
+import { DistillationMapFailed, mapObservationCards } from "./observations";
+import { reduceObservationCards } from "./reduce";
+import { registerSkillPrompts } from "@shared/copy/skill-prompts";
 
 /**
  * How many lines of the upload are read for the memories.
@@ -84,7 +88,8 @@ import { storageToDataUrl } from "../storage";
  * given a window, not the whole file.
  */
 const MEMORY_EXTRACTION_MESSAGE_LIMIT = 50;
-import { registerSkillPrompts } from "@shared/copy/skill-prompts";
+/** Below this, the analysis still reads the start of the transcript. */
+const MIN_RECORDS_FOR_CHUNKED = 200;
 
 // The prompt dictionary is assembled in `shared/copy/index.ts`. Registering it
 // here as well means `copy()` finds these keys whether or not that wiring
@@ -877,13 +882,85 @@ function coerceTimestamp(
   return null;
 }
 
-function transcriptRowsFrom(input: PipelineInput): Array<{
+function asMeta(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+/**
+ * A helper on the db module, when the test mock actually exported it.
+ *
+ * Vitest's module mock throws if a name was not in the factory. The
+ * pipeline has to keep running on the old mocks that never heard of
+ * the record iterator.
+ */
+function dbFn(name: string): ((...args: never[]) => unknown) | undefined {
+  try {
+    const value = (db as Record<string, unknown>)[name];
+    return typeof value === "function" ? (value as (...args: never[]) => unknown) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function toRecordLine(row: {
+  id: number;
+  role: string;
+  content: string;
+  timestamp?: Date | string | null;
+  kind?: string | null;
+  speaker?: string | null;
+  meta?: unknown;
+}): RecordLine | null {
+  if (row.role !== "user" && row.role !== "assistant" && row.role !== "other") {
+    return null;
+  }
+  const timestamp =
+    row.timestamp instanceof Date
+      ? row.timestamp
+      : row.timestamp
+        ? new Date(row.timestamp)
+        : null;
+  return {
+    id: row.id,
+    role: row.role,
+    content: row.content,
+    timestamp: timestamp && !Number.isNaN(timestamp.getTime()) ? timestamp : null,
+    kind: row.kind,
+    speaker: row.speaker,
+    meta: asMeta(row.meta),
+  };
+}
+
+async function loadPipelineRecords(input: PipelineInput): Promise<RecordLine[]> {
+  if (input.records && input.records.length > 0) {
+    return input.records
+      .map((row) => toRecordLine(row))
+      .filter((row): row is RecordLine => Boolean(row));
+  }
+  const iterate = dbFn("iterateRecords") as
+    | ((personaId: number, userId: number) => AsyncIterable<unknown>)
+    | undefined;
+  if (!iterate) return [];
+  const rows: RecordLine[] = [];
+  for await (const row of iterate(input.personaId, input.userId)) {
+    const line = toRecordLine(row as Parameters<typeof toRecordLine>[0]);
+    if (line) rows.push(line);
+  }
+  return rows;
+}
+
+function transcriptRowsFrom(
+  input: PipelineInput,
+  loaded: RecordLine[] = [],
+): Array<{
   role: string;
   content: string;
   timestamp: Date | null;
 }> {
-  if (input.records && input.records.length > 0) {
-    return input.records
+  const rows = loaded.length > 0 ? loaded : input.records ?? [];
+  if (rows.length > 0) {
+    return rows
       .filter((row) => (row.role === "user" || row.role === "assistant") && isTextRecord(row))
       .map((row) => ({
         role: row.role,
@@ -1119,6 +1196,8 @@ async function runSkillPipelineOnce(
   const skillDir = path.join(baseDir, slug);
 
   try {
+    const recordLines = await loadPipelineRecords(input);
+
     // ── Celebrity research (researching → auditing → synthesizing → validating)
     let research: CelebrityResearchResult | null = null;
     if (resolution.hasResearchStages && effectiveProfile) {
@@ -1159,7 +1238,10 @@ async function runSkillPipelineOnce(
     // With no material at all the run is really still *collecting* — the
     // stage id has to say so, otherwise a consumer cannot tell "we are
     // waiting for the chat logs" from "we are reading them".
-    const hasMaterial = chatContent.trim().length > 0 || (input.imageUrls?.length ?? 0) > 0;
+    const hasMaterial =
+      chatContent.trim().length > 0 ||
+      (input.imageUrls?.length ?? 0) > 0 ||
+      recordLines.length > 0;
     const intakeMessage = hasMaterial
       ? copy(locale, "skill.takingStock")
       : copy(locale, "skill.waitingMaterial");
@@ -1218,36 +1300,97 @@ async function runSkillPipelineOnce(
     );
     await setPersonaProgress(stageProgress.analyzing_persona, copy(locale, "skill.analyzingPersona"));
 
-    const analyzerPrompt = loadPrompt(characterFamily, "persona_analyzer", effectiveProfile);
-    const chatSample = chatContent.slice(0, preset.chatSampleLimit);
-    const chatBlock = chatSample || copy(locale, "skillPrompts.pipeline.noChatBlock");
-    const analysisMaterial = research
-      ? [
-          chatBlock,
-          copy(locale, "skill.researchNote", {
-            notes: research.digest.slice(0, MAX_RESEARCH_SAMPLE),
-          }),
-        ].join("\n\n")
-      : chatBlock;
-    const analysisResult = await invokePipeline({
-      userId,
-      providerName: input.provider,
-      messages: [
-        { role: "system", content: analyzerPrompt },
-        {
-          role: "user",
-          content:
-            copy(locale, "skillPrompts.pipeline.analyzerName", { name: fencedName(name, locale) }) +
-            "\n\n" +
-            copy(locale, "skillPrompts.pipeline.analyzerMaterial", {
-              // The material is fenced: it is the user's own chat log,
-              // and it can say anything.
-              material: asMaterial(analysisMaterial, locale),
-            }),
-        },
-      ],
-      options: { provider: input.provider, temperature: preset.analysisTemperature },
-    });
+    const invokeForDistill = (messages: LLMMessage[]) =>
+      invokePipeline({
+        userId,
+        providerName: input.provider,
+        messages,
+        options: { provider: input.provider, temperature: preset.analysisTemperature },
+      });
+
+    let analysisResult = "";
+    let usedChunkedAnalysis = false;
+    try {
+      if (recordLines.length >= MIN_RECORDS_FOR_CHUNKED) {
+        usedChunkedAnalysis = true;
+        const chunks = chunkRecords(recordLines, {
+          locale,
+          timeZone: input.timeZone,
+          themName: name,
+        });
+        const cards = await mapObservationCards({
+          chunks,
+          personaId,
+          userId,
+          name,
+          locale,
+          timeZone: input.timeZone,
+          themName: name,
+          mode: input.mode,
+          invoke: invokeForDistill,
+          onProgress: (message) => {
+            void setPersonaProgress(stageProgress.analyzing_persona, message);
+          },
+        });
+        analysisResult = await reduceObservationCards({
+          cards,
+          chunks,
+          name,
+          locale,
+          timeZone: input.timeZone,
+          invoke: invokeForDistill,
+        });
+      } else {
+        const analyzerPrompt = loadPrompt(characterFamily, "persona_analyzer", effectiveProfile);
+        const chatSample = chatContent.slice(0, preset.chatSampleLimit);
+        const chatBlock = chatSample || copy(locale, "skillPrompts.pipeline.noChatBlock");
+        const analysisMaterial = research
+          ? [
+              chatBlock,
+              copy(locale, "skill.researchNote", {
+                notes: research.digest.slice(0, MAX_RESEARCH_SAMPLE),
+              }),
+            ].join("\n\n")
+          : chatBlock;
+        analysisResult = await invokeForDistill([
+          { role: "system", content: analyzerPrompt },
+          {
+            role: "user",
+            content:
+              copy(locale, "skillPrompts.pipeline.analyzerName", { name: fencedName(name, locale) }) +
+              "\n\n" +
+              copy(locale, "skillPrompts.pipeline.analyzerMaterial", {
+                // The material is fenced: it is the user's own chat log,
+                // and it can say anything.
+                material: asMaterial(analysisMaterial, locale),
+              }),
+          },
+        ]);
+      }
+    } catch (error) {
+      /**
+       * Too many blocks failed. That is the run, not a blip.
+       *
+       * Retrying the whole pipeline would pay for the same blocks
+       * again and still fail the same way. The persona is marked
+       * broken once, with the reason the map stage already wrote.
+       */
+      if (error instanceof DistillationMapFailed) {
+        await setJobStage(
+          {
+            pipelineStage: "error",
+            stageMessage: error.message,
+          },
+          jobId,
+        );
+        await db.updatePersona(personaId, userId, {
+          analysisStatus: "error",
+          analysisMessage: error.message,
+        });
+        return;
+      }
+      throw error;
+    }
 
     // ── Stage 2: build ─────────────────────────────────────────────────────
     await setJobStage(
@@ -1280,7 +1423,10 @@ async function runSkillPipelineOnce(
         {
           role: "user",
           content:
-            copy(locale, "skillPrompts.pipeline.builderName", { name: fencedName(name, locale) }) + "\n\n" + builderMaterial,
+            copy(locale, "skillPrompts.pipeline.builderName", { name: fencedName(name, locale) }) +
+            "\n\n" +
+            (usedChunkedAnalysis ? `${copy(locale, "distill.builderNowPeriod")}\n\n` : "") +
+            builderMaterial,
         },
       ],
       options: { provider: input.provider, temperature: preset.analysisTemperature },
@@ -1417,7 +1563,7 @@ async function runSkillPipelineOnce(
       copy(locale, "labels.microRules.mining"),
     );
 
-    const transcriptRows = transcriptRowsFrom(input);
+    const transcriptRows = transcriptRowsFrom(input, recordLines);
 
     const microRules =
       input.mineRules === false

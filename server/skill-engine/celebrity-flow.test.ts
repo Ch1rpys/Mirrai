@@ -79,6 +79,9 @@ updateSkillJob: (...a: unknown[]) => updateSkillJob(...a),
   getDailyChatCounts: (...a: unknown[]) => getDailyChatCounts(...a),
   createGraduationAssessment: (...a: unknown[]) => createGraduationAssessment(...a),
   getMessagesSince: (...a: unknown[]) => getMessagesSince(...a),
+  iterateRecords: async function* () {},
+  createDistillationChunk: vi.fn(),
+  createDistillationCard: vi.fn(),
 }));
 
 // The mock factories are hoisted above the module body, so the holder has

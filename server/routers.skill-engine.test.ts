@@ -17,19 +17,23 @@ import type { TrpcContext } from "./_core/context";
 const getPersonaById = vi.fn();
 const getFilesByPersonaId = vi.fn();
 const getCollectedMessagesForPersona = vi.fn();
+const countRecords = vi.fn();
 const updatePersona = vi.fn();
 const getSkillJobById = vi.fn();
 const getPersonaSettings = vi.fn();
 const setPersonaSettings = vi.fn();
+const getUserTimezone = vi.fn();
 
 vi.mock("./db", () => ({
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   getFilesByPersonaId: (...a: unknown[]) => getFilesByPersonaId(...a),
   getCollectedMessagesForPersona: (...a: unknown[]) => getCollectedMessagesForPersona(...a),
+  countRecords: (...a: unknown[]) => countRecords(...a),
   updatePersona: (...a: unknown[]) => updatePersona(...a),
   getSkillJobById: (...a: unknown[]) => getSkillJobById(...a),
   getPersonaSettings: (...a: unknown[]) => getPersonaSettings(...a),
   setPersonaSettings: (...a: unknown[]) => setPersonaSettings(...a),
+  getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
 }));
 
 const runSkillPipeline = vi.fn();
@@ -82,6 +86,8 @@ describe("distilling a persona", () => {
       { fileType: "chat_txt", extractedMemory: "在吗\n在的呀", fileUrl: null },
     ]);
     getCollectedMessagesForPersona.mockResolvedValue([]);
+    countRecords.mockResolvedValue(0);
+    getUserTimezone.mockResolvedValue("Asia/Shanghai");
     getPersonaSettings.mockResolvedValue(null);
     setPersonaSettings.mockResolvedValue(true);
     updatePersona.mockResolvedValue(undefined);
@@ -100,6 +106,21 @@ describe("distilling a persona", () => {
 
     expect(runSkillPipeline).toHaveBeenCalled();
     expect(runSkillPipeline.mock.calls[0][0].provider).toBe("ollama");
+  });
+
+  it("does not load the record table into the pipeline input", async () => {
+    countRecords.mockResolvedValue(80);
+
+    await appRouter
+      .createCaller(ctxFor(1))
+      .skillEngine.startPipeline({ personaId: 5, characterFamily: "relationship" });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(runSkillPipeline).toHaveBeenCalled();
+    expect(runSkillPipeline.mock.calls[0][0].records).toBeUndefined();
+    expect(getCollectedMessagesForPersona).not.toHaveBeenCalled();
+    expect(countRecords).toHaveBeenCalledWith(5, 1);
   });
 
   it("runs the analysis trigger on the same provider", async () => {
@@ -157,6 +178,7 @@ describe("distilling a persona", () => {
      */
     getFilesByPersonaId.mockResolvedValue([]);
     getCollectedMessagesForPersona.mockResolvedValue([]);
+    countRecords.mockResolvedValue(0);
 
     await expect(
       appRouter
@@ -219,6 +241,7 @@ describe("distilling a persona", () => {
   it("will not build a persona out of nothing through the other entry point either", async () => {
     getFilesByPersonaId.mockResolvedValue([]);
     getCollectedMessagesForPersona.mockResolvedValue([]);
+    countRecords.mockResolvedValue(0);
 
     await expect(
       appRouter

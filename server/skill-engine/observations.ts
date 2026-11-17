@@ -71,9 +71,22 @@ export interface ObservationStore {
   }) => Promise<unknown>;
 }
 
+function dbFn(name: string): ((row: never) => Promise<unknown>) | undefined {
+  try {
+    const value = (db as Record<string, unknown>)[name];
+    return typeof value === "function" ? (value as (row: never) => Promise<unknown>) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const defaultStore: ObservationStore = {
-  saveChunk: (row) => db.createDistillationChunk(row),
-  saveCard: (row) => db.createDistillationCard(row),
+  saveChunk: async (row) => {
+    await dbFn("createDistillationChunk")?.(row as never);
+  },
+  saveCard: async (row) => {
+    await dbFn("createDistillationCard")?.(row as never);
+  },
 };
 
 function isDimension(value: unknown): value is ObservationDimension {

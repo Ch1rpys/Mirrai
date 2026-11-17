@@ -41,6 +41,7 @@ import {
   getFileSummaryTitles,
   setUserLocale, getUserLocale,  createEmotionSnapshot, getEmotionSnapshots, getEmotionReport, getTodaySnapshot,
   getCollectedMessagesForPersona, getCollectedMessageSources,
+  countRecords,
   getIntimacyData, updateIntimacy,
   getMessageVolume, getEmotionTimeline, getPersonaEngagement, getHourlyDistribution, getAnalyticsStats,
   createDiaryEntry, getDiaryEntries, getDiaryByDate, deleteDiaryEntry, getMessagesByDate, getDiaryDates,
@@ -129,7 +130,6 @@ import {
   sampledActFromMetadata,
 } from "./skill-engine/feedback-aggregate";
 import { mayReachOut } from "@shared/graduation-mode";
-import { isRecordKind } from "@shared/records";
 import { hashPassword, verifyPassword } from "./_core/password";
 import { extractJsonArray, extractJsonObject } from "./_core/json";
 import {
@@ -172,7 +172,7 @@ import {
   getCollectorJob,
   listCollectorJobs,
 } from "./collectors";
-import { listPersistedCollectorJobs, getPersistedCollectorJob, toTimedTranscript } from "./collectors/db-store";
+import { listPersistedCollectorJobs, getPersistedCollectorJob } from "./collectors/db-store";
 
 /**
  * Resolves a persona's picture to PNG bytes for the character-card export.
@@ -294,12 +294,18 @@ const MAX_DISTILLATION_CHARS = 1_000_000;
  */
 type DistillationMaterial = {
   files: Awaited<ReturnType<typeof getFilesByPersonaId>>;
-  collected: Awaited<ReturnType<typeof getCollectedMessagesForPersona>>;
+  /** How many structured rows there are. The pipeline pages them itself. */
+  collectedCount: number;
 };
 
 /**
- * The material for a persona: the uploaded files and the collected
- * messages.
+ * The material for a persona: the uploaded files, and a count of the
+ * structured rows.
+ *
+ * The rows themselves are not read here. A long history used to be
+ * loaded twice — once to decide whether there was anything to distil,
+ * and again to hand to the pipeline — and the analysis then sliced
+ * the beginning. The pipeline pages the table on its own.
  */
 async function readDistillationMaterial(
   personaId: number,
@@ -308,8 +314,8 @@ async function readDistillationMaterial(
   const files = await getFilesByPersonaId(personaId, userId, {
     withExtractedMemory: true,
   });
-  const collected = await getCollectedMessagesForPersona(personaId, userId, { newest: true });
-  return { files, collected };
+  const collectedCount = await countRecords(personaId, userId);
+  return { files, collectedCount };
 }
 
 /**
@@ -332,7 +338,7 @@ function hasDistillationMaterial(material: DistillationMaterial): boolean {
     .join("\n")
     .trim();
   const hasPhotos = material.files.some((f) => f.fileType === "image" && f.fileUrl);
-  return Boolean(uploadedText) || hasPhotos || material.collected.length > 0;
+  return Boolean(uploadedText) || hasPhotos || material.collectedCount > 0;
 }
 
 /**
@@ -412,8 +418,6 @@ async function startPersonaDistillation(params: {
       .map((f) => f.fileUrl)
       .filter(Boolean);
 
-    // Messages pulled in by the collectors are part of the history too.
-    const collected = material.collected;
     let timezone: string | null = null;
     try {
       timezone = await getUserTimezone(userId);
@@ -421,43 +425,15 @@ async function startPersonaDistillation(params: {
       timezone = null;
     }
     /**
-     * The collected transcript has a ceiling too.
+     * The uploaded files are the only text loaded here.
      *
-     * The one-megabyte slice was applied to the *uploaded* files only.
-     * So the material handed to the pipeline was that megabyte plus
-     * the whole collected history — up to twenty thousand rows — and a
-     * collector with a lot to say made the request enormous, and slow,
-     * and expensive.
+     * Structured rows used to be read in full, rendered, and handed
+     * to the pipeline as `records` plus a timed transcript. A long
+     * history made that request enormous. The pipeline pages the
+     * table itself; this entry point only needs to know there is
+     * something to read, and to keep the old-upload path working.
      */
-    const collectedTranscript = collected.length > 0
-      ? toTimedTranscript(collected, locale, timezone).slice(0, MAX_DISTILLATION_CHARS)
-      : "";
-    const records = collected.length > 0
-      ? collected.map((row) => {
-          const role: "user" | "assistant" | "other" =
-            row.role === "user" || row.role === "assistant" || row.role === "other"
-              ? row.role
-              : "other";
-          return {
-            id: row.id,
-            role,
-            content: row.content,
-            timestamp: row.timestamp ?? null,
-            kind: isRecordKind(row.kind) ? row.kind : ("text" as const),
-          };
-        })
-      : undefined;
-    /**
-     * Structured rows win.
-     *
-     * When the persona has records, the miners read those and the
-     * analysis stages that still want text get a timed rendering of
-     * the same rows. An old upload with no rows keeps the extracted
-     * file text.
-     */
-    const chatContent = records
-      ? collectedTranscript
-      : [uploadedText, collectedTranscript].filter(Boolean).join("\n\n---\n\n");
+    const chatContent = uploadedText;
 
     /**
      * Nothing to read.
@@ -468,7 +444,7 @@ async function startPersonaDistillation(params: {
      * net under them, because the check is a database read and the
      * material can be deleted between the check and the run.
      */
-    if (!chatContent && imageUrls.length === 0 && !collectedTranscript) {
+    if (!chatContent && imageUrls.length === 0 && material.collectedCount === 0) {
       console.warn(
         `[SkillEngine] Persona ${personaId} has no material to distil — nothing was written.`,
       );
@@ -504,7 +480,6 @@ async function startPersonaDistillation(params: {
       characterFamily: params.characterFamily,
       name,
       chatContent,
-      records,
       imageUrls,
       researchProfile: params.researchProfile ?? undefined,
       mode: params.mode ?? undefined,

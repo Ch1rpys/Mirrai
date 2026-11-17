@@ -43,6 +43,9 @@ vi.mock("../db", () => ({
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   claimMemoryExtraction: (...a: unknown[]) => claimMemoryExtraction(...a),
   releaseMemoryExtraction: vi.fn(),
+  iterateRecords: async function* () {},
+  createDistillationChunk: vi.fn(),
+  createDistillationCard: vi.fn(),
 }));
 
 vi.mock("./runner", () => ({

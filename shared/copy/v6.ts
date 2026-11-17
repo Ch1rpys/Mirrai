@@ -240,4 +240,32 @@ export const V6 = {
     zh: "有 {{failed}} / {{total}} 段读不出来，超过了三成，这一次没有继续。",
     en: "{{failed}} of {{total}} blocks could not be read — more than a third — so this run stopped.",
   },
+  "prompts.distill.mergeCards": {
+    zh: [
+      "下面是对 {{name}} 同一段时期的观察卡。每张卡带着原话片段和日期。",
+      "把它们归并成四段，沿用分析稿的结构：Expression DNA、Emotional Triggers、Conflict Pattern、Memory Signature。",
+      "只根据这些卡片写。不要发明卡片里没有的事。不要复述整段聊天。",
+      "证据和推断分开。材料不够的地方标（source material insufficient）。",
+      "用用户的语言写。只输出这四段正文。",
+    ].join("\n"),
+    en: [
+      "These are observation cards for one stretch of {{name}}'s life. Each card carries a quoted snippet and a date.",
+      "Merge them into four sections, in the analyser layout: Expression DNA, Emotional Triggers, Conflict Pattern, Memory Signature.",
+      "Write only from these cards. Do not invent what is not on them. Do not retell the chat.",
+      "Keep evidence apart from inference. Mark thin places as (source material insufficient).",
+      "Write in the user's language. Return only the four sections.",
+    ].join("\n"),
+  },
+  "distill.builderNowPeriod": {
+    zh: "最近一段是这个人现在的样子，以它为准；更早的是背景。",
+    en: "The most recent stretch is how this person is now — treat it as current. Earlier stretches are background.",
+  },
+  "distill.periodNow": {
+    zh: "{{from}} – {{to}}（现在）",
+    en: "{{from}} – {{to}} (now)",
+  },
+  "distill.periodPast": {
+    zh: "{{from}} 至 {{to}}",
+    en: "{{from}} to {{to}}",
+  },
 } as const satisfies CopyTable;

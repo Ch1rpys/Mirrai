@@ -107,3 +107,56 @@ describe("the user's own imperfection notes", () => {
     expect(prompt).toMatch(/<persona_data>/);
   });
 });
+
+describe("the distillation's observation and merge stages", () => {
+  it("fences quoted snippets when merging cards", async () => {
+    const { reduceObservationCards } = await import("./skill-engine/reduce");
+    const invoke = async (messages: Array<{ role: string; content: unknown }>) => {
+      const raw = messages.find((message) => message.role === "user")?.content;
+      const user = typeof raw === "string" ? raw : "";
+      expect(user).toContain(HOSTILE_NOTE);
+      const unfencedUser = user.replace(
+        /MATERIAL>>>:[0-9a-f]+\n[\s\S]*?<<<END MATERIAL>>>:[0-9a-f]+/g,
+        "",
+      );
+      expect(unfencedUser).not.toContain(HOSTILE_NOTE);
+      return "ok";
+    };
+    const timestamp = new Date("2023-07-12T08:16:09.000Z");
+    await reduceObservationCards({
+      name: "小满",
+      locale: "zh",
+      timeZone: "Asia/Shanghai",
+      invoke,
+      chunks: [
+        {
+          index: 0,
+          hash: "abc",
+          from: timestamp,
+          to: timestamp,
+          periodId: "p1",
+          dayPart: "day",
+          chars: HOSTILE_NOTE.length,
+          rows: [
+            {
+              id: 7,
+              role: "assistant",
+              content: HOSTILE_NOTE,
+              timestamp,
+              kind: "text",
+            },
+          ],
+        },
+      ],
+      cards: [
+        {
+          dimension: "habit",
+          claim: "会这样说",
+          quotes: [7],
+          chunkHash: "abc",
+          periodId: "p1",
+        },
+      ],
+    });
+  });
+});
