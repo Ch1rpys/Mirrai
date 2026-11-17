@@ -7,6 +7,7 @@ const getRecordsVersion = vi.fn();
 const setPersonaStyleProfile = vi.fn();
 const getPersonaSettings = vi.fn();
 const setPersonaSettings = vi.fn();
+const iterateRecords = vi.fn();
 
 vi.mock("../db", () => ({
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
@@ -15,6 +16,7 @@ vi.mock("../db", () => ({
   setPersonaStyleProfile: (...a: unknown[]) => setPersonaStyleProfile(...a),
   getPersonaSettings: (...a: unknown[]) => getPersonaSettings(...a),
   setPersonaSettings: (...a: unknown[]) => setPersonaSettings(...a),
+  iterateRecords: (...a: unknown[]) => iterateRecords(...a),
 }));
 
 import { appRouter } from "../routers";
@@ -49,6 +51,7 @@ describe("the style profile routes", () => {
     getPersonaStyleProfile.mockResolvedValue(null);
     getRecordsVersion.mockResolvedValue("3:9");
     setPersonaStyleProfile.mockResolvedValue(true);
+    iterateRecords.mockImplementation(async function* () {});
   });
 
   it("does not read somebody else's persona", async () => {

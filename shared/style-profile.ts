@@ -46,7 +46,7 @@ export interface StyleProfile {
   /** `${recordCount}:${maxId}`, used to decide whether to remeasure. */
   recordsVersion: string;
   fingerprint?: unknown; // 由 B3.1 填
-  userSide?: unknown; // 由 B1.10 填
+  userSide?: unknown; // 由 B1.10 填 UserSideProfile
   rituals?: unknown; // 由 B2.2 填
   samplePool?: unknown; // 由 B2.6 填
   imperfectionDrafts?: unknown; // 由 B3.6 填

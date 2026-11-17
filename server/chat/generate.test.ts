@@ -304,6 +304,33 @@ describe("the shared generation path", () => {
     expect(suppressed.sampledAct).toBeNull();
     expect(suppressed.layersUsed).not.toContain("act");
   });
+
+  it("does not put the user's sample lines into the prompt", async () => {
+    /**
+     * i18n:allow-input — a distinctive quote used only to prove it
+     * stays out of the generation path.
+     */
+    const sample = "user-side-sample-line-that-must-not-enter-the-prompt";
+    const withUserSide = persona();
+    withUserSide.styleProfile = {
+      version: 1,
+      measuredAt: NOW.toISOString(),
+      recordsVersion: "80:80",
+      userSide: { samples: 80, sampleLines: [sample] },
+    };
+    const planned = await planTurn({
+      persona: withUserSide,
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "user-side:1",
+    });
+    const packed = JSON.stringify(planned.messages);
+    expect(packed).not.toContain(sample);
+    expect(CONTEXT.some((row) => row.content.includes(sample))).toBe(false);
+  });
 });
 
 describe("pnpm eval --without", () => {

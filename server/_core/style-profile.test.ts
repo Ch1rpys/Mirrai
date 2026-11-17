@@ -6,6 +6,7 @@ const setPersonaStyleProfile = vi.fn();
 const getPersonaById = vi.fn();
 const getPersonaSettings = vi.fn();
 const setPersonaSettings = vi.fn();
+const iterateRecords = vi.fn();
 
 vi.mock("../db", () => ({
   getRecordsVersion: (...a: unknown[]) => getRecordsVersion(...a),
@@ -14,6 +15,7 @@ vi.mock("../db", () => ({
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   getPersonaSettings: (...a: unknown[]) => getPersonaSettings(...a),
   setPersonaSettings: (...a: unknown[]) => setPersonaSettings(...a),
+  iterateRecords: (...a: unknown[]) => iterateRecords(...a),
 }));
 
 import { afterRecordsChanged, afterRecordsRemoved, measureStyleProfile } from "./style-profile";
@@ -22,6 +24,7 @@ describe("measureStyleProfile", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     setPersonaStyleProfile.mockResolvedValue(true);
+    iterateRecords.mockImplementation(async function* () {});
   });
 
   it("does not write again when the records version is unchanged", async () => {
@@ -64,6 +67,7 @@ describe("afterRecordsChanged", () => {
     getPersonaById.mockResolvedValue({ id: 5, userId: 1, analysisStatus: "ready" });
     getPersonaSettings.mockResolvedValue(null);
     setPersonaSettings.mockResolvedValue(true);
+    iterateRecords.mockImplementation(async function* () {});
   });
 
   it("notes new rows on a persona that has already been distilled", async () => {

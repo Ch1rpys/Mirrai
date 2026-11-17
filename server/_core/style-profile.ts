@@ -9,11 +9,13 @@ import {
   getPersonaSettings,
   getPersonaStyleProfile,
   getRecordsVersion,
+  iterateRecords,
   setPersonaSettings,
   setPersonaStyleProfile,
 } from "../db";
 import { mergePersonaSettings } from "@shared/persona-settings";
 import { normalizeStyleProfile, type StyleProfile } from "@shared/style-profile";
+import { measureUserSide } from "@shared/user-side-profile";
 
 export async function measureStyleProfile(params: {
   personaId: number;
@@ -26,11 +28,29 @@ export async function measureStyleProfile(params: {
   if (current && current.recordsVersion === recordsVersion && current.measuredAt) {
     return current;
   }
+  const rows: Array<{
+    role: string;
+    content: string;
+    timestamp: Date | string | null;
+    kind?: string | null;
+    act?: string | null;
+  }> = [];
+  for await (const row of iterateRecords(personaId, userId)) {
+    rows.push({
+      role: row.role,
+      content: row.content,
+      timestamp: row.timestamp,
+      kind: row.kind,
+      act: row.act,
+    });
+  }
+  const userSide = measureUserSide(rows);
   const next = normalizeStyleProfile({
     ...(current ?? {}),
     version: 1,
     measuredAt: now.toISOString(),
     recordsVersion,
+    userSide: userSide ?? undefined,
   });
   await setPersonaStyleProfile(personaId, userId, next);
   return next;
