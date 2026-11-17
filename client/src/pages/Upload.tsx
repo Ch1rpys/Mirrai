@@ -13,6 +13,7 @@ import StaleRecordsBanner from "@/components/v6/StaleRecordsBanner";
 import RecordSources from "@/components/v6/RecordSources";
 import ImportWizard from "@/components/v6/ImportWizard";
 import HarmNotice from "@/components/v6/HarmNotice";
+import ClarifyCard from "@/components/v6/ClarifyCard";
 import { normalizeHarmReport } from "@shared/harm";
 import { isChatImportFileType, isUnparsedChatUpload } from "@shared/records";
 import { resolveIntakeGaps } from "@/lib/intake-gaps";
@@ -679,6 +680,9 @@ export default function Upload() {
                 ?.harmReport,
             )}
           />
+        )}
+        {isReady && (
+          <ClarifyCard personaId={personaId} name={persona?.name ?? ""} />
         )}
 
         {/* Analysis Status · Analyzing */}

@@ -1846,6 +1846,15 @@ export const en = {
     here: "here",
   },
 
+  clarify: {
+    intro: "{{count}} thing(s) in the record are unclear. You can skip them.",
+    done: "That is all. These are now in {{name}}'s rules, and you can change them in the editor.",
+    skip: "Skip",
+    later: "Ask later",
+    submit: "Save",
+    same: "The same as usual",
+  },
+
   research: {
     gapsTitle: "Research gaps",
     missingSources: "{{count}} source(s) missing",

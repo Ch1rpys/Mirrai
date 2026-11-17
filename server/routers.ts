@@ -41,7 +41,7 @@ import {
   getFileSummaryTitles,
   setUserLocale, getUserLocale,  createEmotionSnapshot, getEmotionSnapshots, getEmotionReport, getTodaySnapshot,
   getCollectedMessagesForPersona, getCollectedMessageSources,
-  countRecords,
+  countRecords, iterateRecords,
   getIntimacyData, updateIntimacy,
   getMessageVolume, getEmotionTimeline, getPersonaEngagement, getHourlyDistribution, getAnalyticsStats,
   createDiaryEntry, getDiaryEntries, getDiaryByDate, deleteDiaryEntry, getMessagesByDate, getDiaryDates,
@@ -67,6 +67,7 @@ import {
   getEvalRuns,
   setPersonaBehaviorProfile, getPersonaBehaviorProfile,
   getPersonaSettings, setPersonaSettings,
+  getPersonaStyleProfile, setPersonaStyleProfile,
   createSafetyEvent, countSafetyEvents,
 } from "./db";
 import { nanoid } from "nanoid";
@@ -99,6 +100,13 @@ import { isMemoryDate } from "@shared/memory-date";
 import { resolveRelationshipPhase, parseRecalledIds } from "@shared/user-side";
 import { copy, localizeScene } from "@shared/copy";
 import { normalizeHarmReport } from "@shared/harm";
+import {
+  applyClarification,
+  measureClarifyCountsFromRecords,
+  pickClarifications,
+} from "@shared/clarify";
+import { normalizeStyleProfile } from "@shared/style-profile";
+import type { PersonaData } from "./_core/persona-schema";
 import { isChatImportFileType, startImport } from "./importers";
 import { importUnpackRelKey } from "./importers/archive";
 import { afterRecordsRemoved } from "./_core/style-profile";
@@ -1313,6 +1321,64 @@ export const appRouter = router({
               },
             },
           });
+          return { success: true };
+        });
+      }),
+
+    clarifications: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.id, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const style = (await getPersonaStyleProfile(input.id, ctx.user.id))
+          ?? normalizeStyleProfile(null);
+        const questions = pickClarifications({
+          personaData: (persona.personaData as PersonaData) || {},
+          styleProfile: style,
+          counts: await measureClarifyCountsFromRecords(iterateRecords(input.id, ctx.user.id)),
+          name: persona.name,
+          locale: ctx.locale,
+        });
+        return { questions };
+      }),
+
+    answerClarification: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        questionId: z.string().min(1).max(80),
+        answer: z.string().max(200).optional(),
+        skip: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.id, async () => {
+          const persona = await getPersonaById(input.id, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const current = { ...((persona.personaData as PersonaData) || {}) };
+          const clarified = Array.isArray(current.clarified) ? current.clarified : [];
+          if (clarified.includes(input.questionId)) {
+            throw new TRPCError({ code: "BAD_REQUEST" });
+          }
+          const style = (await getPersonaStyleProfile(input.id, ctx.user.id))
+            ?? normalizeStyleProfile(null);
+          const questions = pickClarifications({
+            personaData: current,
+            styleProfile: style,
+            counts: await measureClarifyCountsFromRecords(iterateRecords(input.id, ctx.user.id)),
+            name: persona.name,
+            locale: ctx.locale,
+          });
+          const question = questions.find((row) => row.id === input.questionId);
+          if (!question) throw new TRPCError({ code: "BAD_REQUEST" });
+          const patch = applyClarification(question, input.answer ?? "", {
+            personaData: current,
+            styleProfile: style,
+            locale: ctx.locale,
+            name: persona.name,
+            skip: input.skip === true,
+          });
+          if (!patch) throw new TRPCError({ code: "BAD_REQUEST" });
+          await updatePersona(input.id, ctx.user.id, { personaData: { ...current, ...patch.personaData } });
+          await setPersonaStyleProfile(input.id, ctx.user.id, patch.styleProfile);
           return { success: true };
         });
       }),

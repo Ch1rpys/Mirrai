@@ -35,6 +35,8 @@ vi.mock("@/lib/trpc", () => ({
     persona: {
       get: { useQuery: () => ({ data: { id: 1, name: "小A", analysisStatus: distillPage.status }, refetch: vi.fn(), isError: false }) },
       decideHarm: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clarifications: { useQuery: () => ({ data: { questions: [] }, isLoading: false, isError: false, refetch: vi.fn() }) },
+      answerClarification: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       getSettings: { useQuery: () => ({ data: { pendingRedistillAdded: 0, pendingRedistillRemoved: false }, refetch: vi.fn() }) },
       getAnalysisStatus: { useQuery: () => ({ data: { status: distillPage.status }, refetch: vi.fn() }) },
       triggerAnalysis: { useMutation: () => ({ mutate: distillPage.trigger, isPending: false }) },

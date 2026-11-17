@@ -1859,6 +1859,15 @@ export const zh = {
     here: "这里",
   },
 
+  clarify: {
+    intro: "有 {{count}} 件事记录里看不出来，想问问你。可以跳过。",
+    done: "问完了。这些已经记进 {{name}} 的规则里，随时可以在人设编辑里改。",
+    skip: "跳过",
+    later: "以后再说",
+    submit: "记下",
+    same: "和平时一样",
+  },
+
   research: {
     gapsTitle: "研究缺口",
     missingSources: "缺 {{count}} 处来源",
