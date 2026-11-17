@@ -444,6 +444,22 @@ describe("the lobby", () => {
 
     expect(screen.queryAllByText(/想你/)).toEqual([]);
     expect(screen.queryByRole("heading", { name: "接着聊" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "继续对话" })).toBeNull();
+    expect(screen.getAllByText("暂停的").length).toBeGreaterThan(0);
+  });
+
+  it("keeps a paused persona on the card and out of the quick row", () => {
+    personas = [
+      makePersona({ id: 1, name: "暂停的", presence: "quiet" }),
+      makePersona({ id: 2, name: "可以的" }),
+    ];
+
+    render(<Lobby />);
+
+    const row = screen.getByRole("heading", { name: "继续对话" }).closest("div.mb-8");
+    expect(row?.textContent).toContain("可以的");
+    expect(row?.textContent).not.toContain("暂停的");
+    expect(screen.getAllByText("暂停的").length).toBeGreaterThan(0);
   });
 
   it("picks up the persona the user spoke to most recently", () => {

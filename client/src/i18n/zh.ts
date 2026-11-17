@@ -489,7 +489,7 @@ export const zh = {
       graduatedAt: "毕业于 {{date}}",
     },
     quick: {
-      kicker: "接着聊",
+      kicker: "快捷",
       title: "继续对话",
       online: "{{count}} 个分身在线",
     },

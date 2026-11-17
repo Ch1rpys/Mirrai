@@ -490,7 +490,7 @@ export const en = {
       graduatedAt: "Graduated on {{date}}",
     },
     quick: {
-      kicker: "Carry on",
+      kicker: "Shortcut",
       title: "Continue chatting",
       online: "{{count}} personas online",
     },

@@ -1227,7 +1227,7 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
 
 function QuickChatBar({ personas, onChat }: { personas: any[]; onChat: (id: number) => void }) {
   const { t } = useLocale();
-  const readyPersonas = personas.filter((p: any) => p.analysisStatus === "ready" && p.graduationStatus !== "graduated");
+  const readyPersonas = personas.filter(mayFeature);
   if (readyPersonas.length === 0) return null;
 
   return (
