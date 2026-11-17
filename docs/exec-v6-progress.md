@@ -45,7 +45,7 @@
 | B1.6 | ✅ | 4709167 (pick/apply); ada73e8 (routes/UI) | `shared/clarify.test.ts` 22 通过：表中每题触发正反例；各回答补丁符合表；「不确定」只记 `clarified`、无内容补丁；数据齐全的夹具只问 `never_says`、`avoid_topic`、`confirm_rule:r-one`。`routers.clarify.test.ts` 3 通过：`address_angry` 写入 `source: "manual"` `verified: true`；重复回答 `BAD_REQUEST`；写在 `withPersonaDataLock` 里。`ClarifyCard.test.tsx` 2 通过：记下后前进；跳过不调 mutation。`prompt-fences.test.ts` `a line they would never say`：敌意文本只在 `<persona_data>` 围栏内。`pipeline-decisions.test.ts` 重跑保住 `clarified`。闸门 `333 passed \| 3 skipped (336)` 文件，`2986 passed \| 16 skipped (3002)` 用例。 |
 | B1.7 | ✅ | 8499939 | `pipeline-chunked.test.ts`：同一份记录蒸两次，第二次 map 0 次、归并次数与第一次相同；追加 400 行后 map 次数等于 `chunkRecords` 里 hash 不在上次切块集合中的块数；第二次之后 `cardRows` 的 `chunkHash` 都在当前切块集合里。`observations.test.ts` 已读过的块不调模型。闸门 `333 passed \| 3 skipped (336)` 文件，`2990 passed \| 16 skipped (3006)` 用例。 |
 | B1.8 | ✅ | 420ef23 | `shared/evidence-map.test.ts` 4 通过：字段-维度对应、缺 `recordId` 的引用丢弃、每维最多 30 张且时间倒序、`attachmentStyle`/`loveLanguage` 恒推断。`routers.evidence.test.ts` 2 通过：原话按 `recordId` 对上「在的呀」、别人的分身 `NOT_FOUND`。`EvidenceList.test.tsx` 2 通过：有卡可展开短句；`attachmentStyle` 恒「推断」。`PersonaProfile.test.tsx`：老分身 8 层都标「推断」且无展开按钮；`attachmentStyle` 有推断无依据按钮。闸门 `336 passed \| 3 skipped (339)` 文件，`3000 passed \| 16 skipped (3016)` 用例。 |
-| B1.9 | ⬜ |  |  |
+| B1.9 | ✅ | f965f92 (db); 298a524 (routes/UI) | 临时库 `mirrai_v6_scratch` 上 `db-persona-versions.test.ts` 2 通过：蒸馏写回前后各一版（前「短句」、后「更短」）；第 21 版写入后最旧一版被清掉。库已 `dropdb`。`persona-version.test.ts` 4 通过：`restore` 后 `personaData` 等于那一版、新增 `reason: "restore"`；别人的版本 `NOT_FOUND`；改了 `speakingStyle` 的两版 diff 旧值「短句」现值「更短」。`db-delete-coverage.test.ts` 通过。`VersionHistory.test.tsx`：点恢复出确认框，确认后 `restore({ id: 5, versionId: 10 })`。闸门 `338 passed \| 4 skipped (342)` 文件，`3006 passed \| 18 skipped (3024)` 用例。 |
 | B1.10 | ⬜ |  |  |
 | B2.1 | ⬜ |  |  |
 | B2.2 | ⬜ |  |  |
@@ -270,6 +270,7 @@
 | 66 | B1.4 | 取样只写 fast 80 / standard 1500 / deep 全部 | `colleague` 按 1500，`celebrity` 按全部 | 手册没给这两种预设的标注预算；分别靠上 standard 和 deep。 |
 | 67 | B1.5 | 情绪取样只写 fast 不调 / standard 600 / deep 全部 | `colleague` 按 600，`celebrity` 按全部 | 与偏差 66 同一理由。 |
 | 68 | B1.6 | 跳过记在 `personaData.clarified`，不再问 | 卡片上点「跳过」只在本会话隐藏该题，不调 `answerClarification` | 验收写「跳过不调用写入」；做法第 2 步写跳过也记入 `clarified`。按验收。刷新页面还会再问。路由仍接受 `skip: true` 供以后持久化。 |
+| 69 | B1.9 | 闸门跳过数不能增加 | 无 `DATABASE_URL` 时 `db-persona-versions.test.ts` 2 条 `skipIf`，跳过文件 4、跳过用例 18 | 手册 2.3 要求库测试 `skipIf(!DATABASE_URL)`。带临时库跑这 2 条全过。与偏差 20、47、49、51 同类。 |
 
 ## 未验证清单
 
@@ -598,3 +599,11 @@ A5、A7、A9 维持 ✅。A6、A8 改回 ⬜。
 - 闸门 `336 passed | 3 skipped (339)` 文件，`3000 passed | 16 skipped (3016)` 用例，`all six steps passed`。相对 B1.7（333/3 文件、2990/16 用例）：通过文件 +3、通过用例 +10；跳过数不变。
 - 偏差无新增。未验证清单、待用户决定无新增。
 - B1.8 标 ✅。下一条 B1.9。
+
+### WP3 · 实现会话 · 2026-11-17 · B1.9
+
+- `f965f92` `createPersonaVersion` / `prunePersonaVersions`（每分身 20 版）；蒸馏写回前 `reason: "distill"`。
+- `298a524` `personaVersion.list` / `diff` / `restore`（`withPersonaDataLock`）；编辑/修正前存版；`eval.run` 把最新版本 id 写入 `metricsJson.personaVersionId` 并回写 `evalRunId`。`VersionHistory` 挂在人设编辑页。
+- 闸门 `338 passed | 4 skipped (342)` 文件，`3006 passed | 18 skipped (3024)` 用例，`all six steps passed`。相对 B1.8（336/3 文件、3000/16 用例）：通过文件 +2、通过用例 +6；跳过文件 +1、跳过用例 +2（偏差 69）。
+- 偏差 69。未验证清单、待用户决定无新增。
+- B1.9 标 ✅。下一条 B1.10。
