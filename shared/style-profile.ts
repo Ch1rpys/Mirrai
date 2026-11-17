@@ -6,6 +6,8 @@
  * and a merge of confirmations. A field that has not been measured is
  * simply absent — there is no default to fill it with.
  */
+import type { StyleFingerprint } from "./style-fingerprint";
+import type { UserSideProfile } from "./user-side-profile";
 
 export const STYLE_PROFILE_KEYS = [
   "fingerprint",
@@ -45,8 +47,8 @@ export interface StyleProfile {
   measuredAt: string;
   /** `${recordCount}:${maxId}`, used to decide whether to remeasure. */
   recordsVersion: string;
-  fingerprint?: unknown; // 由 B3.1 填
-  userSide?: unknown; // 由 B1.10 填 UserSideProfile
+  fingerprint?: StyleFingerprint;
+  userSide?: UserSideProfile;
   rituals?: unknown; // 由 B2.2 填
   samplePool?: unknown; // 由 B2.6 填
   imperfectionDrafts?: unknown; // 由 B3.6 填
@@ -93,7 +95,7 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
   const profile: StyleProfile = { version, measuredAt, recordsVersion };
   for (const key of STYLE_PROFILE_KEYS) {
     if (key in source && source[key] !== undefined) {
-      profile[key] = source[key];
+      (profile as unknown as Record<string, unknown>)[key] = source[key];
     }
   }
   return profile;

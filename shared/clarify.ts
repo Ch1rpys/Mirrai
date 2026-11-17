@@ -99,10 +99,12 @@ function isSameAsUsual(answer: string): boolean {
 }
 
 function fingerprintAddress(styleProfile: StyleProfile | null | undefined): string {
-  const fingerprint = styleProfile?.fingerprint;
-  if (!fingerprint || typeof fingerprint !== "object" || Array.isArray(fingerprint)) return "";
-  const address = (fingerprint as Record<string, unknown>).address;
-  return typeof address === "string" ? address.trim() : "";
+  const address = styleProfile?.fingerprint?.address;
+  if (!address || typeof address !== "object") return "";
+  const ranked = Object.entries(address)
+    .filter(([, rate]) => typeof rate === "number" && rate > 0)
+    .sort((a, b) => b[1] - a[1]);
+  return ranked[0]?.[0] ?? "";
 }
 
 function ritualList(styleProfile: StyleProfile | null | undefined): Array<Record<string, unknown>> {

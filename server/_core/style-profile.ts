@@ -9,12 +9,19 @@ import {
   getPersonaSettings,
   getPersonaStyleProfile,
   getRecordsVersion,
+  getUserById,
   iterateRecords,
   setPersonaSettings,
   setPersonaStyleProfile,
 } from "../db";
 import { mergePersonaSettings } from "@shared/persona-settings";
+import { normalizePeriods } from "@shared/periods";
 import { normalizeStyleProfile, type StyleProfile } from "@shared/style-profile";
+import {
+  defaultAddressForms,
+  measureFingerprint,
+  type FingerprintRow,
+} from "@shared/style-fingerprint";
 import { measureUserSide } from "@shared/user-side-profile";
 
 export async function measureStyleProfile(params: {
@@ -28,13 +35,7 @@ export async function measureStyleProfile(params: {
   if (current && current.recordsVersion === recordsVersion && current.measuredAt) {
     return current;
   }
-  const rows: Array<{
-    role: string;
-    content: string;
-    timestamp: Date | string | null;
-    kind?: string | null;
-    act?: string | null;
-  }> = [];
+  const rows: FingerprintRow[] = [];
   for await (const row of iterateRecords(personaId, userId)) {
     rows.push({
       role: row.role,
@@ -42,14 +43,34 @@ export async function measureStyleProfile(params: {
       timestamp: row.timestamp,
       kind: row.kind,
       act: row.act,
+      emotion: row.emotion,
+      speaker: row.speaker,
     });
   }
+  const persona = await getPersonaById(personaId, userId);
+  const user = await getUserById(userId);
+  const rawData =
+    persona?.personaData && typeof persona.personaData === "object" && !Array.isArray(persona.personaData)
+      ? (persona.personaData as Record<string, unknown>)
+      : {};
+  const nickname = typeof rawData.nickname === "string" ? rawData.nickname.trim() : "";
+  const userName = typeof user?.name === "string" ? user.name.trim() : "";
+  const addressForms = [
+    ...new Set([nickname, userName, ...defaultAddressForms()].filter(Boolean)),
+  ];
+  const periods = normalizePeriods(rawData.periods);
+  const fingerprint = measureFingerprint(rows, { addressForms, periods }) ?? undefined;
   const userSide = measureUserSide(rows);
+  if (userSide) {
+    const userFingerprint = measureFingerprint(rows, { role: "user", addressForms });
+    if (userFingerprint) userSide.fingerprint = userFingerprint;
+  }
   const next = normalizeStyleProfile({
     ...(current ?? {}),
     version: 1,
     measuredAt: now.toISOString(),
     recordsVersion,
+    fingerprint,
     userSide: userSide ?? undefined,
   });
   await setPersonaStyleProfile(personaId, userId, next);

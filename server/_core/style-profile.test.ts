@@ -6,6 +6,7 @@ const setPersonaStyleProfile = vi.fn();
 const getPersonaById = vi.fn();
 const getPersonaSettings = vi.fn();
 const setPersonaSettings = vi.fn();
+const getUserById = vi.fn();
 const iterateRecords = vi.fn();
 
 vi.mock("../db", () => ({
@@ -15,6 +16,7 @@ vi.mock("../db", () => ({
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   getPersonaSettings: (...a: unknown[]) => getPersonaSettings(...a),
   setPersonaSettings: (...a: unknown[]) => setPersonaSettings(...a),
+  getUserById: (...a: unknown[]) => getUserById(...a),
   iterateRecords: (...a: unknown[]) => iterateRecords(...a),
 }));
 
@@ -55,6 +57,36 @@ describe("measureStyleProfile", () => {
     });
     expect(measured.recordsVersion).toBe("12:50");
     expect(setPersonaStyleProfile).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes a fingerprint when there are enough of their lines", async () => {
+    getRecordsVersion.mockResolvedValue("40:40");
+    getPersonaStyleProfile.mockResolvedValue(null);
+    getPersonaById.mockResolvedValue({
+      id: 5,
+      userId: 1,
+      name: "小满",
+      personaData: { nickname: "树树" },
+    });
+    getUserById.mockResolvedValue({ id: 1, name: "阿树" });
+    iterateRecords.mockImplementation(async function* () {
+      for (let i = 0; i < 40; i++) {
+        yield {
+          role: "assistant",
+          content: "在的呀",
+          timestamp: new Date("2022-03-01T12:00:00.000Z"),
+          kind: "text",
+          emotion: "warm",
+        };
+      }
+    });
+    const measured = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    expect(measured.fingerprint?.samples).toBe(40);
+    expect(measured.fingerprint?.particles["呀"]).toBe(1);
   });
 });
 

@@ -60,7 +60,7 @@ describe("when each question is asked", () => {
     expect(pick().some((row) => row.id === "address_normal")).toBe(true);
     expect(
       pick({
-        styleProfile: normalizeStyleProfile({ fingerprint: { address: "满满" } }),
+        styleProfile: normalizeStyleProfile({ fingerprint: { address: { 满满: 0.2 } } }),
       }).some((row) => row.id === "address_normal"),
     ).toBe(false);
   });
@@ -120,7 +120,7 @@ describe("when each question is asked", () => {
   it("always asks what they never say and what they avoid", () => {
     const ids = pick({
       styleProfile: normalizeStyleProfile({
-        fingerprint: { address: "满满" },
+        fingerprint: { address: { 满满: 0.2 } },
         rituals: [{ cue: "晚安", reply: "晚安" }],
         stickers: { rate: 0 },
       }),
@@ -163,7 +163,7 @@ describe("a persona whose records already cover the gaps", () => {
     const ids = pick({
       personaData: { nickname: "满满", microRules: [candidate] },
       styleProfile: normalizeStyleProfile({
-        fingerprint: { address: "满满" },
+        fingerprint: { address: { 满满: 0.2 } },
         rituals: [{ cue: "晚安", reply: "晚安呀" }],
         stickers: { rate: 0.05 },
       }),

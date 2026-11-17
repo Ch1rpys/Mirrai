@@ -8,6 +8,7 @@
  */
 import { isTextRecord } from "./records";
 import { isUserAct, type UserAct } from "./speech-acts";
+import type { StyleFingerprint } from "./style-fingerprint";
 
 const MIN_USER_SIDE_SAMPLES = 40;
 const SAMPLE_LINE_COUNT = 12;
@@ -29,7 +30,7 @@ export interface UserSideProfile {
   /** How many of the user's own text lines were counted. */
   samples: number;
   /** Filled by B3.1. Absent until then. */
-  fingerprint?: unknown;
+  fingerprint?: StyleFingerprint;
   acts?: Partial<Record<UserAct, number>>;
   /** Twelve representative quotes, evenly spaced in time. */
   sampleLines: string[];
