@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   aggregateScores,
   buildCharNgramModel,
+  compareMetricCI,
   compareToBaseline,
   evaluateGate,
   evaluateRuleBenefit,
+  resolveGateTolerances,
   measureLineShape,
   ngramOverlap,
   scoreCase,
@@ -336,6 +338,26 @@ describe("aggregating a run", () => {
     expect(metrics.styleDistance).toBeNull();
   });
 
+  it("gives the same interval when the same scores are aggregated twice", () => {
+    const scored = [
+      { ...score(0.4, 0, 10, 10), caseId: 1 },
+      { ...score(0.6, 1, 12, 8), caseId: 2 },
+      { ...score(0.5, -1, 8, 9), caseId: 3 },
+    ];
+    const first = aggregateScores(scored);
+    const second = aggregateScores(scored);
+    expect(first.ci).toEqual(second.ci);
+    expect(first.ci?.overlap[0]).toBeLessThanOrEqual(first.ci?.overlap[1] ?? 0);
+  });
+
+  it("collapses the interval to a point when there is only one case", () => {
+    const metrics = aggregateScores([score(0.5, 0, 10, 10)]);
+    expect(metrics.ci?.overlap).toEqual([metrics.overlap, metrics.overlap]);
+    expect(metrics.ci?.likelihoodGap).toEqual([metrics.likelihoodGap, metrics.likelihoodGap]);
+    expect(metrics.ci?.actMatch).toEqual([metrics.actMatch, metrics.actMatch]);
+    expect(metrics.ci?.styleDistance).toEqual([0, 0]);
+  });
+
   it("breaks the run down by period, and the bucket counts add up", () => {
     const metrics = aggregateScores([
       { ...score(0.4, 0, 10, 10), periodId: "p1", dayPart: "day", expectedAct: "acknowledge" },
@@ -565,5 +587,18 @@ describe("comparing a run with the baseline", () => {
     const report = compareToBaseline(baseline, barely, { overlap: 0.005 });
     expect(report.regressed).toBe(true);
     expect(report.offenders).toEqual(["overlap"]);
+  });
+
+  it("uses saved tolerances rather than the defaults", () => {
+    const worse = aggregateScores([
+      {
+        ...baseline.scores[0],
+        overlap: 0.35,
+      },
+    ]);
+    expect(compareToBaseline(baseline, worse).regressed).toBe(true);
+    const saved = resolveGateTolerances({}, { overlap: 0.2 });
+    expect(saved.overlap).toBe(0.2);
+    expect(compareToBaseline(baseline, worse, saved).regressed).toBe(false);
   });
 });

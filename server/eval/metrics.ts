@@ -34,6 +34,7 @@ import {
   type StyleFingerprint,
   type StyleFingerprintCore,
 } from "@shared/style-fingerprint";
+import { seededRandom } from "../_core/behavior-profile";
 
 /** One held-out exchange, and what the rebuilt persona said instead. */
 export interface EvalCaseScore {
@@ -77,6 +78,8 @@ export interface EvalCaseScore {
   sampledAct?: SpeechAct | null;
   actMatch?: boolean;
   residue?: ResidueScore;
+  /** Every generated line for this case, when the run sampled more than once. */
+  generatedSamples?: string[];
 }
 
 /** The aggregate of a run. */
@@ -140,6 +143,26 @@ export interface EvalMetrics {
   residueRate?: number;
   /** Distance from the generated lines to the persona's fingerprint. Absent fingerprint → null. */
   styleDistance?: StyleDistance | null;
+  /**
+   * 95% intervals from resampling the held-out cases.
+   *
+   * A comparison that does not look at the interval is measuring the
+   * weather: two runs of an unchanged persona disagree, and a "better"
+   * that sits inside that disagreement is not better.
+   */
+  ci?: {
+    overlap: [number, number];
+    likelihoodGap: [number, number];
+    styleDistance: [number, number];
+    actMatch: [number, number];
+  };
+  /** The tolerances a calibration wrote, if this run stored them. */
+  tolerances?: {
+    overlap?: number;
+    likelihoodGap?: number;
+    emotionAccuracy?: number;
+    style?: number;
+  };
 }
 
 /**
@@ -392,9 +415,14 @@ function styleDistanceForScores(
   fingerprint: StyleFingerprint | StyleFingerprintCore | null | undefined,
 ): StyleDistance | null {
   if (!fingerprint) return null;
-  const lines = scores
-    .map((score) => score.generatedText)
-    .filter((text): text is string => typeof text === "string" && text.trim().length > 0);
+  const lines = scores.flatMap((score) => {
+    if (score.generatedSamples?.length) {
+      return score.generatedSamples.filter((text) => text.trim().length > 0);
+    }
+    return typeof score.generatedText === "string" && score.generatedText.trim().length > 0
+      ? [score.generatedText]
+      : [];
+  });
   if (lines.length === 0) return null;
   const perState = "perState" in fingerprint ? fingerprint.perState : undefined;
   if (!perState || Object.keys(perState).length === 0) {
@@ -434,6 +462,77 @@ function styleDistanceForScores(
   };
 }
 
+const BOOTSTRAP_ROUNDS = 1000;
+
+function percentile(sorted: number[], p: number): number {
+  if (!sorted.length) return 0;
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo]!;
+  return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (idx - lo);
+}
+
+function intervalOf(values: number[]): [number, number] {
+  if (!values.length) return [0, 0];
+  const sorted = [...values].sort((a, b) => a - b);
+  return [percentile(sorted, 0.025), percentile(sorted, 0.975)];
+}
+
+function meanOf(scores: EvalCaseScore[], pick: (score: EvalCaseScore) => number): number {
+  if (!scores.length) return 0;
+  return scores.reduce((sum, score) => sum + pick(score), 0) / scores.length;
+}
+
+function actMatchRate(scores: EvalCaseScore[]): number {
+  const denom = scores.filter((score) => score.expectedAct).length;
+  const hits = scores.filter((score) => score.actMatch).length;
+  return denom ? hits / denom : 0;
+}
+
+/**
+ * 95% intervals by resampling the held-out cases, with a seed that is
+ * just those case ids — the same scores always produce the same interval.
+ */
+function bootstrapCI(
+  scores: EvalCaseScore[],
+  fingerprint: StyleFingerprint | StyleFingerprintCore | null | undefined,
+): NonNullable<EvalMetrics["ci"]> {
+  const overlap = meanOf(scores, (score) => score.overlap);
+  const likelihoodGap = meanOf(scores, (score) => score.likelihoodGap);
+  const actMatch = actMatchRate(scores);
+  const style = styleDistanceForScores(scores, fingerprint)?.total ?? 0;
+  if (scores.length <= 1) {
+    return {
+      overlap: [overlap, overlap],
+      likelihoodGap: [likelihoodGap, likelihoodGap],
+      styleDistance: [style, style],
+      actMatch: [actMatch, actMatch],
+    };
+  }
+  const rng = seededRandom(scores.map((score) => String(score.caseId)).join(","));
+  const overlaps: number[] = [];
+  const likelihoods: number[] = [];
+  const styles: number[] = [];
+  const acts: number[] = [];
+  for (let i = 0; i < BOOTSTRAP_ROUNDS; i++) {
+    const sample: EvalCaseScore[] = [];
+    for (let j = 0; j < scores.length; j++) {
+      sample.push(scores[Math.floor(rng() * scores.length)]!);
+    }
+    overlaps.push(meanOf(sample, (score) => score.overlap));
+    likelihoods.push(meanOf(sample, (score) => score.likelihoodGap));
+    styles.push(styleDistanceForScores(sample, fingerprint)?.total ?? 0);
+    acts.push(actMatchRate(sample));
+  }
+  return {
+    overlap: intervalOf(overlaps),
+    likelihoodGap: intervalOf(likelihoods),
+    styleDistance: intervalOf(styles),
+    actMatch: intervalOf(acts),
+  };
+}
+
 /** Aggregates the cases into the run's numbers. */
 export function aggregateScores(
   scores: EvalCaseScore[],
@@ -456,6 +555,7 @@ export function aggregateScores(
       actMatch: 0,
       residueRate: 0,
       styleDistance: options?.fingerprint ? styleDistanceForScores(scores, options.fingerprint) : null,
+      ci: bootstrapCI(scores, options?.fingerprint),
     };
   }
   const mean = (values: number[]) => values.reduce((a, b) => a + b, 0) / values.length;
@@ -551,6 +651,76 @@ export function aggregateScores(
     actMatch: actDenom ? actHits / actDenom : 0,
     residueRate,
     styleDistance: styleDistanceForScores(scores, options?.fingerprint),
+    ci: bootstrapCI(scores, options?.fingerprint),
+  };
+}
+
+export type NoiseVerdict = "better" | "worse" | "within noise";
+
+export type GateTolerances = {
+  overlap?: number;
+  likelihoodGap?: number;
+  emotionAccuracy?: number;
+  style?: number;
+};
+
+function metricInterval(
+  metrics: EvalMetrics,
+  key: "overlap" | "likelihoodGap" | "style" | "actMatch",
+): { value: number; lo: number; hi: number } {
+  if (key === "overlap") {
+    const ci = metrics.ci?.overlap;
+    return { value: metrics.overlap, lo: ci?.[0] ?? metrics.overlap, hi: ci?.[1] ?? metrics.overlap };
+  }
+  if (key === "likelihoodGap") {
+    const ci = metrics.ci?.likelihoodGap;
+    return {
+      value: metrics.likelihoodGap,
+      lo: ci?.[0] ?? metrics.likelihoodGap,
+      hi: ci?.[1] ?? metrics.likelihoodGap,
+    };
+  }
+  if (key === "style") {
+    const value = metrics.styleDistance?.total ?? 0;
+    const ci = metrics.ci?.styleDistance;
+    return { value, lo: ci?.[0] ?? value, hi: ci?.[1] ?? value };
+  }
+  const value = metrics.actMatch ?? 0;
+  const ci = metrics.ci?.actMatch;
+  return { value, lo: ci?.[0] ?? value, hi: ci?.[1] ?? value };
+}
+
+/**
+ * Compares one measure with its interval.
+ *
+ * Only a gap that does not overlap, in the improving direction, is
+ * `better`. An overlapping pair is weather. A gap the other way is
+ * `worse`.
+ */
+export function compareMetricCI(
+  withThem: EvalMetrics,
+  withoutThem: EvalMetrics,
+  key: "overlap" | "likelihoodGap" | "style" | "actMatch",
+  better: "higher" | "closer",
+): NoiseVerdict {
+  const a = metricInterval(withThem, key);
+  const b = metricInterval(withoutThem, key);
+  const overlap = a.lo <= b.hi && b.lo <= a.hi;
+  if (overlap) return "within noise";
+  const improved = better === "higher" ? a.value > b.value : Math.abs(a.value) < Math.abs(b.value);
+  return improved ? "better" : "worse";
+}
+
+/** Flags win; then the last saved calibration; then the hardcoded defaults. */
+export function resolveGateTolerances(
+  flags: GateTolerances,
+  saved?: GateTolerances | null,
+): GateTolerances {
+  return {
+    overlap: flags.overlap ?? saved?.overlap,
+    likelihoodGap: flags.likelihoodGap ?? saved?.likelihoodGap,
+    emotionAccuracy: flags.emotionAccuracy ?? saved?.emotionAccuracy,
+    style: flags.style ?? saved?.style,
   };
 }
 

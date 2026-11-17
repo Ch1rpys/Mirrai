@@ -16,6 +16,7 @@ import {
   aggregateScores,
   buildCharNgramModel,
   scoreCase,
+  type EvalCaseScore,
   type EvalMetrics,
 } from "./metrics";
 import type { EvalCaseData } from "./dataset";
@@ -90,6 +91,31 @@ export function layerOverridesForEval(options: {
   return overrides;
 }
 
+function averageSampleScores(samples: EvalCaseScore[]): EvalCaseScore {
+  const n = samples.length;
+  const first = samples[0]!;
+  if (n === 1) return { ...first };
+  const mean = (pick: (score: EvalCaseScore) => number) =>
+    samples.reduce((sum, score) => sum + pick(score), 0) / n;
+  return {
+    ...first,
+    overlap: mean((score) => score.overlap),
+    likelihoodGap: mean((score) => score.likelihoodGap),
+    lengthDelta: mean((score) => score.lengthDelta),
+    generatedLength: mean((score) => score.generatedLength),
+    generatedShape: {
+      ...first.generatedShape,
+      chars: mean((score) => score.generatedShape.chars),
+      sentences: mean((score) => score.generatedShape.sentences),
+      addresses: mean((score) => score.generatedShape.addresses),
+    },
+    actMatch: mean((score) => (score.actMatch ? 1 : 0)) >= 0.5,
+    residue: first.residue
+      ? { ...first.residue, rate: mean((score) => score.residue?.rate ?? 0) }
+      : undefined,
+  };
+}
+
 export interface EvalRunOptions {
   persona: Persona;
   userId: number;
@@ -115,6 +141,8 @@ export interface EvalRunOptions {
   sampleAct?: boolean;
   /** The clock the turn is planned against. Defaults to now, per case. */
   now?: Date;
+  /** How many lines to generate per case. Averaged; styleDistance uses all of them. */
+  samplesPerCase?: number;
 }
 
 /**
@@ -143,6 +171,7 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
   const model = buildCharNgramModel(options.trainingTexts);
   const scores = [];
   const whyWon: string[] = [];
+  const samplesPerCase = Math.max(1, options.samplesPerCase ?? 1);
 
   for (let i = 0; i < options.cases.length; i++) {
     const caseData = options.cases[i];
@@ -158,86 +187,97 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
             ),
           )
         : null);
-    const seed = `eval:${options.persona.id}:${i}:${caseData.expected.content}`;
-    const turnInput = {
-      persona: options.persona,
-      userId: options.userId,
-      userMessage: lastUser?.content ?? "",
-      history: caseData.context.map((row) => ({
-        role: row.role === "user" ? ("user" as const) : ("assistant" as const),
-        content: row.content,
-      })),
-      now,
-      locale,
-      seed,
-      periodId: caseData.periodId ?? null,
-      actCondition: {
-        emotion: caseData.expectedState,
-        dayPart,
-      },
-      layerOverrides,
-      exclude: {
-        recordIds: caseData.expected.id ? [caseData.expected.id] : undefined,
-        texts: [caseData.expected.content],
-      },
-    };
-
-    let generated = "";
-    let winnerNote = "";
-    let sampledAct: SpeechAct | null = null;
-    try {
-      const plan = await planTurn(turnInput);
-      sampledAct = plan.sampledAct;
-      for await (const event of executePlan(plan, turnInput, {
-        provider,
-        mode: "once",
-        rerank: useRerank && layerOverrides.rerank !== false,
-        options: {
-          maxTokens: options.maxTokens ?? 200,
-          temperature: options.temperature ?? 0.7,
+    const sampleScores: ReturnType<typeof scoreCase>[] = [];
+    const sampleTexts: string[] = [];
+    for (let sample = 0; sample < samplesPerCase; sample++) {
+      const seed =
+        `eval:${options.persona.id}:${i}:${caseData.expected.content}` +
+        (samplesPerCase === 1 ? "" : `:s${sample}`);
+      const turnInput = {
+        persona: options.persona,
+        userId: options.userId,
+        userMessage: lastUser?.content ?? "",
+        history: caseData.context.map((row) => ({
+          role: row.role === "user" ? ("user" as const) : ("assistant" as const),
+          content: row.content,
+        })),
+        now,
+        locale,
+        seed,
+        periodId: caseData.periodId ?? null,
+        actCondition: {
+          emotion: caseData.expectedState,
+          dayPart,
         },
-        emitDeltas: false,
-        emptyAsSilence: false,
-        trainingTexts: options.trainingTexts.filter(
-          (text) => text !== caseData.expected.content,
-        ),
-      })) {
-        if (event.type !== "final") continue;
-        generated = typeof event.text === "string" ? event.text : "";
-        const picked = event.rerank;
-        if (picked) {
-          const winner = picked.scores.find((row) => row.index === picked.index);
-          winnerNote = `case ${i} picked #${picked.index ?? 0} distance=${winner?.distanceToMedian?.toFixed(3) ?? "n/a"} discarded=${picked.scores.filter((s) => s.discarded).length}`;
+        layerOverrides,
+        exclude: {
+          recordIds: caseData.expected.id ? [caseData.expected.id] : undefined,
+          texts: [caseData.expected.content],
+        },
+      };
+
+      let generated = "";
+      let winnerNote = "";
+      let sampledAct: SpeechAct | null = null;
+      try {
+        const plan = await planTurn(turnInput);
+        sampledAct = plan.sampledAct;
+        for await (const event of executePlan(plan, turnInput, {
+          provider,
+          mode: "once",
+          rerank: useRerank && layerOverrides.rerank !== false,
+          options: {
+            maxTokens: options.maxTokens ?? 200,
+            temperature: options.temperature ?? 0.7,
+          },
+          emitDeltas: false,
+          emptyAsSilence: false,
+          trainingTexts: options.trainingTexts.filter(
+            (text) => text !== caseData.expected.content,
+          ),
+        })) {
+          if (event.type !== "final") continue;
+          generated = typeof event.text === "string" ? event.text : "";
+          const picked = event.rerank;
+          if (picked) {
+            const winner = picked.scores.find((row) => row.index === picked.index);
+            winnerNote = `case ${i} picked #${picked.index ?? 0} distance=${winner?.distanceToMedian?.toFixed(3) ?? "n/a"} discarded=${picked.scores.filter((s) => s.discarded).length}`;
+          }
         }
+      } catch (error) {
+        console.warn(
+          `[Eval] Case ${caseData.expected.content.slice(0, 30)} failed: ${
+            (error as Error).message
+          }`,
+        );
       }
-    } catch (error) {
-      console.warn(
-        `[Eval] Case ${caseData.expected.content.slice(0, 30)} failed: ${
-          (error as Error).message
-        }`,
+      if (!generated.trim()) continue;
+      if (winnerNote) whyWon.push(winnerNote);
+      sampleTexts.push(generated);
+      sampleScores.push(
+        scoreCase({
+          caseId: i,
+          expected: caseData.expected.content,
+          generated,
+          model,
+          declaredState: caseData.expectedState ?? null,
+          expectedState: caseData.expectedState ?? null,
+          periodId: caseData.periodId ?? null,
+          dayPart,
+          locale,
+          expectedAct: caseData.expectedAct ?? null,
+          sampledAct,
+          previousUser: lastUser?.content ?? null,
+        }),
       );
     }
-    if (!generated.trim()) {
+    if (!sampleScores.length) {
       options.onProgress?.(i + 1, options.cases.length);
       continue;
     }
-    if (winnerNote) whyWon.push(winnerNote);
-    scores.push(
-      scoreCase({
-        caseId: i,
-        expected: caseData.expected.content,
-        generated,
-        model,
-        declaredState: caseData.expectedState ?? null,
-        expectedState: caseData.expectedState ?? null,
-        periodId: caseData.periodId ?? null,
-        dayPart,
-        locale,
-        expectedAct: caseData.expectedAct ?? null,
-        sampledAct,
-        previousUser: lastUser?.content ?? null,
-      }),
-    );
+    const averaged = averageSampleScores(sampleScores);
+    averaged.generatedSamples = sampleTexts;
+    scores.push(averaged);
     options.onProgress?.(i + 1, options.cases.length);
   }
 

@@ -274,6 +274,17 @@ describe("running the cases", () => {
     expect(context.locale).toBe("en");
   });
 
+  it("generates k lines for each case when asked", async () => {
+    await runEval({
+      persona,
+      userId: 1,
+      cases: cases(),
+      trainingTexts: ["嗯嗯"],
+      samplesPerCase: 3,
+    });
+    expect(invokeWithProvider).toHaveBeenCalledTimes(6);
+  });
+
   it("samples the act against the held-out line's own state", async () => {
     const spy = vi.spyOn(generate, "planTurn");
     await runEval({

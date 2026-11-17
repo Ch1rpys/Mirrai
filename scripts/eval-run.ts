@@ -31,8 +31,9 @@ import { zonedHour } from "../shared/timezone";
 import { labelEvalCases } from "../server/eval/act-labels";
 import { runEval } from "../server/eval/run";
 import {
+  compareMetricCI,
   evaluateGate,
-  evaluateRuleBenefit,
+  resolveGateTolerances,
   type EvalMetrics,
 } from "../server/eval/metrics";
 
@@ -92,6 +93,7 @@ const compare = args.includes("--compare");
 const pairs = args.includes("--pairs");
 const maxFlag = flag("max");
 const maxCases = maxFlag !== undefined ? Number(maxFlag) : undefined;
+const samplesPerCase = Math.max(1, Number(flag("k") ?? 1));
 /**
  * The language the records are written in.
  *
@@ -125,7 +127,7 @@ const calibrateRuns = Math.max(1, Number(flag("calibrate-runs") ?? 3));
  * Each one is how far a number may move before it counts as a
  * regression. They are a guess until they are calibrated.
  */
-const tolerances = {
+const flagTolerances = {
   overlap: numberOrUndefined(flag("tolerance-overlap")),
   likelihoodGap: numberOrUndefined(flag("tolerance-likelihood")),
   emotionAccuracy: numberOrUndefined(flag("tolerance-emotion")),
@@ -134,7 +136,7 @@ const tolerances = {
 
 if (!Number.isFinite(personaId) || !Number.isFinite(userId)) {
   console.error(
-    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n] [--tolerance-style n]",
+    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--k n] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n] [--tolerance-style n]",
   );
   process.exit(1);
 }
@@ -243,6 +245,7 @@ if (pairs) {
     locale,
     rerank,
     sampleAct: variant !== "withoutAct",
+    samplesPerCase,
   });
   console.log("");
   console.log("[eval] the pairs for the blind test:");
@@ -287,6 +290,7 @@ if (compare) {
     locale,
     temperature,
     rerank,
+    samplesPerCase,
   });
   const withoutThem = await runEval({
     persona,
@@ -298,6 +302,7 @@ if (compare) {
     locale,
     temperature,
     rerank: false,
+    samplesPerCase,
   });
   const withoutAct = await runEval({
     persona,
@@ -309,6 +314,7 @@ if (compare) {
     locale,
     temperature,
     rerank,
+    samplesPerCase,
   });
   const withoutRerank = await runEval({
     persona,
@@ -320,39 +326,65 @@ if (compare) {
     locale,
     temperature,
     rerank: false,
+    samplesPerCase,
   });
 
-  const row = (label: string, a: number, b: number, better: "higher" | "closer") => {
-    const delta = a - b;
-    const improved = better === "higher" ? delta > 0 : Math.abs(b) < Math.abs(a);
+  const valueOf = (metrics: EvalMetrics, key: "overlap" | "likelihoodGap" | "style" | "actMatch" | "emotion" | "residue") => {
+    if (key === "overlap") return metrics.overlap;
+    if (key === "likelihoodGap") return metrics.likelihoodGap;
+    if (key === "style") return metrics.styleDistance?.total ?? 0;
+    if (key === "actMatch") return metrics.actMatch ?? 0;
+    if (key === "emotion") return metrics.emotionAccuracy;
+    return metrics.residueRate ?? 0;
+  };
+
+  const row = (
+    label: string,
+    a: EvalMetrics,
+    b: EvalMetrics,
+    key: "overlap" | "likelihoodGap" | "style" | "actMatch",
+    better: "higher" | "closer",
+  ) => {
+    const left = valueOf(a, key);
+    const right = valueOf(b, key);
+    const delta = left - right;
+    const verdict = compareMetricCI(a, b, key, better);
     console.log(
-      `  ${label.padEnd(12)} with=${a.toFixed(4)}  without=${b.toFixed(4)}  ` +
-        `delta=${delta > 0 ? "+" : ""}${delta.toFixed(4)}  ${improved ? "better with" : "not better with"}`,
+      `  ${label.padEnd(12)} with=${left.toFixed(4)}  without=${right.toFixed(4)}  ` +
+        `delta=${delta > 0 ? "+" : ""}${delta.toFixed(4)}  ${verdict}`,
     );
-    return improved;
+    return verdict;
   };
 
   console.log("");
   console.log("[eval] the same persona, measured both ways:");
-  row("overlap", withThem.overlap, withoutThem.overlap, "higher");
-  row("likelihood", withThem.likelihoodGap, withoutThem.likelihoodGap, "closer");
-  row("emotion", withThem.emotionAccuracy, withoutThem.emotionAccuracy, "higher");
-  row("actMatch", withThem.actMatch ?? 0, withoutThem.actMatch ?? 0, "higher");
-  row("residue", withThem.residueRate ?? 0, withoutThem.residueRate ?? 0, "closer");
-  row("style", withThem.styleDistance?.total ?? 0, withoutThem.styleDistance?.total ?? 0, "closer");
+  const overlapV = row("overlap", withThem, withoutThem, "overlap", "higher");
+  const likelihoodV = row("likelihood", withThem, withoutThem, "likelihoodGap", "closer");
+  const actV = row("actMatch", withThem, withoutThem, "actMatch", "higher");
+  const styleV = row("style", withThem, withoutThem, "style", "closer");
+  console.log(
+    `  ${"emotion".padEnd(12)} with=${withThem.emotionAccuracy.toFixed(4)}  without=${withoutThem.emotionAccuracy.toFixed(4)}`,
+  );
+  console.log(
+    `  ${"residue".padEnd(12)} with=${(withThem.residueRate ?? 0).toFixed(4)}  without=${(withoutThem.residueRate ?? 0).toFixed(4)}`,
+  );
   console.log("");
   console.log("[eval] action sampling on vs off:");
-  row("actMatch", withThem.actMatch ?? 0, withoutAct.actMatch ?? 0, "higher");
-  row("likelihood", withThem.likelihoodGap, withoutAct.likelihoodGap, "closer");
+  row("actMatch", withThem, withoutAct, "actMatch", "higher");
+  row("likelihood", withThem, withoutAct, "likelihoodGap", "closer");
   console.log("");
   console.log("[eval] rerank on vs off:");
-  row("actMatch", withThem.actMatch ?? 0, withoutRerank.actMatch ?? 0, "higher");
-  row("likelihood", withThem.likelihoodGap, withoutRerank.likelihoodGap, "closer");
+  row("actMatch", withThem, withoutRerank, "actMatch", "higher");
+  row("likelihood", withThem, withoutRerank, "likelihoodGap", "closer");
   if (withThem.variant?.includes("picked")) {
     console.log(`[eval] why it won   : ${withThem.variant}`);
   }
 
-  const benefit = evaluateRuleBenefit(withThem, withoutThem);
+  const useful = [overlapV, likelihoodV, styleV, actV].filter((verdict) => verdict === "better").length;
+  const note =
+    useful === 0
+      ? "The rules do not make the persona measurably closer. They are decoration — remove them."
+      : `The rules help on ${useful} of 4 measures.`;
   console.log("");
   if (save) {
     await db.saveEvalRun(
@@ -366,11 +398,11 @@ if (compare) {
   // The run is saved before the gate decides, so `--save` saves whether
   // or not the gate passes. A flag that quietly stops working when
   // something else fails is a flag nobody can rely on.
-  if (benefit.improved === 0) {
-    console.error(`[eval] ${benefit.note}`);
-    if (gate) process.exit(benefit.exitCode);
+  if (useful === 0) {
+    console.error(`[eval] ${note}`);
+    if (gate) process.exit(3);
   } else {
-    console.log(`[eval] ${benefit.note}`);
+    console.log(`[eval] ${note}`);
   }
   process.exit(0);
 }
@@ -404,6 +436,7 @@ if (calibrate) {
         temperature,
         rerank,
         sampleAct: variant !== "withoutAct",
+        samplesPerCase,
       }),
     );
   }
@@ -427,7 +460,23 @@ if (calibrate) {
   console.log("[eval] measuring the weather rather than the persona:");
   console.log("  pnpm eval -- --tolerance-overlap " + (overlaps.width * 1.5).toFixed(3) +
     " --tolerance-likelihood " + (likelihoods.width * 1.5).toFixed(3) +
-    " --tolerance-emotion " + (emotions.width * 1.5).toFixed(3));
+    " --tolerance-emotion " + (emotions.width * 1.5).toFixed(3) +
+    " --tolerance-style " + ((spread(runs.map((r) => r.styleDistance?.total ?? 0)).width) * 1.5).toFixed(3));
+  const measured = {
+    overlap: overlaps.width * 1.5,
+    likelihoodGap: likelihoods.width * 1.5,
+    emotionAccuracy: emotions.width * 1.5,
+    style: spread(runs.map((r) => r.styleDistance?.total ?? 0)).width * 1.5,
+  };
+  if (save) {
+    await db.saveEvalRun(
+      personaId,
+      userId,
+      { ...runs[runs.length - 1]!, variant, tolerances: measured },
+      persona.personaData,
+    );
+    console.log("[eval] run saved with calibrated tolerances");
+  }
   process.exit(0);
 }
 
@@ -442,6 +491,7 @@ const metrics = await runEval({
   temperature,
   rerank,
   sampleAct: variant !== "withoutAct",
+  samplesPerCase,
 });
 
 console.log("");
@@ -520,6 +570,7 @@ if (save) {
   console.log(`[eval] run ${id} saved`);
 }
 
+const tolerances = resolveGateTolerances(flagTolerances, storedBaseline?.tolerances);
 const outcome = evaluateGate(baseline, metrics, variant, tolerances);
 console.log("");
 if (outcome.regressed) {
