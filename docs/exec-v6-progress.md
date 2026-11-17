@@ -34,7 +34,7 @@
 | A4 | ✅ | 042d0bf (normalize); 507c44c (records) | `pipeline-v5-seam.test.ts` 2 通过。文本路径与 `records` 路径：`actProfile.samples ≥ 40`；相邻两段 `to`/`from` 同为静默后第一条的 ISO（夹具 p2 首条 `2023-07-12T08:16:09.000Z`）；该段 `suppressionsDelta` 含 `no_question_ending`；`openingProfile.samples > 0`；「下次带你去吃那家面」`whoSaid=them`，「说好的 周末看电影」`whoSaid=me`。先红后绿：提交 `042d0bf` 之前跑同一文件，`actProfile` 为 `null`。`db-store.test.ts` `toTimedTranscript`：`2023-07-12T08:16:09.000Z` + `Asia/Shanghai` → `2023-07-12 16:16 我：在吗`。`server/skill-engine/` 原有测试 + `prompt-golden.test.ts` 10 通过、快照未改。闸门 `303 passed \| 3 skipped (306)` 文件，`2796 passed \| 13 skipped (2809)` 用例。时期条数见偏差 46。 |
 | A5 | ✅ | 21981ee | 先红后绿：`Lobby.test.tsx` `does not put a daily letter in a persona's mouth` 旧代码红在 `expected <h2 class="section-title">TA 想对你说</h2> to be null`；改后该文件 11 通过。`rg -n "lobby\\.daily|DailyMessages" client/` 无结果。`i18n.test.ts` 与 Lobby 一起 26 通过。闸门 `310 passed \| 3 skipped (313)` 文件，`2837 passed \| 16 skipped (2853)` 用例，`all six steps passed`。 |
 | A6 | ✅ | 8614668 | 先红后绿：`Lobby.test.tsx` 三条在改代码前红——quiet 分身页面有「很想你」；`getByRole("heading", { name: "接着聊" })` 找不到推荐标题；卡片没有「上次联系 3 天前」。改后该文件 14 通过。`lobby-eligibility.test.ts` 5 通过（未就绪 / 已毕业 / quiet / unreachable / relationshipEnded 各一条反例）。`db-behaviour.test.ts`：`relationship_events` 一次 `DISTINCT ON (personaId)`，breakup 与 `togetherTo` 都令 `relationshipEnded` 为真。`rg -n "missYou|getMissYouLevel" client/` 无结果。闸门 `311 passed \| 3 skipped (314)` 文件，`2847 passed \| 16 skipped (2863)` 用例。 |
-| A7 | ⬜ |  |  |
+| A7 | ✅ | 8ceb9b8 (remove); 3b5575e (milestones) | 先红后绿：`Lobby.test.tsx` `does not keep a streak, achievement badges, or a conversation ranking` 旧代码红在 `expected '连续对话 2 天' not to be null`；改后该文件 15 通过。`Analytics.test.tsx` `does not keep a longest-streak tile` 无「最长连续」。`rg -n "ChatStreak\|AchievementBadges\|PersonaLeaderboard\|ACHIEVEMENTS" client/` 无结果。`Milestones.test.tsx` 3 通过：三日期都 null 不渲染；只有 `firstLetterAt` 时只出现「写下了第一封信」。`routers.milestones.test.ts` 2 通过：user 1 / 2 各自只看到自己的日期，procedure 调 `getUserMilestones(ctx.user.id)`。闸门 `313 passed \| 3 skipped (316)` 文件，`2854 passed \| 16 skipped (2870)` 用例。 |
 | A8 | ⬜ |  |  |
 | A9 | ⬜ |  |  |
 | B1.1 | ⬜ |  |  |
@@ -259,6 +259,7 @@
 | 55 | C1.2 | A1 里上传后 `startImport` 在角色猜得出时就写入 | `cf3214d`：猜得出也停在 `needs_roles`，猜测放进 `parseReport.suggested` 供向导预填。只有 `confirm` 带齐两边才写。同一文件再次确认先删掉它自己的行再写 | 预览和确认之前不能入库。脱敏会改内容，旧的去重键会把原文留下。 |
 | 56 | C1.1 | 日月都看不出时两种顺序都对 | 短日期默认按月日，也就是手册里的 Android `M/D/YY`。文件里有大于 12 的日或月时，整份按那个证据 | 没有证据时必须选一边。原先默认日月，把 `3/1/22` 读成 1 月 3 日。 |
 | 57 | A6 | 验收写卡片显示「上次联系 3 天」 | 复用已有 `chat.lastContact`，渲染成「上次联系 3 天前」 | 做法明确写复用聊天页同一条文案；验收那句是做法里的中性说法。 |
+| 58 | A7 | `letters` 最早一行 | `getUserMilestones` 只取 `kind = "letter"` 的最早 `createdAt` | 同表里还有「等 TA 回来再说」的 todo；`countLetters` 已经排除它们。「写下了第一封信」不该点亮在一条待办上。 |
 
 ## 未验证清单
 
@@ -270,6 +271,7 @@
 
 | 条目 | 问题 | 两个选项各自的后果 |
 |---|---|---|
+| A7 | 亲密度 `computeIntimacy` 里含连续对话天数（`consecutiveDays * 10`，最高 100 分），是否拿掉 | 拿掉：毕业门槛少这一项输入，已有分身的亲密度分数会下降，可能改变毕业建议。留着：大厅已经没有打卡，分数里仍奖励连续聊。手册 A7 边界写明这一条不动它，等决定。 |
 
 ## 批次日志
 
@@ -457,3 +459,12 @@ A1、A2、A3、C1.3、C1.4、C1.5、C1.6、C1.7 维持 ✅。C1.1、A4、C1.2 �
 - 先红后绿（亲自跑过）：三条大厅断言在改代码前红（「很想你」、推荐标题、「上次联系 3 天前」）。
 - 闸门 `311 passed | 3 skipped (314)` 文件，`2847 passed | 16 skipped (2863)` 用例。相对 A5（310/3 文件、2837/16 用例）：通过文件 +1、通过用例 +10；跳过数不变。
 - A6 标 ✅。A7 起未做。
+
+### WP2 · 实现会话 · 2026-11-17 · A7
+
+- A7 两个提交。`8ceb9b8` 删掉 `ChatStreak`、`AchievementBadges`、`PersonaLeaderboard`、`ACHIEVEMENTS`，以及 `lobby.achievements` / `lobby.streak` / `lobby.leaderboard` 和 Analytics 的最长连续卡。`3b5575e` 加 `user.milestones` / `getUserMilestones`，大厅原成就位置挂 `Milestones`（只列出已经发生的）。
+- 先红后绿（亲自跑过）：写断言后、删组件前，大厅有「连续对话 2 天」。
+- 闸门 `313 passed | 3 skipped (316)` 文件，`2854 passed | 16 skipped (2870)` 用例，`all six steps passed`。相对 A6（311/3 文件、2847/16 用例）：通过文件 +2、通过用例 +7；跳过数不变。
+- 偏差 58：第一封信只计 `kind = "letter"`。待用户决定新增亲密度连续天数是否拿掉。
+- `mirrai_live` 未碰。本条无临时库。
+- A7 标 ✅。A8 起未做。
