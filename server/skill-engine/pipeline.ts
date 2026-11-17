@@ -78,6 +78,7 @@ import { extractMemories } from "../chat/memory-extract";
 import { storageToDataUrl } from "../storage";
 import { chunkRecords, type RecordLine } from "./chunks";
 import { DistillationMapFailed, mapObservationCards } from "./observations";
+import { extractFactsFromRecords } from "./facts";
 import { reduceObservationCards } from "./reduce";
 import { registerSkillPrompts } from "@shared/copy/skill-prompts";
 
@@ -1310,14 +1311,17 @@ async function runSkillPipelineOnce(
 
     let analysisResult = "";
     let usedChunkedAnalysis = false;
-    try {
-      if (recordLines.length >= MIN_RECORDS_FOR_CHUNKED) {
-        usedChunkedAnalysis = true;
-        const chunks = chunkRecords(recordLines, {
+    const recordChunks = recordLines.length > 0
+      ? chunkRecords(recordLines, {
           locale,
           timeZone: input.timeZone,
           themName: name,
-        });
+        })
+      : [];
+    try {
+      if (recordLines.length >= MIN_RECORDS_FOR_CHUNKED) {
+        usedChunkedAnalysis = true;
+        const chunks = recordChunks;
         const cards = await mapObservationCards({
           chunks,
           personaId,
@@ -1631,7 +1635,25 @@ async function runSkillPipelineOnce(
      * The extraction reads the transcript itself, so it is the same
      * reading the persona is built from.
      */
-    if (chatContent.trim()) {
+    if (recordChunks.length > 0) {
+      await extractFactsFromRecords({
+        chunks: recordChunks,
+        rows: recordLines,
+        personaId,
+        userId,
+        name,
+        locale,
+        timeZone: input.timeZone,
+        themName: name,
+        mode: input.mode,
+        invoke: invokeForDistill,
+        onProgress: (message) => {
+          void setPersonaProgress(stageProgress.analyzing_persona, message);
+        },
+      }).catch((e) =>
+        console.warn("[SkillEngine] The facts could not be extracted from the records:", e.message),
+      );
+    } else if (chatContent.trim()) {
       const transcript = parseTranscriptMessages(chatContent, { personaName: name });
       const uploaded = transcript
         .filter((m) => m.content.trim())

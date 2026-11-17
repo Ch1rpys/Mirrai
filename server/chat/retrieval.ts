@@ -375,6 +375,7 @@ export async function retrieveMemories(params: {
   markRecalled?: boolean;
 }): Promise<ScoredMemory[]> {
   const rows = await db.getMemoriesByPersonaId(params.personaId, params.userId);
+  const hasRecordMemories = rows.some((row) => row.source === "records");
   const candidates: MemoryCandidate[] = rows.map((row) => ({
     id: row.id,
     title: row.title,
@@ -397,18 +398,20 @@ export async function retrieveMemories(params: {
   // pinned and anchor memories. A failure to read the files is not fatal —
   // the curated memories are still worth injecting.
   let files: Array<{ id: number; originalName: string; extractedMemory: string | null; createdAt: Date }> = [];
-  try {
-    /**
-     * Only the columns that are used, and only the newest files.
-     *
-     * The whole row used to be loaded, including the extracted text of
-     * every uploaded chat log — megabytes of it, on every single chat
-     * turn, of which two summaries of four hundred characters were
-     * actually used.
-     */
-    files = await db.getFileSummariesByPersonaId(params.personaId, params.userId);
-  } catch {
-    files = [];
+  if (!hasRecordMemories) {
+    try {
+      /**
+       * Only the columns that are used, and only the newest files.
+       *
+       * The whole row used to be loaded, including the extracted text of
+       * every uploaded chat log — megabytes of it, on every single chat
+       * turn, of which two summaries of four hundred characters were
+       * actually used.
+       */
+      files = await db.getFileSummariesByPersonaId(params.personaId, params.userId);
+    } catch {
+      files = [];
+    }
   }
   const fileCandidates = fileSummaryCandidates(files, params.locale ?? "zh");
   const fileSelected = selectMemories(fileCandidates, params.userMessage, {

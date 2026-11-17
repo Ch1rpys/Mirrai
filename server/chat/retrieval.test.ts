@@ -353,4 +353,32 @@ describe("file summaries", () => {
 
     expect(touchMemoryRecalled).not.toHaveBeenCalled();
   });
+
+  it("does not offer a file summary when the persona already has memories from the records", async () => {
+    getMemoriesByPersonaId.mockResolvedValue([
+      {
+        id: 1,
+        title: "生日",
+        description: "5月21号",
+        category: "anchor",
+        date: "05-21",
+        isPinned: false,
+        importance: 5,
+        lastRecalledAt: null,
+        createdAt: new Date("2025-01-01T00:00:00Z"),
+        source: "records",
+      },
+    ]);
+    getFilesByPersonaId.mockResolvedValue([uploadedFile()]);
+    getFileSummariesByPersonaId.mockResolvedValue([uploadedFile()]);
+
+    const memories = await retrieveMemories({
+      personaId: 1,
+      userId: 1,
+      userMessage: "你还记得图书馆吗",
+    });
+
+    expect(memories.some((row) => row.category === "file_summary")).toBe(false);
+    expect(getFileSummariesByPersonaId).not.toHaveBeenCalled();
+  });
 });

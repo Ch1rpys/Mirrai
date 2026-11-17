@@ -46,6 +46,8 @@ vi.mock("../db", () => ({
   iterateRecords: async function* () {},
   createDistillationChunk: vi.fn(),
   createDistillationCard: vi.fn(),
+  createMemory: vi.fn(),
+  getMemoriesByPersonaId: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("./runner", () => ({
@@ -165,7 +167,13 @@ beforeEach(() => {
   ]) {
     fn.mockReset();
   }
-  invoke.mockImplementation(async (req: unknown) => actLabelsFrom(req) ?? PERSONA_JSON);
+  invoke.mockImplementation(async (req: unknown) => {
+    const blob = JSON.stringify(req);
+    if (blob.includes("anchor|milestone|anniversary|memory")) {
+      return JSON.stringify({ facts: [], people: [], stances: [] });
+    }
+    return actLabelsFrom(req) ?? PERSONA_JSON;
+  });
   invokeForUser.mockImplementation(async (...a: unknown[]) => invoke(...a));
   invokeForUserWithReason.mockImplementation(async (...a: unknown[]) => ({
     text: await invoke(...a),

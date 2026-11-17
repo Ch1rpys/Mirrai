@@ -23,6 +23,8 @@ const claimMemoryExtraction = vi.fn();
 const createDistillationChunk = vi.fn();
 const createDistillationCard = vi.fn();
 const iterateRecords = vi.fn();
+const createMemory = vi.fn();
+const getMemoriesByPersonaId = vi.fn();
 
 vi.mock("../llm", () => ({
   llmService: {
@@ -50,6 +52,8 @@ vi.mock("../db", () => ({
   createDistillationChunk: (...a: unknown[]) => createDistillationChunk(...a),
   createDistillationCard: (...a: unknown[]) => createDistillationCard(...a),
   iterateRecords: (...a: unknown[]) => iterateRecords(...a),
+  createMemory: (...a: unknown[]) => createMemory(...a),
+  getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
 }));
 
 vi.mock("./runner", () => ({
@@ -62,6 +66,7 @@ vi.mock("./prompts", () => ({
 
 import { pipelineRetryPolicy, runSkillPipeline, type PipelineRecord } from "./pipeline";
 import { chunkRecords, type RecordLine } from "./chunks";
+import { chunkHasFactCue } from "@shared/fact-cues";
 import {
   buildXiaomanRecords,
   XIAOMAN_NAME,
@@ -98,6 +103,10 @@ function blobOf(req: unknown): string {
 
 function isMapCall(req: unknown): boolean {
   return blobOf(req).includes("expression|trigger|conflict|care|memory|habit");
+}
+
+function isFactCall(req: unknown): boolean {
+  return blobOf(req).includes("anchor|milestone|anniversary|memory");
 }
 
 function isMergeCall(req: unknown): boolean {
@@ -201,10 +210,13 @@ describe("the layered distillation", () => {
       createDistillationChunk,
       createDistillationCard,
       iterateRecords,
+      createMemory,
+      getMemoriesByPersonaId,
     ]) {
       fn.mockReset();
     }
     invoke.mockImplementation(async (req: unknown) => {
+      if (isFactCall(req)) return JSON.stringify({ facts: [], people: [], stances: [] });
       if (isMapCall(req)) return observationFrom(req);
       if (isMergeCall(req)) {
         return [
@@ -243,6 +255,8 @@ describe("the layered distillation", () => {
     createDistillationChunk.mockResolvedValue(undefined);
     createDistillationCard.mockResolvedValue(undefined);
     iterateRecords.mockImplementation(async function* () {});
+    createMemory.mockResolvedValue(1);
+    getMemoriesByPersonaId.mockResolvedValue([]);
     runPythonTool.mockImplementation(async (_script: string, args: string[]) => {
       const work = args[args.indexOf("--work") + 1];
       const persona = args[args.indexOf("--persona") + 1];
@@ -364,5 +378,121 @@ describe("the layered distillation", () => {
     await runSkillPipeline({ ...baseInput, mode: "deep" });
     expect(lastSkillPackage.length).toBeGreaterThan(0);
     expect(lastSkillPackage).not.toMatch(/#\d+/);
+  }, 90_000);
+
+  it("stores the birthday in the fixture as a record-sourced memory", async () => {
+    const birthday = fixture.find((row) => row.content === "我生日是5月21号");
+    expect(birthday).toBeTruthy();
+    invoke.mockImplementation(async (req: unknown) => {
+      if (isFactCall(req)) {
+        const text = blobOf(req);
+        if (birthday && text.includes(`#${birthday.id} `)) {
+          return JSON.stringify({
+            facts: [{
+              title: "生日",
+              description: "5月21号",
+              category: "anchor",
+              subject: "me",
+              date: "05-21",
+              quote: birthday.id,
+            }],
+            people: [],
+            stances: [],
+          });
+        }
+        return JSON.stringify({ facts: [], people: [], stances: [] });
+      }
+      if (isMapCall(req)) return observationFrom(req);
+      if (isMergeCall(req)) return "ok";
+      return actLabelsFrom(req) ?? PERSONA_JSON;
+    });
+
+    await runSkillPipeline({ ...baseInput, mode: "deep" });
+
+    expect(createMemory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        category: "anchor",
+        date: "05-21",
+        recordId: birthday?.id,
+        source: "records",
+      }),
+    );
+  }, 90_000);
+
+  it("does not send a block without a clue in fast mode", async () => {
+    await runSkillPipeline({ ...baseInput, mode: "fast" });
+    const factBlobs = invoke.mock.calls
+      .filter((call) => isFactCall(call[0]))
+      .map((call) => blobOf(call[0]));
+    const uncued = xiaomanChunks.filter((chunk) => !chunkHasFactCue(chunk));
+    expect(uncued.length).toBeGreaterThan(0);
+    for (const chunk of uncued) {
+      const first = chunk.rows[0];
+      if (!first) continue;
+      expect(factBlobs.some((blob) => blob.includes(`#${first.id} `))).toBe(false);
+    }
+  }, 90_000);
+
+  it("drops a fact that cites a line from another block", async () => {
+    invoke.mockImplementation(async (req: unknown) => {
+      if (isFactCall(req)) {
+        return JSON.stringify({
+          facts: [{
+            title: "生日",
+            description: "5月21号",
+            category: "anchor",
+            subject: "me",
+            date: "05-21",
+            quote: 999_999,
+          }],
+          people: [],
+          stances: [],
+        });
+      }
+      if (isMapCall(req)) return observationFrom(req);
+      if (isMergeCall(req)) return "ok";
+      return actLabelsFrom(req) ?? PERSONA_JSON;
+    });
+    await runSkillPipeline({ ...baseInput, mode: "deep" });
+    expect(createMemory).not.toHaveBeenCalled();
+  }, 90_000);
+
+  it("does not write the same memory twice", async () => {
+    const store: Array<{ title: string; description: string; factKey: string }> = [];
+    createMemory.mockImplementation(async (row: { title: string; description: string; factKey: string }) => {
+      store.push(row);
+      return store.length;
+    });
+    getMemoriesByPersonaId.mockImplementation(async () => store);
+    invoke.mockImplementation(async (req: unknown) => {
+      if (isFactCall(req)) {
+        const birthday = fixture.find((row) => row.content === "我生日是5月21号");
+        const text = blobOf(req);
+        if (birthday && text.includes(`#${birthday.id} `)) {
+          return JSON.stringify({
+            facts: [{
+              title: "生日",
+              description: "5月21号",
+              category: "anchor",
+              subject: "me",
+              date: "05-21",
+              quote: birthday.id,
+            }],
+            people: [],
+            stances: [],
+          });
+        }
+        return JSON.stringify({ facts: [], people: [], stances: [] });
+      }
+      if (isMapCall(req)) return observationFrom(req);
+      if (isMergeCall(req)) return "ok";
+      return actLabelsFrom(req) ?? PERSONA_JSON;
+    });
+
+    await runSkillPipeline({ ...baseInput, mode: "deep" });
+    const first = store.length;
+    expect(first).toBeGreaterThan(0);
+    await runSkillPipeline({ ...baseInput, mode: "deep" });
+    expect(store.length).toBe(first);
   }, 90_000);
 });
