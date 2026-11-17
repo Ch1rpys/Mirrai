@@ -104,7 +104,7 @@
 | B7.13 | ⬜ |  |  |
 | B7.14 | ⬜ |  |  |
 | B7.15 | ⬜ |  |  |
-| B8.1 | ⬜ |  |  |
+| B8.1 | ✅ | e61eca3 (model); cc0fa59 (CLI/UI) | `discriminator.test.ts`：200 句真句 vs 末尾加「。」AUC > 0.95，前三特征含 `ending.period` 且 `side === "persona"`；同一池随机对分 AUC 在 0.4–0.6；59 对 `insufficient` 且不训练；同输入同种子两次 AUC 全等；`splitPairFolds` 同一对不会跨训练/测试折。`compare-cli.test.ts`：源码含 `--discriminator`、`pairsFromEvalRuns(historical, version?.createdAt ?? null)`。`DiscriminatorView.test.tsx` 渲染「以句号结尾」和 AUC 文案；59 对显示「样本不够（59 / 60）。」。`FidelityPanel.test.tsx`：最近一次带 `metricsJson.discriminator` 时显示 AUC。闸门 `343 passed \| 4 skipped (347)` 文件，`3067 passed \| 18 skipped (3085)` 用例。特征 id 见偏差 73。 |
 | B8.2 | ⬜ |  |  |
 | B8.3 | ⬜ |  |  |
 | B8.4 | ⬜ |  |  |
@@ -274,6 +274,7 @@
 | 70 | B3.1 | 夹具 `particles["呢"] === 0` | 约为 0.0067，全部来自追一句「人呢」 | P0.5 偏差 9：设计表既写了从不用「呢」，又写了追一句 70% 是「人呢」。`lastParticleOf` 按手册剥完标点后看最后一个字。 |
 | 71 | B3.1 | `laugh.haRuns` 只有长度 4 那一格非零 | 长度 4 是绝大多数（124）；另有少量 2（2）和 3（9） | 夹具把「呵呵」换成「哈哈」，以及 `fitLength` 在句末前插入衬字，会把「哈哈哈哈」拆开。不改夹具。 |
 | 72 | B8.7 | 每个非空的层至少 1 条 | 层数多于名额时，改回在全部候选上等距取 | 两句对话只留 1 条时无法每层一条；否则会丢掉「我也想你」那条原有测试。名额够覆盖每一层时仍按层分配。 |
+| 73 | B8.1 | 前三个特征里有「以句号结尾」 | 报告里的 `feature` 是 `ending.period`；界面再译成「以句号结尾」 | 生产代码不能写没对照的中文。单字「。」的 n-gram 并进同一个特征，避免句号独热和哈希抢权重。 |
 
 ## 未验证清单
 
@@ -669,3 +670,11 @@ B1.1、B1.3、B1.4、B1.5、C10.1、B1.6、B1.7、B1.8、B1.10 维持 ✅。B1.2
 - 闸门 `341 passed | 4 skipped (345)` 文件，`3054 passed | 18 skipped (3072)` 用例，`all six steps passed`。相对 B8.7（341/4 文件、3047/18 用例）：通过用例 +7；跳过数不变。
 - 偏差、未验证清单、待用户决定无新增。
 - B8.6 标 ✅。下一条 B8.1。
+
+### WP4 · 实现会话 · 2026-11-17 · B8.1
+
+- `e61eca3`：哈希 1–3 元 + 稠密特征的 L2 逻辑回归，五折按对切分；少于 60 对不训练。
+- `cc0fa59`：`--discriminator` 并起本版本之后的对子，写入 `metricsJson.discriminator` 和 `styleProfile.discriminator`；`DiscriminatorView` 显示 AUC 和特征表。
+- 闸门 `343 passed | 4 skipped (347)` 文件，`3067 passed | 18 skipped (3085)` 用例，`all six steps passed`。相对 B8.6（341/4 文件、3054/18 用例）：通过文件 +2、通过用例 +13；跳过数不变。
+- 偏差 73。未验证清单、待用户决定无新增。
+- B8.1 标 ✅。下一条 B8.2。
