@@ -32,7 +32,7 @@
 | A2 | ✅ | 042d0bf (with A4 normalize) | `roles.test.ts` 3 通过：两个具名说话人且一个是 TA → 另一人 `user`；三个具名说话人 → 非 TA 为 `other`；无说话人 → 全是 `other`。`pipeline-v5-seam.test.ts` 文本路径：旧代码 `actProfile` 为 `null`（`expected null to be truthy`）；改映射后与 A4 同一条断言绿。闸门随 A4。 |
 | A3 | ✅ | 267d8c6 (with C1.2 wizard) | `csv-not-unlabelled.test.ts`：`renderFixture(buildXiaomanRecords(), "wechat-csv")` 经 wechat-csv 解析再 `guessRoles`/`assignRoles`，每行 `role` 为 `user` 或 `assistant`，`content` 不含 `IsSender`/`StrContent`/`StrTime`，`lineNo > 1`。先红后绿见偏差 40。闸门随 C1.2。 |
 | A4 | ✅ | 042d0bf (normalize); 507c44c (records) | `pipeline-v5-seam.test.ts` 2 通过。文本路径与 `records` 路径：`actProfile.samples ≥ 40`；相邻两段 `to`/`from` 同为静默后第一条的 ISO（夹具 p2 首条 `2023-07-12T08:16:09.000Z`）；该段 `suppressionsDelta` 含 `no_question_ending`；`openingProfile.samples > 0`；「下次带你去吃那家面」`whoSaid=them`，「说好的 周末看电影」`whoSaid=me`。先红后绿：提交 `042d0bf` 之前跑同一文件，`actProfile` 为 `null`。`db-store.test.ts` `toTimedTranscript`：`2023-07-12T08:16:09.000Z` + `Asia/Shanghai` → `2023-07-12 16:16 我：在吗`。`server/skill-engine/` 原有测试 + `prompt-golden.test.ts` 10 通过、快照未改。闸门 `303 passed \| 3 skipped (306)` 文件，`2796 passed \| 13 skipped (2809)` 用例。时期条数见偏差 46。 |
-| A5 | ⬜ |  |  |
+| A5 | ✅ | 21981ee | 先红后绿：`Lobby.test.tsx` `does not put a daily letter in a persona's mouth` 旧代码红在 `expected <h2 class="section-title">TA 想对你说</h2> to be null`；改后该文件 11 通过。`rg -n "lobby\\.daily|DailyMessages" client/` 无结果。`i18n.test.ts` 与 Lobby 一起 26 通过。闸门 `310 passed \| 3 skipped (313)` 文件，`2837 passed \| 16 skipped (2853)` 用例，`all six steps passed`。 |
 | A6 | ⬜ |  |  |
 | A7 | ⬜ |  |  |
 | A8 | ⬜ |  |  |
@@ -440,3 +440,12 @@ A1、A2、A3、C1.3、C1.4、C1.5、C1.6、C1.7 维持 ✅。C1.1、A4、C1.2 �
 - `TZ=UTC` 下 `pipeline-v5-seam.test.ts` 2 通过。WhatsApp 三条新断言和 zip 条数测试通过。
 - 闸门 `310 passed | 3 skipped (313)` 文件，`2836 passed | 16 skipped (2852)` 用例，`all six steps passed`。通过数比验收时的 2832 多 4，跳过数仍是 16。
 - C1.1、A4、C1.2 改回 ✅。偏差 56 记下短日期的默认顺序。
+
+### WP2 · 实现会话 · 2026-11-17 · A5
+
+- 分支 `exec/v6`。独立验收留下的 `- [ ]` 已全部勾掉。没有「等 xxx」的推后项。
+- A5 一个提交：`21981ee`。删掉 `DailyMessages`、挂载点和 `lobby.daily` 中英文案。原位置先空着，C2.1 再放「那年今天」。
+- 先红后绿（亲自跑过）：写断言后、删组件前，`Lobby.test.tsx` 红在「TA 想对你说」。
+- 闸门 `310 passed | 3 skipped (313)` 文件，`2837 passed | 16 skipped (2853)` 用例，`all six steps passed`。相对 WP1 闸门（310/3 文件、2836/16 用例）：通过用例 +1；跳过数不变。
+- `mirrai_live` 未碰。本条无临时库。
+- A5 标 ✅。A6 起未做。
