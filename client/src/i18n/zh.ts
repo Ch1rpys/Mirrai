@@ -311,6 +311,9 @@ export const zh = {
       writtenLater: "后来写下的",
       conflict: "这两条对不上",
       keepThis: "以这条为准",
+      fromPersona: "这 {{count}} 条记忆是从分身自己说的话里抽出来的，不是 TA 本人说的。看一眼，不对的删掉。",
+      fromPersonaKeep: "留着",
+      fromPersonaDelete: "删掉",
       categories: {
         memory: "记忆",
         milestone: "里程碑",

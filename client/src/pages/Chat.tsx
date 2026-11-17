@@ -28,6 +28,7 @@ import { formatDayKey, formatInstantInZone, formatTimeInZone } from "@/lib/dates
 import DigitalPersonaBadge from "@/components/DigitalPersonaBadge";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionKey } from "@/lib/emotions";
 import { useConfirm } from "@/components/ConfirmDialog";
+import MemoryReview from "@/components/v6/MemoryReview";
 
 /**
  * The largest picture the chat will send.
@@ -2330,6 +2331,7 @@ function MemoryTimeline({ personaId, onClose, onJumpTo }: { personaId: number; o
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
+          <MemoryReview personaId={personaId} />
           {/**
            * A failure is not an empty list.
            *

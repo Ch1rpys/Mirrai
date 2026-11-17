@@ -34,7 +34,7 @@ import {
   updateUserProfile, updateUserPassword, deleteUserAccount, getAccountStats, exportUserData,
   getUserById, bumpUserTokenVersion, updateUserGraduationMode, updateUserTrajectoryAssessment,
   getUserTimezone,
-  createMemory, getMemoriesByPersonaId, countMemories, getMemoryTitles, deleteMemory, updateMemory,
+  createMemory, getMemoriesByPersonaId, getMemoriesFromPersona, countMemories, getMemoryTitles, deleteMemory, updateMemory,
   createFidelityFeedback, listFidelityFeedbackForMessage, listFidelityFeedbackForPersona,
   getMemoriesByFactKey, supersedeMemory, getMessageById,
   countDiaryEntries,
@@ -3943,6 +3943,20 @@ export const appRouter = router({
         return { items, total };
       }),
 
+    /**
+     * Memories whose source line is something the persona said.
+     *
+     * Those lines are reconstructed. The review panel lists them so
+     * the user can keep or drop each one.
+     */
+    listFromPersona: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        return getMemoriesFromPersona(input.personaId, ctx.user.id);
+      }),
+
     create: protectedProcedure
       .input(z.object({
         personaId: z.number(),
@@ -4014,6 +4028,20 @@ export const appRouter = router({
         // The memory was removed, or there was nothing there to remove.
         const removed = await deleteMemory(input.id, ctx.user.id);
         if (!removed) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true };
+      }),
+
+    /**
+     * The user has looked at a memory that came from the persona.
+     *
+     * Clearing the source line takes it off the review list. The
+     * memory itself stays.
+     */
+    keepFromPersona: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const row = await updateMemory(input.id, ctx.user.id, { messageId: null });
+        if (!row) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true };
       }),
 

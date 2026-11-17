@@ -2497,6 +2497,47 @@ export async function getMemoriesByPersonaId(
     .limit(limit);
 }
 
+/**
+ * Memories whose source line is something the persona said.
+ *
+ * In an in-app conversation those lines are reconstructed. The review
+ * panel lists them so the user can keep or drop each one.
+ */
+export type MemoryFromPersona = {
+  id: number;
+  title: string;
+  description: string | null;
+  category: string;
+  messageId: number | null;
+};
+
+export async function getMemoriesFromPersona(
+  personaId: number,
+  userId: number,
+): Promise<MemoryFromPersona[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({
+      id: memories.id,
+      title: memories.title,
+      description: memories.description,
+      category: memories.category,
+      messageId: memories.messageId,
+    })
+    .from(memories)
+    .innerJoin(messages, eq(memories.messageId, messages.id))
+    .where(and(
+      eq(memories.personaId, personaId),
+      eq(memories.userId, userId),
+      eq(messages.userId, userId),
+      eq(messages.personaId, personaId),
+      eq(messages.role, "assistant"),
+    ))
+    .orderBy(desc(memories.id));
+  return rows;
+}
+
 /** How many memories the list returns at once. */
 export const MEMORY_LIST_LIMIT = 200;
 
@@ -2764,6 +2805,14 @@ export async function updateMemory(
     importance?: number;
     /** Whose memory this is: "them" or "me". */
     subject?: "them" | "me";
+    /**
+     * Clearing the source line means the user has looked at it.
+     *
+     * A memory extracted from the persona's own speech keeps its
+     * messageId until the user says to keep it — then the link is
+     * dropped so it is no longer on the review list.
+     */
+    messageId?: number | null;
   },
 ) {
   const db = await getDb();

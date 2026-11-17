@@ -312,6 +312,9 @@ export const en = {
       writtenLater: "Written later",
       conflict: "These two do not agree",
       keepThis: "Keep this one",
+      fromPersona: "These {{count}} memories were extracted from what the persona said, not from them. Look them over and delete the ones that are wrong.",
+      fromPersonaKeep: "Keep it",
+      fromPersonaDelete: "Delete",
       categories: {
         memory: "Memory",
         milestone: "Milestone",
