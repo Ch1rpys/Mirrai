@@ -75,6 +75,9 @@ vi.mock("@/lib/trpc", () => ({
         }),
       },
     },
+    style: {
+      get: { useQuery: () => ({ data: { profile: null }, isError: false }) },
+    },
     eval: {
       latest: { useQuery: () => ({ data: { run: lastRun } }) },
       // The last runs, so the two variants can be compared.

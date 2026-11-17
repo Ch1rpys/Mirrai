@@ -1472,6 +1472,13 @@ export const zh = {
       median: "平均回信间隔",
       proactive: "主动开口的比例",
     },
+    fingerprint: {
+      title: "语气指纹",
+      almostNoPeriod: "几乎不以句号结尾（{{rate}}%）",
+      laughFourHa: "笑的时候通常打四个「哈」",
+      topParticles: "句末最常用：{{list}}",
+      particleSep: "、",
+    },
   },
 
   templates: {

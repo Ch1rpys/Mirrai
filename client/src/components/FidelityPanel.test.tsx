@@ -38,6 +38,9 @@ vi.mock("@/lib/trpc", () => ({
       get: { useQuery: () => ({ data: { profile }, isError: behaviorFailed, refetch: vi.fn() }) },
       measure: { useMutation: () => ({ mutate: measure, isPending: false }) },
     },
+    style: {
+      get: { useQuery: () => ({ data: { profile: null }, isError: false }) },
+    },
     eval: {
       latest: { useQuery: () => ({ data: { run: lastRun } }) },
       // The last runs, so the two variants can be compared.

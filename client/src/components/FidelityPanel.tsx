@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Gauge, Timer, Play } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import FingerprintView from "@/components/v6/FingerprintView";
 
 /**
  * The ruler, and the timing.
@@ -115,6 +116,7 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
     isError: behaviorFailed,
     refetch: refetchBehavior,
   } = trpc.behavior.get.useQuery({ personaId });
+  const { data: styleData, isError: styleFailed } = trpc.style.get.useQuery({ personaId });
   const measureMutation = trpc.behavior.measure.useMutation({
     onSuccess: (result) => {
       if (!result.profile) {
@@ -254,6 +256,12 @@ export default function FidelityPanel({ personaId }: { personaId: number }) {
           </p>
         )}
       </div>
+
+      {styleFailed ? (
+        <p className="text-xs text-destructive" role="alert">{t("common.error")}</p>
+      ) : (
+        <FingerprintView fingerprint={styleData?.profile?.fingerprint} />
+      )}
 
       <hr className="rule" />
 

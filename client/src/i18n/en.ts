@@ -1466,6 +1466,13 @@ export const en = {
       median: "Typical reply gap",
       proactive: "How often they speak first",
     },
+    fingerprint: {
+      title: "How they write",
+      almostNoPeriod: "Almost never ends a line with a period ({{rate}}%)",
+      laughFourHa: "When they laugh they usually type four ha's",
+      topParticles: "Most common sentence endings: {{list}}",
+      particleSep: ", ",
+    },
   },
 
   templates: {
