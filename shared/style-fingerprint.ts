@@ -661,6 +661,11 @@ export function measureFingerprint(
     if (Object.keys(perPeriod).length > 0) fingerprint.perPeriod = perPeriod;
   }
 
+  const surprises = lines
+    .map((row) => lineSurprise(row.content, core))
+    .sort((a, b) => a - b);
+  fingerprint.surpriseP75 = quantile(surprises, 0.75);
+
   return fingerprint;
 }
 
@@ -713,4 +718,189 @@ export function fingerprintHighlights(fp: StyleFingerprint): FingerprintHighligh
 
 export function defaultAddressForms(): string[] {
   return [...ADDRESS_WORDS_ZH, ...ADDRESS_WORDS_EN];
+}
+
+export interface StyleDistance {
+  total: number;
+  endings: number;
+  particles: number;
+  laugh: number;
+  emoji: number;
+  length: number;
+}
+
+const DIST_SMOOTH = 0.01;
+
+/** 1-Wasserstein distance between two histograms on the same bins. */
+function wassersteinHist(a: number[], b: number[]): number {
+  const n = Math.max(a.length, b.length);
+  let sumA = 0;
+  let sumB = 0;
+  for (let i = 0; i < n; i++) {
+    sumA += a[i] ?? 0;
+    sumB += b[i] ?? 0;
+  }
+  if (sumA === 0 || sumB === 0) return 0;
+  let cdfA = 0;
+  let cdfB = 0;
+  let total = 0;
+  for (let i = 0; i < n; i++) {
+    cdfA += (a[i] ?? 0) / sumA;
+    cdfB += (b[i] ?? 0) / sumB;
+    total += Math.abs(cdfA - cdfB);
+  }
+  return total;
+}
+
+function lengthHistogramOf(lengths: number[]): number[] {
+  const histogram = emptyLengthHistogram();
+  for (const length of lengths) {
+    histogram[Math.min(length, LENGTH_HIST_MAX)] += 1;
+  }
+  return histogram;
+}
+
+function smoothDist(dist: Record<string, number>, keys: string[]): number[] {
+  const raw = keys.map((key) => (dist[key] ?? 0) + DIST_SMOOTH);
+  const sum = raw.reduce((a, b) => a + b, 0);
+  return raw.map((value) => value / sum);
+}
+
+function kl(p: number[], q: number[]): number {
+  let sum = 0;
+  for (let i = 0; i < p.length; i++) {
+    if (p[i]! > 0) sum += p[i]! * Math.log(p[i]! / q[i]!);
+  }
+  return sum;
+}
+
+function jsdNormalized(p: number[], q: number[]): number {
+  const m = p.map((pi, i) => 0.5 * (pi + q[i]!));
+  return (0.5 * kl(p, m) + 0.5 * kl(q, m)) / Math.LN2;
+}
+
+function ratesFromCounts(counts: Record<string, number>, total: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(counts)) {
+    out[key] = total === 0 ? 0 : value / total;
+  }
+  return out;
+}
+
+function generatedStats(lines: string[]): {
+  samples: number;
+  endings: Record<EndingClass, number>;
+  particles: Record<string, number>;
+  laughRate: number;
+  laughCount: number;
+  haRuns: number[];
+  emojiRate: number;
+  lengths: number[];
+} {
+  const endings = zeroEndings();
+  const particleCounts: Record<string, number> = { none: 0 };
+  for (const particle of PARTICLES) particleCounts[particle] = 0;
+  const haRuns = emptyHaRuns();
+  let laughCount = 0;
+  let emojiCount = 0;
+  const lengths: number[] = [];
+  for (const raw of lines) {
+    const text = raw.trim();
+    if (!text) continue;
+    lengths.push(codePoints(text));
+    endings[endingClassOf(text)] += 1;
+    particleCounts[lastParticleOf(text)] = (particleCounts[lastParticleOf(text)] ?? 0) + 1;
+    if (laughFormsOf(text).length > 0) laughCount += 1;
+    for (const run of text.match(HA_RUN_RE) ?? []) {
+      bumpRun(haRuns, codePoints(run), HA_RUN_MAX);
+    }
+    HA_RUN_RE.lastIndex = 0;
+    const emojis = text.match(EMOJI_ALL_RE) ?? [];
+    EMOJI_ALL_RE.lastIndex = 0;
+    if (emojis.length > 0) emojiCount += 1;
+  }
+  const samples = lengths.length;
+  return {
+    samples,
+    endings: ratesFromCounts(endings, samples) as Record<EndingClass, number>,
+    particles: ratesFromCounts(particleCounts, samples),
+    laughRate: samples === 0 ? 0 : laughCount / samples,
+    laughCount,
+    haRuns,
+    emojiRate: samples === 0 ? 0 : emojiCount / samples,
+    lengths,
+  };
+}
+
+function haRunDist(runs: number[]): Record<string, number> {
+  const total = runs.reduce((a, b) => a + b, 0);
+  const out: Record<string, number> = {};
+  for (let i = 0; i < runs.length; i++) {
+    out[String(i)] = total === 0 ? 0 : (runs[i] ?? 0) / total;
+  }
+  return out;
+}
+
+/**
+ * How far a batch of generated lines sits from a fingerprint.
+ *
+ * Each term is 0–1. Smaller is closer.
+ */
+export function styleDistance(lines: string[], fp: StyleFingerprintCore): StyleDistance {
+  const gen = generatedStats(lines);
+  if (gen.samples === 0) {
+    return { total: 0, endings: 0, particles: 0, laugh: 0, emoji: 0, length: 0 };
+  }
+
+  const endingKeys = [...ENDING_CLASSES];
+  const endings = jsdNormalized(smoothDist(gen.endings, endingKeys), smoothDist(fp.endings, endingKeys));
+
+  const particleKeys = [...new Set([...Object.keys(fp.particles), ...Object.keys(gen.particles)])];
+  const particles = jsdNormalized(
+    smoothDist(gen.particles, particleKeys),
+    smoothDist(fp.particles, particleKeys),
+  );
+
+  const laughRateGap = Math.abs(gen.laughRate - fp.laugh.rate);
+  const fpLaughCount = fp.laugh.rate * fp.samples;
+  const haKeys = Array.from({ length: HA_RUN_MAX + 1 }, (_, i) => String(i));
+  const laugh =
+    gen.laughCount < 3 || fpLaughCount < 3
+      ? Math.min(1, laughRateGap)
+      : Math.min(
+          1,
+          laughRateGap +
+            0.5 *
+              jsdNormalized(
+                smoothDist(haRunDist(gen.haRuns), haKeys),
+                smoothDist(haRunDist(fp.laugh.haRuns), haKeys),
+              ),
+        );
+
+  const emojiDenom = Math.max(0.05, fp.emoji.rate);
+  const emoji = Math.min(1, Math.abs(gen.emojiRate - fp.emoji.rate) / emojiDenom);
+
+  const lengthRaw =
+    wassersteinHist(fp.length.histogram, lengthHistogramOf(gen.lengths)) /
+    Math.max(1, fp.length.median);
+  const length = Math.min(1, lengthRaw);
+
+  const total = (endings + particles + laugh + emoji + length) / 5;
+  return { total, endings, particles, laugh, emoji, length };
+}
+
+/**
+ * How unexpected one line is under a fingerprint.
+ *
+ * Used by rerank and the drift ruler. Probabilities are smoothed by 0.01.
+ */
+export function lineSurprise(line: string, fp: StyleFingerprintCore): number {
+  const text = line.trim();
+  const ending = endingClassOf(text);
+  const particle = lastParticleOf(text);
+  const pEnding = (fp.endings[ending] ?? 0) + DIST_SMOOTH;
+  const pParticle = (fp.particles[particle] ?? 0) + DIST_SMOOTH;
+  const chars = codePoints(text);
+  const spread = Math.max(1, fp.length.p90 - fp.length.median);
+  return -Math.log(pEnding) - Math.log(pParticle) + Math.abs(chars - fp.length.median) / spread;
 }

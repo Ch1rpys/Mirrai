@@ -125,11 +125,12 @@ const tolerances = {
   overlap: numberOrUndefined(flag("tolerance-overlap")),
   likelihoodGap: numberOrUndefined(flag("tolerance-likelihood")),
   emotionAccuracy: numberOrUndefined(flag("tolerance-emotion")),
+  style: numberOrUndefined(flag("tolerance-style")),
 };
 
 if (!Number.isFinite(personaId) || !Number.isFinite(userId)) {
   console.error(
-    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n]",
+    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n] [--tolerance-style n]",
   );
   process.exit(1);
 }
@@ -314,6 +315,7 @@ if (compare) {
   row("emotion", withThem.emotionAccuracy, withoutThem.emotionAccuracy, "higher");
   row("actMatch", withThem.actMatch ?? 0, withoutThem.actMatch ?? 0, "higher");
   row("residue", withThem.residueRate ?? 0, withoutThem.residueRate ?? 0, "closer");
+  row("style", withThem.styleDistance?.total ?? 0, withoutThem.styleDistance?.total ?? 0, "closer");
   console.log("");
   console.log("[eval] action sampling on vs off:");
   row("actMatch", withThem.actMatch ?? 0, withoutAct.actMatch ?? 0, "higher");
@@ -427,6 +429,10 @@ console.log(`[eval] length dist  : ${metrics.lengthDistance.toFixed(2)} characte
 console.log(`[eval] emotion      : ${(metrics.emotionAccuracy * 100).toFixed(1)}% agreement`);
 console.log(`[eval] actMatch     : ${((metrics.actMatch ?? 0) * 100).toFixed(1)}%`);
 console.log(`[eval] residue      : ${((metrics.residueRate ?? 0) * 100).toFixed(1)}%`);
+const styleTotal = metrics.styleDistance?.total;
+console.log(
+  `[eval] style        : ${styleTotal == null ? "n/a" : styleTotal.toFixed(4)}  (smaller is closer)`,
+);
 if (metrics.variant?.includes("picked")) {
   console.log(`[eval] why it won   : ${metrics.variant}`);
 }

@@ -13,4 +13,10 @@ describe("pnpm eval --compare", () => {
   it("prints why a reranked line won", () => {
     expect(src).toContain("why it won");
   });
+
+  it("includes style in the comparison", () => {
+    expect(src).toContain('row("style"');
+    expect(src).toContain("[eval] style");
+    expect(src).toContain("tolerance-style");
+  });
 });

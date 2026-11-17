@@ -21,6 +21,7 @@ import {
 import type { EvalCaseData } from "./dataset";
 import { isLayerId, type LayerId } from "@shared/layers";
 import type { SpeechAct } from "@shared/speech-acts";
+import { normalizeStyleProfile } from "@shared/style-profile";
 
 /**
  * Which version of the persona to measure.
@@ -220,7 +221,8 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
     options.onProgress?.(i + 1, options.cases.length);
   }
 
-  const aggregated = aggregateScores(scores);
+  const fingerprint = normalizeStyleProfile(options.persona.styleProfile).fingerprint ?? null;
+  const aggregated = aggregateScores(scores, { fingerprint });
   if (whyWon.length) {
     aggregated.variant = `${variant}; ${whyWon.join(" | ")}`;
   }

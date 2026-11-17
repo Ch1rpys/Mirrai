@@ -3,7 +3,9 @@ import {
   endingClassOf,
   fingerprintHighlights,
   lastParticleOf,
+  lineSurprise,
   measureFingerprint,
+  styleDistance,
   type EndingClass,
   type FingerprintRow,
 } from "./style-fingerprint";
@@ -120,6 +122,42 @@ describe("measureFingerprint", () => {
     expect(fp?.perPeriod?.p1?.length.median).toBeLessThanOrEqual(11);
     expect(fp?.perPeriod?.p2?.length.median).toBeGreaterThanOrEqual(5);
     expect(fp?.perPeriod?.p2?.length.median).toBeLessThanOrEqual(7);
+  });
+});
+
+describe("styleDistance", () => {
+  it("is small when the generated lines are the person's own", () => {
+    const rows = fixtureRows();
+    const fp = measureFingerprint(rows, { addressForms: ["陈树", "树树"] });
+    expect(fp).not.toBeNull();
+    const ta = rows
+      .filter((row) => row.role === "assistant" && (row.kind ?? "text") === "text")
+      .slice(0, 200)
+      .map((row) => row.content);
+    const close = styleDistance(ta, fp!);
+    expect(close.total).toBeLessThan(0.1);
+    const withPeriod = styleDistance(
+      ta.map((line) => `${line}。`),
+      fp!,
+    );
+    expect(withPeriod.endings).toBeGreaterThan(0.5);
+    expect(withPeriod.total).toBeGreaterThan(close.total);
+    const long = styleDistance(
+      ta.map(() => "字".repeat(80)),
+      fp!,
+    );
+    expect(long.length).toBe(1);
+  });
+});
+
+describe("lineSurprise", () => {
+  it("treats a period line as more surprising in warm than in distant", () => {
+    const fp = measureFingerprint(fixtureRows(), { addressForms: ["陈树", "树树"] });
+    expect(fp?.perState?.warm).toBeTruthy();
+    expect(fp?.perState?.distant).toBeTruthy();
+    expect(lineSurprise("哦。", fp!.perState!.warm!)).toBeGreaterThan(
+      lineSurprise("哦。", fp!.perState!.distant!),
+    );
   });
 });
 

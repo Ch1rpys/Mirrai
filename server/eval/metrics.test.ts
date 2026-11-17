@@ -11,6 +11,8 @@ import {
   wasserstein1d,
   type EvalCaseScore,
 } from "./metrics";
+import { measureFingerprint } from "@shared/style-fingerprint";
+import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
 
 /**
  * The measurements.
@@ -299,6 +301,39 @@ describe("aggregating a run", () => {
     expect(metrics.perState.playful.lengthGap).toBeCloseTo(4, 6);
     expect(metrics.perState.playful.sentenceGap).toBeCloseTo(0, 6);
     expect(metrics.perState.playful.addressGap).toBeCloseTo(0, 6);
+  });
+
+  it("fills styleDistance when a fingerprint is given", () => {
+    const fp = measureFingerprint(
+      buildXiaomanRecords().map((row) => ({
+        role: row.role,
+        content: row.content,
+        kind: row.kind,
+        emotion: row.truth.state,
+      })),
+      { addressForms: ["陈树", "树树"] },
+    );
+    expect(fp).not.toBeNull();
+    const scored = [
+      { ...score(0.5, 0, 10, 10), generatedText: "在的呀" },
+      { ...score(0.4, 1, 12, 8), generatedText: "好呀" },
+    ];
+    const withFp = aggregateScores(scored, { fingerprint: fp });
+    expect(withFp.styleDistance).not.toBeNull();
+    expect(withFp.styleDistance!.total).toBeGreaterThanOrEqual(0);
+    expect(withFp.styleDistance!.total).toBeLessThanOrEqual(1);
+    const without = aggregateScores(scored);
+    expect(without.styleDistance).toBeNull();
+    expect(without.overlap).toBe(withFp.overlap);
+    expect(without.likelihoodGap).toBe(withFp.likelihoodGap);
+    expect(without.emotionAccuracy).toBe(withFp.emotionAccuracy);
+    expect(without.cases).toBe(withFp.cases);
+    expect(without.lengthDistance).toBe(withFp.lengthDistance);
+  });
+
+  it("leaves styleDistance null when there is no fingerprint", () => {
+    const metrics = aggregateScores([score(0.5, 0, 10, 10)]);
+    expect(metrics.styleDistance).toBeNull();
   });
 });
 

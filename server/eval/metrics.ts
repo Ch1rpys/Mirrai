@@ -28,6 +28,12 @@ import { matchEmotionTrigger, type EmotionTriggerState } from "@shared/emotion-t
 import { ngramOverlap as sharedNgramOverlap } from "@shared/ngram";
 import { labelSpeechActByRule, type SpeechAct } from "@shared/speech-acts";
 import { scoreResidue, type ResidueScore } from "@shared/assistant-residue";
+import {
+  styleDistance as distanceFromLines,
+  type StyleDistance,
+  type StyleFingerprint,
+  type StyleFingerprintCore,
+} from "@shared/style-fingerprint";
 
 /** One held-out exchange, and what the rebuilt persona said instead. */
 export interface EvalCaseScore {
@@ -113,6 +119,8 @@ export interface EvalMetrics {
   actMatch?: number;
   /** How often the assistant-shaped tells fired, 0–1. */
   residueRate?: number;
+  /** Distance from the generated lines to the persona's fingerprint. Absent fingerprint → null. */
+  styleDistance?: StyleDistance | null;
 }
 
 /**
@@ -351,8 +359,58 @@ function matchAct(params: {
   return generated === expected;
 }
 
+function styleDistanceForScores(
+  scores: EvalCaseScore[],
+  fingerprint: StyleFingerprint | StyleFingerprintCore | null | undefined,
+): StyleDistance | null {
+  if (!fingerprint) return null;
+  const lines = scores
+    .map((score) => score.generatedText)
+    .filter((text): text is string => typeof text === "string" && text.trim().length > 0);
+  if (lines.length === 0) return null;
+  const perState = "perState" in fingerprint ? fingerprint.perState : undefined;
+  if (!perState || Object.keys(perState).length === 0) {
+    return distanceFromLines(lines, fingerprint);
+  }
+  const groups = new Map<string, { core: StyleFingerprintCore; lines: string[] }>();
+  const fallback: string[] = [];
+  for (const score of scores) {
+    const text = score.generatedText?.trim();
+    if (!text) continue;
+    const state = score.expectedState;
+    const core = state ? perState[state] : undefined;
+    if (state && core) {
+      const group = groups.get(state) ?? { core, lines: [] };
+      group.lines.push(text);
+      groups.set(state, group);
+    } else {
+      fallback.push(text);
+    }
+  }
+  const parts: Array<{ n: number; d: StyleDistance }> = [];
+  for (const group of groups.values()) {
+    parts.push({ n: group.lines.length, d: distanceFromLines(group.lines, group.core) });
+  }
+  if (fallback.length) parts.push({ n: fallback.length, d: distanceFromLines(fallback, fingerprint) });
+  if (!parts.length) return null;
+  const n = parts.reduce((sum, part) => sum + part.n, 0);
+  const avg = (pick: (d: StyleDistance) => number) =>
+    parts.reduce((sum, part) => sum + pick(part.d) * part.n, 0) / n;
+  return {
+    total: avg((d) => d.total),
+    endings: avg((d) => d.endings),
+    particles: avg((d) => d.particles),
+    laugh: avg((d) => d.laugh),
+    emoji: avg((d) => d.emoji),
+    length: avg((d) => d.length),
+  };
+}
+
 /** Aggregates the cases into the run's numbers. */
-export function aggregateScores(scores: EvalCaseScore[]): EvalMetrics {
+export function aggregateScores(
+  scores: EvalCaseScore[],
+  options?: { fingerprint?: StyleFingerprint | StyleFingerprintCore | null },
+): EvalMetrics {
   const n = scores.length;
   if (!n) {
     return {
@@ -366,6 +424,7 @@ export function aggregateScores(scores: EvalCaseScore[]): EvalMetrics {
       scores: [],
       actMatch: 0,
       residueRate: 0,
+      styleDistance: options?.fingerprint ? styleDistanceForScores(scores, options.fingerprint) : null,
     };
   }
   const mean = (values: number[]) => values.reduce((a, b) => a + b, 0) / values.length;
@@ -446,6 +505,7 @@ export function aggregateScores(scores: EvalCaseScore[]): EvalMetrics {
     scores,
     actMatch: actDenom ? actHits / actDenom : 0,
     residueRate,
+    styleDistance: styleDistanceForScores(scores, options?.fingerprint),
   };
 }
 
@@ -495,7 +555,7 @@ export function evaluateGate(
   baseline: EvalMetrics | null,
   metrics: EvalMetrics,
   variant = "default",
-  tolerances: { overlap?: number; likelihoodGap?: number; emotionAccuracy?: number } = {},
+  tolerances: { overlap?: number; likelihoodGap?: number; emotionAccuracy?: number; style?: number } = {},
 ): GateOutcome {
   if (!baseline) {
     return {
@@ -570,11 +630,12 @@ export function evaluateRuleBenefit(
 export function compareToBaseline(
   baseline: EvalMetrics,
   current: EvalMetrics,
-  tolerances: { overlap?: number; likelihoodGap?: number; emotionAccuracy?: number } = {},
+  tolerances: { overlap?: number; likelihoodGap?: number; emotionAccuracy?: number; style?: number } = {},
 ): RegressionReport {
   const overlapTolerance = tolerances.overlap ?? 0.02;
   const likelihoodTolerance = tolerances.likelihoodGap ?? 1.0;
   const emotionTolerance = tolerances.emotionAccuracy ?? 0.05;
+  const styleTolerance = tolerances.style ?? 0.05;
 
   const offenders: string[] = [];
   if (current.overlap < baseline.overlap - overlapTolerance) offenders.push("overlap");
@@ -583,6 +644,15 @@ export function compareToBaseline(
   }
   if (current.emotionAccuracy < baseline.emotionAccuracy - emotionTolerance) {
     offenders.push("emotionAccuracy");
+  }
+  const baselineStyle = baseline.styleDistance?.total;
+  const currentStyle = current.styleDistance?.total;
+  if (
+    baselineStyle != null &&
+    currentStyle != null &&
+    currentStyle > baselineStyle + styleTolerance
+  ) {
+    offenders.push("styleDistance");
   }
   return { regressed: offenders.length > 0, offenders };
 }
