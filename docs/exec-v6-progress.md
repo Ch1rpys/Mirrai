@@ -110,7 +110,7 @@
 | B8.4 | ⬜ |  |  |
 | B8.5 | ⬜ |  |  |
 | B8.6 | ⬜ |  |  |
-| B8.7 | ⬜ |  |  |
+| B8.7 | ✅ | dc2e6da | `dataset.test.ts`：`covers both periods, a distant line, and day and night on the fixture` 通过（夹具切出的标答含 p1/p2、`distant`、day 与 night；同一输入两次 `toEqual`）。原有「留出句不出现在上下文里」「不超过四分之一」等断言全部通过。`metrics.test.ts`：`breaks the run down by period, and the bucket counts add up` 通过，`perPeriod` 键为 `p1`/`p2`，桶 `count` 之和等于 `cases`。`run.test.ts`：`samples the act against the held-out line's own state` 通过，`planTurn` 收到 `actCondition.emotion === "distant"`。临时库 `mirrai_v6_scratch` 0047 四步+升级路径：push 后 migrate 应用到 `0047_eval_cases_period`；`--replay` `replayed 45 migration(s)`；`--rollback 1` 后 `eval_cases` 无 `periodId`；再 migrate 回来；DROP 列并删 journal 后再 migrate，`periodId` 出现。库已 `dropdb`。闸门 `341 passed \| 4 skipped (345)` 文件，`3047 passed \| 18 skipped (3065)` 用例。层数多于名额时见偏差 72。 |
 | B8.8 | ⬜ |  |  |
 | B8.9 | ⬜ |  |  |
 | B8.10 | ⬜ |  |  |
@@ -273,6 +273,7 @@
 | 69 | B1.9 | 闸门跳过数不能增加 | 无 `DATABASE_URL` 时 `db-persona-versions.test.ts` 2 条 `skipIf`，跳过文件 4、跳过用例 18 | 手册 2.3 要求库测试 `skipIf(!DATABASE_URL)`。带临时库跑这 2 条全过。与偏差 20、47、49、51 同类。 |
 | 70 | B3.1 | 夹具 `particles["呢"] === 0` | 约为 0.0067，全部来自追一句「人呢」 | P0.5 偏差 9：设计表既写了从不用「呢」，又写了追一句 70% 是「人呢」。`lastParticleOf` 按手册剥完标点后看最后一个字。 |
 | 71 | B3.1 | `laugh.haRuns` 只有长度 4 那一格非零 | 长度 4 是绝大多数（124）；另有少量 2（2）和 3（9） | 夹具把「呵呵」换成「哈哈」，以及 `fitLength` 在句末前插入衬字，会把「哈哈哈哈」拆开。不改夹具。 |
+| 72 | B8.7 | 每个非空的层至少 1 条 | 层数多于名额时，改回在全部候选上等距取 | 两句对话只留 1 条时无法每层一条；否则会丢掉「我也想你」那条原有测试。名额够覆盖每一层时仍按层分配。 |
 
 ## 未验证清单
 
@@ -654,3 +655,10 @@ B1.1、B1.3、B1.4、B1.5、C10.1、B1.6、B1.7、B1.8、B1.10 维持 ✅。B1.2
 - 闸门 `341 passed | 4 skipped (345)` 文件，`3042 passed | 18 skipped (3060)` 用例，`all six steps passed`。相对 B3.1（341/4 文件、3037/18 用例）：通过用例 +5；跳过数不变。
 - 偏差、未验证清单、待用户决定无新增。
 - B3.2 标 ✅。下一条 B8.7。
+
+### WP4 · 实现会话 · 2026-11-17 · B8.7
+
+- `dc2e6da`：`eval_cases.periodId`；`buildEvalCases` 按时期/情绪/白天夜里分层；默认 `maxCases` 为 TA 行数的 2%（12–60）；评测抽样用标答自己的状态和时段。
+- 闸门 `341 passed | 4 skipped (345)` 文件，`3047 passed | 18 skipped (3065)` 用例，`all six steps passed`。相对 B3.2（341/4 文件、3042/18 用例）：通过用例 +5；跳过数不变。
+- 偏差 72。未验证清单、待用户决定无新增。
+- B8.7 标 ✅。下一条 B8.6。
