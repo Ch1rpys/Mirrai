@@ -47,6 +47,8 @@ import {
 } from "../server/eval/discriminator";
 import { DriftNeedUserSideError, DRIFT_TURNS_DEFAULT, runDrift } from "../server/eval/drift";
 import { runAudition } from "../server/eval/audition";
+import { ablationCalls, layersFromBaseline, runAblation } from "../server/eval/ablate";
+import { enabledLayerIds, layersFromSettings } from "../shared/layers";
 import { resolveProviderForUser } from "../server/llm/user-provider";
 
 const args = process.argv.slice(2);
@@ -126,6 +128,14 @@ const driftTurns = Math.max(1, Number(flag("turns") ?? DRIFT_TURNS_DEFAULT));
  */
 const audition = args.includes("--audition");
 /**
+ * Measures each on layer against the same cases with that layer off.
+ *
+ * It costs (layers + 1) × cases × k calls, so it does not run unless
+ * `--yes` is also passed.
+ */
+const ablate = args.includes("--ablate");
+const yes = args.includes("--yes");
+/**
  * The language the records are written in.
  *
  * The emotion is read off the words, so it is read with the trigger
@@ -167,7 +177,7 @@ const flagTolerances = {
 
 if (!Number.isFinite(personaId) || !Number.isFinite(userId)) {
   console.error(
-    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--k n] [--discriminator] [--drift] [--turns n] [--audition] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n] [--tolerance-style n]",
+    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--k n] [--discriminator] [--drift] [--turns n] [--audition] [--ablate] [--yes] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n] [--tolerance-style n]",
   );
   process.exit(1);
 }
@@ -407,6 +417,81 @@ if (audition) {
     );
   }
   console.log(`[eval] ${report.cases} cases × ${report.results.length} models ≈ ${report.calls} calls`);
+  process.exit(0);
+}
+
+if (ablate) {
+  const previewLayers = enabledLayerIds(layersFromSettings(persona));
+  const estimated = ablationCalls(previewLayers.length, cases.length, samplesPerCase);
+  console.log(
+    `[eval] ablation would make ${previewLayers.length + 1} runs × ${cases.length} cases × ${samplesPerCase} = ${estimated} calls`,
+  );
+  if (!yes) {
+    console.log("[eval] pass --yes to run");
+    process.exit(0);
+  }
+  const baseline = await runEval({
+    persona,
+    userId,
+    cases,
+    trainingTexts: training,
+    variant,
+    without,
+    locale,
+    temperature,
+    rerank,
+    sampleAct: variant !== "withoutAct",
+    samplesPerCase,
+  });
+  const layers = layersFromBaseline(baseline);
+  const report = await runAblation({
+    baseline,
+    layers,
+    locale,
+    runWithout: (layer) =>
+      runEval({
+        persona,
+        userId,
+        cases,
+        trainingTexts: training,
+        variant,
+        without: [...without, layer],
+        locale,
+        temperature,
+        rerank: layer === "rerank" ? false : rerank,
+        sampleAct: variant !== "withoutAct",
+        samplesPerCase,
+      }),
+  });
+  console.log("");
+  console.log("[eval] ablation:");
+  console.log(
+    "  layer".padEnd(20) +
+      "overlap".padStart(10) +
+      "likelihood".padStart(12) +
+      "style".padStart(10) +
+      "actMatch".padStart(10) +
+      "  verdict",
+  );
+  for (const row of report.rows) {
+    console.log(
+      `  ${row.layer.padEnd(18)}` +
+        `${row.overlap.toFixed(3).padStart(10)}` +
+        `${row.likelihoodGap.toFixed(3).padStart(12)}` +
+        `${row.styleDistance.toFixed(3).padStart(10)}` +
+        `${row.actMatch.toFixed(3).padStart(10)}` +
+        `  ${row.verdict}`,
+    );
+  }
+  if (save) {
+    await db.saveEvalRun(
+      personaId,
+      userId,
+      { variant: "ablate", layers: report.rows, baseline },
+      persona.personaData,
+    );
+    console.log("[eval] run saved");
+  }
   process.exit(0);
 }
 

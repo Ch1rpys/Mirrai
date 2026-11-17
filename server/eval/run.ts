@@ -180,6 +180,7 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
   const model = buildCharNgramModel(options.trainingTexts);
   const scores = [];
   const whyWon: string[] = [];
+  const usedLayers = new Set<LayerId>();
   const samplesPerCase = Math.max(1, options.samplesPerCase ?? 1);
 
   for (let i = 0; i < options.cases.length; i++) {
@@ -231,6 +232,7 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
       try {
         const plan = await planTurn(turnInput);
         sampledAct = plan.sampledAct;
+        for (const id of plan.layersUsed) usedLayers.add(id);
         for await (const event of executePlan(plan, turnInput, {
           provider,
           mode: "once",
@@ -292,6 +294,7 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
 
   const fingerprint = normalizeStyleProfile(options.persona.styleProfile).fingerprint ?? null;
   const aggregated = aggregateScores(scores, { fingerprint });
+  aggregated.layersUsed = [...usedLayers];
   if (whyWon.length) {
     aggregated.variant = `${variant}; ${whyWon.join(" | ")}`;
   }

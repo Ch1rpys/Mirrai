@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "fs";
 import { join } from "path";
+import { copy } from "@shared/copy";
 import { compareMetricCI, type EvalMetrics } from "./metrics";
+import { runAblation } from "./ablate";
+import type { LayerId } from "@shared/layers";
 
 const src = readFileSync(join(__dirname, "../../scripts/eval-run.ts"), "utf8");
 
@@ -75,3 +78,65 @@ describe("pnpm eval --compare", () => {
     expect(src).toContain("discriminator:");
   });
 });
+
+const OLD_FIVE: LayerId[] = ["rules", "imperfection", "suppressions", "act", "exemplars"];
+
+function metricsAround(
+  overlap: number,
+  spread = 0.01,
+  extra: Partial<EvalMetrics> = {},
+): EvalMetrics {
+  return {
+    cases: 12,
+    overlap,
+    likelihoodGap: 0,
+    lengthDistance: 0,
+    emotionAccuracy: 0.8,
+    emotionMatrix: {},
+    perState: {},
+    scores: [],
+    actMatch: 0.5,
+    styleDistance: { total: 0.2, endings: 0, particles: 0, laugh: 0, emoji: 0, length: 0 },
+    ci: {
+      overlap: [overlap - spread, overlap + spread],
+      likelihoodGap: [0, 0],
+      styleDistance: [0.2, 0.2],
+      actMatch: [0.5, 0.5],
+    },
+    layersUsed: OLD_FIVE,
+    ...extra,
+  };
+}
+
+describe("pnpm eval --ablate", () => {
+  it("does not call the model without --yes", () => {
+    expect(src).toContain("--ablate");
+    expect(src).toContain('if (!yes)');
+    expect(src).toContain("ablation would make");
+    expect(src).toContain("[eval] pass --yes to run");
+    expect(src).toContain('variant: "ablate"');
+  });
+
+  it("calls a layer that hurts when off a contribution, and an unchanged one noise", async () => {
+    const baseline = metricsAround(0.55, 0.02);
+    const runWithout = vi.fn(async (layer: LayerId) => {
+      if (layer === "rules") return metricsAround(0.20, 0.02);
+      return metricsAround(0.55, 0.02);
+    });
+    const report = await runAblation({
+      baseline,
+      layers: OLD_FIVE,
+      runWithout,
+    });
+    expect(report.rows).toHaveLength(5);
+    expect(report.rows.map((row) => row.layer)).toEqual(OLD_FIVE);
+    expect(report.rows.find((row) => row.layer === "rules")?.verdict).toBe(
+      copy("zh", "eval.ablate.helps"),
+    );
+    expect(report.rows.find((row) => row.layer === "exemplars")?.verdict).toBe(
+      copy("zh", "eval.ablate.noise"),
+    );
+    expect(runWithout).toHaveBeenCalledTimes(5);
+  });
+});
+

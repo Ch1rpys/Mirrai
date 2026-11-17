@@ -176,6 +176,8 @@ export interface EvalMetrics {
     tells: Array<{ feature: string; weight: number; side: "persona" | "real" }>;
     insufficient: boolean;
   };
+  /** Union of layers that were on while the cases were planned. */
+  layersUsed?: string[];
 }
 
 /**

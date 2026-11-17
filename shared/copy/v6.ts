@@ -420,6 +420,9 @@ export const V6 = {
     zh: "这个模型没有答出来",
     en: "This model did not answer.",
   },
+  "eval.ablate.helps": { zh: "有贡献", en: "helps" },
+  "eval.ablate.noise": { zh: "在噪声之内", en: "within noise" },
+  "eval.ablate.worse": { zh: "变差了", en: "worse" },
   "eval.blind.needEval": {
     zh: "先跑一次评测。",
     en: "Run an evaluation first.",
