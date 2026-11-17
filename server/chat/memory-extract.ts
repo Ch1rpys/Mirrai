@@ -125,6 +125,14 @@ export interface ExtractResult {
    * was not true.
    */
   running?: boolean;
+  /**
+   * How many items were about something the persona said.
+   *
+   * In an in-app conversation those lines are reconstructed, not a
+   * fact about them. They are counted rather than stored; WP8 will
+   * keep a ledger of them.
+   */
+  fromPersona: number;
 }
 
 /**
@@ -177,7 +185,7 @@ export async function extractMemories(params: {
    */
   const claimed = await db.claimMemoryExtraction(persona.id, userId);
   if (!claimed) {
-    return { added: [], skipped: 0, readable: true, trimmed: 0, running: true };
+    return { added: [], skipped: 0, readable: true, trimmed: 0, running: true, fromPersona: 0 };
   }
   try {
     return await runExtraction(params);
@@ -240,7 +248,7 @@ async function runExtraction(params: {
     lastExtracted ?? new Date(0),
     LOOKBACK,
   );
-  if (history.length === 0) return { added: [], skipped: 0, readable: true, trimmed: 0 };
+  if (history.length === 0) return { added: [], skipped: 0, readable: true, trimmed: 0, fromPersona: 0 };
 
   /**
    * The batch: the oldest messages first, and only as many as the model
@@ -278,7 +286,7 @@ async function runExtraction(params: {
    * fact ("my birthday is the 3rd"), and the run happens at most once
    * a day, so the model call is worth it.
    */
-  if (fresh.length < 1) return { added: [], skipped: 0, readable: true, trimmed: 0 };
+  if (fresh.length < 1) return { added: [], skipped: 0, readable: true, trimmed: 0, fromPersona: 0 };
 
   /**
    * The transcript is read by the model, so the name it gives the user is
@@ -343,14 +351,15 @@ async function runExtraction(params: {
       });
     } catch (e) {
       console.warn("[Memories] No provider could extract:", (e as Error).message);
-      return { added: [], skipped: 0, readable: false, trimmed: 0 };
+      return { added: [], skipped: 0, readable: false, trimmed: 0, fromPersona: 0 };
     }
   }
-  if (!response.trim()) return { added: [], skipped: 0, readable: false, trimmed: 0 };
+  if (!response.trim()) return { added: [], skipped: 0, readable: false, trimmed: 0, fromPersona: 0 };
 
   const existing = await db.getMemoriesByPersonaId(persona.id, userId);
   const added: ExtractResult["added"] = [];
   let skipped = 0;
+  let fromPersona = 0;
 
   let parsed: unknown;
   /**
@@ -411,6 +420,24 @@ async function runExtraction(params: {
     const title = (item.title || "").trim();
     if (!title) continue;
 
+    /**
+     * The line it came from.
+     *
+     * Without a line the model can pin a fact on whoever spoke last —
+     * and in an in-app conversation the persona's lines are
+     * reconstructed, not a source of facts about them.
+     */
+    const lineIndex = Number(item.line);
+    if (!Number.isInteger(lineIndex) || lineIndex < 1 || lineIndex > fresh.length) {
+      skipped += 1;
+      continue;
+    }
+    const source = fresh[lineIndex - 1];
+    if (!fromUpload && (source.role === "assistant" || source.role === "persona")) {
+      fromPersona += 1;
+      continue;
+    }
+
     const factKey = factKeyFromTitle(title);
     const sameClaim = (other: { title: string; description?: string | null }) =>
       normalizeMemoryTitle(other.title) === normalizeMemoryTitle(title)
@@ -432,10 +459,6 @@ async function runExtraction(params: {
       ? item.category!
       : "memory";
     const subject = item.subject === "me" ? "me" : "them";
-    const lineIndex = Number(item.line ?? item.sourceId);
-    const source = Number.isInteger(lineIndex) && lineIndex >= 1 && lineIndex <= fresh.length
-      ? fresh[lineIndex - 1]
-      : fresh[fresh.length - 1];
 
     const id = await db.createMemory({
       personaId: persona.id,
@@ -486,7 +509,7 @@ async function runExtraction(params: {
       `[Memories] The model returned ${items.length} memories; ${trimmed} were not stored (the limit is ${MAX_PER_RUN}).`,
     );
   }
-  return { added, skipped, readable: understood, trimmed };
+  return { added, skipped, readable: understood, trimmed, fromPersona };
 }
 
 /**

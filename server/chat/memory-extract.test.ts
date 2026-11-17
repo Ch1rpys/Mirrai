@@ -119,7 +119,7 @@ describe("the memory extraction", () => {
     // The array used to be taken from the first `[` to the last `]`,
     // so a bracket in the prose before it lost the whole answer.
     invoke.mockResolvedValue(
-        'Here are the memories [see the notes below]:\n[{"title":"他喜欢蓝色","category":"anchor","subject":"them"}]\nHope that helps!',
+        'Here are the memories [see the notes below]:\n[{"title":"他喜欢蓝色","category":"anchor","subject":"them","line":2}]\nHope that helps!',
     );
 
     const result = await extractMemories({ persona, userId: 1, now: NOW });
@@ -130,7 +130,7 @@ describe("the memory extraction", () => {
   });
 
   it("reads the answer out of a fenced block", async () => {
-    invoke.mockResolvedValue('```json\n[{"title":"他喜欢蓝色","category":"anchor","subject":"them"}]\n```');
+    invoke.mockResolvedValue('```json\n[{"title":"他喜欢蓝色","category":"anchor","subject":"them","line":2}]\n```');
 
     const result = await extractMemories({ persona, userId: 1, now: NOW });
 
@@ -170,6 +170,7 @@ describe("the memory extraction", () => {
       title: `记忆 ${index + 1}`,
       category: "memory",
       subject: "them",
+      line: 2,
     }));
     invoke.mockResolvedValue(JSON.stringify(items));
 
@@ -180,7 +181,7 @@ describe("the memory extraction", () => {
   });
 
   it("does not touch the extraction log for an uploaded transcript", async () => {
-    invoke.mockResolvedValue('[{"title":"他喜欢蓝色","category":"anchor","subject":"them"}]');
+    invoke.mockResolvedValue('[{"title":"他喜欢蓝色","category":"anchor","subject":"them","line":1}]');
 
     const result = await extractMemories({
       persona,
