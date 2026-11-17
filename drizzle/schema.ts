@@ -542,6 +542,12 @@ export const memories = pgTable("memories", {
    * persona's.
    */
   subject: varchar("subject", { length: 8 }).default("them").notNull(),
+  /** The record this memory was taken from. */
+  recordId: integer("recordId"),
+  /** Where the memory came from: `chat`, `records`, or `manual`. */
+  source: varchar("source", { length: 16 }).default("chat").notNull(),
+  /** How often the title's character bigrams appear in the records. */
+  mentionCount: integer("mentionCount").default(0).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => ({
   /**
@@ -1158,6 +1164,14 @@ export const collectedMessages = pgTable("collected_messages", {
   lineNo: integer("lineNo"),
   /** Kind-specific extras, and the register (`private` / `public` / `written` / `group`). */
   meta: jsonb("meta"),
+  /** Speech-act label on this line (B1.4). */
+  act: varchar("act", { length: 16 }),
+  /** `rule` or `model`. */
+  actSource: varchar("actSource", { length: 8 }),
+  /** Six-state emotion on this line (B1.5). */
+  emotion: varchar("emotion", { length: 16 }),
+  /** `rule` or `model`. */
+  emotionSource: varchar("emotionSource", { length: 8 }),
 }, (table) => ({
   /**
    * The collected history of one persona.
@@ -1179,6 +1193,84 @@ export const collectedMessages = pgTable("collected_messages", {
 
 export type CollectedMessage = typeof collectedMessages.$inferSelect;
 export type InsertCollectedMessage = typeof collectedMessages.$inferInsert;
+
+/**
+ * One hashed block of records read during distillation.
+ *
+ * The map stage writes a row even when the block produced no card, so
+ * a later run can skip the same hash.
+ */
+export const distillationChunks = pgTable("distillation_chunks", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  chunkHash: varchar("chunkHash", { length: 64 }).notNull(),
+  phase: varchar("phase", { length: 16 }).notNull(),
+  cardCount: integer("cardCount").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  hashPhaseUnique: uniqueIndex("distillation_chunks_hash_phase_idx").on(
+    table.personaId,
+    table.userId,
+    table.chunkHash,
+    table.phase,
+  ),
+}));
+
+export type DistillationChunk = typeof distillationChunks.$inferSelect;
+export type InsertDistillationChunk = typeof distillationChunks.$inferInsert;
+
+/**
+ * One observation, fact, person, or stance taken from a block.
+ *
+ * The quoted record ids live in `payload`. They stay on this machine;
+ * the exported skill package must not carry them.
+ */
+export const distillationCards = pgTable("distillation_cards", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  chunkHash: varchar("chunkHash", { length: 64 }).notNull(),
+  periodId: varchar("periodId", { length: 32 }),
+  kind: varchar("kind", { length: 16 }).notNull(),
+  dimension: varchar("dimension", { length: 16 }),
+  claim: text("claim").notNull(),
+  payload: jsonb("payload"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  kindIdx: index("distillation_cards_kind_idx").on(table.personaId, table.userId, table.kind),
+}));
+
+export type DistillationCard = typeof distillationCards.$inferSelect;
+export type InsertDistillationCard = typeof distillationCards.$inferInsert;
+
+/**
+ * A snapshot of the persona taken before a rewrite.
+ *
+ * Distillation, a full edit, a correction, and a restore each store
+ * one. The last twenty are kept.
+ */
+export const personaVersions = pgTable("persona_versions", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  reason: varchar("reason", { length: 32 }).notNull(),
+  personaData: jsonb("personaData"),
+  styleProfile: jsonb("styleProfile"),
+  behaviorProfile: jsonb("behaviorProfile"),
+  settings: jsonb("settings"),
+  evalRunId: integer("evalRunId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  personaCreatedIdx: index("persona_versions_persona_created_idx").on(
+    table.personaId,
+    table.userId,
+    table.createdAt,
+  ),
+}));
+
+export type PersonaVersion = typeof personaVersions.$inferSelect;
+export type InsertPersonaVersion = typeof personaVersions.$inferInsert;
 
 // ─── Celebrity research ────────────────────────────────────────────────────
 
