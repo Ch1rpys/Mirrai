@@ -205,11 +205,27 @@ async function sourceFromArchive(
     return { status: "needs_format", report };
   }
   if (chats.length > 1 && !input.chatId) {
-    report.chats = chats.map((row) => ({
-      id: row.path,
-      title: path.posix.basename(row.path),
-      count: 0,
-    }));
+    let timeZone: string | null = null;
+    try {
+      timeZone = await getUserTimezone(input.userId);
+    } catch {
+      timeZone = null;
+    }
+    const listed: Array<{ id: string; title: string; count: number }> = [];
+    for (const row of chats) {
+      let count = 0;
+      const importer = row.format ? importerById(row.format) : undefined;
+      if (importer) {
+        const parsed = await importer.parse(row.source, { timeZone: timeZone ?? undefined });
+        count = parsed.records.length;
+      }
+      listed.push({
+        id: row.path,
+        title: path.posix.basename(row.path),
+        count,
+      });
+    }
+    report.chats = listed;
     return { status: "needs_chat", report };
   }
 
