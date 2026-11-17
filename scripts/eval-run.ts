@@ -45,6 +45,8 @@ import {
   pairsFromScores,
   trainDiscriminator,
 } from "../server/eval/discriminator";
+import { DriftNeedUserSideError, DRIFT_TURNS_DEFAULT, runDrift } from "../server/eval/drift";
+import { resolveProviderForUser } from "../server/llm/user-provider";
 
 const args = process.argv.slice(2);
 
@@ -111,6 +113,14 @@ const samplesPerCase = Math.max(1, Number(flag("k") ?? 1));
  */
 const wantDiscriminator = args.includes("--discriminator");
 /**
+ * Talks to the persona for many turns and watches the fingerprint.
+ *
+ * A held-out line is one turn. This is the other question: does the
+ * voice hold after fifty.
+ */
+const drift = args.includes("--drift");
+const driftTurns = Math.max(1, Number(flag("turns") ?? DRIFT_TURNS_DEFAULT));
+/**
  * The language the records are written in.
  *
  * The emotion is read off the words, so it is read with the trigger
@@ -152,7 +162,7 @@ const flagTolerances = {
 
 if (!Number.isFinite(personaId) || !Number.isFinite(userId)) {
   console.error(
-    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--k n] [--discriminator] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n] [--tolerance-style n]",
+    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--k n] [--discriminator] [--drift] [--turns n] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n] [--tolerance-style n]",
   );
   process.exit(1);
 }
@@ -279,6 +289,76 @@ if (pairs) {
 if (onlyCases) {
   for (const item of cases) {
     console.log(`  · ${item.expectedState ?? "—"}  ${item.expected.content.slice(0, 48)}`);
+  }
+  process.exit(0);
+}
+
+if (drift) {
+  const sampleLines = normalizeStyleProfile(persona.styleProfile).userSide?.sampleLines ?? [];
+  if (!sampleLines.filter((line) => line.trim()).length) {
+    console.error(copy(locale, "eval.drift.needUserSide"));
+    process.exit(1);
+  }
+  if (!cases.length) {
+    console.error("No held-out cases to start from.");
+    process.exit(1);
+  }
+  const provider = await resolveProviderForUser({ userId });
+  if (!provider) {
+    console.error("No LLM provider is configured for this user.");
+    process.exit(1);
+  }
+  let report;
+  try {
+    report = await runDrift({
+      persona,
+      userId,
+      turns: driftTurns,
+      startCase: cases[0]!,
+      provider,
+      seed: `eval-drift:${personaId}`,
+      locale,
+    });
+  } catch (error) {
+    if (error instanceof DriftNeedUserSideError) {
+      console.error(error.message);
+      process.exit(1);
+    }
+    throw error;
+  }
+  console.log("");
+  console.log("[eval] drift windows:");
+  for (const window of report.windows) {
+    console.log(
+      `  window ${window.index}` +
+        `  surprise=${window.surprise.toFixed(4)}` +
+        `  residue=${window.residueRate.toFixed(4)}` +
+        `  style=${window.styleDistance.total.toFixed(4)}`,
+    );
+  }
+  console.log(`[eval] slope: ${report.slope.toFixed(4)}`);
+  console.log(
+    `[eval] first window over: ${report.firstWindowOver == null ? "none" : report.firstWindowOver}`,
+  );
+  console.log(
+    report.firstWindowOver == null
+      ? "[eval] the voice stayed inside the first window"
+      : `[eval] the voice drifted from window ${report.firstWindowOver}`,
+  );
+  if (save) {
+    await db.saveEvalRun(
+      personaId,
+      userId,
+      {
+        variant: "drift",
+        windows: report.windows,
+        slope: report.slope,
+        firstWindowOver: report.firstWindowOver,
+        cases: report.turns.length,
+      },
+      persona.personaData,
+    );
+    console.log("[eval] run saved");
   }
   process.exit(0);
 }

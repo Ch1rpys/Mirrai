@@ -210,6 +210,19 @@ describe("the distillation's observation and merge stages", () => {
   });
 });
 
+describe("the simulated user in a drift run", () => {
+  it("keeps the other person's lines inside the fence", async () => {
+    const { simUserSystemPrompt } = await import("./eval/drift");
+    const prompt = simUserSystemPrompt("zh", [HOSTILE_NOTE]);
+    expect(prompt).toContain(HOSTILE_NOTE);
+    const unfencedPrompt = prompt.replace(
+      /MATERIAL>>>:[0-9a-f]+\n[\s\S]*?<<<END MATERIAL>>>:[0-9a-f]+/g,
+      "",
+    );
+    expect(unfencedPrompt).not.toContain(HOSTILE_NOTE);
+  });
+});
+
 describe("a line they would never say", () => {
   it("reaches the prompt only inside the fence", async () => {
     const { applyClarification } = await import("@shared/clarify");

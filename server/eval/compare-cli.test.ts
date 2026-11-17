@@ -56,6 +56,13 @@ describe("pnpm eval --compare", () => {
     expect(src).toContain("resolveGateTolerances(flagTolerances, storedBaseline?.tolerances)");
   });
 
+  it("runs a multi-turn drift measurement", () => {
+    expect(src).toContain("--drift");
+    expect(src).toContain('variant: "drift"');
+    expect(src).toContain("eval.drift.needUserSide");
+    expect(src).toContain("[eval] drift windows:");
+  });
+
   it("trains the discriminator on pairs from this persona version", () => {
     expect(src).toContain("--discriminator");
     expect(src).toContain("pairsFromEvalRuns(historical, version?.createdAt ?? null)");

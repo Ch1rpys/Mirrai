@@ -276,8 +276,17 @@ Return JSON only, with no other text:
   },
 
   /**
-   * The transcription of a voice message.
+   * The other person in a drift run.
+   *
+   * The sample lines are fenced separately. This sentence is the
+   * instruction around them: speak like those lines, one short reply
+   * at a time.
    */
+  "prompts.eval.simUser": {
+    zh: "你是这段聊天里的另一方，照这些原话的样子接着聊，每次只说一句，不解释，不总结。",
+    en: "You are the other person in this chat. Keep talking the way these original lines do. One short line each time. Do not explain. Do not summarise.",
+  },
+
   /**
    * How well a research source is grounded.
    *

@@ -412,6 +412,10 @@ export const V6 = {
     zh: "样本不够（{{n}} / {{need}}）。",
     en: "Not enough samples ({{n}} / {{need}}).",
   },
+  "eval.drift.needUserSide": {
+    zh: "记录里你这一侧的话不够，模拟不了",
+    en: "There are not enough of your own lines in the record to simulate you.",
+  },
   "eval.blind.needEval": {
     zh: "先跑一次评测。",
     en: "Run an evaluation first.",
