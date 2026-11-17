@@ -196,6 +196,20 @@ export async function extractMemories(params: {
 }
 
 /**
+ * The instructions for one extraction.
+ *
+ * The shared prompt asks for a line number and a subject. The extra
+ * sentence — the persona's own lines are not a source of facts — is
+ * only true of an in-app conversation. An uploaded transcript is a
+ * record, and both sides of it were said.
+ */
+function extractionInstructions(locale: "zh" | "en", fromUpload: boolean): string {
+  const base = copy(locale, "prompts.memoryExtraction");
+  if (fromUpload) return base;
+  return `${base}\n\n${copy(locale, "prompts.memoryExtractionInApp")}`;
+}
+
+/**
  * The extraction itself, once the claim has been taken.
  */
 async function runExtraction(params: {
@@ -333,7 +347,7 @@ async function runExtraction(params: {
       // have been retried for every other call.
       response = await llmService.invokeWithProvider(resolved.provider, {
         messages: [
-          { role: "system", content: copy(locale, "prompts.memoryExtraction") },
+          { role: "system", content: extractionInstructions(locale, fromUpload) },
           { role: "user", content: chatText },
         ],
       });
@@ -345,7 +359,7 @@ async function runExtraction(params: {
     try {
       response = await llmService.invoke({
         messages: [
-          { role: "system", content: copy(locale, "prompts.memoryExtraction") },
+          { role: "system", content: extractionInstructions(locale, fromUpload) },
           { role: "user", content: chatText },
         ],
       });

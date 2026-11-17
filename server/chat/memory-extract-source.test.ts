@@ -83,6 +83,7 @@ describe("the source of an extracted memory", () => {
 
     expect(createMemory).not.toHaveBeenCalled();
     expect(result.fromPersona).toBe(1);
+    expect(systemOf()).toContain("重建出来的");
   });
 
   it("stores a fact the user said", async () => {
@@ -126,5 +127,33 @@ describe("the source of an extracted memory", () => {
     expect(createMemory.mock.calls[0][0].messageId).toBe(11);
     expect(result.fromPersona).toBe(0);
     expect(result.added).toHaveLength(1);
+    const system = systemOf();
+    expect(system).toContain("line");
+    expect(system).not.toContain("重建出来的");
+    expect(system).not.toContain("reconstructed speech");
+  });
+
+  it("says the same thing in English, and only for an in-app conversation", async () => {
+    invoke.mockResolvedValue("[]");
+    await extractMemories({ persona, userId: 1, now: NOW, locale: "en" });
+    expect(systemOf()).toContain("reconstructed speech");
+
+    invoke.mockClear();
+    await extractMemories({
+      persona,
+      userId: 1,
+      now: NOW,
+      locale: "en",
+      history: conversation,
+    });
+    const system = systemOf();
+    expect(system).toContain("line");
+    expect(system).not.toContain("reconstructed speech");
   });
 });
+
+/** The system prompt the extractor just sent. */
+function systemOf(): string {
+  const call = invoke.mock.calls.at(-1)?.[0] as { messages: Array<{ content: string }> };
+  return call.messages[0].content;
+}

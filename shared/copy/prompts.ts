@@ -141,8 +141,6 @@ subject 的含义：
 - them：关于对方（分身本人）的记忆
 - me：关于用户自己的记忆（用户的工作、家人、正在经历的事）
 
-关于对方的事实只能来自用户说的话；对方（分身）在这段对话里说的话是重建出来的，不是事实来源。
-
 不要提取闲聊、寒暄、没有信息量的话。`,
     en: `You are a memory extractor. Pull the important memory points out of the conversation. Return a JSON array only; each element has title, description, category(milestone/memory/anniversary/anchor), subject(them/me), date(if it can be inferred), line(the number of the line it is based on). At most 5. The conversation is already in the form "[1] speaker: text"; line must be that number.
 
@@ -156,9 +154,19 @@ What the subjects mean:
 - them: a memory about the other party (the persona itself)
 - me: a memory about the user (their work, their family, what they are going through)
 
-Facts about the other party may only come from what the user said. What the other party (the persona) says in this conversation is reconstructed speech, not a source of facts.
-
 Do not extract small talk, greetings, or anything without information in it.`,
+  },
+
+  /**
+   * Added only when the lines were said inside the app.
+   *
+   * An uploaded transcript is a record of what was actually said, so
+   * both sides of it are a source of facts. The in-app conversation is
+   * not: the persona's lines were rebuilt.
+   */
+  "prompts.memoryExtractionInApp": {
+    zh: "关于对方的事实只能来自用户说的话；对方（分身）在这段对话里说的话是重建出来的，不是事实来源。",
+    en: "Facts about the other party may only come from what the user said. What the other party (the persona) says in this conversation is reconstructed speech, not a source of facts.",
   },
 
   /**
