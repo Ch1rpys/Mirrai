@@ -370,9 +370,43 @@ function allocateProportional(sizes: number[], seats: number): number[] {
   return out;
 }
 
+/**
+ * The mood most of their lines in this block are labelled with.
+ *
+ * A tie is not a mood: the block stays in the unlabelled layer. Their
+ * lines are the only ones that count. A block with no labels does not
+ * grow an emotion axis, so a log that has not been labelled yet is
+ * sampled the way it was before the labels existed.
+ */
+function dominantEmotion(chunk: RecordChunk): string | null {
+  const counts = new Map<string, number>();
+  for (const row of chunk.rows) {
+    if (row.role !== "assistant") continue;
+    const emotion = row.emotion?.trim();
+    if (!emotion) continue;
+    counts.set(emotion, (counts.get(emotion) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let bestCount = 0;
+  let ties = 0;
+  for (const [emotion, count] of counts) {
+    if (count > bestCount) {
+      best = emotion;
+      bestCount = count;
+      ties = 1;
+    } else if (count === bestCount) {
+      ties += 1;
+    }
+  }
+  if (!best || ties !== 1) return null;
+  return best;
+}
+
 function layerKey(chunk: RecordChunk, sceneCount: number, median: number): string {
   const density = sceneCount > median ? "dense" : "sparse";
-  return `${chunk.periodId ?? ""}|${chunk.dayPart}|${density}`;
+  const base = `${chunk.periodId ?? ""}|${chunk.dayPart}|${density}`;
+  const emotion = dominantEmotion(chunk);
+  return emotion ? `${base}|${emotion}` : base;
 }
 
 function byTimeThenIndex(chunks: RecordChunk[], a: number, b: number): number {
@@ -387,9 +421,10 @@ function byTimeThenIndex(chunks: RecordChunk[], a: number, b: number): number {
  *
  * The first block and the last three are kept so a short sample still
  * covers the start and the present. The rest of the seats are spread
- * across period × day/night × how busy the scene was, so a fast run
- * does not collapse onto one stretch. Emotion is a later axis — B1.5
- * has to write it first.
+ * across period × day/night × how busy the scene was, and, once their
+ * lines carry a mood, that mood as well. A fast run does not collapse
+ * onto one stretch or one mood. Blocks with no mood label stay on the
+ * three-way key, so an unlabelled log is sampled as before.
  */
 export function selectChunks(
   chunks: RecordChunk[],

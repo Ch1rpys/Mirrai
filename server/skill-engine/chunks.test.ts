@@ -95,6 +95,57 @@ describe("selectChunks", () => {
     expect(selectChunks(chunks, "all", seed)).toEqual(chunks);
   });
 
+  it("keeps a labelled mood in the sample once their lines carry one", () => {
+    const at = (index: number) => new Date(Date.parse("2024-01-01T04:00:00Z") + index * 60_000);
+    const chunks = Array.from({ length: 12 }, (_, index) => {
+      const stamp = at(index);
+      // The first block and the last three are kept whatever happens.
+      // Those four are warm, so a draw that ignores mood can spend its
+      // spare seats on more warm blocks and never touch a distant one.
+      const mood = index >= 6 && index <= 8 ? "distant" : index === 5 ? null : "warm";
+      return {
+        index,
+        hash: `mood${index}`,
+        from: stamp,
+        to: stamp,
+        periodId: "p",
+        dayPart: "day" as const,
+        chars: 4,
+        rows: [
+          {
+            id: index * 2 + 1,
+            role: "user" as const,
+            content: "嗯",
+            timestamp: stamp,
+            kind: "text",
+            emotion: index === 5 ? "distant" : null,
+          },
+          {
+            id: index * 2 + 2,
+            role: "assistant" as const,
+            content: "在",
+            timestamp: new Date(stamp.getTime() + 1000),
+            kind: "text",
+            emotion: mood,
+          },
+        ],
+      };
+    });
+    const seed = "distill:1:12";
+    const labelled = selectChunks(chunks, 6, seed);
+    const distant = labelled.filter((chunk) =>
+      chunk.rows.some((row) => row.role === "assistant" && row.emotion === "distant"),
+    );
+    expect(distant.length).toBeGreaterThan(0);
+    const unlabelled = chunks.map((chunk) => ({
+      ...chunk,
+      rows: chunk.rows.map((row) => ({ ...row, emotion: null })),
+    }));
+    expect(selectChunks(unlabelled, 6, seed).map((chunk) => chunk.hash)).not.toEqual(
+      labelled.map((chunk) => chunk.hash),
+    );
+  });
+
   it("puts the latest selected block inside the last five percent of the record", () => {
     const times = rows
       .filter((row) => row.role === "user" || row.role === "assistant")
