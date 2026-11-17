@@ -116,7 +116,7 @@ function monthKey(at: Date | null, timeZone?: string | null): string {
   return zonedDateKey(at, timeZone).slice(0, 7);
 }
 
-function sampleByMonth<T extends { at: Date | null }>(
+export function sampleByMonth<T extends { at: Date | null }>(
   items: T[],
   budget: number,
   seed: string,

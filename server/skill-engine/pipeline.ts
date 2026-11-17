@@ -80,6 +80,7 @@ import { chunkRecords, type RecordLine } from "./chunks";
 import { DistillationMapFailed, mapObservationCards } from "./observations";
 import { extractFactsFromRecords } from "./facts";
 import { labelActsForRecords } from "./label-acts";
+import { labelEmotionsForRecords } from "./label-emotions";
 import { reduceObservationCards } from "./reduce";
 import { registerSkillPrompts } from "@shared/copy/skill-prompts";
 
@@ -1637,6 +1638,18 @@ async function runSkillPipelineOnce(
       invoke: invokeForDistill,
     }).catch((e) =>
       console.warn("[SkillEngine] The acts could not be labelled:", e.message),
+    );
+    await labelEmotionsForRecords({
+      personaId,
+      userId,
+      mode: preset.id,
+      locale,
+      timeZone: input.timeZone,
+      records: transcriptRows,
+      write: recordLines.length > 0,
+      invoke: invokeForDistill,
+    }).catch((e) =>
+      console.warn("[SkillEngine] The emotions could not be labelled:", e.message),
     );
     const minedActProfile = await buildActProfile({
       messages: transcriptRows,

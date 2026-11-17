@@ -301,6 +301,32 @@ export const V6 = {
   "prompt.userAct.ask": { zh: "在问一件事", en: "asking something" },
   "prompt.userAct.complain": { zh: "在抱怨、发火", en: "complaining or angry" },
   "prompt.userAct.other": { zh: "上面都不是", en: "none of the above" },
+  "prompts.distill.labelEmotions": {
+    zh: [
+      "你在给一段聊天场景标分身当时的情绪。只看分身的语气，不要根据用户说了什么来判。",
+      "state 必须是这些之一，含义与情感分类器相同：",
+      "warm: 温柔、放松、亲近、有回应感",
+      "playful: 俏皮、开玩笑、活泼、撒娇",
+      "nostalgic: 怀念过去、触景生情、提到回忆或从前",
+      "melancholy: 低落、难过、失落、脆弱",
+      "happy: 明显开心、兴奋、愉悦",
+      "distant: 疏离、敷衍、心不在焉、想结束话题",
+      "没有明确信号就把这一条省掉。只输出 JSON 数组，不要解释：",
+      '[{ "i": 0, "state": "" }]',
+    ].join("\n"),
+    en: [
+      "You are labelling one stretch of chat with the persona's mood at the time. Judge by their tone, not by what the user said.",
+      "state must be one of these, with the same meanings as the emotion classifier:",
+      "warm: relaxed, affectionate, responsive",
+      "playful: joking, lively, a little spoiled",
+      "nostalgic: thinking back, reminded of the past, mentioning memories",
+      "melancholy: low, sad, vulnerable",
+      "happy: clearly happy, excited, cheerful",
+      "distant: aloof, perfunctory, distracted, ending the topic",
+      "If there is no clear signal, omit that item. Return a JSON array only, with no explanation:",
+      '[{ "i": 0, "state": "" }]',
+    ].join("\n"),
+  },
   "prompts.distill.labelActs": {
     zh: [
       "你在给一轮对话标言语动作。prev 是用户说的，text 是对方说的。",
