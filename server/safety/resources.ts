@@ -1,16 +1,25 @@
 /**
  * Crisis-support resources.
  *
- * IMPORTANT: the numbers below are the ones named in the approved plan, and
- * they are the widely published ones. **Nobody has checked them against the
- * operators themselves.** The `lastVerified` field records when the entry
- * was written, not when a person verified it — and the date in it is a
- * placeholder, not a promise. A human check is still owed before a release
- * goes out: edit this file (or point `SAFETY_RESOURCES_FILE` at your own
- * copy) to correct the numbers, and put the real date in the field.
+ * Checked on 2026-11-17 against the operators' own pages. The app still
+ * does not fetch these numbers: the list ships with the binary so it is
+ * available offline. `source` is the page that was opened; `lastVerified`
+ * is that day.
  *
- * Nothing in this file is fetched from the network: the list ships with the
- * app so it is available even when the machine is offline.
+ * - cn-national `12356`: NDCPA seasonal-health briefing
+ *   https://www.ndcpa.gov.cn/jbkzzx/c100009/common/content/content_1925026893781176320.html
+ *   — all 31 provinces were running 12356. The NHC notice that named
+ *   the number (circular 259, 6 December 2024) lived at nhc.gov.cn; this
+ *   machine got HTTP 412 there, so the live source is the NDCPA page.
+ * - cn-beijing `010-82951332`: Beijing Crisis Research and Intervention
+ *   Centre, https://www.crisis.org.cn/lists/5.html — mobile 010-82951332.
+ * - intl-directory `https://findahelpline.com`: the directory itself, and
+ *   IASP at https://www.iasp.info/crisis-centres-helplines/ naming it as
+ *   their partner.
+ * - us-ca `988`: https://988lifeline.org/ (call or text 988). SAMHSA
+ *   https://www.samhsa.gov/mental-health/988 and Canada.ca
+ *   https://www.canada.ca/en/public-health/services/suicide-prevention/government-canada-doing-help-prevent-suicide.html
+ *   also publish 9-8-8.
  */
 import { existsSync, readFileSync } from "fs";
 import { ENV } from "../_core/env";
@@ -28,12 +37,10 @@ export interface CrisisResource {
   descriptionEn?: string;
   /** The contact itself — a phone number or a URL. */
   contact: string;
+  /** Official page that shows this number or address is current. */
+  source: string;
   /**
-   * ISO date the entry was last checked by a human.
-   *
-   * It is a placeholder in the list that ships with the app: the numbers
-   * have not been checked against the operators. The field is kept so that
-   * the check has somewhere to be recorded when it happens.
+   * ISO date a person last opened `source` and confirmed the contact.
    */
   lastVerified: string;
 }
@@ -53,7 +60,8 @@ export const DEFAULT_CRISIS_RESOURCES: CrisisResource[] = [
     description: copy("zh", "labels.crisis.description.cnNational"),
     descriptionEn: copy("en", "labels.crisis.description.cnNational"),
     contact: "12356",
-    lastVerified: "2026-01-01",
+    source: "https://www.ndcpa.gov.cn/jbkzzx/c100009/common/content/content_1925026893781176320.html",
+    lastVerified: "2026-11-17",
   },
   {
     id: "cn-beijing",
@@ -62,7 +70,8 @@ export const DEFAULT_CRISIS_RESOURCES: CrisisResource[] = [
     description: copy("zh", "labels.crisis.description.cnBeijing"),
     descriptionEn: copy("en", "labels.crisis.description.cnBeijing"),
     contact: "010-8295-1332",
-    lastVerified: "2026-01-01",
+    source: "https://www.crisis.org.cn/lists/5.html",
+    lastVerified: "2026-11-17",
   },
   {
     id: "intl-directory",
@@ -71,7 +80,8 @@ export const DEFAULT_CRISIS_RESOURCES: CrisisResource[] = [
     description: copy("zh", "labels.crisis.description.international"),
     descriptionEn: copy("en", "labels.crisis.description.international"),
     contact: "https://findahelpline.com",
-    lastVerified: "2026-01-01",
+    source: "https://findahelpline.com/",
+    lastVerified: "2026-11-17",
   },
   {
     id: "us-ca",
@@ -81,7 +91,8 @@ export const DEFAULT_CRISIS_RESOURCES: CrisisResource[] = [
     // that, in both languages.
     description: "Suicide & Crisis Lifeline",
     contact: "988",
-    lastVerified: "2026-01-01",
+    source: "https://988lifeline.org/",
+    lastVerified: "2026-11-17",
   },
 ];
 

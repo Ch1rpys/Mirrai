@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { DEFAULT_CRISIS_RESOURCES, getCrisisResources } from "./resources";
+
+/** The date that used to mean "nobody has looked yet". */
+const PLACEHOLDER_VERIFIED = "2026-01-01";
+
+/**
+ * Entries that could not be confirmed against an operator page.
+ *
+ * The test does not fail them. It does fail if this list and the
+ * unverified section of the progress file disagree.
+ */
+export const KNOWN_UNVERIFIED: Array<{ id: string; reason: string }> = [];
 
 /**
  * The crisis resources.
@@ -70,5 +83,42 @@ describe("the crisis resources", () => {
       expect(resource.lastVerified, resource.id).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(Number.isNaN(new Date(resource.lastVerified).getTime()), resource.id).toBe(false);
     }
+  });
+
+  it("gives every shipped resource a source and a real date, unless it is listed as unverified", () => {
+    const known = new Set(KNOWN_UNVERIFIED.map((row) => row.id));
+    for (const resource of DEFAULT_CRISIS_RESOURCES) {
+      if (known.has(resource.id)) {
+        expect(resource.lastVerified, resource.id).toBe(PLACEHOLDER_VERIFIED);
+        continue;
+      }
+      expect(resource.source.startsWith("https://"), resource.id).toBe(true);
+      expect(resource.lastVerified, resource.id).not.toBe(PLACEHOLDER_VERIFIED);
+    }
+    for (const row of KNOWN_UNVERIFIED) {
+      expect(
+        DEFAULT_CRISIS_RESOURCES.some((resource) => resource.id === row.id),
+        row.id,
+      ).toBe(true);
+      expect(row.reason.trim(), row.id).not.toBe("");
+    }
+  });
+
+  it("lists the same unverified ids as the progress file", () => {
+    const progress = readFileSync(
+      path.resolve(__dirname, "../../docs/exec-v6-progress.md"),
+      "utf-8",
+    );
+    const section = progress.split("## 未验证清单")[1]?.split("## ")[0] ?? "";
+    const a9Rows = section
+      .split("\n")
+      .filter((line) => /^\| A9 \|/.test(line));
+    const listedIds = a9Rows.map((line) => {
+      const match = line.match(/`([a-z0-9-]+)`/);
+      return match?.[1] ?? line;
+    });
+    expect(listedIds.sort()).toEqual(
+      KNOWN_UNVERIFIED.map((row) => row.id).sort(),
+    );
   });
 });
