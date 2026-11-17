@@ -513,6 +513,7 @@ async function startPersonaDistillation(params: {
       // The prompts and the progress messages are written in the language
       // the person is using.
       locale,
+      timeZone: timezone,
     });
   } catch (e) {
     // The persona must never be left stuck in "pending" — the upload page

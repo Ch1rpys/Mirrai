@@ -72,6 +72,7 @@ import {
 } from "./micro-rules";
 import { toMinerRows } from "./roles";
 import { isTextRecord, type RecordKind } from "@shared/records";
+import { parseExportTime } from "../importers/normalize";
 import { copy, type CopyKey, type Locale } from "@shared/copy";
 import { extractMemories } from "../chat/memory-extract";
 import { storageToDataUrl } from "../storage";
@@ -150,6 +151,13 @@ export type PipelineInput = {
    * keeps the text path.
    */
   records?: PipelineRecord[];
+  /**
+   * Zone for wall clocks in the transcript text.
+   *
+   * An old upload has no zone on its timestamps. They are read here,
+   * not in the process zone, so a UTC server does not shift the day.
+   */
+  timeZone?: string | null;
   /** Image URLs to describe and fold into the persona memories. */
   imageUrls?: string[];
   intakeMeta?: Record<string, unknown>;
@@ -851,10 +859,19 @@ async function runMerger(input: {
  * in which case the whole transcript is offered and the model is left to
  * quote what it can source.
  */
-function coerceTimestamp(value: Date | string | null | undefined): Date | null {
+function coerceTimestamp(
+  value: Date | string | null | undefined,
+  timeZone?: string | null,
+): Date | null {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
-  if (typeof value === "string" && value.trim()) {
-    const parsed = new Date(value);
+  if (typeof value !== "string" || !value.trim()) return null;
+  const trimmed = value.trim();
+  const wall = parseExportTime(trimmed, timeZone);
+  if (wall) return wall;
+  // An absolute instant. A zoneless string must not fall through to
+  // `new Date`, which would read it in the process zone.
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(trimmed)) {
+    const parsed = new Date(trimmed);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
   return null;
@@ -871,7 +888,7 @@ function transcriptRowsFrom(input: PipelineInput): Array<{
       .map((row) => ({
         role: row.role,
         content: row.content,
-        timestamp: coerceTimestamp(row.timestamp),
+        timestamp: coerceTimestamp(row.timestamp, input.timeZone),
       }));
   }
   return toMinerRows(
@@ -880,7 +897,7 @@ function transcriptRowsFrom(input: PipelineInput): Array<{
   ).map((row) => ({
     role: row.role,
     content: row.content,
-    timestamp: coerceTimestamp(row.timestamp),
+    timestamp: coerceTimestamp(row.timestamp, input.timeZone),
   }));
 }
 

@@ -141,6 +141,7 @@ const baseInput = {
   characterFamily: "relationship" as const,
   name: XIAOMAN_NAME,
   chatContent,
+  timeZone: "Asia/Shanghai",
 };
 
 beforeEach(() => {
