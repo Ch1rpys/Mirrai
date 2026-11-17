@@ -42,7 +42,7 @@
 | B1.3 | ✅ | c1e9484 (parse/cues); ce3c3d9 (pipeline) | `memory-date.test.ts` 3 通过（`2021-05-21`/`05-21` 真，`02-30`/`last summer` 假）。`fact-cues.test.ts` 3 通过（「我生日是5月21号」命中，「在的呀」不命中）。`facts.test.ts` 8 通过：合法引用入库、跨块行号丢弃、非法日期置空、deep 读全部块、fast 不调无线索块、`createMemory` `category: anchor` `date: 05-21` `recordId: 11` `source: records`、同一事实第二次 `created: 0`。`pipeline-chunked.test.ts` 生日那条 `createMemory` 含 `anchor`/`05-21`/`records`；fast 无线索块的 `#id` 不在 fact 调用里；quote 999999 不入库；两遍蒸馏 `store.length` 不变。`retrieval.test.ts` `source: "records"` 时 `getFileSummariesByPersonaId` 未调用。闸门 `321 passed \| 3 skipped (324)` 文件，`2920 passed \| 16 skipped (2936)` 用例。 |
 | B1.4 | ✅ | 89d0048 (rules); ade38b6 (label/pipeline) | 先红后绿：旧 `buildActProfile` 300 轮规则判不了的回复进入分布 80 条，断言 `samples > 200` 红在 `expected 80 to be greater than 200`。新路径 `labelActsForRecords` + 读已标注行：`acts-coverage.test.ts` 2 通过，standard 下 300 条全进分布；p2 只含 p2 行、真值 mock 后 `acknowledge` 占比在 0.3 ±5pp。`speech-acts.test.ts`：`precisionOnly` 下「我今天去了图书馆」为 `null`（旧规则 `share`）；`labelUserActByRule` 对「在吗」「嗯」「对不起」「想你」和普通陈述符合验收。`label-acts.test.ts` 同一批第二次模型调用 0；围栏内才有配对原文。`shared/act-profile.test.ts`、`server/eval/act-labels.test.ts` 通过。闸门 `323 passed \| 3 skipped (326)` 文件，`2931 passed \| 16 skipped (2947)` 用例。 |
 | B1.5 | ✅ | db75f76 | 先红后绿：未回标时 `buildActProfile` 的桶没有 `emotion`（旧代码全是 `warm`），断言存在 `emotion: "distant"` 的桶为红。`act-buckets-emotion.test.ts` 3 通过：真值 mock 后有 `distant` 桶且样本 > 0；`countsForCondition` 对该条件 `fallback === false`；designed distant 场景里 TA 行全部 `emotion: "distant"`、用户行没有；`fast` 不调模型；无触发词且不调模型时 `emotion` 为空；同一批第二次调用 0。闸门 `324 passed \| 3 skipped (327)` 文件，`2935 passed \| 16 skipped (2951)` 用例。 |
-| B1.6 | ⬜ |  |  |
+| B1.6 | ✅ | 4709167 (pick/apply); ada73e8 (routes/UI) | `shared/clarify.test.ts` 22 通过：表中每题触发正反例；各回答补丁符合表；「不确定」只记 `clarified`、无内容补丁；数据齐全的夹具只问 `never_says`、`avoid_topic`、`confirm_rule:r-one`。`routers.clarify.test.ts` 3 通过：`address_angry` 写入 `source: "manual"` `verified: true`；重复回答 `BAD_REQUEST`；写在 `withPersonaDataLock` 里。`ClarifyCard.test.tsx` 2 通过：记下后前进；跳过不调 mutation。`prompt-fences.test.ts` `a line they would never say`：敌意文本只在 `<persona_data>` 围栏内。`pipeline-decisions.test.ts` 重跑保住 `clarified`。闸门 `333 passed \| 3 skipped (336)` 文件，`2986 passed \| 16 skipped (3002)` 用例。 |
 | B1.7 | ⬜ |  |  |
 | B1.8 | ⬜ |  |  |
 | B1.9 | ⬜ |  |  |
@@ -269,6 +269,7 @@
 | 65 | B1.3 | 预估含全部蒸馏调用 | `estimateDistillation` 仍只计观察卡的 map/reduce 和旧的 `approxCalls` | 手册 B1.3 没要求改预估；事实卡是额外调用。 |
 | 66 | B1.4 | 取样只写 fast 80 / standard 1500 / deep 全部 | `colleague` 按 1500，`celebrity` 按全部 | 手册没给这两种预设的标注预算；分别靠上 standard 和 deep。 |
 | 67 | B1.5 | 情绪取样只写 fast 不调 / standard 600 / deep 全部 | `colleague` 按 600，`celebrity` 按全部 | 与偏差 66 同一理由。 |
+| 68 | B1.6 | 跳过记在 `personaData.clarified`，不再问 | 卡片上点「跳过」只在本会话隐藏该题，不调 `answerClarification` | 验收写「跳过不调用写入」；做法第 2 步写跳过也记入 `clarified`。按验收。刷新页面还会再问。路由仍接受 `skip: true` 供以后持久化。 |
 
 ## 未验证清单
 
@@ -575,3 +576,11 @@ A5、A7、A9 维持 ✅。A6、A8 改回 ⬜。
 - 闸门 `330 passed | 3 skipped (333)` 文件，`2957 passed | 16 skipped (2973)` 用例，`all six steps passed`。相对 B1.5（324/3 文件、2935/16 用例）：通过文件 +6、通过用例 +22；跳过数不变。
 - 偏差无新增。未验证清单、待用户决定无新增。
 - C10.1 标 ✅。下一条 B1.6。
+
+### WP3 · 实现会话 · 2026-11-17 · B1.6
+
+- `4709167` 闭集 `pickClarifications` / `applyClarification`；`personaData.clarified`；`mergeUserDecisions` 保住已答。计数走 `iterateRecords`（第 3.1 节：读全部记录必须分页）。
+- `ada73e8` `persona.clarifications` / `answerClarification`（`withPersonaDataLock`）；`ClarifyCard` 挂在上传页就绪卡片下，一次一题。
+- 闸门 `333 passed | 3 skipped (336)` 文件，`2986 passed | 16 skipped (3002)` 用例，`all six steps passed`。相对 C10.1（330/3 文件、2957/16 用例）：通过文件 +3、通过用例 +29；跳过数不变。
+- 偏差 68。未验证清单、待用户决定无新增。
+- B1.6 标 ✅。下一条 B1.7。
