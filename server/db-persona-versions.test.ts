@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { commitDistilledPersona } from "./skill-engine/commit-distillation";
 import {
   MAX_PERSONA_VERSIONS,
   createPersona,
@@ -7,13 +8,12 @@ import {
   getPersonaById,
   getPersonaVersion,
   listPersonaVersions,
-  updatePersona,
 } from "./db";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
 describe.skipIf(!DATABASE_URL)("persona versions", () => {
-  it("stores a version from before a distillation write, and the persona is the write", async () => {
+  it("stores the persona from before a distillation write and from after it", async () => {
     const userId = 9_940_000 + Math.floor(Math.random() * 10_000);
     const personaId = await createPersona({
       userId,
@@ -21,20 +21,15 @@ describe.skipIf(!DATABASE_URL)("persona versions", () => {
       personaData: { speakingStyle: "短句" },
     });
     try {
-      const beforeId = await createPersonaVersion(personaId, userId, "distill");
-      expect(beforeId).toBeTypeOf("number");
-
-      await updatePersona(personaId, userId, {
+      await commitDistilledPersona(personaId, userId, {
         personaData: { speakingStyle: "更短" },
       });
-      const afterId = await createPersonaVersion(personaId, userId, "distill");
-      expect(afterId).toBeTypeOf("number");
-      expect(afterId).not.toBe(beforeId);
 
       const versions = await listPersonaVersions(personaId, userId);
       expect(versions).toHaveLength(2);
-      expect((versions.find((row) => row.id === beforeId)?.personaData as { speakingStyle?: string } | null)?.speakingStyle).toBe("短句");
-      expect((versions.find((row) => row.id === afterId)?.personaData as { speakingStyle?: string } | null)?.speakingStyle).toBe("更短");
+      expect(versions.every((row) => row.reason === "distill")).toBe(true);
+      expect((versions[0]?.personaData as { speakingStyle?: string } | null)?.speakingStyle).toBe("更短");
+      expect((versions[1]?.personaData as { speakingStyle?: string } | null)?.speakingStyle).toBe("短句");
       expect(
         ((await getPersonaById(personaId, userId))?.personaData as { speakingStyle?: string } | null)
           ?.speakingStyle,

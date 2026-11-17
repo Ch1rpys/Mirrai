@@ -81,6 +81,7 @@ import { DistillationMapFailed, mapObservationCards } from "./observations";
 import { confirmHarmFromRecords } from "./harm";
 import { mergeHarmDecision } from "@shared/harm";
 import { extractFactsFromRecords } from "./facts";
+import { commitDistilledPersona } from "./commit-distillation";
 import { labelActsForRecords } from "./label-acts";
 import { labelEmotionsForRecords } from "./label-emotions";
 import { reduceObservationCards } from "./reduce";
@@ -1857,16 +1858,7 @@ async function runSkillPipelineOnce(
        * persona editor while the run was going is either before the read
        * (and is carried over) or after the write (and is not touched).
        */
-      const snapshot = dbFn("createPersonaVersion") as
-        | ((personaId: number, userId: number, reason: string) => Promise<unknown>)
-        | undefined;
-      try {
-        await snapshot?.(personaId, userId, "distill");
-      } catch (error) {
-        console.warn("[SkillEngine] The persona version was not stored:", error);
-      }
-
-      await db.updatePersona(personaId, userId, {
+      await commitDistilledPersona(personaId, userId, {
         personaData,
         analysisStatus: "ready",
         analysisProgress: 100,

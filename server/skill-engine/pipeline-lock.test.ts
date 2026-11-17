@@ -49,7 +49,7 @@ describe("the distillation's write-back", () => {
   it("takes the lock before it reads and releases it after it writes", () => {
     const lockAt = SOURCE.indexOf("await withPersonaDataLock(personaId, async () => {");
     const readAt = SOURCE.indexOf("const previous = await (async () => {", lockAt);
-    const writeAt = SOURCE.indexOf("await db.updatePersona(personaId, userId, {", readAt);
+    const writeAt = SOURCE.indexOf("await commitDistilledPersona(personaId, userId, {", readAt);
     const releaseAt = SOURCE.indexOf("});", writeAt);
 
     expect(lockAt).toBeGreaterThan(-1);
@@ -71,14 +71,19 @@ describe("the distillation's write-back", () => {
     expect(extractionAt).toBeLessThan(lockAt);
   });
 
-  it("stores a version of the persona before it writes", () => {
+  it("stores a version before the write and another after it", () => {
+    const helper = readFileSync(path.resolve(__dirname, "commit-distillation.ts"), "utf-8");
+    const first = helper.indexOf("await snapshot(personaId, userId)");
+    const writeAt = helper.indexOf("await db.updatePersona(personaId, userId, patch)");
+    const second = helper.indexOf("await snapshot(personaId, userId)", first + 1);
+    expect(first).toBeGreaterThan(-1);
+    expect(writeAt).toBeGreaterThan(first);
+    expect(second).toBeGreaterThan(writeAt);
+    expect(helper).toContain('"distill"');
+
     const lockAt = SOURCE.indexOf("await withPersonaDataLock(personaId, async () => {");
-    const snapshotAt = SOURCE.indexOf('dbFn("createPersonaVersion")', lockAt);
-    const writeAt = SOURCE.indexOf("await db.updatePersona(personaId, userId, {", lockAt);
-    expect(lockAt).toBeGreaterThan(-1);
-    expect(snapshotAt).toBeGreaterThan(lockAt);
-    expect(snapshotAt).toBeLessThan(writeAt);
-    expect(SOURCE.slice(snapshotAt, writeAt)).toContain('"distill"');
+    const callAt = SOURCE.indexOf("await commitDistilledPersona(personaId, userId, {", lockAt);
+    expect(callAt).toBeGreaterThan(lockAt);
   });
 
   it("the lock is the same one the router takes", () => {
