@@ -492,7 +492,7 @@ function TodayRecommendation({ personas, onChat }: { personas: any[]; onChat: (i
   );
 }
 
-// ─── "TA 想对你说" DAILY MESSAGES ────────────────────────────────────────────
+// ─── REMINDERS ───────────────────────────────────────────────────────────────
 
 /**
  * Proactive reminders — anniversaries and the like.
@@ -543,54 +543,6 @@ function RemindersPanel({ personas }: { personas: any[] }) {
             </button>
           </div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-function DailyMessages({ personas }: { personas: any[] }) {
-  const { t } = useLocale();
-  const messages = useMemo(() => {
-    const ready = personas.filter((p: any) => p.analysisStatus === "ready" && p.graduationStatus !== "graduated");
-    if (ready.length === 0) return [];
-    const today = new Date().getDate();
-    const greetings = Array.from(t("lobby.daily.greetings"));
-    return ready.slice(0, 3).map((p, i) => {
-      const pd = (p.personaData as any) || {};
-      const catchphrases: string[] = pd.catchphrases || [];
-      const greetingIdx = (p.name.charCodeAt(0) + today + i) % greetings.length;
-      let msg: string = greetings[greetingIdx];
-      if (catchphrases.length > 0) {
-        const cp = catchphrases[(today + i) % catchphrases.length];
-        msg = `${cp}~ ${msg}`;
-      }
-      if (pd.nickname) msg += ` —— ${pd.nickname}`;
-      return { name: p.name, message: msg, emotion: p.emotionalState || "warm" };
-    });
-  }, [personas, t]);
-
-  if (messages.length === 0) return null;
-
-  return (
-    <div className="mb-8">
-      <SectionHeading kicker={t("lobby.daily.kicker")} title={t("lobby.daily.title")} />
-      <div>
-        {messages.map((m, i) => {
-          const emotion = emotionOf(m.emotion) || EMOTIONS.warm;
-          return (
-            <div key={i} className="border-t border-border last:border-b flex items-start gap-3 py-3.5 animate-fade-in-up"
-              style={{ animationDelay: `${i * 100}ms`, animationFillMode: "both" }}>
-              <div className="mood-ring-sm flex-shrink-0" style={{ "--mood-color": emotionColor(m.emotion) } as CSSProperties}>
-                <PersonaAvatar name={m.name} className="w-8 h-8 rounded-full text-xs" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <span className="font-sans text-xs font-semibold text-foreground">{m.name}</span>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{m.message}</p>
-              </div>
-              <span className="text-[10px] text-muted-subtle flex-shrink-0 mt-1">{t("lobby.daily.today")}</span>
-            </div>
-          );
-        })}
       </div>
     </div>
   );
@@ -2142,7 +2094,6 @@ export default function Lobby() {
             )}
             <div className="grid md:grid-cols-2 gap-x-8 gap-y-2">
               <TodayRecommendation personas={personas as any[]} onChat={(id) => navigate(`/chat/${id}`)} />
-              <DailyMessages personas={personas as any[]} />
             </div>
 
             <RemindersPanel personas={personas as any[]} />

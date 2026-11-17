@@ -372,4 +372,31 @@ describe("the lobby", () => {
 
     expect(screen.getByText("已经毕业的")).toBeInTheDocument();
   });
+
+  it("does not put a daily letter in a persona's mouth", () => {
+    /**
+     * A ready persona used to get a sentence from a fixed pool, with
+     * a catchphrase stuck on the front and a nickname at the end, under
+     * "TA 想对你说". The words were the app's, signed as them.
+     */
+    personas = [makePersona({ analysisStatus: "ready", graduationStatus: "active" })];
+
+    render(<Lobby />);
+
+    expect(screen.queryByText("TA 想对你说")).toBeNull();
+    for (const line of [
+      "今天也想你了呢~",
+      "你今天开心吗？",
+      "好想和你聊聊天",
+      "今天的天气让我想起了你",
+      "你吃饭了吗？记得好好吃饭哦",
+      "想你想到发呆了...",
+      "今天有什么有趣的事吗？",
+      "看到好看的东西就想分享给你",
+      "你最近忙不忙呀？",
+      "突然好想抱抱你",
+    ]) {
+      expect(screen.queryByText(line)).toBeNull();
+    }
+  });
 });

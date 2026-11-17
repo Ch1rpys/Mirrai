@@ -423,23 +423,6 @@ export const en = {
       never: "Never chatted yet",
       chat: "Talk",
     },
-    daily: {
-      kicker: "Daily letter",
-      title: "They want to tell you",
-      today: "Today",
-      greetings: [
-        "I missed you today too~",
-        "Are you happy today?",
-        "I would love to chat a little",
-        "Today's weather reminded me of you",
-        "Have you eaten? Remember to eat well",
-        "I went daydreaming about you…",
-        "Anything interesting happen today?",
-        "Saw something pretty and wanted to share it",
-        "Have you been busy lately?",
-        "Suddenly really want to hug you",
-      ],
-    },
     weather: { title: "Emotional weather" },
     heatmap: {
       title: "Conversation heatmap",
