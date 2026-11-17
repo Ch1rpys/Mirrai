@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
+import { previousDateKey, zonedDateKey } from "@shared/timezone";
 
 /**
  * The lobby, and the pin.
@@ -42,6 +43,8 @@ function setPersonas(next: any[]) {
 let personasLoading = false;
 /** Whether the list could not be read. */
 let personasFailed = false;
+/** Days the user spoke, for the streak that used to sit on this page. */
+let dailyActivity: Array<{ date: string; userCount: number; count: number }> = [];
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -65,7 +68,7 @@ vi.mock("@/lib/trpc", () => ({
       create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       createSandbox: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       awaken: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
-      dailyActivity: { useQuery: () => ({ data: [] }) },
+      dailyActivity: { useQuery: () => ({ data: dailyActivity }) },
       recentActivity: { useQuery: () => ({ data: [] }) },
     },
     reminder: {
@@ -143,6 +146,7 @@ describe("the lobby", () => {
     personas = [];
     personasLoading = false;
     personasFailed = false;
+    dailyActivity = [];
   });
 
   it("does not say the user has no personas while the list is on its way", () => {
@@ -469,5 +473,23 @@ describe("the lobby", () => {
     render(<Lobby />);
 
     expect(screen.getByText("上次联系 3 天前")).toBeInTheDocument();
+  });
+
+  it("does not keep a streak, achievement badges, or a conversation ranking", () => {
+    const today = zonedDateKey(new Date(), "Asia/Shanghai");
+    dailyActivity = [
+      { date: today, userCount: 2, count: 2 },
+      { date: previousDateKey(today), userCount: 1, count: 1 },
+    ];
+    personas = [
+      makePersona({ id: 1, name: "甲", chatCount: 10 }),
+      makePersona({ id: 2, name: "乙", chatCount: 5 }),
+    ];
+
+    render(<Lobby />);
+
+    expect(screen.queryByText(/连续对话/)).toBeNull();
+    expect(screen.queryByText("成就徽章")).toBeNull();
+    expect(screen.queryByText("对话排行")).toBeNull();
   });
 });

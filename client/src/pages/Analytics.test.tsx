@@ -120,6 +120,11 @@ describe("the statistics page", () => {
     expect(screen.getByText("42")).toBeInTheDocument();
   });
 
+  it("does not keep a longest-streak tile", () => {
+    render(<Analytics />);
+    expect(screen.queryByText("最长连续")).toBeNull();
+  });
+
   it("says how many of the user's own states are not shown", () => {
     /**
      * The row of states stops at fourteen, and it said nothing — so

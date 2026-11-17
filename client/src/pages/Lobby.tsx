@@ -9,14 +9,14 @@ import { getLoginUrl } from "@/const";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   Plus, MessageCircle, Upload, Trash2, Sparkles, Clock, LogOut,
-  Settings, Pencil, Users, CalendarDays, FileText,
+  Settings, Pencil, CalendarDays, FileText,
   Wifi, Heart, Brain, Star, Lightbulb,
   Zap, Coffee, Search, Flame, Gift,
   ArrowUpDown, Eye, Bookmark, Activity, Palette, BookOpen,
   GraduationCap, Sunrise, Sun, Moon, CloudSun, Sunset,
   Handshake, HeartHandshake,
-  Cloud, Waves, Tornado, Trophy, Gem, Sprout, Medal, MessagesSquare,
-  Library, Lock, Drama, Shield, X, Pin, ChevronDown, CheckSquare, Square, PauseCircle,
+  Cloud, Waves, Tornado, Trophy, Gem, Sprout,
+  Library, Shield, X, Pin, ChevronDown, CheckSquare, Square, PauseCircle,
 } from "lucide-react";
 import { Wordmark } from "@/components/Wordmark";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
@@ -99,17 +99,6 @@ const SORT_OPTIONS = [
   { key: "created", labelKey: "lobby.sort.created" },
   { key: "chats", labelKey: "lobby.sort.chats" },
   { key: "name", labelKey: "lobby.sort.name" },
-] as const;
-
-const ACHIEVEMENTS = [
-  { id: "first_chat", icon: MessageCircle, labelKey: "lobby.achievements.first_chat.label", descKey: "lobby.achievements.first_chat.desc", check: (s: any) => s.totalChats >= 1 },
-  { id: "ten_chats", icon: MessagesSquare, labelKey: "lobby.achievements.ten_chats.label", descKey: "lobby.achievements.ten_chats.desc", check: (s: any) => s.totalChats >= 10 },
-  { id: "fifty_chats", icon: BookOpen, labelKey: "lobby.achievements.fifty_chats.label", descKey: "lobby.achievements.fifty_chats.desc", check: (s: any) => s.totalChats >= 50 },
-  { id: "hundred_chats", icon: Library, labelKey: "lobby.achievements.hundred_chats.label", descKey: "lobby.achievements.hundred_chats.desc", check: (s: any) => s.totalChats >= 100 },
-  { id: "multi_persona", icon: Users, labelKey: "lobby.achievements.multi_persona.label", descKey: "lobby.achievements.multi_persona.desc", check: (s: any) => s.totalPersonas >= 3 },
-  { id: "daily_active", icon: Flame, labelKey: "lobby.achievements.daily_active.label", descKey: "lobby.achievements.daily_active.desc", check: (s: any) => s.todayChats >= 5 },
-  { id: "veteran", icon: Medal, labelKey: "lobby.achievements.veteran.label", descKey: "lobby.achievements.veteran.desc", check: (s: any) => s.memberDays >= 30 },
-  { id: "collector", icon: Drama, labelKey: "lobby.achievements.collector.label", descKey: "lobby.achievements.collector.desc", check: (s: any) => s.totalPersonas >= 5 },
 ] as const;
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -662,106 +651,6 @@ function ActivityHeatmap() {
   );
 }
 
-// ─── ACHIEVEMENT BADGES ──────────────────────────────────────────────────────
-
-function AchievementBadges({ stats }: { stats: any }) {
-  const { t } = useLocale();
-  const memberDays = stats?.memberSince
-    ? Math.max(1, Math.floor((Date.now() - new Date(stats.memberSince).getTime()) / 86400000))
-    : 0;
-  const checkData = { ...stats, memberDays };
-  const unlocked = ACHIEVEMENTS.filter(a => a.check(checkData));
-  const locked = ACHIEVEMENTS.filter(a => !a.check(checkData));
-
-  if (unlocked.length === 0 && !stats) return null;
-
-  return (
-    <div className="mb-8 border-t border-border pt-5">
-      <PanelTitle
-        icon={Trophy}
-        title={t("lobby.achievements.title")}
-        right={<span className="num-frac text-[10px] text-muted-foreground">{t("lobby.achievements.unlocked", { count: unlocked.length, total: ACHIEVEMENTS.length })}</span>}
-      />
-      <div className="flex gap-2 flex-wrap">
-        {unlocked.map((a, i) => {
-          const BadgeIcon = a.icon;
-          return (
-            <div key={a.id} className="animate-fade-in-up flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-card border border-border"
-              style={{ animationDelay: `${i * 100}ms`, animationFillMode: "both" }} title={t(a.descKey)}>
-              <BadgeIcon className="w-3 h-3 text-foreground" />
-              <span className="text-[10px] font-medium text-foreground">{t(a.labelKey)}</span>
-            </div>
-          );
-        })}
-        {locked.slice(0, 3).map(a => (
-          <div key={a.id} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-muted/40 border border-border/50 opacity-50"
-            title={t(a.descKey)}>
-            <Lock className="w-3 h-3 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">{t(a.labelKey)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── CHAT STREAK ─────────────────────────────────────────────────────────────
-
-function ChatStreak() {
-  const { t } = useLocale();
-  const { user } = useAuth();
-  const { data: dailyActivity } = trpc.persona.dailyActivity.useQuery();
-  /**
-   * The user's own calendar.
-   *
-   * The server files the days in the user's *stored* zone, and this
-   * counted them in the *browser's* zone — so the two calendars
-   * disagreed and the streak was wrong.
-   */
-  const timezone = (user as any)?.timezone ?? null;
-
-  const streak = useMemo(() => {
-    if (!dailyActivity || dailyActivity.length === 0) return 0;
-    /**
-     * The days the *user* spoke.
-     *
-     * The set used to hold every day with a message — including the
-     * ones where the persona spoke first, on its own, at night. So the
-     * lobby's streak counted days the user was not there, and it was
-     * not the same number as the analytics' longest streak.
-     */
-    const dateSet = new Set(
-      dailyActivity.filter((r: any) => Number(r.userCount ?? r.count) > 0).map(r => String(r.date)),
-    );
-    let count = 0;
-    const d = new Date();
-    const todayKey = zonedDateKey(d, timezone);
-    if (!dateSet.has(todayKey)) {
-      d.setDate(d.getDate() - 1);
-      if (!dateSet.has(zonedDateKey(d, timezone))) return 0;
-    }
-    while (dateSet.has(zonedDateKey(d, timezone))) {
-      count++;
-      d.setDate(d.getDate() - 1);
-    }
-    return count;
-  }, [dailyActivity, timezone]);
-
-  if (streak < 2) return null;
-
-  return (
-    <div className="mb-8 flex items-center gap-2.5">
-      <Flame className="w-4 h-4 text-mood-warm" />
-      <span className="font-display text-sm font-semibold text-mood-warm">{t("lobby.streak", { count: streak })}</span>
-      <div className="flex gap-0.5 ml-1">
-        {Array.from({ length: Math.min(streak, 7) }).map((_, i) => (
-          <div key={i} className="w-1.5 h-3 rounded-full bg-mood-warm" style={{ opacity: 0.3 + (i / 7) * 0.7 }} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ─── CONVERSATION STARTERS ───────────────────────────────────────────────────
 
 function ConversationStarters({ personas, onChat }: { personas: any[]; onChat: (id: number) => void }) {
@@ -940,53 +829,6 @@ function MiniCalendar() {
             {d?.day || ""}
           </div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── PERSONA LEADERBOARD ─────────────────────────────────────────────────────
-
-function PersonaLeaderboard({ personas }: { personas: any[] }) {
-  const { t } = useLocale();
-  const ranked = useMemo(() => {
-    return [...personas]
-      .filter((p: any) => (p.chatCount || 0) > 0)
-      .sort((a, b) => (b.chatCount || 0) - (a.chatCount || 0))
-      .slice(0, 3);
-  }, [personas]);
-
-  if (ranked.length < 2) return null;
-
-  return (
-    <div className="mb-8 border-t border-border pt-5">
-      <PanelTitle icon={Medal} title={t("lobby.leaderboard.title")} />
-      <div className="space-y-2.5">
-        {ranked.map((p: any, i: number) => {
-          const emotion = emotionOf(p.emotionalState) || EMOTIONS.warm;
-          const maxChats = ranked[0].chatCount || 1;
-          const pct = Math.round(((p.chatCount || 0) / maxChats) * 100);
-          return (
-            <div key={p.id} className="flex items-center gap-3">
-              <span className={`w-5 text-center font-display text-sm font-semibold flex-shrink-0 ${
-                i === 0 ? "text-foreground" : "text-muted-subtle"
-              }`}>{i + 1}</span>
-              <div className="mood-ring-sm flex-shrink-0" style={{ "--mood-color": emotionColor(p.emotionalState) } as CSSProperties}>
-                <PersonaAvatar name={p.name} className="w-7 h-7 rounded-full text-[11px]" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-foreground truncate">{p.name}</span>
-                  <span className="text-[10px] text-muted-foreground">{t("lobby.leaderboard.chats", { count: p.chatCount })}</span>
-                </div>
-                <div className="h-1 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full rounded-full transition-all duration-700"
-                    style={{ width: `${pct}%`, backgroundColor: emotionColor(p.emotionalState), opacity: 0.55 }} />
-                </div>
-              </div>
-            </div>
-          );
-        })}
       </div>
     </div>
   );
@@ -2313,17 +2155,14 @@ export default function Lobby() {
             <section className="mt-4 pt-2">
               <SectionHeading kicker={t("lobby.directory.study")} title={t("lobby.directory.records")} />
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-6">
-                <ChatStreak />
                 <EmotionalWeather personas={personas as any[]} />
                 <ActivityHeatmap />
                 <MiniCalendar />
                 <MemoryHighlights personas={personas as any[]} />
-                <AchievementBadges stats={stats} />
               </div>
               <QuickChatBar personas={personas as any[]} onChat={(id) => navigate(`/chat/${id}`)} />
               <PersonaConstellation personas={personas as any[]} onChat={(id) => navigate(`/chat/${id}`)} />
               <ConversationStarters personas={personas as any[]} onChat={(id) => navigate(`/chat/${id}`)} />
-              <PersonaLeaderboard personas={personas as any[]} />
               <TemplateLibrarySection
                 onCreated={(id) => { refetch(); navigate(`/chat/${id}`); }}
                 onQuestionnaire={() => navigate("/persona/new/questionnaire")}

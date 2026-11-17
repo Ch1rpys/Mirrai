@@ -205,14 +205,13 @@ export default function Analytics() {
         ) : null}
 
         <motion.div
-          className="stat-grid grid-cols-2 md:grid-cols-4"
+          className="stat-grid grid-cols-2 md:grid-cols-3"
           initial="hidden"
           animate="visible"
           variants={stagger}
         >
           <StatCard label={t("analytics.totalMessages")} value={busy || failed ? "—" : stats.totalMessages} />
           <StatCard label={t("analytics.activeDays")} value={busy || failed ? "—" : stats.activeDays} />
-          <StatCard label={t("analytics.longestStreak")} value={busy || failed ? "—" : t("analytics.streakDays", { count: stats.longestStreak })} />
           <StatCard label={t("analytics.avgMessages")} value={busy || failed ? "—" : stats.avgPerDay} />
         </motion.div>
 
