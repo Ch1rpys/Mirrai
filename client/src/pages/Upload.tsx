@@ -12,6 +12,8 @@ import BackfillBanner from "@/components/v6/BackfillBanner";
 import StaleRecordsBanner from "@/components/v6/StaleRecordsBanner";
 import RecordSources from "@/components/v6/RecordSources";
 import ImportWizard from "@/components/v6/ImportWizard";
+import HarmNotice from "@/components/v6/HarmNotice";
+import { normalizeHarmReport } from "@shared/harm";
 import { isChatImportFileType, isUnparsedChatUpload } from "@shared/records";
 import { resolveIntakeGaps } from "@/lib/intake-gaps";
 import { toast } from "sonner";
@@ -667,6 +669,16 @@ export default function Upload() {
               </div>
             )}
           </div>
+        )}
+        {isReady && (
+          <HarmNotice
+            personaId={personaId}
+            name={persona?.name ?? ""}
+            report={normalizeHarmReport(
+              (persona as { personaData?: { harmReport?: unknown } } | undefined)?.personaData
+                ?.harmReport,
+            )}
+          />
         )}
 
         {/* Analysis Status · Analyzing */}

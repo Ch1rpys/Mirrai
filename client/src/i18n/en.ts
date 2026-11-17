@@ -1836,6 +1836,16 @@ export const en = {
     resourcesEmergency: "If it is urgent, call your local emergency number (120 / 110 in mainland China).",
   },
 
+  harm: {
+    title: "Some of the lines in the record may have been meant to hurt",
+    body: "In what {{name}} said, {{count}} place(s) read as belittling, threatening, or restricting you. Whether the replica should learn them is yours to decide.",
+    remove: "Do not learn them. The replica can be cold, and it can be sharp, but it will not speak to you that way.",
+    soften: "Learn the tone, not these lines.",
+    keep: "Keep them as they were. I want them as they actually were.",
+    footnote: "If these words bring up something hard, you can look here.",
+    here: "here",
+  },
+
   research: {
     gapsTitle: "Research gaps",
     missingSources: "{{count}} source(s) missing",

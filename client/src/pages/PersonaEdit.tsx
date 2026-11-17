@@ -24,7 +24,9 @@ import MicroRulesEditor from "@/components/MicroRulesEditor";
 import ImperfectionEditor from "@/components/ImperfectionEditor";
 import V5FidelityEditors from "@/components/V5FidelityEditors";
 import PersonaSwitches from "@/components/v6/PersonaSwitches";
+import HarmNotice from "@/components/v6/HarmNotice";
 import TagInput from "@/components/v6/TagInput";
+import { normalizeHarmReport } from "@shared/harm";
 import { useLocale } from "@/contexts/LocaleContext";
 import { copy } from "@shared/copy";
 
@@ -649,6 +651,16 @@ export default function PersonaEdit() {
             </div>
           )}
         </section>
+
+        {persona.analysisStatus === "ready" && (
+          <HarmNotice
+            personaId={personaId}
+            name={persona.name}
+            report={normalizeHarmReport(
+              (persona.personaData as { harmReport?: unknown } | null)?.harmReport,
+            )}
+          />
+        )}
 
         {/* Persona Data Editor */}
         {persona.analysisStatus === "ready" && (

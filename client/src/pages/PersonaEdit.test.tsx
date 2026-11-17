@@ -36,6 +36,7 @@ vi.mock("@/lib/trpc", () => ({
       getSystemPrompt: { useQuery: () => ({ data: { prompt: "【身份】\n你是 小A" } }) },
       update: { useMutation: () => ({ mutate: update, isPending: false }) },
       updatePersonaData: { useMutation: () => ({ mutate: updatePersonaData, isPending: false }) },
+      decideHarm: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       graduate: { useMutation: () => ({ mutate: graduate, isPending: false }) },
       applyCorrection: { useMutation: () => ({ mutate: applyCorrection, isPending: false }) },
       correctionLog: { useQuery: () => ({ data: { entries: [] } }) },
@@ -47,6 +48,9 @@ vi.mock("@/lib/trpc", () => ({
     },
     llmConfig: { listProviders: { useQuery: () => ({ data: [] }) } },
     behavior: { get: { useQuery: () => ({ data: { profile: null }, isLoading: false }) } },
+    useUtils: () => ({
+      persona: { get: { invalidate: vi.fn() } },
+    }),
   },
 }));
 

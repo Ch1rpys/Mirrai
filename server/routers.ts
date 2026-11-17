@@ -98,6 +98,7 @@ import {
 import { isMemoryDate } from "@shared/memory-date";
 import { resolveRelationshipPhase, parseRecalledIds } from "@shared/user-side";
 import { copy, localizeScene } from "@shared/copy";
+import { normalizeHarmReport } from "@shared/harm";
 import { isChatImportFileType, startImport } from "./importers";
 import { importUnpackRelKey } from "./importers/archive";
 import { afterRecordsRemoved } from "./_core/style-profile";
@@ -1284,6 +1285,34 @@ export const appRouter = router({
             });
           }
           await updatePersona(input.id, ctx.user.id, { personaData: merged });
+          return { success: true };
+        });
+      }),
+
+    decideHarm: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        decision: z.enum(["keep", "soften", "remove"]),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.id, async () => {
+          const persona = await getPersonaById(input.id, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const current = { ...((persona.personaData as Record<string, unknown> | null) || {}) };
+          const report = normalizeHarmReport(current.harmReport);
+          if (!report) {
+            throw new TRPCError({ code: "BAD_REQUEST" });
+          }
+          await updatePersona(input.id, ctx.user.id, {
+            personaData: {
+              ...current,
+              harmReport: {
+                ...report,
+                decision: input.decision,
+                decidedAt: new Date().toISOString(),
+              },
+            },
+          });
           return { success: true };
         });
       }),

@@ -1849,6 +1849,16 @@ export const zh = {
     resourcesEmergency: "如果情况紧急，请拨打当地急救电话（中国大陆 120 / 110）。",
   },
 
+  harm: {
+    title: "记录里有一些可能伤人的话",
+    body: "在 {{name}} 说过的话里，有 {{count}} 处读起来像是在贬低、威胁或限制你。分身要不要照着学，由你决定。",
+    remove: "不学。分身可以冷、可以凶，但不会这样对你说话。",
+    soften: "学语气，不学这些话。",
+    keep: "照实保留。我想要的就是 TA 原本的样子。",
+    footnote: "如果这些话让你想起不好受的事，可以看看这里。",
+    here: "这里",
+  },
+
   research: {
     gapsTitle: "研究缺口",
     missingSources: "缺 {{count}} 处来源",
