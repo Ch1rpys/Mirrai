@@ -29,6 +29,29 @@ export const SPEECH_ACTS = [
 
 export type SpeechAct = (typeof SPEECH_ACTS)[number];
 
+/**
+ * What the other person is doing in their turn.
+ *
+ * Distillation writes this on the user's last line of a round so later
+ * layers (adjacency, a tap-back, the mirror) can condition on it.
+ * Adding a label means changing this list and every place that reads it.
+ */
+export const USER_ACTS = [
+  "ask",
+  "acknowledge",
+  "share",
+  "affection",
+  "tease",
+  "complain",
+  "logistics",
+  "repair",
+  "comfort",
+  "advise",
+  "other",
+] as const;
+
+export type UserAct = (typeof USER_ACTS)[number];
+
 /** Why a user said a reply did not sound like them. */
 export const FEEDBACK_REASONS = [
   "act",
@@ -56,11 +79,16 @@ export const PROACTIVE_OPENINGS = [
 export type ProactiveOpening = (typeof PROACTIVE_OPENINGS)[number];
 
 const ACT_SET = new Set<string>(SPEECH_ACTS);
+const USER_ACT_SET = new Set<string>(USER_ACTS);
 const FEEDBACK_SET = new Set<string>(FEEDBACK_REASONS);
 const OPENING_SET = new Set<string>(PROACTIVE_OPENINGS);
 
 export function isSpeechAct(value: unknown): value is SpeechAct {
   return typeof value === "string" && ACT_SET.has(value);
+}
+
+export function isUserAct(value: unknown): value is UserAct {
+  return typeof value === "string" && USER_ACT_SET.has(value);
 }
 
 export function isFeedbackReason(value: unknown): value is FeedbackReason {
@@ -98,14 +126,16 @@ const SHARE_SELF = /^(我|俺|咱).{2,}/;
 export function labelSpeechActByRule(
   text: string,
   previousUser?: string | null,
+  options?: { precisionOnly?: boolean },
 ): SpeechAct | null {
   const trimmed = String(text ?? "").trim();
   if (!trimmed) return "silence";
 
   const compact = trimmed.replace(/\s+/g, "");
   if (compact.length <= 8 && ACKNOWLEDGE.test(compact)) return "acknowledge";
-
   if (REPAIR.test(trimmed)) return "repair";
+  if (options?.precisionOnly) return null;
+
   if (LOGISTICS.test(trimmed) && (/\d|点|见|到|来|meet|at /i.test(trimmed))) {
     return "logistics";
   }
@@ -120,6 +150,28 @@ export function labelSpeechActByRule(
     return "answer";
   }
   return null;
+}
+
+/**
+ * Labels the other person's line from the words alone, when the words
+ * are enough.
+ *
+ * A question is an ask. A one-word "嗯" is an acknowledgement. The rest
+ * is left unlabelled so distillation can ask a model rather than guess.
+ */
+export function labelUserActByRule(text: string): UserAct | null {
+  const trimmed = String(text ?? "").trim();
+  if (!trimmed) return null;
+  if (isUserAsking(trimmed) || endsWithMa(trimmed)) return "ask";
+  const compact = trimmed.replace(/\s+/g, "");
+  if (compact.length <= 8 && ACKNOWLEDGE.test(compact)) return "acknowledge";
+  if (REPAIR.test(trimmed)) return "repair";
+  if (AFFECTION.test(trimmed) && trimmed.length < 40) return "affection";
+  return null;
+}
+
+function endsWithMa(text: string): boolean {
+  return /[吗]$/.test(text.replace(/[。.!！?？…~～]+$/g, ""));
 }
 
 /** True when the other person asked a question this turn. */
@@ -144,6 +196,20 @@ const ACT_COPY_KEYS: Record<SpeechAct, `prompt.act.${SpeechAct}`> = {
   repair: "prompt.act.repair",
   share: "prompt.act.share",
   silence: "prompt.act.silence",
+};
+
+const USER_ACT_COPY_KEYS: Record<UserAct, `prompt.act.${SpeechAct}` | `prompt.userAct.${"ask" | "complain" | "other"}`> = {
+  ask: "prompt.userAct.ask",
+  acknowledge: "prompt.act.acknowledge",
+  share: "prompt.act.share",
+  affection: "prompt.act.affection",
+  tease: "prompt.act.tease",
+  complain: "prompt.userAct.complain",
+  logistics: "prompt.act.logistics",
+  repair: "prompt.act.repair",
+  comfort: "prompt.act.comfort",
+  advise: "prompt.act.advise",
+  other: "prompt.userAct.other",
 };
 
 const OPENING_COPY_KEYS: Record<ProactiveOpening, `prompt.opening.${ProactiveOpening}`> = {
@@ -174,4 +240,4 @@ export function renderOpeningInstruction(
   });
 }
 
-export { ACT_COPY_KEYS, OPENING_COPY_KEYS };
+export { ACT_COPY_KEYS, OPENING_COPY_KEYS, USER_ACT_COPY_KEYS };
