@@ -5,11 +5,11 @@ import type { TrpcContext } from "../_core/context";
 /**
  * An uploaded transcript has to show up as exemplars.
  *
- * Before the record table was filled on upload, a persona that had
- * only ever been given a file had an empty collected-messages list, so
+ * Before the record table was filled, a persona that had only ever
+ * been given a file had an empty collected-messages list, so
  * `exemplarSectionFor` returned "" — the prompt had no "what they
- * actually said". The assertion below is "the section is there"; on
- * that old path it is red.
+ * actually said". Upload waits for confirm. After confirm names both
+ * sides, the section is there.
  */
 
 const getPersonaById = vi.fn();
@@ -26,11 +26,20 @@ const getRecentUserMood = vi.fn();
 const getRelationshipEvents = vi.fn();
 const getMemoriesByPersonaId = vi.fn();
 const retrieveMemories = vi.fn();
+const readFile = vi.fn();
+const resolveStoredPath = vi.fn();
 
 let imported: Array<Record<string, unknown>> = [];
 
-vi.mock("../storage", () => ({
+vi.mock("node:fs/promises", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:fs/promises")>()),
+  readFile: (...a: unknown[]) => readFile(...a),
+}));
+
+vi.mock("../storage", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   storagePut: vi.fn(async (key: string) => ({ key, url: `/uploads/${key}` })),
+  resolveStoredPath: (...a: unknown[]) => resolveStoredPath(...a),
 }));
 
 vi.mock("../db", async (importOriginal) => ({
@@ -112,6 +121,7 @@ describe("exemplars from an uploaded file", () => {
       userId: 1,
       fileType: "chat_txt",
       originalName: "chat.txt",
+      fileKey: "personas/1/5/chat.txt",
     });
     updatePersonaFile.mockResolvedValue(true);
     getUserTimezone.mockResolvedValue("Asia/Shanghai");
@@ -127,6 +137,8 @@ describe("exemplars from an uploaded file", () => {
     getRelationshipEvents.mockResolvedValue([]);
     getMemoriesByPersonaId.mockResolvedValue([]);
     retrieveMemories.mockResolvedValue([]);
+    resolveStoredPath.mockReturnValue("/tmp/chat.txt");
+    readFile.mockResolvedValue(Buffer.from(TRANSCRIPT, "utf-8"));
   });
 
   it("leaves the exemplar section empty when nothing has been imported", async () => {
@@ -140,13 +152,21 @@ describe("exemplars from an uploaded file", () => {
 
   it("puts TA's uploaded lines in the prompt after the file is imported", async () => {
     const fileContent = Buffer.from(TRANSCRIPT, "utf-8").toString("base64");
-    await appRouter.createCaller(ctxFor(1)).file.upload({
+    const caller = appRouter.createCaller(ctxFor(1));
+    await caller.file.upload({
       personaId: 5,
       fileName: "chat.txt",
       fileType: "chat_txt",
       fileSize: Buffer.from(TRANSCRIPT, "utf-8").length,
       fileContent,
       mimeType: "text/plain",
+    });
+    expect(imported).toHaveLength(0);
+    await caller.import.confirm({
+      fileId: 99,
+      format: "generic-line",
+      me: ["阿树"],
+      them: ["小满"],
     });
     expect(imported.length).toBeGreaterThan(0);
 

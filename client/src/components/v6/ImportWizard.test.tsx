@@ -151,6 +151,36 @@ describe("the import wizard", () => {
     });
   });
 
+  it("starts from a guessed pair and still waits for confirm", async () => {
+    const user = userEvent.setup();
+    status = fileStatus("needs_roles", {
+      format: "generic-line",
+      suggested: { me: ["阿树"], them: ["小满"] },
+      speakers: [
+        { name: "小满", count: 3 },
+        { name: "阿树", count: 2 },
+      ],
+    });
+    preview = {
+      status: "ok",
+      total: 5,
+      records: [
+        { timestamp: "2022-03-01T12:00:00.000Z", speaker: "小满", content: "在吗", kind: "text", lineNo: 1 },
+      ],
+      report: { format: "generic-line" },
+    };
+    render(<ImportWizard fileId={11} personaName="小满" timezone="Asia/Shanghai" />);
+    const continueButton = screen.getByRole("button", { name: translate("zh", "importWizard.continue") });
+    expect(continueButton).not.toBeDisabled();
+    expect(screen.getByText(translate("zh", "importWizard.previewTitle"))).toBeTruthy();
+    await user.click(continueButton);
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({
+      me: ["阿树"],
+      them: ["小满"],
+    }));
+    expect(apply).not.toHaveBeenCalled();
+  });
+
   it("replaces a phone number in the preview table when that box is ticked", async () => {
     const user = userEvent.setup();
     status = fileStatus("needs_roles", {

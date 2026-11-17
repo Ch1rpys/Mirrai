@@ -165,19 +165,23 @@ export default function ImportWizard(props: {
 
   useEffect(() => {
     if (!speakers.length) return;
+    const suggestedMe = new Set(report?.suggested?.me ?? []);
+    const suggestedThem = new Set(report?.suggested?.them ?? []);
     setRoles((prev) => {
       let changed = false;
       const next = { ...prev };
       for (const speaker of speakers) {
         if (next[speaker.name]) continue;
-        if (props.personaName && speaker.name.trim() === props.personaName.trim()) {
+        if (suggestedMe.has(speaker.name)) next[speaker.name] = "me";
+        else if (suggestedThem.has(speaker.name)) next[speaker.name] = "them";
+        else if (props.personaName && speaker.name.trim() === props.personaName.trim()) {
           next[speaker.name] = "them";
-          changed = true;
-        }
+        } else continue;
+        changed = true;
       }
       return changed ? next : prev;
     });
-  }, [speakers, props.personaName]);
+  }, [speakers, props.personaName, report?.suggested]);
 
   useEffect(() => {
     const headers = report?.rawTable?.headers;

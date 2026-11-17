@@ -11,6 +11,7 @@ const getUserTimezone = vi.fn();
 const getUserById = vi.fn();
 const resolveStoredPath = vi.fn();
 const readFile = vi.fn();
+const deleteRecordsByFile = vi.fn();
 
 vi.mock("node:fs/promises", async (importOriginal) => ({
   ...(await importOriginal<typeof import("node:fs/promises")>()),
@@ -32,6 +33,7 @@ vi.mock("../db", async (importOriginal) => ({
   updatePersonaFile: (...a: unknown[]) => updatePersonaFile(...a),
   getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
   getUserById: (...a: unknown[]) => getUserById(...a),
+  deleteRecordsByFile: (...a: unknown[]) => deleteRecordsByFile(...a),
   MAX_RECORDS_PER_PERSONA: 1_000_000,
 }));
 
@@ -131,13 +133,15 @@ describe("import.backfill", () => {
   it("imports unparsed chat files from disk, not from the truncated excerpt", async () => {
     const result = await appRouter.createCaller(ctxFor(1)).import.backfill({ personaId: 5 });
     expect(result.count).toBe(1);
-    expect(result.results).toEqual([{ fileId: 11, status: "done", written: 2 }]);
+    expect(result.results).toEqual([{ fileId: 11, status: "needs_roles", written: 0 }]);
+    expect(createCollectedMessages).not.toHaveBeenCalled();
     expect(resolveStoredPath).toHaveBeenCalledWith("personas/1/5/old.txt");
     expect(readFile).toHaveBeenCalledWith("/tmp/old.txt");
     expect(readFile).toHaveBeenCalledTimes(1);
-    const rows = createCollectedMessages.mock.calls[0][0] as Array<Record<string, unknown>>;
-    expect(rows.map((row) => row.content)).toEqual(["在吗", "在的"]);
-    expect(rows.every((row) => row.content !== "this excerpt must not be parsed")).toBe(true);
+    const waiting = updatePersonaFile.mock.calls
+      .map((call) => call[2] as { parseStatus?: string; parseReport?: { speakers?: Array<{ name: string }> } })
+      .find((patch) => patch.parseStatus === "needs_roles");
+    expect(waiting?.parseReport?.speakers?.map((row) => row.name)).toEqual(["小满", "阿树"]);
   });
 });
 
@@ -161,6 +165,7 @@ describe("import.status / preview / confirm / cancel", () => {
     getUserById.mockResolvedValue({ id: 1, name: "阿树" });
     countRecords.mockResolvedValue(0);
     createCollectedMessages.mockImplementation(async (rows: unknown[]) => (rows as unknown[]).length);
+    deleteRecordsByFile.mockResolvedValue(0);
     resolveStoredPath.mockReturnValue("/tmp/old.txt");
     readFile.mockResolvedValue(Buffer.from(DISK_TEXT, "utf-8"));
   });
@@ -211,6 +216,16 @@ describe("import.status / preview / confirm / cancel", () => {
     expect(createCollectedMessages).not.toHaveBeenCalled();
   });
 
+  it("does not write on resume when the two sides can be guessed", async () => {
+    const result = await appRouter.createCaller(ctxFor(1)).import.resume({
+      fileId: 11,
+      format: "generic-line",
+    });
+    expect(result).toMatchObject({ status: "needs_roles", written: 0 });
+    expect(createCollectedMessages).not.toHaveBeenCalled();
+    expect(deleteRecordsByFile).not.toHaveBeenCalled();
+  });
+
   it("writes records when confirm names both sides", async () => {
     const result = await appRouter.createCaller(ctxFor(1)).import.confirm({
       fileId: 11,
@@ -247,6 +262,35 @@ describe("import.status / preview / confirm / cancel", () => {
       replaced: expect.objectContaining({ phones: 1 }),
     });
     expect(JSON.stringify(done?.parseReport)).not.toContain("13800138000");
+    expect(deleteRecordsByFile).toHaveBeenCalledWith(5, 1, 11);
+  });
+
+  it("replaces an earlier copy of the same file when confirm redacts it", async () => {
+    const withPhone = [
+      "[2022-03-01 20:00:00] 小满：打 13800138000",
+      "[2022-03-01 20:00:05] 阿树：在的",
+    ].join("\n");
+    readFile.mockResolvedValue(Buffer.from(withPhone, "utf-8"));
+    const caller = appRouter.createCaller(ctxFor(1));
+    await caller.import.confirm({
+      fileId: 11,
+      format: "generic-line",
+      me: ["阿树"],
+      them: ["小满"],
+    });
+    createCollectedMessages.mockClear();
+    deleteRecordsByFile.mockClear();
+    await caller.import.confirm({
+      fileId: 11,
+      format: "generic-line",
+      me: ["阿树"],
+      them: ["小满"],
+      redaction: { phones: true },
+    });
+    expect(deleteRecordsByFile).toHaveBeenCalledWith(5, 1, 11);
+    const rows = createCollectedMessages.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(rows.map((row) => row.content)).toEqual(["打 [phone]", "在的"]);
+    expect(JSON.stringify(rows)).not.toContain("13800138000");
   });
 
   it("marks a cancelled import as failed", async () => {

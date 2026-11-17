@@ -2,11 +2,10 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { TrpcContext } from "./_core/context";
 
 /**
- * Uploading a chat file writes records, not just an excerpt.
+ * Uploading a chat file parses it and waits.
  *
- * The old upload stored the text on `persona_files` and left the
- * record table empty, so a persona that had only been uploaded had
- * nothing for exemplars, rhythm, or evaluation to read.
+ * The rows are not stored until confirm names both sides. A guess is
+ * kept on the file so the wizard can show it first.
  */
 
 const getPersonaById = vi.fn();
@@ -66,7 +65,7 @@ const TRANSCRIPT = [
   "[2022-03-01 20:00:05] 阿树：在的",
 ].join("\n");
 
-describe("file.upload writes records", () => {
+describe("file.upload waits for both sides to be named", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getPersonaById.mockResolvedValue({ id: 5, userId: 1, name: "小满" });
@@ -85,7 +84,7 @@ describe("file.upload writes records", () => {
     createCollectedMessages.mockImplementation(async (rows: unknown[]) => (rows as unknown[]).length);
   });
 
-  it("calls createCollectedMessages with fileId, lineNo, kind, and speaker", async () => {
+  it("does not write rows until confirm, even when the two sides are obvious", async () => {
     const fileContent = Buffer.from(TRANSCRIPT, "utf-8").toString("base64");
     const result = await appRouter.createCaller(ctxFor(1)).file.upload({
       personaId: 5,
@@ -97,20 +96,10 @@ describe("file.upload writes records", () => {
     });
 
     expect(result.fileId).toBe(99);
-    expect(createCollectedMessages).toHaveBeenCalled();
-    const rows = createCollectedMessages.mock.calls[0][0] as Array<Record<string, unknown>>;
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({
-      fileId: 99,
-      lineNo: 1,
-      kind: "text",
-      speaker: "小满",
-    });
-    expect(rows[1]).toMatchObject({
-      fileId: 99,
-      lineNo: 2,
-      kind: "text",
-      speaker: "阿树",
-    });
+    expect(createCollectedMessages).not.toHaveBeenCalled();
+    const waiting = updatePersonaFile.mock.calls
+      .map((call) => call[2] as { parseStatus?: string; parseReport?: { suggested?: { me: string[]; them: string[] } } })
+      .find((patch) => patch.parseStatus === "needs_roles");
+    expect(waiting?.parseReport?.suggested).toEqual({ me: ["阿树"], them: ["小满"] });
   });
 });

@@ -107,6 +107,14 @@ export interface ParseReport {
   existing?: number;
   /** Which redaction flags ran, and how many replacements each made. */
   redaction?: RedactionReport;
+  /**
+   * Roles the file itself suggested.
+   *
+   * Nothing is written until confirm names both sides. The wizard
+   * shows this guess so the person can check it, change it, and only
+   * then let the rows in.
+   */
+  suggested?: { me: string[]; them: string[] };
 }
 
 export type { ParsedRecord, RecordKind };

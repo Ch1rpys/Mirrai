@@ -3,8 +3,9 @@
  *
  * Detection picks a format; the wizard (C1.2) can override it. A zip is
  * unpacked first, then each chat file inside it is detected. A file
- * whose two sides cannot be named stops at `needs_roles` so nothing is
- * written until the user says who is who.
+ * whose sides have not been confirmed stops at `needs_roles`. A guess
+ * is stored for the wizard, and nothing is written until confirm
+ * names both sides.
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -17,6 +18,7 @@ import {
 import { ENV } from "../_core/env";
 import { resolveUploadPath } from "../_core/filename";
 import {
+  deleteRecordsByFile,
   getPersonaById,
   getPersonaFileById,
   getUserById,
@@ -353,20 +355,28 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
 
   const persona = await getPersonaById(file.personaId, input.userId);
   const user = await getUserById(input.userId);
-  const mapping =
-    input.me && input.them && input.me.length > 0 && input.them.length > 0
-      ? { me: input.me, them: input.them }
-      : guessRoles(speakers, {
-          personaName: persona?.name,
-          userName: user?.name,
-        }, parsed.records);
-  if (!mapping) {
+  const confirmed = Boolean(
+    input.me && input.them && input.me.length > 0 && input.them.length > 0,
+  );
+  const guessed = guessRoles(speakers, {
+    personaName: persona?.name,
+    userName: user?.name,
+  }, parsed.records);
+  // A guess is not a confirmation. Upload, resume, and backfill stop
+  // here even when the two sides are obvious, so the person sees the
+  // preview and the redaction boxes before any row is stored.
+  if (!confirmed) {
     await updatePersonaFile(file.id, input.userId, {
       parseStatus: "needs_roles",
-      parseReport: reportOf({ ...baseReport, progress: 0 }),
+      parseReport: reportOf({
+        ...baseReport,
+        suggested: guessed ?? undefined,
+        progress: 0,
+      }),
     });
     return { status: "needs_roles", written: 0 };
   }
+  const mapping = { me: input.me ?? [], them: input.them ?? [] };
 
   const assigned = assignRoles(parsed.records, mapping);
   const keepNames = [
@@ -398,6 +408,10 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
   });
 
   try {
+    // A second confirm of this file replaces its rows. Redaction changes
+    // the text, so the old idempotency key would otherwise keep the
+    // original phone number beside the token.
+    await deleteRecordsByFile(file.personaId, input.userId, file.id);
     const written = await importRecords({
       personaId: file.personaId,
       userId: input.userId,
