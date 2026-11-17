@@ -38,7 +38,7 @@
 | A8 | ✅ | 2cfd462 (extract); 0be929c (review); d14ba9d (upload prompt) | 先红后绿：`memory-extract-source.test.ts` `does not store a fact the persona said` 旧代码红在 `createMemory` 被调用、`fromPersona` 为 undefined。改后该文件 4 通过（分身行不存 / 用户行存 / 无 line 丢弃 / 上传记录里 TA 的行照常存）。`memory-extract.test.ts` 与 `memory-extract.test.ts`（根下）通过；原有 mock 补了 `line`。`MemoryReview.test.tsx` 3 通过：空列表不渲染；「留着」调 `keepFromPersona({ id: 7 })`；「删掉」调 `delete({ id: 7 })`。闸门 `315 passed \| 3 skipped (318)` 文件，`2861 passed \| 16 skipped (2877)` 用例。 |
 | A9 | ✅ | 6ebeea3 | 四条都核到了，`KNOWN_UNVERIFIED` 为空，未验证清单无 A9 行。`resources.test.ts` 6 通过（含 source 以 `https://` 开头、`lastVerified` 不是 `2026-01-01`、KNOWN_UNVERIFIED 与进度未验证清单一致）。`egress.test.ts` 4 通过。闸门 `315 passed \| 3 skipped (318)` 文件，`2863 passed \| 16 skipped (2879)` 用例。核对摘要见批次日志。 |
 | B1.1 | ✅ | 93aa60d (schema); 1fd5c18 (chunks); 14faa43 (map); a488610 (reduce); e15dc9a (estimate) | 临时库 `mirrai_v6_scratch` 0046 四步+升级路径：`push --force` 后 `migrate` 应用到 `0046_distillation_tables`（journal 44 条）；`--replay` `replayed 44 migration(s)`；`--rollback 1` 后三张表和 memories/records 新列消失；再 `migrate` 回来。升级路径 DROP 三表七列并删 journal 的 0046 后再 migrate，对象出现。库已 `dropdb`。`chunks.test.ts` 6 通过：不跨 2023-06-10 静默、每块 ≤ `CHUNK_MAX_CHARS`、两次 hash 相同、说话行各进一块、deep 预估块数=切块数、fast 预估 12 块。`pipeline-chunked.test.ts` 7 通过：deep map=块数、fast=12、坏引用不入库、expression 只引「我」丢弃、归并不含 `#\d+ ` 只含卡片、构建文案最近段标「（现在）」、失败超三成 `analysisStatus: error` 且含「三成」、技能包无 `#\d+`。`routers.skill-engine.test.ts`：`estimate` 块数与 `chunkRecords` 一致；`MAX_DISTILL_CALLS=1` 时 `triggerAnalysis` 抛 `/上限/`。`pipeline.test.ts` 5 通过（mock 补了三个导出，见偏差 64）。`Upload.test.tsx` 显示「这次会读 24 段…31 次」、120 次时确认可停。闸门 `318 passed \| 3 skipped (321)` 文件，`2897 passed \| 16 skipped (2913)` 用例。 |
-| B1.2 | ⬜ |  |  |
+| B1.2 | ✅ | dbd08ca | `chunks.test.ts` `selectChunks` 3 通过：budget 12 含第 1 块和最后 3 块、两个时期、白天和夜里、同一种子两次 hash 相同；budget > 块数返回全部；最晚一块的 `to` ≥ 记录时间跨度的 95%。闸门 `318 passed \| 3 skipped (321)` 文件，`2900 passed \| 16 skipped (2916)` 用例。情绪维等 B1.5。 |
 | B1.3 | ⬜ |  |  |
 | B1.4 | ⬜ |  |  |
 | B1.5 | ⬜ |  |  |
@@ -533,3 +533,10 @@ A5、A7、A9 维持 ✅。A6、A8 改回 ⬜。
 - 闸门 `318 passed | 3 skipped (321)` 文件，`2897 passed | 16 skipped (2913)` 用例，`all six steps passed`。相对 WP2 收尾（315/3 文件、2868/16 用例）：通过文件 +3、通过用例 +29；跳过数不变。
 - 偏差 61–64。未验证清单无新增。待用户决定无新增。
 - B1.1 标 ✅。下一条 B1.2。
+
+### WP3 · 实现会话 · 2026-11-17 · B1.2
+
+- `dbd08ca` `selectChunks`：必留第 1 块和最后 3 块，其余按时期 × 昼夜 × 疏密分层，层内 `seededRandom(seed)`。`takeChunkBudget` / 预估 / map 都走这一抽。种子 `distill:<personaId>:<块数>`。
+- `chunks.test.ts` 新增 3 条全过。`pipeline-chunked.test.ts` 7 通过。闸门 `318 passed | 3 skipped (321)` 文件，`2900 passed | 16 skipped (2916)` 用例，`all six steps passed`。相对 B1.1（2897/16）：通过用例 +3；跳过数不变。
+- 情绪维等 B1.5 写回 `emotion` 后再乘。偏差无新增。未验证清单、待用户决定无新增。
+- B1.2 标 ✅。下一条 B1.3。
