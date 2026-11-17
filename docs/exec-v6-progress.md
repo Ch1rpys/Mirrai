@@ -511,6 +511,11 @@ A5、A7、A9 维持 ✅。A6、A8 改回 ⬜。
 
 - `d9f679d` 修 A6。`d14ba9d` 修 A8。`1e5dec4` 修 A7 的查询测试。
 - 闸门 `315 passed | 3 skipped (318)` 文件，`2865 passed | 16 skipped (2881)` 用例，`all six steps passed`。通过数比验收时的 2863 多 2，跳过数仍是 16。
-- A6、A8 改回 ✅。存疑三项未改：快捷栏、美加热线的来源页、已取代的记忆仍进核对列表。
+- A6、A8 改回 ✅。存疑三项当时未改。
 
-存疑，不改状态。快捷栏 `QuickChatBar` 仍只按已就绪且未毕业过滤，一个 `presence: "quiet"` 的分身会出现在「继续对话」里，这一栏的 kicker 也是「接着聊」。做法只点了推荐和今日话题，这两处按 `mayFeature` 排除了结束的和联系不上的。`us-ca` 的 `source` 只有 https://988lifeline.org/ ，页面写的是美国 988；加拿大是另一条线。另开 https://www.canada.ca/en/public-health/services/suicide-prevention/government-canada-doing-help-prevent-suicide.html ，上面写 call or text 9-8-8。号码两边都是 988，描述用的是美国热线的名字。`getMemoriesFromPersona` 不看 `status`，一条已 `superseded`、来源仍是分身消息的记忆也会进核对列表。手册没有要求按状态滤掉。
+### WP2 · 实现会话 · 2026-11-17 · 存疑三处
+
+- `94f72d2` 快捷栏改走 `mayFeature`。暂停的分身留在卡片上，不进「继续对话」。这一栏的小标题从「接着聊」改成「快捷」，英文 `Shortcut`。
+- `17b934c` 美加拆成 `us` 和 `ca`。美国来源 https://988lifeline.org/ ，页面写 national mental health hotline: 988，描述「自杀与危机生命线」。加拿大来源 https://www.canada.ca/en/public-health/services/suicide-prevention/government-canada-doing-help-prevent-suicide.html ，当天又打开，写 call or text 9-8-8，服务名是 9-8-8: Suicide Crisis Helpline，描述「自杀危机援助热线」。`us-ca` 和「美国 / 加拿大」文案已删。`lastVerified` 仍是 2026-11-17。
+- `ef25b46` `getMemoriesFromPersona` 加上 `status = "active"`。已取代的行留在库里，不再进核对列表。普通记忆列表没动。
+- 闸门 `315 passed | 3 skipped (318)` 文件，`2868 passed | 16 skipped (2884)` 用例，`all six steps passed`。通过数比上一闸门 2865 多 3，跳过数仍是 16。
