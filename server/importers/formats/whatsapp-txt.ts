@@ -63,10 +63,19 @@ function inferDateOrder(dates: string[]): "ymd" | "mdy" | "dmy" {
     else if (a > 12) dmy += 1;
     else if (b > 12) mdy += 1;
   }
-  if (ymd >= dmy && ymd >= mdy && ymd > 0) return "ymd";
-  if (dmy >= mdy && dmy > 0) return "dmy";
-  if (mdy > 0) return "mdy";
-  return "dmy";
+  // A number above 12 is evidence. A year-first line is not: it does
+  // not say whether the short dates beside it are month-first.
+  if (dmy > mdy) return "dmy";
+  if (mdy > dmy) return "mdy";
+  if (ymd > 0) return "ymd";
+  // The handbook's Android shape is M/D/YY. A file that never reaches
+  // the 13th has no evidence either way, so that shape wins.
+  return "mdy";
+}
+
+/** Ambiguous short dates. Year-first files still use month-first for those. */
+function shortDateOrder(order: "ymd" | "mdy" | "dmy"): "mdy" | "dmy" {
+  return order === "dmy" ? "dmy" : "mdy";
 }
 
 /** WhatsApp attachment markers → kind. `<Media omitted>` is also in parseTextPlaceholder. */
@@ -126,7 +135,7 @@ export async function parseWhatsappTxt(text: string, options: ParseOptions = {})
       current = {
         speaker: header.speaker || "system",
         content: header.system ? header.content : attached.content,
-        timestamp: parseExportTime(`${header.date} ${header.time}`, options.timeZone, order),
+        timestamp: parseExportTime(`${header.date} ${header.time}`, options.timeZone, shortDateOrder(order)),
         kind,
         lineNo,
         meta: attached.path ? { path: attached.path } : undefined,

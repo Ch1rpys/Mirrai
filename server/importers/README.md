@@ -141,8 +141,10 @@ animation / audio_file (music) / photo; `phone_call` → call with
 Checked 2026-11-16 against WhatsApp iOS/Android export chat
 ([Preserve Chat](https://preserve.chat/whatsapp-guides/whatsapp-chat-export-format/),
 [starkdmi/whats_json](https://github.com/starkdmi/whats_json)).
-iOS: `[D/M/Y, HH:mm:ss] Name: text`. Android: `D/M/Y, HH:mm - Name: text`.
-Date order follows the file (day > 12 vs month > 12 vs a 4-digit year).
+iOS: `[YYYY/M/D, HH:mm:ss] Name: text`. Android: `M/D/YY, HH:mm - Name: text`.
+A day or month above 12 fixes the order for the whole file. A year-first
+line does not. When nothing is above 12, short dates are month-first,
+which is the Android shape above.
 A header without `Name:` is a system message. Attachments are
 `<attached: file>` or `file (file attached)`. Continuation lines have no
 timestamp. Image/video/audio/sticker/file kinds follow the attachment
