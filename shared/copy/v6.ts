@@ -412,4 +412,24 @@ export const V6 = {
     zh: "样本不够（{{n}} / {{need}}）。",
     en: "Not enough samples ({{n}} / {{need}}).",
   },
+  "eval.blind.needEval": {
+    zh: "先跑一次评测。",
+    en: "Run an evaluation first.",
+  },
+  "eval.blind.expired": {
+    zh: "这个链接已经失效了。",
+    en: "That link has expired.",
+  },
+  "eval.blind.finished": {
+    zh: "这一场已经答完了。",
+    en: "That sitting is already finished.",
+  },
+  "eval.blind.verdict.real": { zh: "真话", en: "real" },
+  "eval.blind.verdict.persona": { zh: "分身", en: "persona" },
+  "eval.blind.verdict.unsure": { zh: "猜不出", en: "unsure" },
+  "eval.blind.export.group": { zh: "组", en: "group" },
+  "eval.blind.export.subject": { zh: "被试", en: "subject" },
+  "eval.blind.export.verdict": { zh: "判定", en: "verdict" },
+  "eval.blind.export.seconds": { zh: "秒", en: "seconds" },
+  "eval.blind.export.reason": { zh: "理由原文", en: "reason" },
 } as const satisfies CopyTable;

@@ -104,6 +104,8 @@ knewThemWell: true
 
 `baseline.md` 可以链到最近一次文件，但不再是唯一的存放处。
 
+应用内生成的记录（`blind.exportRecord`）在前置信息里多三个字段：`pickedReal`、`unsure`、`subject`。这一类记录里的 `hitRate` 是 `pickedPersona`——把分身那句当成真话的比例，不是认出真话的比例。正文仍然只有编号、判定、秒数和理由，没有原文。
+
 ## 七、注意事项
 
 - **同一个人两次盲测之间要隔开。** 记得第一次答了什么，第二次就会用答案去猜，而不是去读。

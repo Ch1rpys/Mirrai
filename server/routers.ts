@@ -69,6 +69,7 @@ import {
   getPersonaSettings, setPersonaSettings,
   getPersonaStyleProfile, setPersonaStyleProfile,
   createPersonaVersion, getLatestPersonaVersion, setPersonaVersionEvalRun,
+  listBlindSessions,
   createSafetyEvent, countSafetyEvents,
 } from "./db";
 import { nanoid } from "nanoid";
@@ -124,6 +125,7 @@ import { styleRouter } from "./routers-v6/style";
 import { importRouter } from "./routers-v6/import";
 import { recordRouter } from "./routers-v6/record";
 import { personaVersionRouter } from "./routers-v6/persona-version";
+import { blindRouter } from "./routers-v6/blind";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
 import { normalizeMicroRules } from "@shared/micro-rules";
@@ -140,6 +142,7 @@ import { correctActCount, normalizeActProfile } from "@shared/act-profile";
 import { normalizeLifeEvents } from "@shared/life-events";
 import { mineForgetStyles, mineSuppressions } from "./skill-engine/suppressions";
 import { mineOpenLoops } from "./skill-engine/open-loops";
+import { feedbackRowsFromBlindSessions } from "./eval/blind";
 import {
   aggregateFidelityFeedback,
   confirmedSuppressionFromUnlike,
@@ -5292,8 +5295,14 @@ export const appRouter = router({
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         const rows = await listFidelityFeedbackForPersona(input.personaId, ctx.user.id);
+        const blindRows = feedbackRowsFromBlindSessions(
+          await listBlindSessions(input.personaId, ctx.user.id),
+        );
         const rejected = ((persona.personaData as any)?.rejectedFeedbackKeys ?? []) as string[];
-        const items = aggregateFidelityFeedback({ rows, rejectedKeys: rejected });
+        const items = aggregateFidelityFeedback({
+          rows: [...rows, ...blindRows],
+          rejectedKeys: rejected,
+        });
         return {
           items: await Promise.all(items.map(async (item) => {
             const message = await getMessageById(item.messageId, ctx.user.id, input.personaId);
@@ -5784,6 +5793,7 @@ export const appRouter = router({
   import: importRouter,
   record: recordRouter,
   personaVersion: personaVersionRouter,
+  blind: blindRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {

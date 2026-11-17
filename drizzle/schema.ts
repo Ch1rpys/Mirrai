@@ -1583,3 +1583,31 @@ export const fidelityFeedback = pgTable("fidelity_feedback", {
 
 export type FidelityFeedback = typeof fidelityFeedback.$inferSelect;
 export type InsertFidelityFeedback = typeof fidelityFeedback.$inferInsert;
+
+/**
+ * One sitting of the in-app blind test.
+ *
+ * A real line and a rebuilt one are shown without saying which is which.
+ * The groups keep the truth; the answers do not see it until the sitting
+ * is finished. A friend gets a hashed token, not an account.
+ */
+export const blindSessions = pgTable("blind_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  subject: varchar("subject", { length: 8 }).notNull(),
+  tokenHash: varchar("tokenHash", { length: 64 }),
+  expiresAt: timestamp("expiresAt"),
+  groups: jsonb("groups").notNull(),
+  answers: jsonb("answers"),
+  summary: jsonb("summary"),
+  startedAt: timestamp("startedAt").defaultNow().notNull(),
+  finishedAt: timestamp("finishedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  personaUserIdx: index("blind_sessions_persona_user_idx").on(table.personaId, table.userId),
+  tokenHashIdx: uniqueIndex("blind_sessions_token_hash_idx").on(table.tokenHash),
+}));
+
+export type BlindSession = typeof blindSessions.$inferSelect;
+export type InsertBlindSession = typeof blindSessions.$inferInsert;

@@ -10,7 +10,7 @@ import {
   reminderDeliveries, researchProfiles, collectedMessages, collectionSources,
   collectionJobs,
   distillationChunks, distillationCards, personaVersions,
-  evalCases, evalRuns, outboundLetters, fidelityFeedback,
+  evalCases, evalRuns, outboundLetters, fidelityFeedback, blindSessions,
   InsertPersona, InsertPersonaFile, InsertMessage,
   InsertWechatBinding, InsertSkillJob, InsertLlmConfig,
   InsertMemory, InsertEmotionSnapshot, InsertDiaryEntry, InsertScene,
@@ -20,6 +20,7 @@ import {
   InsertCollectionJob,
   InsertDistillationChunk, InsertDistillationCard,
   InsertEvalCase, InsertEvalRun, InsertOutboundLetter, InsertFidelityFeedback,
+  InsertBlindSession,
   userMoods, relationshipEvents, letters, memoryExtractions,
   InsertUserMood, InsertRelationshipEvent, InsertLetter,
 } from "../drizzle/schema";
@@ -1072,6 +1073,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(emotionSnapshots).where(eq(emotionSnapshots.userId, id));
     await tx.delete(evalCases).where(eq(evalCases.userId, id));
     await tx.delete(evalRuns).where(eq(evalRuns.userId, id));
+    await tx.delete(blindSessions).where(eq(blindSessions.userId, id));
     await tx.delete(fidelityFeedback).where(eq(fidelityFeedback.userId, id));
     await tx.delete(graduationAssessments).where(eq(graduationAssessments.userId, id));
     await tx.delete(llmConfigs).where(eq(llmConfigs.userId, id));
@@ -1464,6 +1466,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(emotionSnapshots).where(and(eq(emotionSnapshots.personaId, id), eq(emotionSnapshots.userId, userId)));
     await tx.delete(evalCases).where(and(eq(evalCases.personaId, id), eq(evalCases.userId, userId)));
     await tx.delete(evalRuns).where(and(eq(evalRuns.personaId, id), eq(evalRuns.userId, userId)));
+    await tx.delete(blindSessions).where(and(eq(blindSessions.personaId, id), eq(blindSessions.userId, userId)));
     await tx.delete(fidelityFeedback).where(and(eq(fidelityFeedback.personaId, id), eq(fidelityFeedback.userId, userId)));
     await tx.delete(graduationAssessments).where(and(eq(graduationAssessments.personaId, id), eq(graduationAssessments.userId, userId)));
     await tx.delete(memories).where(and(eq(memories.personaId, id), eq(memories.userId, userId)));
@@ -6056,6 +6059,96 @@ export async function setPersonaVersionEvalRun(
     .where(and(eq(personaVersions.id, id), eq(personaVersions.userId, userId)))
     .returning({ id: personaVersions.id });
   return rows.length > 0;
+}
+
+/** Open a sitting of the blind test. */
+export async function createBlindSession(data: InsertBlindSession) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [row] = await db.insert(blindSessions).values(data).returning();
+  return row;
+}
+
+/** One sitting, scoped to its owner. */
+export async function getBlindSession(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(blindSessions)
+    .where(and(eq(blindSessions.id, id), eq(blindSessions.userId, userId)))
+    .limit(1);
+  return rows[0];
+}
+
+/** The sittings of a persona, newest first. */
+export async function listBlindSessions(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(blindSessions)
+    .where(and(eq(blindSessions.personaId, personaId), eq(blindSessions.userId, userId)))
+    .orderBy(desc(blindSessions.id));
+}
+
+/** Write answers, the invite hash, or the summary of a sitting. */
+export async function updateBlindSession(
+  id: number,
+  userId: number,
+  patch: Partial<{
+    groups: unknown;
+    answers: unknown;
+    summary: unknown;
+    tokenHash: string | null;
+    expiresAt: Date | null;
+    finishedAt: Date | null;
+  }>,
+) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db
+    .update(blindSessions)
+    .set(patch)
+    .where(and(eq(blindSessions.id, id), eq(blindSessions.userId, userId)))
+    .returning();
+  return row;
+}
+
+/**
+ * A sitting looked up by the invite hash, not by who owns it.
+ *
+ * A friend has the token and nothing else. The hash is how the sitting
+ * is found; the owner is not in the request.
+ */
+export async function getBlindSessionByTokenHash(tokenHash: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(blindSessions)
+    .where(eq(blindSessions.tokenHash, tokenHash))
+    .limit(1);
+  return rows[0];
+}
+
+/** Write a friend's answers onto the sitting the token opened. */
+export async function updateBlindSessionByTokenHash(
+  tokenHash: string,
+  patch: Partial<{
+    answers: unknown;
+    summary: unknown;
+    finishedAt: Date | null;
+  }>,
+) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db
+    .update(blindSessions)
+    .set(patch)
+    .where(eq(blindSessions.tokenHash, tokenHash))
+    .returning();
+  return row;
 }
 
 /** The evaluation runs with these ids, scoped to their owner. */
