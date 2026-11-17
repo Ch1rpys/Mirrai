@@ -948,6 +948,21 @@ describe("the lobby", () => {
   });
 });
 
+describe("memories taken from the persona", () => {
+  it("asks only for active memories whose source line is the persona", async () => {
+    registry.select.memories = [{ id: 1, title: "还在", status: "active" }];
+    await db.getMemoriesFromPersona(4, 1);
+
+    const where = whereOf(0)[0];
+    expect(where.sql).toContain('"memories"."status"');
+    expect(where.params).toContain("active");
+    expect(where.sql).toContain('"messages"."role"');
+    expect(where.params).toContain("assistant");
+    expect(where.params).toContain(1);
+    expect(where.params).toContain(4);
+  });
+});
+
 describe("the milestones", () => {
   it("counts only this user's letters, sent sentences, and goodbyes", async () => {
     await db.getUserMilestones(3);

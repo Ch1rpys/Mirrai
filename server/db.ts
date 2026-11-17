@@ -2530,6 +2530,7 @@ export async function getMemoriesFromPersona(
     .where(and(
       eq(memories.personaId, personaId),
       eq(memories.userId, userId),
+      eq(memories.status, "active"),
       eq(messages.userId, userId),
       eq(messages.personaId, personaId),
       eq(messages.role, "assistant"),
