@@ -75,6 +75,10 @@ import { getBotStatus, startWeChatBot, stopWeChatBot, startLogin, submitVerifyCo
 import { clearAllActivePersonas } from "./wechat/commands";
 import { runSkillPipeline } from "./skill-engine/pipeline";
 import { exportSkillToHost } from "./skill-engine/skill-export";
+import {
+  estimateDistillationForPersona,
+  maxDistillCalls,
+} from "./skill-engine/estimate";
 import { getEmotionalStateDesc, buildSystemPrompt, computeIntimacy, checkGraduationEligibility } from "./_core/persona-utils";
 import { isEmotionalState } from "./_core/emotion";
 import { getEffectiveGraduationMode, getGraduationModeDetails, canOfferGraduation, getEffectivePresence } from "./_core/graduation";
@@ -339,6 +343,38 @@ function hasDistillationMaterial(material: DistillationMaterial): boolean {
     .trim();
   const hasPhotos = material.files.some((f) => f.fileType === "image" && f.fileUrl);
   return Boolean(uploadedText) || hasPhotos || material.collectedCount > 0;
+}
+
+async function assertDistillCallBudget(params: {
+  personaId: number;
+  userId: number;
+  mode?: DistillationMode | null;
+  locale: "zh" | "en";
+  name?: string;
+}): Promise<void> {
+  let timezone: string | null = null;
+  try {
+    timezone = await getUserTimezone(params.userId);
+  } catch {
+    timezone = null;
+  }
+  const estimate = await estimateDistillationForPersona({
+    personaId: params.personaId,
+    userId: params.userId,
+    mode: params.mode,
+    timeZone: timezone,
+    themName: params.name,
+  });
+  const max = maxDistillCalls();
+  if (estimate.calls > max) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: copy(params.locale, "errors.tooManyDistillCalls", {
+        calls: estimate.calls,
+        max,
+      }),
+    });
+  }
 }
 
 /**
@@ -1563,6 +1599,13 @@ export const appRouter = router({
             message: copy(ctx.locale, "errors.nothingToDistil"),
           });
         }
+        await assertDistillCallBudget({
+          personaId: input.id,
+          userId: ctx.user.id,
+          mode: input.mode ?? null,
+          locale: ctx.locale,
+          name: persona.name,
+        });
         startPersonaDistillation({
           locale: ctx.locale,
           personaId: input.id,
@@ -3564,6 +3607,29 @@ export const appRouter = router({
   }),
 
   skillEngine: router({
+    estimate: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        mode: z.enum(["fast", "standard", "deep", "colleague", "celebrity"]).optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        let timezone: string | null = null;
+        try {
+          timezone = await getUserTimezone(ctx.user.id);
+        } catch {
+          timezone = null;
+        }
+        return estimateDistillationForPersona({
+          personaId: input.personaId,
+          userId: ctx.user.id,
+          mode: input.mode ?? null,
+          timeZone: timezone,
+          themName: persona.name,
+        });
+      }),
+
     startPipeline: protectedProcedure
       /**
        * The same limit as the other entry point.
@@ -3618,6 +3684,13 @@ export const appRouter = router({
             message: copy(ctx.locale, "errors.nothingToDistil"),
           });
         }
+        await assertDistillCallBudget({
+          personaId: input.personaId,
+          userId: ctx.user.id,
+          mode: input.mode ?? null,
+          locale: ctx.locale,
+          name: persona.name,
+        });
 
         startPersonaDistillation({
           locale: ctx.locale,

@@ -9,7 +9,7 @@ import type { LLMMessage } from "../llm/types";
 import type { ObservationCard } from "./observations";
 import type { RecordChunk, RecordLine } from "./chunks";
 
-const CARDS_PER_CALL = 60;
+export const CARDS_PER_CALL = 60;
 
 export interface ReduceObservationsInput {
   cards: ObservationCard[];

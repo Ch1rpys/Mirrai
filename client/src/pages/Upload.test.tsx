@@ -14,6 +14,15 @@ import { translate } from "@/i18n";
 
 const upload = vi.fn();
 const refetchFiles = vi.fn();
+const distillPage = vi.hoisted(() => ({
+  status: "ready" as string,
+  files: [] as unknown[],
+  estimate: { chunks: 0, chars: 0, mapCalls: 0, reduceCalls: 0, calls: 4 },
+  collected: 0,
+  confirm: true,
+  trigger: vi.fn(),
+  ask: vi.fn(async () => true),
+}));
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -21,16 +30,17 @@ vi.mock("@/lib/trpc", () => ({
       getResearchProfile: { useQuery: () => ({ data: undefined }) },
       getJobStatus: { useQuery: () => ({ data: undefined, error: null }) },
       exportSkill: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      estimate: { useQuery: () => ({ data: distillPage.estimate }) },
     },
     persona: {
-      get: { useQuery: () => ({ data: { id: 1, name: "小A", analysisStatus: "ready" }, refetch: vi.fn(), isError: false }) },
+      get: { useQuery: () => ({ data: { id: 1, name: "小A", analysisStatus: distillPage.status }, refetch: vi.fn(), isError: false }) },
       getSettings: { useQuery: () => ({ data: { pendingRedistillAdded: 0, pendingRedistillRemoved: false }, refetch: vi.fn() }) },
-      getAnalysisStatus: { useQuery: () => ({ data: { status: "ready" }, refetch: vi.fn() }) },
-      triggerAnalysis: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      getAnalysisStatus: { useQuery: () => ({ data: { status: distillPage.status }, refetch: vi.fn() }) },
+      triggerAnalysis: { useMutation: () => ({ mutate: distillPage.trigger, isPending: false }) },
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     file: {
-      list: { useQuery: () => ({ data: [], refetch: refetchFiles, isLoading: false, isError: false }) },
+      list: { useQuery: () => ({ data: distillPage.files, refetch: refetchFiles, isLoading: false, isError: false }) },
       upload: { useMutation: () => ({ mutateAsync: upload, isPending: false }) },
       delete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
@@ -48,7 +58,7 @@ vi.mock("@/lib/trpc", () => ({
       cancel: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     collector: {
-      preview: { useQuery: () => ({ data: { total: 0 } }) },
+      preview: { useQuery: () => ({ data: { total: distillPage.collected } }) },
     },
     useUtils: () => ({
       persona: { getSettings: { invalidate: vi.fn() } },
@@ -70,7 +80,7 @@ vi.mock("sonner", () => ({
 }));
 
 vi.mock("@/components/ConfirmDialog", () => ({
-  useConfirm: () => async () => true,
+  useConfirm: () => distillPage.ask,
   ConfirmProvider: ({ children }: { children: any }) => children,
 }));
 
@@ -114,6 +124,14 @@ function makeFile(name: string, type = "text/plain"): File {
 describe("the files that are on their way", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    distillPage.status = "ready";
+    distillPage.files = [];
+    distillPage.estimate = { chunks: 0, chars: 0, mapCalls: 0, reduceCalls: 0, calls: 4 };
+    distillPage.collected = 0;
+    distillPage.confirm = true;
+    distillPage.trigger.mockReset();
+    distillPage.ask.mockReset();
+    distillPage.ask.mockImplementation(async () => distillPage.confirm);
     // The uploads stay on their way: a row that is finished is taken
     // off the panel.
     upload.mockImplementation(() => new Promise(() => {}));
@@ -224,5 +242,32 @@ describe("the files that are on their way", () => {
       expect(send).toHaveBeenCalled();
     });
     expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("shows how much of the record this run will read", () => {
+    distillPage.status = "pending";
+    distillPage.collected = 3;
+    distillPage.estimate = { chunks: 24, chars: 140_000, mapCalls: 24, reduceCalls: 4, calls: 31 };
+
+    render(<Upload />);
+    expect(screen.getByText(/这次会读 24 段记录（约 14 万字），大约调用模型 31 次/)).toBeTruthy();
+  });
+
+  it("asks once more when the estimate is over a hundred calls, and can stop", async () => {
+    distillPage.status = "pending";
+    distillPage.collected = 3;
+    distillPage.estimate = { chunks: 24, chars: 140_000, mapCalls: 24, reduceCalls: 4, calls: 120 };
+    distillPage.confirm = false;
+
+    render(<Upload />);
+    fireEvent.click(screen.getByRole("button", { name: "开始 AI 解析，生成数字分身" }));
+
+    await waitFor(() => {
+      expect(distillPage.ask).toHaveBeenCalled();
+    });
+    expect(distillPage.ask).toHaveBeenCalledWith(
+      expect.objectContaining({ description: expect.stringContaining("120") }),
+    );
+    expect(distillPage.trigger).not.toHaveBeenCalled();
   });
 });

@@ -268,4 +268,8 @@ export const V6 = {
     zh: "{{from}} 至 {{to}}",
     en: "{{from}} to {{to}}",
   },
+  "errors.tooManyDistillCalls": {
+    zh: "这次预估要调用 {{calls}} 次，超过了上限 {{max}}。换一个更轻的模式。",
+    en: "This run would make {{calls}} calls, over the ceiling of {{max}}. Pick a lighter mode.",
+  },
 } as const satisfies CopyTable;

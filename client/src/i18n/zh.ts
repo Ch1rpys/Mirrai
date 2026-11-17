@@ -1771,6 +1771,8 @@ export const zh = {
     calls: "约 {{count}} 次模型调用",
     sample: "最多分析 {{count}} 字聊天记录",
     photos: "最多描述 {{count}} 张照片",
+    estimate: "这次会读 {{chunks}} 段记录（约 {{chars}} 万字），大约调用模型 {{calls}} 次。",
+    confirmCalls: "{{calls}} 次调用可能要花一阵子，也要花钱。确定用这个模式吗？",
     presets: {
       fast: {
         label: "快速",

@@ -56,4 +56,11 @@ describe("the distillation preset picker", () => {
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange.mock.calls[0][0]).not.toBe("standard");
   });
+
+  it("shows the live estimate on the selected preset", () => {
+    render(
+      <DistillationModePicker value="standard" onChange={() => {}} estimateCalls={37} />,
+    );
+    expect(screen.getByText("约 37 次模型调用")).toBeTruthy();
+  });
 });

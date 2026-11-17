@@ -23,6 +23,7 @@ const getSkillJobById = vi.fn();
 const getPersonaSettings = vi.fn();
 const setPersonaSettings = vi.fn();
 const getUserTimezone = vi.fn();
+const iterateRecords = vi.fn();
 
 vi.mock("./db", () => ({
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
@@ -34,6 +35,7 @@ vi.mock("./db", () => ({
   getPersonaSettings: (...a: unknown[]) => getPersonaSettings(...a),
   setPersonaSettings: (...a: unknown[]) => setPersonaSettings(...a),
   getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
+  iterateRecords: (...a: unknown[]) => iterateRecords(...a),
 }));
 
 const runSkillPipeline = vi.fn();
@@ -88,6 +90,7 @@ describe("distilling a persona", () => {
     getCollectedMessagesForPersona.mockResolvedValue([]);
     countRecords.mockResolvedValue(0);
     getUserTimezone.mockResolvedValue("Asia/Shanghai");
+    iterateRecords.mockImplementation(async function* () {});
     getPersonaSettings.mockResolvedValue(null);
     setPersonaSettings.mockResolvedValue(true);
     updatePersona.mockResolvedValue(undefined);
@@ -251,5 +254,41 @@ describe("distilling a persona", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(runSkillPipeline).not.toHaveBeenCalled();
+  });
+
+  it("estimates the same number of blocks chunkRecords would cut", async () => {
+    const { buildXiaomanRecords } = await import("./test-fixtures/xiaoman");
+    const { chunkRecords } = await import("./skill-engine/chunks");
+    const fixture = buildXiaomanRecords();
+    iterateRecords.mockImplementation(async function* () {
+      for (const row of fixture) yield row;
+    });
+
+    const estimate = await appRouter
+      .createCaller(ctxFor(1))
+      .skillEngine.estimate({ personaId: 5, mode: "deep" });
+
+    const chunks = chunkRecords(fixture, {
+      timeZone: "Asia/Shanghai",
+      themName: persona.name,
+    });
+    expect(estimate.chunks).toBe(chunks.length);
+    expect(estimate.mapCalls).toBe(chunks.length);
+  });
+
+  it("refuses a run that would go over MAX_DISTILL_CALLS", async () => {
+    const previous = process.env.MAX_DISTILL_CALLS;
+    process.env.MAX_DISTILL_CALLS = "1";
+    try {
+      await expect(
+        appRouter
+          .createCaller(ctxFor(1))
+          .persona.triggerAnalysis({ id: 5, characterFamily: "relationship" }),
+      ).rejects.toThrow(/上限/);
+      expect(runSkillPipeline).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) delete process.env.MAX_DISTILL_CALLS;
+      else process.env.MAX_DISTILL_CALLS = previous;
+    }
   });
 });

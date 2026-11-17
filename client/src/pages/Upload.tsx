@@ -16,8 +16,10 @@ import { isChatImportFileType, isUnparsedChatUpload } from "@shared/records";
 import { resolveIntakeGaps } from "@/lib/intake-gaps";
 import { toast } from "sonner";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useConfirm } from "@/components/ConfirmDialog";
 import {
   DEFAULT_DISTILLATION_MODE,
+  DISTILL_CALLS_CONFIRM_AFTER,
   type DistillationMode,
 } from "@shared/distillation-modes";
 
@@ -249,6 +251,7 @@ export default function Upload() {
   const [, navigate] = useLocation();
   const { isAuthenticated, user } = useAuth({ redirectOnUnauthenticated: true });
   const { t, locale } = useLocale();
+  const confirm = useConfirm();
 
   /**
    * The uploads that are on their way.
@@ -404,6 +407,10 @@ export default function Upload() {
     },
     onError: (e) => toast.error(t("upload.analysisFailed", { message: e.message })),
   });
+  const { data: distillEstimate } = trpc.skillEngine.estimate.useQuery(
+    { personaId, mode },
+    { enabled: isAuthenticated && hasPersonaId },
+  );
   /* The preset is remembered on the persona, so a re-run of the
      distillation keeps the same choice. */
   const saveModeMutation = trpc.persona.update.useMutation({
@@ -504,6 +511,17 @@ export default function Upload() {
     if (!entry?.file) return;
     await sendFile(entry.file, key);
   }, [uploadingFiles, sendFile]);
+
+  const startDistillation = useCallback(async () => {
+    const calls = distillEstimate?.calls ?? 0;
+    if (calls > DISTILL_CALLS_CONFIRM_AFTER) {
+      const ok = await confirm({
+        description: t("distillation.confirmCalls", { calls }),
+      });
+      if (!ok) return;
+    }
+    triggerMutation.mutate({ id: personaId, mode });
+  }, [confirm, distillEstimate?.calls, mode, personaId, t, triggerMutation]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false);
@@ -608,7 +626,7 @@ export default function Upload() {
           added={isAnalyzing ? 0 : (personaSettings?.pendingRedistillAdded ?? 0)}
           removed={!isAnalyzing && personaSettings?.pendingRedistillRemoved === true}
           pending={triggerMutation.isPending}
-          onRebuild={() => triggerMutation.mutate({ id: personaId, mode })}
+          onRebuild={() => { void startDistillation(); }}
         />
         <RecordSources personaId={personaId} />
 
@@ -870,6 +888,7 @@ export default function Upload() {
               </div>
               <DistillationModePicker
                 value={mode}
+                estimateCalls={distillEstimate?.calls}
                 onChange={next => {
                   setMode(next);
                   /**
@@ -886,9 +905,18 @@ export default function Upload() {
                 }}
                 disabled={triggerMutation.isPending || saveModeMutation.isPending}
               />
+              {distillEstimate && distillEstimate.chunks > 0 && (
+                <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                  {t("distillation.estimate", {
+                    chunks: distillEstimate.chunks,
+                    chars: Math.round((distillEstimate.chars / 10_000) * 10) / 10,
+                    calls: distillEstimate.calls,
+                  })}
+                </p>
+              )}
             </div>
             <Button className="w-full h-12 rounded-md text-base font-semibold animate-fade-in-up"
-              onClick={() => triggerMutation.mutate({ id: personaId, mode })}
+              onClick={() => { void startDistillation(); }}
               disabled={triggerMutation.isPending}>
               {triggerMutation.isPending
                 ? <><Loader2 className="w-5 h-5 animate-spin" />{t("upload.starting")}</>

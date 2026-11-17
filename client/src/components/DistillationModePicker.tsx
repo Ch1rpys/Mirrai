@@ -20,9 +20,11 @@ interface Props {
   value: DistillationMode;
   onChange: (mode: DistillationMode) => void;
   disabled?: boolean;
+  /** Live call count for the selected preset, from `skillEngine.estimate`. */
+  estimateCalls?: number;
 }
 
-export default function DistillationModePicker({ value, onChange, disabled }: Props) {
+export default function DistillationModePicker({ value, onChange, disabled, estimateCalls }: Props) {
   const { t } = useLocale();
   const groupRef = useRef<HTMLDivElement>(null);
 
@@ -107,7 +109,9 @@ export default function DistillationModePicker({ value, onChange, disabled }: Pr
                 {t(preset.clientLabelKey)}
               </span>
               <span className="text-xs text-muted-foreground flex-shrink-0">
-                {t("distillation.calls", { count: preset.approxCalls })}
+                {t("distillation.calls", {
+                  count: selected && estimateCalls != null ? estimateCalls : preset.approxCalls,
+                })}
               </span>
               {selected && <Check className="w-3.5 h-3.5 text-cinnabar flex-shrink-0" />}
             </div>

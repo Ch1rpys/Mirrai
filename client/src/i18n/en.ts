@@ -1758,6 +1758,8 @@ export const en = {
     calls: "About {{count}} model calls",
     sample: "Reads up to {{count}} characters of chat history",
     photos: "Describes up to {{count}} photos",
+    estimate: "This run will read {{chunks}} blocks (about {{chars}} × 10,000 characters) and make about {{calls}} model calls.",
+    confirmCalls: "{{calls}} calls may take a while, and they cost money. Use this mode?",
     presets: {
       fast: {
         label: "Quick",

@@ -21,6 +21,12 @@
 
 export type DistillationMode = "fast" | "standard" | "deep" | "colleague" | "celebrity";
 
+/** Above this, the upload page asks once more before starting. */
+export const DISTILL_CALLS_CONFIRM_AFTER = 100;
+
+/** The hard ceiling. A run over this is refused. */
+export const DEFAULT_MAX_DISTILL_CALLS = 600;
+
 /** The family of prompts a run uses. */
 export type DistillationFamily = "relationship" | "colleague" | "celebrity";
 

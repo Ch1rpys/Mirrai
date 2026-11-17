@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CHUNK_MAX_CHARS, chunkRecords } from "./chunks";
+import { estimateDistillation } from "./estimate";
 import { isTextRecord } from "@shared/records";
 import { buildXiaomanRecords, shanghaiDate } from "../test-fixtures/xiaoman";
 
@@ -47,5 +48,23 @@ describe("chunkRecords", () => {
     // in the blocks too, rendered, so the sum is the spoken count, not
     // only kind === "text".
     expect(spoken.filter((row) => isTextRecord(row)).length).toBeLessThan(packed);
+  });
+});
+
+describe("estimateDistillation", () => {
+  const chunks = chunkRecords(buildXiaomanRecords(), { timeZone: TIME_ZONE });
+
+  it("counts the same blocks deep mode would map", () => {
+    const estimate = estimateDistillation(chunks, "deep");
+    expect(estimate.chunks).toBe(chunks.length);
+    expect(estimate.mapCalls).toBe(chunks.length);
+    expect(estimate.calls).toBeGreaterThan(estimate.mapCalls);
+  });
+
+  it("caps fast mode at twelve blocks", () => {
+    expect(chunks.length).toBeGreaterThan(12);
+    const estimate = estimateDistillation(chunks, "fast");
+    expect(estimate.chunks).toBe(12);
+    expect(estimate.mapCalls).toBe(12);
   });
 });
