@@ -185,7 +185,7 @@
 | C9.6 | ⬜ |  |  |
 | C9.7 | ⬜ |  |  |
 | C9.8 | ⬜ |  |  |
-| C10.1 | ⬜ |  |  |
+| C10.1 | ✅ | 178f815 (detect); 4bde47e (filter/prompt); 092e6b8 (UI) | `shared/harm.test.ts`：四类词表各 ≥15；正例命中；「你这个小笨蛋」不命中；默认夹具 0 候选、`withHarm` 5 个 `belittle`；`pending`/`remove` 滤掉那 5 行、`keep` 不滤。`harm.test.ts` + `pipeline-harm.test.ts`：mock 确认全部 5 条后 `harmReport.categories` 有 `belittle`、`count: 5`、`decision: "pending"`。`pipeline-decisions.test.ts`：已选 `keep` 重跑仍是 `keep`。`persona-utils-harm.test.ts`：`pending` 时指令在底线之后、围栏之外；`keep` 与无报告不含该句。`prompt-golden.test.ts` 10 通过、快照未改。`HarmNotice.test.tsx`：默认选中「不学」；选「照实保留」调 `decideHarm({ id: 5, decision: "keep" })`；文案不含「家暴」「PUA」「有毒」。闸门 `330 passed \| 3 skipped (333)` 文件，`2957 passed \| 16 skipped (2973)` 用例。 |
 | C10.2 | ⬜ |  |  |
 | C10.3 | ⬜ |  |  |
 | C10.4 | ⬜ |  |  |
@@ -566,3 +566,12 @@ A5、A7、A9 维持 ✅。A6、A8 改回 ⬜。
 - 闸门 `324 passed | 3 skipped (327)` 文件，`2935 passed | 16 skipped (2951)` 用例，`all six steps passed`。相对 B1.4（323/3 文件、2931/16 用例）：通过文件 +1、通过用例 +4；跳过数不变。
 - 偏差 67。未验证清单、待用户决定无新增。
 - B1.5 标 ✅。下一条 C10.1。
+
+### WP3 · 实现会话 · 2026-11-17 · C10.1
+
+- `178f815` 四类线索词、`findHarmCandidates` / `confirmHarmFromRecords`（一类 ≥3 条才问模型，最多送 20 条），确认后仍 ≥3 的类写入 `personaData.harmReport`，默认 `pending`。`mergeUserDecisions` 保住已做的决定。
+- `4bde47e` `filterHarm` 接到示范检索和生成；`pending`/`remove` 在底线后加固定指令且在围栏外，`keep` 不加。
+- `092e6b8` `HarmNotice` 挂在上传页就绪卡片和人设编辑页；`persona.decideHarm` 走 `withPersonaDataLock`。文案不含「家暴」「PUA」「有毒」。
+- 闸门 `330 passed | 3 skipped (333)` 文件，`2957 passed | 16 skipped (2973)` 用例，`all six steps passed`。相对 B1.5（324/3 文件、2935/16 用例）：通过文件 +6、通过用例 +22；跳过数不变。
+- 偏差无新增。未验证清单、待用户决定无新增。
+- C10.1 标 ✅。下一条 B1.6。
