@@ -249,4 +249,13 @@ describe("a re-run of the distillation", () => {
     expect(merged.harmReport?.categories[0]?.count).toBe(5);
     expect(merged.harmReport?.decidedAt).toBe("2026-01-01T00:00:00.000Z");
   });
+
+  it("keeps the questions the user already answered", () => {
+    const merged = mergeUserDecisions(
+      fresh,
+      { clarified: ["never_says", "address_angry"] },
+      [],
+    );
+    expect(merged.clarified).toEqual(["never_says", "address_angry"]);
+  });
 });

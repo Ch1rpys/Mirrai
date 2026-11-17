@@ -106,6 +106,8 @@ export interface PersonaData {
    * is the user's, and a re-run must not put it back to pending.
    */
   harmReport?: HarmReport | null;
+  /** Question ids the user already answered or skipped, so they are not asked again. */
+  clarified?: string[];
 }
 
 /** The stages a relationship can be in. */
@@ -140,6 +142,7 @@ export const PERSONA_DATA_FIELDS: Array<keyof PersonaData> = [
   "rejectedFeedbackKeys",
   "imperfectionDefaultsReviewed",
   "harmReport",
+  "clarified",
 ];
 
 /**
@@ -185,6 +188,7 @@ export const PERSONA_DOCUMENT_EXCLUDED_FIELDS: Array<keyof PersonaData> = [
   "rejectedFeedbackKeys",
   "imperfectionDefaultsReviewed",
   "harmReport",
+  "clarified",
 ];
 
 /** The default realism level: noticeably imperfect, but not a mess. */
@@ -330,6 +334,7 @@ export function normalizePersonaData(
     source.imperfectionDefaultsReviewed === true ||
     fallback.imperfectionDefaultsReviewed === true;
   const harmReport = normalizeHarmReport(source.harmReport ?? fallback.harmReport);
+  const clarified = toStringList(source.clarified ?? fallback.clarified);
 
   return {
     personality,
@@ -354,5 +359,6 @@ export function normalizePersonaData(
     rejectedFeedbackKeys,
     imperfectionDefaultsReviewed,
     ...(harmReport ? { harmReport } : {}),
+    ...(clarified.length ? { clarified } : {}),
   };
 }

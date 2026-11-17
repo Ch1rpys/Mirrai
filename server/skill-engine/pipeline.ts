@@ -338,6 +338,13 @@ export function mergeUserDecisions(
   const nextHarm = mergeHarmDecision(fresh.harmReport, previous.harmReport);
   if (nextHarm) merged.harmReport = nextHarm;
   else delete merged.harmReport;
+  const clarified = Array.isArray(previous.clarified)
+    ? previous.clarified.filter((key): key is string => typeof key === "string")
+    : Array.isArray(fresh.clarified)
+      ? fresh.clarified.filter((key): key is string => typeof key === "string")
+      : undefined;
+  if (clarified) merged.clarified = clarified;
+  else delete merged.clarified;
   return merged;
 }
 

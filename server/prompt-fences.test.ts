@@ -209,3 +209,20 @@ describe("the distillation's observation and merge stages", () => {
     });
   });
 });
+
+describe("a line they would never say", () => {
+  it("reaches the prompt only inside the fence", async () => {
+    const { applyClarification } = await import("@shared/clarify");
+    const { normalizeStyleProfile } = await import("@shared/style-profile");
+    const patch = applyClarification(
+      { id: "never_says", kind: "never_says", prompt: "", input: "skipable-text" },
+      HOSTILE_NOTE,
+      { personaData: {}, styleProfile: normalizeStyleProfile(null), locale: "zh" },
+    );
+    const prompt = buildSystemPrompt(
+      persona({ personaData: patch?.personaData }),
+    );
+    expect(prompt).toContain(HOSTILE_NOTE);
+    expect(unfenced(prompt)).not.toContain(HOSTILE_NOTE);
+  });
+});
