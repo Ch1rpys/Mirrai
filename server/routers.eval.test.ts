@@ -20,6 +20,8 @@ const getCollectedMessagesForPersonaRows = vi.fn();
 const getEvalCases = vi.fn();
 const saveEvalCases = vi.fn();
 const saveEvalRun = vi.fn();
+const getLatestPersonaVersion = vi.fn();
+const setPersonaVersionEvalRun = vi.fn();
 
 vi.mock("./db", () => ({
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
@@ -29,6 +31,8 @@ vi.mock("./db", () => ({
   getEvalCases: (...a: unknown[]) => getEvalCases(...a),
   saveEvalCases: (...a: unknown[]) => saveEvalCases(...a),
   saveEvalRun: (...a: unknown[]) => saveEvalRun(...a),
+  getLatestPersonaVersion: (...a: unknown[]) => getLatestPersonaVersion(...a),
+  setPersonaVersionEvalRun: (...a: unknown[]) => setPersonaVersionEvalRun(...a),
 }));
 
 const runEval = vi.fn();
@@ -96,6 +100,8 @@ describe("the fidelity evaluation", () => {
     evalCases = [{ context: "在吗", expected: "在的", expectedState: "warm" }];
     saveEvalCases.mockResolvedValue(undefined);
     saveEvalRun.mockResolvedValue(undefined);
+    getLatestPersonaVersion.mockResolvedValue(undefined);
+    setPersonaVersionEvalRun.mockResolvedValue(false);
     // The run takes a while — that is the whole point of the guard.
     runEval.mockImplementation(async () => {
       await new Promise((resolve) => setTimeout(resolve, 30));

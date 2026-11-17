@@ -20,6 +20,8 @@ const getEvalCases = vi.fn();
 const saveEvalCases = vi.fn();
 const saveEvalRun = vi.fn();
 const getLatestEvalRun = vi.fn();
+const getLatestPersonaVersion = vi.fn();
+const setPersonaVersionEvalRun = vi.fn();
 const getOutboundLetters = vi.fn();
 const createOutboundLetter = vi.fn();
 const setOutboundLetterStatus = vi.fn();
@@ -40,6 +42,8 @@ vi.mock("./db", () => ({
   saveEvalCases: (...a: unknown[]) => saveEvalCases(...a),
   saveEvalRun: (...a: unknown[]) => saveEvalRun(...a),
   getLatestEvalRun: (...a: unknown[]) => getLatestEvalRun(...a),
+  getLatestPersonaVersion: (...a: unknown[]) => getLatestPersonaVersion(...a),
+  setPersonaVersionEvalRun: (...a: unknown[]) => setPersonaVersionEvalRun(...a),
   getOutboundLetters: (...a: unknown[]) => getOutboundLetters(...a),
   createOutboundLetter: (...a: unknown[]) => createOutboundLetter(...a),
   setOutboundLetterStatus: (...a: unknown[]) => setOutboundLetterStatus(...a),
@@ -156,6 +160,8 @@ beforeEach(() => {
     saveEvalCases,
     saveEvalRun,
     getLatestEvalRun,
+    getLatestPersonaVersion,
+    setPersonaVersionEvalRun,
     getOutboundLetters,
     createOutboundLetter,
     setOutboundLetterStatus,
@@ -179,6 +185,8 @@ beforeEach(() => {
   );
   saveEvalRun.mockResolvedValue(1);
   getLatestEvalRun.mockResolvedValue(null);
+  getLatestPersonaVersion.mockResolvedValue(undefined);
+  setPersonaVersionEvalRun.mockResolvedValue(false);
   getOutboundLetters.mockResolvedValue([]);
   createOutboundLetter.mockResolvedValue(1);
   setOutboundLetterStatus.mockResolvedValue(true);

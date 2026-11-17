@@ -20,6 +20,7 @@ const updatePersona = vi.fn();
 const getCollectedMessagesForPersonaRows = vi.fn();
 const appendPersonaCorrection = vi.fn();
 const updateSkillJob = vi.fn();
+const createPersonaVersion = vi.fn();
 
 vi.mock("./db", () => ({
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
@@ -28,6 +29,7 @@ vi.mock("./db", () => ({
   getCollectedMessagesForPersona: (...a: unknown[]) => getCollectedMessagesForPersonaRows(...a),
   appendPersonaCorrection: (...a: unknown[]) => appendPersonaCorrection(...a),
   updateSkillJob: (...a: unknown[]) => updateSkillJob(...a),
+  createPersonaVersion: (...a: unknown[]) => createPersonaVersion(...a),
 }));
 
 const mineMicroRules = vi.fn();
@@ -106,6 +108,7 @@ describe("the persona's own fields", () => {
       stored = { ...stored, ...(data?.personaData ?? {}) };
     });
     getCollectedMessagesForPersonaRows.mockResolvedValue([]);
+    createPersonaVersion.mockResolvedValue(1);
     applyPersonaCorrection.mockResolvedValue({
       personaData: { personality: "更温柔" },
       changedFields: ["personality"],

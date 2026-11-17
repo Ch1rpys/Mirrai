@@ -1861,6 +1861,20 @@ export const en = {
     inferredHint: "This layer has no quoted line behind it. The model summarised it from the rest.",
   },
 
+  versionHistory: {
+    title: "Persona versions",
+    reasonDistill: "Before the last distillation",
+    reasonEdit: "Before the last edit",
+    reasonCorrection: "Before the last correction",
+    reasonRestore: "Before the last restore",
+    restore: "Restore this version",
+    restoreConfirm: "Restore the persona to how it was at {{time}}? The current one is stored first, so you can switch back.",
+    overlap: "Overlap {{value}}",
+    compare: "Compare",
+    before: "Then",
+    after: "Now",
+  },
+
   research: {
     gapsTitle: "Research gaps",
     missingSources: "{{count}} source(s) missing",

@@ -68,6 +68,7 @@ import {
   setPersonaBehaviorProfile, getPersonaBehaviorProfile,
   getPersonaSettings, setPersonaSettings,
   getPersonaStyleProfile, setPersonaStyleProfile,
+  createPersonaVersion, getLatestPersonaVersion, setPersonaVersionEvalRun,
   createSafetyEvent, countSafetyEvents,
 } from "./db";
 import { nanoid } from "nanoid";
@@ -122,6 +123,7 @@ import { personaSettingsPatchSchema } from "./routers-v6/persona-settings-patch"
 import { styleRouter } from "./routers-v6/style";
 import { importRouter } from "./routers-v6/import";
 import { recordRouter } from "./routers-v6/record";
+import { personaVersionRouter } from "./routers-v6/persona-version";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
 import { normalizeMicroRules } from "@shared/micro-rules";
@@ -1293,6 +1295,11 @@ export const appRouter = router({
               message: copy(ctx.locale, "errors.personaDataTooLarge"),
             });
           }
+          try {
+            await createPersonaVersion(input.id, ctx.user.id, "edit");
+          } catch (error) {
+            console.warn("[Persona] The persona version was not stored:", error);
+          }
           await updatePersona(input.id, ctx.user.id, { personaData: merged });
           return { success: true };
         });
@@ -1580,6 +1587,11 @@ export const appRouter = router({
            * replaced. So a correction silently deleted what the user had
            * written.
            */
+          try {
+            await createPersonaVersion(input.id, ctx.user.id, "correction");
+          } catch (error) {
+            console.warn("[Persona] The persona version was not stored:", error);
+          }
           await updatePersona(input.id, ctx.user.id, {
             personaData: {
               ...((persona.personaData as any) || {}),
@@ -4979,10 +4991,25 @@ export const appRouter = router({
           // stored with it, because a run with the rules switched off is
           // a different persona and must not be compared against one with
           // them on.
-          await saveEvalRun(input.personaId, ctx.user.id, {
+          let personaVersionId: number | null = null;
+          try {
+            const latest = await getLatestPersonaVersion(input.personaId, ctx.user.id);
+            personaVersionId = latest?.id ?? null;
+          } catch (error) {
+            console.warn("[Eval] The persona version could not be read:", error);
+          }
+          const runId = await saveEvalRun(input.personaId, ctx.user.id, {
             ...metrics,
             variant: input.variant,
+            personaVersionId,
           }, persona.personaData);
+          if (runId && personaVersionId != null) {
+            try {
+              await setPersonaVersionEvalRun(personaVersionId, ctx.user.id, runId);
+            } catch (error) {
+              console.warn("[Eval] The persona version was not linked:", error);
+            }
+          }
           return { metrics };
         } finally {
           runningEvals.delete(runKey);
@@ -5756,6 +5783,7 @@ export const appRouter = router({
   style: styleRouter,
   import: importRouter,
   record: recordRouter,
+  personaVersion: personaVersionRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {

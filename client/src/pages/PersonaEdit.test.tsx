@@ -94,6 +94,9 @@ vi.mock("@/components/ImperfectionEditor", () => ({
 vi.mock("@/components/V5FidelityEditors", () => ({
   default: () => <div data-testid="v5-editors" />,
 }));
+vi.mock("@/components/v6/VersionHistory", () => ({
+  default: () => <div data-testid="version-history" />,
+}));
 
 import PersonaEdit from "./PersonaEdit";
 

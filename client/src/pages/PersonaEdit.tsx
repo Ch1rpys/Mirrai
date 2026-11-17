@@ -25,6 +25,7 @@ import ImperfectionEditor from "@/components/ImperfectionEditor";
 import V5FidelityEditors from "@/components/V5FidelityEditors";
 import PersonaSwitches from "@/components/v6/PersonaSwitches";
 import HarmNotice from "@/components/v6/HarmNotice";
+import VersionHistory from "@/components/v6/VersionHistory";
 import TagInput from "@/components/v6/TagInput";
 import { normalizeHarmReport } from "@shared/harm";
 import { useLocale } from "@/contexts/LocaleContext";
@@ -840,6 +841,8 @@ export default function PersonaEdit() {
             )}
           </section>
         )}
+
+        <VersionHistory personaId={personaId} />
 
         {/* Character card — the persona in a format other tools understand */}
         <section className="surface p-5 sm:p-6 space-y-5 animate-fade-in-up">

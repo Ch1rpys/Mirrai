@@ -1874,6 +1874,20 @@ export const zh = {
     inferredHint: "这一层没有直接的原话依据，是模型根据其他内容归纳的。",
   },
 
+  versionHistory: {
+    title: "人设版本",
+    reasonDistill: "重新蒸馏之前",
+    reasonEdit: "手动修改之前",
+    reasonCorrection: "修正之前",
+    reasonRestore: "恢复之前",
+    restore: "恢复这一版",
+    restoreConfirm: "把人设恢复成 {{time}} 的样子？现在的会先存成一版，可以再换回来。",
+    overlap: "重合 {{value}}",
+    compare: "对比",
+    before: "当时",
+    after: "现在",
+  },
+
   research: {
     gapsTitle: "研究缺口",
     missingSources: "缺 {{count}} 处来源",
