@@ -60,7 +60,9 @@ export function normalizePeriods(value: unknown): PersonaPeriod[] {
  * sides still have enough of their own lines.
  *
  * Returns nothing when the record is one stretch. The selector is not
- * shown for a persona that cannot be cut.
+ * shown for a persona that cannot be cut. Rows are read by the time
+ * they were said, so a later scene that was appended out of order
+ * does not look like another silence.
  */
 export function findPeriodSplits(
   messages: Array<{ role: string; timestamp: Date | null }>,
@@ -76,7 +78,8 @@ export function findPeriodSplits(
         ? row.timestamp
         : null,
     }))
-    .filter((row) => row.at);
+    .filter((row) => row.at)
+    .sort((a, b) => a.at!.getTime() - b.at!.getTime() || a.index - b.index);
 
   const cuts: PeriodSplitPoint[] = [];
   for (let i = 1; i < dated.length; i++) {

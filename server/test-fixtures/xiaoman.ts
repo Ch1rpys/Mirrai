@@ -337,18 +337,36 @@ function listCandidateDays(): CivilDate[] {
   return days;
 }
 
-function pickActiveDays(rng: Rng, n: number): CivilDate[] {
-  const candidates = listCandidateDays();
+const MAX_ACTIVE_GAP_DAYS = 13;
+
+function daysBetween(a: CivilDate, b: CivilDate): number {
+  const ua = Date.UTC(a.year, a.month - 1, a.day);
+  const ub = Date.UTC(b.year, b.month - 1, b.day);
+  return Math.round((ub - ua) / 86_400_000);
+}
+
+function crossesSilence(a: CivilDate, b: CivilDate): boolean {
+  return ymd(a.year, a.month, a.day) < ymd(2023, 6, 10)
+    && ymd(b.year, b.month, b.day) > ymd(2023, 7, 4);
+}
+
+/**
+ * Burns the same random draws the old day picker used.
+ *
+ * The sentences after this still need that stream: sticker rates and
+ * the other designed proportions were fitted to it.
+ */
+function consumeLegacyDayRng(rng: Rng, n: number, candidates: CivilDate[]): void {
+  const selected = new Map<number, CivilDate>();
   const forced: CivilDate[] = [
     { year: 2022, month: 3, day: 12 },
     { year: 2022, month: 4, day: 2 },
   ];
-  const selected = new Map<number, CivilDate>();
   for (const day of forced) selected.set(ymd(day.year, day.month, day.day), day);
 
   const wednesdays = shuffle(
     rng,
-    candidates.filter((d) => weekdayOf(d.year, d.month, d.day) === 3),
+    candidates.filter((day) => weekdayOf(day.year, day.month, day.day) === 3),
   );
   for (const day of wednesdays) {
     if (selected.size >= n) break;
@@ -360,25 +378,108 @@ function pickActiveDays(rng: Rng, n: number): CivilDate[] {
 
   const sundays = shuffle(
     rng,
-    candidates.filter((d) => weekdayOf(d.year, d.month, d.day) === 0),
+    candidates.filter((day) => weekdayOf(day.year, day.month, day.day) === 0),
   );
-  let sundayCount = [...selected.values()].filter((d) => weekdayOf(d.year, d.month, d.day) === 0).length;
+  let sundayCount = [...selected.values()].filter((day) => weekdayOf(day.year, day.month, day.day) === 0).length;
   for (const day of sundays) {
     if (sundayCount >= 20) break;
     const key = ymd(day.year, day.month, day.day);
     if (!selected.has(key)) {
       selected.set(key, day);
-      sundayCount++;
+      sundayCount += 1;
     }
   }
 
   const rest = shuffle(
     rng,
-    candidates.filter((d) => !selected.has(ymd(d.year, d.month, d.day))),
+    candidates.filter((day) => !selected.has(ymd(day.year, day.month, day.day))),
   );
   for (const day of rest) {
     if (selected.size >= n) break;
     selected.set(ymd(day.year, day.month, day.day), day);
+  }
+}
+
+/**
+ * Active days, with the designed silence as the only long gap.
+ *
+ * A period split is a silence of fourteen days. Random days across two
+ * years leave several of those, so the log was cut into a dozen
+ * stretches. Every other gap stays inside thirteen days, and the first
+ * day after the silence is 2023-07-05.
+ */
+function pickActiveDays(rng: Rng, n: number): CivilDate[] {
+  const candidates = listCandidateDays();
+  consumeLegacyDayRng(rng, n, candidates);
+
+  const byKey = new Map(candidates.map((day) => [ymd(day.year, day.month, day.day), day]));
+  const selected = new Map<number, CivilDate>();
+  const take = (day: CivilDate | undefined) => {
+    if (!day || selected.size >= n) return;
+    const key = ymd(day.year, day.month, day.day);
+    const known = byKey.get(key);
+    if (!known) return;
+    selected.set(key, known);
+  };
+
+  take(candidates[0]);
+  take(candidates[candidates.length - 1]);
+  take({ year: 2022, month: 3, day: 12 });
+  take({ year: 2022, month: 4, day: 2 });
+  take({ year: 2023, month: 6, day: 9 });
+  take({ year: 2023, month: 7, day: 5 });
+
+  let guard = 0;
+  while (guard++ < candidates.length && selected.size < n) {
+    const sorted = [...selected.values()].sort(
+      (a, b) => ymd(a.year, a.month, a.day) - ymd(b.year, b.month, b.day),
+    );
+    let inserted = false;
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1]!;
+      const next = sorted[i]!;
+      if (crossesSilence(prev, next) || daysBetween(prev, next) <= MAX_ACTIVE_GAP_DAYS) continue;
+      const limit = addDays(prev.year, prev.month, prev.day, MAX_ACTIVE_GAP_DAYS);
+      const prevKey = ymd(prev.year, prev.month, prev.day);
+      const limitKey = ymd(limit.year, limit.month, limit.day);
+      let pick: CivilDate | undefined;
+      for (const day of candidates) {
+        const key = ymd(day.year, day.month, day.day);
+        if (key <= prevKey) continue;
+        if (key > limitKey) break;
+        if (!selected.has(key)) pick = day;
+      }
+      if (!pick) break;
+      take(pick);
+      inserted = true;
+      break;
+    }
+    if (!inserted) break;
+  }
+
+  const addUntil = (pool: CivilDate[], want: number, match: (day: CivilDate) => boolean) => {
+    let count = [...selected.values()].filter(match).length;
+    for (const day of pool) {
+      if (selected.size >= n || count >= want) break;
+      if (selected.has(ymd(day.year, day.month, day.day))) continue;
+      take(day);
+      count += 1;
+    }
+  };
+
+  addUntil(
+    candidates.filter((day) => weekdayOf(day.year, day.month, day.day) === 3),
+    25,
+    (day) => weekdayOf(day.year, day.month, day.day) === 3,
+  );
+  addUntil(
+    candidates.filter((day) => weekdayOf(day.year, day.month, day.day) === 0),
+    20,
+    (day) => weekdayOf(day.year, day.month, day.day) === 0,
+  );
+  for (const day of candidates) {
+    if (selected.size >= n) break;
+    take(day);
   }
 
   return [...selected.values()].sort(

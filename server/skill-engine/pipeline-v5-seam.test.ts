@@ -112,12 +112,12 @@ function expectMinedV5(data: PersonaData, boundaryIso?: string) {
 
   const periods = data.periods ?? [];
   const iso = boundaryIso ?? firstAfterSilenceIso();
-  const idx = periods.findIndex((period) => period.from === iso);
-  expect(idx).toBeGreaterThan(0);
-  expect(periods[idx - 1]?.to).toBe(iso);
-  expect(formatShanghai(new Date(iso)).startsWith("2023-07-12")).toBe(true);
+  expect(periods).toHaveLength(2);
+  expect(periods[0]?.to).toBe(periods[1]?.from);
+  expect(periods[1]?.from).toBe(iso);
+  expect(formatShanghai(new Date(iso)).startsWith("2023-07-05")).toBe(true);
   expect(
-    (periods[idx]?.suppressionsDelta ?? []).some((row) => row.kind === "no_question_ending"),
+    (periods[1]?.suppressionsDelta ?? []).some((row) => row.kind === "no_question_ending"),
   ).toBe(true);
 
   expect(data.openingProfile?.samples ?? 0).toBeGreaterThan(0);
