@@ -71,6 +71,16 @@ describe("the distillation's write-back", () => {
     expect(extractionAt).toBeLessThan(lockAt);
   });
 
+  it("stores a version of the persona before it writes", () => {
+    const lockAt = SOURCE.indexOf("await withPersonaDataLock(personaId, async () => {");
+    const snapshotAt = SOURCE.indexOf('dbFn("createPersonaVersion")', lockAt);
+    const writeAt = SOURCE.indexOf("await db.updatePersona(personaId, userId, {", lockAt);
+    expect(lockAt).toBeGreaterThan(-1);
+    expect(snapshotAt).toBeGreaterThan(lockAt);
+    expect(snapshotAt).toBeLessThan(writeAt);
+    expect(SOURCE.slice(snapshotAt, writeAt)).toContain('"distill"');
+  });
+
   it("the lock is the same one the router takes", () => {
     // Two locks would be two queues, and the two paths would not take
     // turns with each other.

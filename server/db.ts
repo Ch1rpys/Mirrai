@@ -5911,3 +5911,158 @@ export async function deleteOrphanDistillationCards(
     .returning({ id: distillationCards.id });
   return rows.length;
 }
+
+// ─── Persona versions ──────────────────────────────────────────────────────
+
+/**
+ * How many snapshots of a persona are kept.
+ *
+ * Distillation, a full edit, a correction, and a restore each store
+ * one. Without a cap the table grew for every small save, and nothing
+ * pruned it.
+ */
+export const MAX_PERSONA_VERSIONS = 20;
+
+/**
+ * Stores the persona as it is now, before the next write.
+ *
+ * The snapshot is the four columns that make the persona: its own
+ * fields, the measurements, the behaviour, and the switches. A later
+ * restore writes those four back as a set.
+ */
+export async function createPersonaVersion(
+  personaId: number,
+  userId: number,
+  reason: string,
+): Promise<number | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const persona = await getPersonaById(personaId, userId);
+  if (!persona) return undefined;
+  const [row] = await db
+    .insert(personaVersions)
+    .values({
+      userId,
+      personaId,
+      reason,
+      personaData: persona.personaData,
+      styleProfile: persona.styleProfile,
+      behaviorProfile: persona.behaviorProfile,
+      settings: persona.settings,
+    })
+    .returning({ id: personaVersions.id });
+  await prunePersonaVersions(personaId, userId);
+  return row?.id;
+}
+
+/** The snapshots of a persona, newest first. */
+export async function listPersonaVersions(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(personaVersions)
+    .where(
+      and(
+        eq(personaVersions.personaId, personaId),
+        eq(personaVersions.userId, userId),
+      ),
+    )
+    .orderBy(desc(personaVersions.id));
+}
+
+/** One snapshot, scoped to its owner. */
+export async function getPersonaVersion(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(personaVersions)
+    .where(and(eq(personaVersions.id, id), eq(personaVersions.userId, userId)))
+    .limit(1);
+  return rows[0];
+}
+
+/** The newest snapshot of a persona. */
+export async function getLatestPersonaVersion(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(personaVersions)
+    .where(
+      and(
+        eq(personaVersions.personaId, personaId),
+        eq(personaVersions.userId, userId),
+      ),
+    )
+    .orderBy(desc(personaVersions.id))
+    .limit(1);
+  return rows[0];
+}
+
+/**
+ * Drops every snapshot older than the twenty that are kept.
+ *
+ * Newest is by id: several writes in the same second share a
+ * `createdAt`, and id is the order they were taken.
+ */
+export async function prunePersonaVersions(
+  personaId: number,
+  userId: number,
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows = await db
+    .select({ id: personaVersions.id })
+    .from(personaVersions)
+    .where(
+      and(
+        eq(personaVersions.personaId, personaId),
+        eq(personaVersions.userId, userId),
+      ),
+    )
+    .orderBy(desc(personaVersions.id));
+  const surplus = rows.slice(MAX_PERSONA_VERSIONS);
+  if (surplus.length === 0) return 0;
+  const deleted = await db
+    .delete(personaVersions)
+    .where(
+      and(
+        eq(personaVersions.userId, userId),
+        inArray(
+          personaVersions.id,
+          surplus.map((row) => row.id),
+        ),
+      ),
+    )
+    .returning({ id: personaVersions.id });
+  return deleted.length;
+}
+
+/** Hangs a later evaluation run on this snapshot. */
+export async function setPersonaVersionEvalRun(
+  id: number,
+  userId: number,
+  evalRunId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .update(personaVersions)
+    .set({ evalRunId })
+    .where(and(eq(personaVersions.id, id), eq(personaVersions.userId, userId)))
+    .returning({ id: personaVersions.id });
+  return rows.length > 0;
+}
+
+/** The evaluation runs with these ids, scoped to their owner. */
+export async function getEvalRunsByIds(ids: number[], userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  if (ids.length === 0) return [];
+  return db
+    .select()
+    .from(evalRuns)
+    .where(and(eq(evalRuns.userId, userId), inArray(evalRuns.id, ids)));
+}

@@ -1857,6 +1857,15 @@ async function runSkillPipelineOnce(
        * persona editor while the run was going is either before the read
        * (and is carried over) or after the write (and is not touched).
        */
+      const snapshot = dbFn("createPersonaVersion") as
+        | ((personaId: number, userId: number, reason: string) => Promise<unknown>)
+        | undefined;
+      try {
+        await snapshot?.(personaId, userId, "distill");
+      } catch (error) {
+        console.warn("[SkillEngine] The persona version was not stored:", error);
+      }
+
       await db.updatePersona(personaId, userId, {
         personaData,
         analysisStatus: "ready",
