@@ -46,6 +46,17 @@ function daysSince(date: string): number {
 }
 
 describe("the crisis resources", () => {
+  it("lists the United States and Canada as two lines", () => {
+    const us = DEFAULT_CRISIS_RESOURCES.find((resource) => resource.id === "us");
+    const ca = DEFAULT_CRISIS_RESOURCES.find((resource) => resource.id === "ca");
+    expect(us?.contact).toBe("988");
+    expect(ca?.contact).toBe("988");
+    expect(us?.source).toBe("https://988lifeline.org/");
+    expect(ca?.source).toContain("canada.ca");
+    expect(us?.description).not.toBe(ca?.description);
+    expect(DEFAULT_CRISIS_RESOURCES.some((resource) => resource.id === "us-ca")).toBe(false);
+  });
+
   it("ships with at least the national and international lines", () => {
     const resources = getCrisisResources();
     expect(resources.length).toBeGreaterThan(0);

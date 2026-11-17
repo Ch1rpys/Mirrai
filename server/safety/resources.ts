@@ -16,10 +16,11 @@
  * - intl-directory `https://findahelpline.com`: the directory itself, and
  *   IASP at https://www.iasp.info/crisis-centres-helplines/ naming it as
  *   their partner.
- * - us-ca `988`: https://988lifeline.org/ (call or text 988). SAMHSA
- *   https://www.samhsa.gov/mental-health/988 and Canada.ca
- *   https://www.canada.ca/en/public-health/services/suicide-prevention/government-canada-doing-help-prevent-suicide.html
- *   also publish 9-8-8.
+ * - us `988`: https://988lifeline.org/ — "988 Suicide & Crisis Lifeline",
+ *   call or text 988.
+ * - ca `988`: https://www.canada.ca/en/public-health/services/suicide-prevention/government-canada-doing-help-prevent-suicide.html
+ *   — "9-8-8: Suicide Crisis Helpline", call or text 9-8-8. A different
+ *   service from the US line, run with the Government of Canada.
  */
 import { existsSync, readFileSync } from "fs";
 import { ENV } from "../_core/env";
@@ -84,14 +85,23 @@ export const DEFAULT_CRISIS_RESOURCES: CrisisResource[] = [
     lastVerified: "2026-11-17",
   },
   {
-    id: "us-ca",
-    region: copy("zh", "labels.crisis.region.usCanada"),
-    regionEn: copy("en", "labels.crisis.region.usCanada"),
-    // This one is named in English already: the hotline calls itself
-    // that, in both languages.
-    description: "Suicide & Crisis Lifeline",
+    id: "us",
+    region: copy("zh", "labels.crisis.region.us"),
+    regionEn: copy("en", "labels.crisis.region.us"),
+    description: copy("zh", "labels.crisis.description.us"),
+    descriptionEn: copy("en", "labels.crisis.description.us"),
     contact: "988",
     source: "https://988lifeline.org/",
+    lastVerified: "2026-11-17",
+  },
+  {
+    id: "ca",
+    region: copy("zh", "labels.crisis.region.ca"),
+    regionEn: copy("en", "labels.crisis.region.ca"),
+    description: copy("zh", "labels.crisis.description.ca"),
+    descriptionEn: copy("en", "labels.crisis.description.ca"),
+    contact: "988",
+    source: "https://www.canada.ca/en/public-health/services/suicide-prevention/government-canada-doing-help-prevent-suicide.html",
     lastVerified: "2026-11-17",
   },
 ];

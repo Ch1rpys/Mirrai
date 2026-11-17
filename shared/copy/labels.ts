@@ -115,9 +115,21 @@ export const LABELS = {
     zh: "按所在国家查找当地热线",
     en: "Find a local helpline for your country",
   },
-  "labels.crisis.region.usCanada": {
-    zh: "美国 / 加拿大",
-    en: "USA / Canada",
+  "labels.crisis.region.us": {
+    zh: "美国",
+    en: "United States",
+  },
+  "labels.crisis.description.us": {
+    zh: "自杀与危机生命线",
+    en: "Suicide & Crisis Lifeline",
+  },
+  "labels.crisis.region.ca": {
+    zh: "加拿大",
+    en: "Canada",
+  },
+  "labels.crisis.description.ca": {
+    zh: "自杀危机援助热线",
+    en: "Suicide Crisis Helpline",
   },
 
   /**
