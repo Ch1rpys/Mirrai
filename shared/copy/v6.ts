@@ -327,6 +327,22 @@ export const V6 = {
       '[{ "i": 0, "state": "" }]',
     ].join("\n"),
   },
+  "prompts.distill.confirmHarm": {
+    zh: [
+      "你在判断对方说过的话：这一句是在伤害听的人，还是玩笑、引用、或在说别人。",
+      "只看这一句本身。伤害包括辱骂、贬低、威胁、限制对方。",
+      "harm 为 true 表示确认是在伤害听的人；false 表示不是。",
+      "只输出 JSON 数组，不要解释：",
+      '[{ "i": 0, "harm": true }]',
+    ].join("\n"),
+    en: [
+      "You are judging a line they said: is it hurting the person who heard it, or is it a joke, a quote, or about someone else?",
+      "Judge the line itself. Harm includes insult, belittling, threat, and restricting the other person.",
+      "harm is true when the line is hurting the listener; false when it is not.",
+      "Return a JSON array only, with no explanation:",
+      '[{ "i": 0, "harm": true }]',
+    ].join("\n"),
+  },
   "prompts.distill.labelActs": {
     zh: [
       "你在给一轮对话标言语动作。prev 是用户说的，text 是对方说的。",

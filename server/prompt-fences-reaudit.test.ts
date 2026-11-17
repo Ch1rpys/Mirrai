@@ -79,6 +79,11 @@ const SITES: Array<{ file: string; what: string; pattern: RegExp }> = [
     what: "the emotion labelling",
     pattern: /asMaterial\(JSON\.stringify\(payload\), locale\)/,
   },
+  {
+    file: "server/skill-engine/harm.ts",
+    what: "the harm confirmation",
+    pattern: /asMaterial\(JSON\.stringify\(payload\), locale\)/,
+  },
 ];
 
 describe("the places the user's own words reach a model", () => {

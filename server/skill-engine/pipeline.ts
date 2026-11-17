@@ -78,6 +78,8 @@ import { extractMemories } from "../chat/memory-extract";
 import { storageToDataUrl } from "../storage";
 import { chunkRecords, type RecordLine } from "./chunks";
 import { DistillationMapFailed, mapObservationCards } from "./observations";
+import { confirmHarmFromRecords } from "./harm";
+import { mergeHarmDecision } from "@shared/harm";
 import { extractFactsFromRecords } from "./facts";
 import { labelActsForRecords } from "./label-acts";
 import { labelEmotionsForRecords } from "./label-emotions";
@@ -311,7 +313,7 @@ export function mergeUserDecisions(
     (event) => !eventKeys.has(event.id) && !eventTitles.has(event.title),
   );
 
-  return {
+  const merged: PersonaData = {
     ...fresh,
     microRules: [...confirmed, ...uncovered],
     imperfectionProfile,
@@ -333,6 +335,10 @@ export function mergeUserDecisions(
       previous.imperfectionDefaultsReviewed ?? fresh.imperfectionDefaultsReviewed,
     ),
   };
+  const nextHarm = mergeHarmDecision(fresh.harmReport, previous.harmReport);
+  if (nextHarm) merged.harmReport = nextHarm;
+  else delete merged.harmReport;
+  return merged;
 }
 
 export function skillSlug(name: string, personaId: number): string {
@@ -1427,6 +1433,12 @@ async function runSkillPipelineOnce(
       throw error;
     }
 
+    const harmReport = await confirmHarmFromRecords({
+      records: recordLines,
+      locale,
+      invoke: invokeForDistill,
+    });
+
     // ── Stage 2: build ─────────────────────────────────────────────────────
     await setJobStage(
       {
@@ -1575,12 +1587,15 @@ async function runSkillPipelineOnce(
       userId,
     );
     const baseData = normalizePersonaData(parsed, { name, locale });
-    const enrichedData: PersonaData = imageNote
-      ? {
-          ...baseData,
-          memories: `${baseData.memories}\n\n${copy(locale, "skillPrompts.pipeline.photoMemories")}${imageNote}`.trim(),
-        }
-      : baseData;
+    const enrichedData: PersonaData = {
+      ...(imageNote
+        ? {
+            ...baseData,
+            memories: `${baseData.memories}\n\n${copy(locale, "skillPrompts.pipeline.photoMemories")}${imageNote}`.trim(),
+          }
+        : baseData),
+      ...(harmReport ? { harmReport } : {}),
+    };
 
     // ── Stage 4b: mine the discriminative rules ─────────────────────────────
     // The rules are read off the records and written into the contract; the

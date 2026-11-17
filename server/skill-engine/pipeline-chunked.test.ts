@@ -113,6 +113,11 @@ function isMergeCall(req: unknown): boolean {
   return blobOf(req).includes("归并成四段");
 }
 
+function isHarmConfirm(req: unknown): boolean {
+  const blob = blobOf(req);
+  return blob.includes("伤害听的人") || blob.includes("hurting the person who heard");
+}
+
 function payloadText(req: unknown): string {
   if (typeof req === "string") return req;
   if (Array.isArray(req)) return req.map((item) => payloadText(item)).join("\n");
@@ -226,6 +231,17 @@ describe("the layered distillation", () => {
       fn.mockReset();
     }
     invoke.mockImplementation(async (req: unknown) => {
+      if (isHarmConfirm(req)) {
+        const blob = payloadText(req);
+        const indices = new Set<number>();
+        for (const match of blob.matchAll(/"i":\s*(\d+)/g)) {
+          indices.add(Number(match[1]));
+        }
+        const max = indices.size > 0 ? Math.max(...indices) : 0;
+        return JSON.stringify(
+          Array.from({ length: max + 1 }, (_, i) => ({ i, harm: true })),
+        );
+      }
       if (isFactCall(req)) return JSON.stringify({ facts: [], people: [], stances: [] });
       if (isMapCall(req)) return observationFrom(req);
       if (isMergeCall(req)) {

@@ -235,4 +235,18 @@ describe("a re-run of the distillation", () => {
     expect(merged.actProfile?.unconditional.tease).toBe(12);
     expect(merged.rejectedFeedbackKeys).toEqual(["word:9"]);
   });
+
+  it("keeps a harm decision the user already made", () => {
+    const categories = [
+      { kind: "belittle" as const, count: 5, examples: [1, 2, 3] },
+    ];
+    const merged = mergeUserDecisions(
+      { ...fresh, harmReport: { categories, decision: "pending" } },
+      { harmReport: { categories, decision: "keep", decidedAt: "2026-01-01T00:00:00.000Z" } },
+      [],
+    );
+    expect(merged.harmReport?.decision).toBe("keep");
+    expect(merged.harmReport?.categories[0]?.count).toBe(5);
+    expect(merged.harmReport?.decidedAt).toBe("2026-01-01T00:00:00.000Z");
+  });
 });

@@ -46,6 +46,7 @@ import {
   normalizeOpeningProfile,
   type OpeningProfile,
 } from "@shared/opening-profile";
+import { normalizeHarmReport, type HarmReport } from "@shared/harm";
 
 export interface PersonaData {
   personality: string;
@@ -98,6 +99,13 @@ export interface PersonaData {
   rejectedFeedbackKeys?: string[];
   /** Whether the user has already been asked about product-written imperfections. */
   imperfectionDefaultsReviewed?: boolean;
+  /**
+   * Lines in the record that look like they were meant to hurt.
+   *
+   * Absent means none were found, which is the usual case. The decision
+   * is the user's, and a re-run must not put it back to pending.
+   */
+  harmReport?: HarmReport | null;
 }
 
 /** The stages a relationship can be in. */
@@ -131,6 +139,7 @@ export const PERSONA_DATA_FIELDS: Array<keyof PersonaData> = [
   "periods",
   "rejectedFeedbackKeys",
   "imperfectionDefaultsReviewed",
+  "harmReport",
 ];
 
 /**
@@ -175,6 +184,7 @@ export const PERSONA_DOCUMENT_EXCLUDED_FIELDS: Array<keyof PersonaData> = [
   "periods",
   "rejectedFeedbackKeys",
   "imperfectionDefaultsReviewed",
+  "harmReport",
 ];
 
 /** The default realism level: noticeably imperfect, but not a mess. */
@@ -319,6 +329,7 @@ export function normalizePersonaData(
   const imperfectionDefaultsReviewed =
     source.imperfectionDefaultsReviewed === true ||
     fallback.imperfectionDefaultsReviewed === true;
+  const harmReport = normalizeHarmReport(source.harmReport ?? fallback.harmReport);
 
   return {
     personality,
@@ -342,5 +353,6 @@ export function normalizePersonaData(
     periods,
     rejectedFeedbackKeys,
     imperfectionDefaultsReviewed,
+    ...(harmReport ? { harmReport } : {}),
   };
 }
