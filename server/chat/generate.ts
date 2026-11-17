@@ -20,6 +20,7 @@ import { loadBehaviorProfile, seededRandom } from "../_core/behavior-profile";
 import { zonedHour } from "@shared/timezone";
 import { pickRerankWinner, type RerankResult } from "./rerank";
 import { retrieveExemplars } from "./exemplars";
+import { filterHarm } from "@shared/harm";
 import { buildPromptForPersona } from "./prompt";
 import * as db from "../db";
 import {
@@ -244,15 +245,18 @@ export async function* executePlan(
     } catch {
       records = [];
     }
+    const personaData = input.persona.personaData as { harmReport?: unknown } | null;
     const exemplars = retrieveExemplars({
       userMessage: input.userMessage,
       records: records as never,
       excludeTexts: input.exclude?.texts,
       excludeIds: input.exclude?.recordIds,
+      personaData: personaData as never,
     });
+    const filteredRecords = filterHarm(records, personaData as never);
     const training =
       io.trainingTexts ??
-      records
+      filteredRecords
         .filter((row) => row.role === "assistant" && isTextRecord(row))
         .map((row) => row.content)
         .slice(-80);

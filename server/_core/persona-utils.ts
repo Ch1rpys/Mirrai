@@ -12,6 +12,7 @@ import {
 import { renderSuppressions, type Suppression } from "@shared/suppressions";
 import { renderActInstruction, type SpeechAct } from "@shared/speech-acts";
 import { normalizePersonaData } from "./persona-schema";
+import { shouldInstructHarm } from "@shared/harm";
 
 export { INTIMACY_LEVELS, normalizeIntimacyLevel };
 
@@ -364,6 +365,9 @@ export function buildSystemPrompt(
    * filtered afterwards has already said the thing.
    */
   const hardRules = copy(locale, "prompt.hardRules");
+  const harmInstruction = shouldInstructHarm(p.harmReport)
+    ? copy(locale, "prompt.harmDoNotRepeat")
+    : "";
 
   // The time of day is the persona's own, not the server's. A persona in
   // another timezone was being told it was the user's evening.
@@ -480,6 +484,7 @@ export function buildSystemPrompt(
   const sections: Array<string | null | undefined> = [
     identityRule,
     hardRules,
+    harmInstruction,
     // Everything below is material, and the material says so.
     copy(locale, "prompt.materialIsData"),
     identitySection,

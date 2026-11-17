@@ -9,6 +9,7 @@
  */
 import { copy, type Locale } from "@shared/copy";
 import { isTextRecord } from "@shared/records";
+import { filterHarm, type HarmReport } from "@shared/harm";
 import { keywordCoverage, tokenize } from "./retrieval";
 
 export const EXEMPLAR_MIN_SCORE = 0.08;
@@ -63,6 +64,7 @@ export function retrieveExemplars(params: {
   score?: ExemplarScoreFn;
   minScore?: number;
   limit?: number;
+  personaData?: { harmReport?: HarmReport | null } | null;
 }): Exemplar[] {
   const query = params.userMessage.trim();
   if (!query) return [];
@@ -75,16 +77,17 @@ export function retrieveExemplars(params: {
   const excludedTexts = new Set(
     [...(params.excludeTexts ?? [])].map((text) => text.trim()).filter(Boolean),
   );
+  const records = filterHarm(params.records, params.personaData);
 
   const median = medianLength(
-    params.records
+    records
       .filter((row) => row.role === "assistant" && isTextRecord(row))
       .map((row) => row.content),
   );
 
   const scored: Exemplar[] = [];
-  for (let i = 0; i < params.records.length; i++) {
-    const row = params.records[i];
+  for (let i = 0; i < records.length; i++) {
+    const row = records[i];
     if (row.role !== "assistant") continue;
     if (!isTextRecord(row)) continue;
     if (excludedIds.has(row.id)) continue;
@@ -92,7 +95,7 @@ export function retrieveExemplars(params: {
     if (!content || excludedTexts.has(content)) continue;
     let previousUser = "";
     for (let j = i - 1; j >= 0; j--) {
-      const prev = params.records[j];
+      const prev = records[j];
       if (prev.role === "user" && isTextRecord(prev) && prev.content.trim()) {
         previousUser = prev.content.trim();
         break;

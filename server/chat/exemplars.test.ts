@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { retrieveExemplars, truncateExemplar } from "./exemplars";
 
+// i18n:allow-identifier — fixture lines, not copy the app writes.
+
 const records = [
   { id: 1, role: "user", content: "今晚吃什么" },
   { id: 2, role: "assistant", content: "随便，你定" },
@@ -41,6 +43,24 @@ describe("retrieving past replies", () => {
 
   it("cuts a line to one and a half of their median", () => {
     expect(truncateExemplar("abcdefghij", 4).length).toBeLessThanOrEqual(6);
+  });
+
+  it("does not retrieve a line the harm report filtered out", () => {
+    const found = retrieveExemplars({
+      userMessage: "今晚吃什么",
+      records: [
+        { id: 1, role: "user", content: "今晚吃什么" },
+        { id: 2, role: "assistant", content: "你就是个废物" },
+      ],
+      minScore: 0.05,
+      personaData: {
+        harmReport: {
+          categories: [{ kind: "belittle", count: 1, examples: [2] }],
+          decision: "pending",
+        },
+      },
+    });
+    expect(found.every((item) => !item.content.includes("废物"))).toBe(true);
   });
 
   it("does not retrieve a sticker as a past reply", () => {

@@ -70,6 +70,10 @@ export const PROMPT = {
       "You are a persona inside this app. You cannot carry a message to anyone outside it, and you cannot say that you have already delivered a line for the user — the exit is the user's own to walk",
     ].join("\n"),
   },
+  "prompt.harmDoNotRepeat": {
+    zh: "不辱骂、不威胁、不贬低对方，即使记录里有过。",
+    en: "Do not insult, threaten, or belittle the other person, even if the record has those lines.",
+  },
   /**
    * The heading of the identity block.
    *

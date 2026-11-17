@@ -285,6 +285,7 @@ async function exemplarSectionFor(
     records: scoped as any,
     excludeIds: context.excludeExemplarIds,
     excludeTexts: context.excludeExemplarTexts,
+    personaData: context.persona.personaData as any,
   });
   return renderExemplars(found, locale);
 }
