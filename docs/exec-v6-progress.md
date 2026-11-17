@@ -35,7 +35,7 @@
 | A5 | ✅ | 21981ee | 先红后绿：`Lobby.test.tsx` `does not put a daily letter in a persona's mouth` 旧代码红在 `expected <h2 class="section-title">TA 想对你说</h2> to be null`；改后该文件 11 通过。`rg -n "lobby\\.daily|DailyMessages" client/` 无结果。`i18n.test.ts` 与 Lobby 一起 26 通过。闸门 `310 passed \| 3 skipped (313)` 文件，`2837 passed \| 16 skipped (2853)` 用例，`all six steps passed`。 |
 | A6 | ✅ | 8614668 | 先红后绿：`Lobby.test.tsx` 三条在改代码前红——quiet 分身页面有「很想你」；`getByRole("heading", { name: "接着聊" })` 找不到推荐标题；卡片没有「上次联系 3 天前」。改后该文件 14 通过。`lobby-eligibility.test.ts` 5 通过（未就绪 / 已毕业 / quiet / unreachable / relationshipEnded 各一条反例）。`db-behaviour.test.ts`：`relationship_events` 一次 `DISTINCT ON (personaId)`，breakup 与 `togetherTo` 都令 `relationshipEnded` 为真。`rg -n "missYou|getMissYouLevel" client/` 无结果。闸门 `311 passed \| 3 skipped (314)` 文件，`2847 passed \| 16 skipped (2863)` 用例。 |
 | A7 | ✅ | 8ceb9b8 (remove); 3b5575e (milestones) | 先红后绿：`Lobby.test.tsx` `does not keep a streak, achievement badges, or a conversation ranking` 旧代码红在 `expected '连续对话 2 天' not to be null`；改后该文件 15 通过。`Analytics.test.tsx` `does not keep a longest-streak tile` 无「最长连续」。`rg -n "ChatStreak\|AchievementBadges\|PersonaLeaderboard\|ACHIEVEMENTS" client/` 无结果。`Milestones.test.tsx` 3 通过：三日期都 null 不渲染；只有 `firstLetterAt` 时只出现「写下了第一封信」。`routers.milestones.test.ts` 2 通过：user 1 / 2 各自只看到自己的日期，procedure 调 `getUserMilestones(ctx.user.id)`。闸门 `313 passed \| 3 skipped (316)` 文件，`2854 passed \| 16 skipped (2870)` 用例。 |
-| A8 | ⬜ |  |  |
+| A8 | ✅ | 2cfd462 (extract); 0be929c (review) | 先红后绿：`memory-extract-source.test.ts` `does not store a fact the persona said` 旧代码红在 `createMemory` 被调用、`fromPersona` 为 undefined。改后该文件 4 通过（分身行不存 / 用户行存 / 无 line 丢弃 / 上传记录里 TA 的行照常存）。`memory-extract.test.ts` 与 `memory-extract.test.ts`（根下）通过；原有 mock 补了 `line`。`MemoryReview.test.tsx` 3 通过：空列表不渲染；「留着」调 `keepFromPersona({ id: 7 })`；「删掉」调 `delete({ id: 7 })`。闸门 `315 passed \| 3 skipped (318)` 文件，`2861 passed \| 16 skipped (2877)` 用例。 |
 | A9 | ⬜ |  |  |
 | B1.1 | ⬜ |  |  |
 | B1.2 | ⬜ |  |  |
@@ -468,3 +468,11 @@ A1、A2、A3、C1.3、C1.4、C1.5、C1.6、C1.7 维持 ✅。C1.1、A4、C1.2 �
 - 偏差 58：第一封信只计 `kind = "letter"`。待用户决定新增亲密度连续天数是否拿掉。
 - `mirrai_live` 未碰。本条无临时库。
 - A7 标 ✅。A8 起未做。
+
+### WP2 · 实现会话 · 2026-11-17 · A8
+
+- A8 两个提交。`2cfd462`：抽取每条必须带 `line`；应用内来源是分身的不存，计入 `fromPersona`；没有合法 `line` 计入 `skipped`；上传记录两边都是真的，照常存。提示词 `prompts.memoryExtraction` 补了 `line` 和「对方的话不是事实来源」。`0be929c`：`memory.listFromPersona` / `keepFromPersona`，聊天记忆面板顶部挂 `MemoryReview`。
+- 先红后绿（亲自跑过）：旧代码把「我周三下午有课」存成锚点。
+- 闸门 `315 passed | 3 skipped (318)` 文件，`2861 passed | 16 skipped (2877)` 用例，`all six steps passed`。相对 A7（313/3 文件、2854/16 用例）：通过文件 +2、通过用例 +7；跳过数不变。
+- `mirrai_live` 未碰。本条无临时库。
+- A8 标 ✅。A9 起未做。
