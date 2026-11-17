@@ -37,7 +37,7 @@
 | A7 | ✅ | 8ceb9b8 (remove); 3b5575e (milestones) | 先红后绿：`Lobby.test.tsx` `does not keep a streak, achievement badges, or a conversation ranking` 旧代码红在 `expected '连续对话 2 天' not to be null`；改后该文件 15 通过。`Analytics.test.tsx` `does not keep a longest-streak tile` 无「最长连续」。`rg -n "ChatStreak\|AchievementBadges\|PersonaLeaderboard\|ACHIEVEMENTS" client/` 无结果。`Milestones.test.tsx` 3 通过：三日期都 null 不渲染；只有 `firstLetterAt` 时只出现「写下了第一封信」。`routers.milestones.test.ts` 2 通过：user 1 / 2 各自只看到自己的日期，procedure 调 `getUserMilestones(ctx.user.id)`。`1e5dec4`：`db-behaviour.test.ts` 断言三条 SQL 分别按 `letters.userId` 且 `kind = letter`、`outbound_letters.userId`、`personas.userId` 过滤。闸门 `313 passed \| 3 skipped (316)` 文件，`2854 passed \| 16 skipped (2870)` 用例。 |
 | A8 | ✅ | 2cfd462 (extract); 0be929c (review); d14ba9d (upload prompt) | 先红后绿：`memory-extract-source.test.ts` `does not store a fact the persona said` 旧代码红在 `createMemory` 被调用、`fromPersona` 为 undefined。改后该文件 4 通过（分身行不存 / 用户行存 / 无 line 丢弃 / 上传记录里 TA 的行照常存）。`memory-extract.test.ts` 与 `memory-extract.test.ts`（根下）通过；原有 mock 补了 `line`。`MemoryReview.test.tsx` 3 通过：空列表不渲染；「留着」调 `keepFromPersona({ id: 7 })`；「删掉」调 `delete({ id: 7 })`。闸门 `315 passed \| 3 skipped (318)` 文件，`2861 passed \| 16 skipped (2877)` 用例。 |
 | A9 | ✅ | 6ebeea3 | 四条都核到了，`KNOWN_UNVERIFIED` 为空，未验证清单无 A9 行。`resources.test.ts` 6 通过（含 source 以 `https://` 开头、`lastVerified` 不是 `2026-01-01`、KNOWN_UNVERIFIED 与进度未验证清单一致）。`egress.test.ts` 4 通过。闸门 `315 passed \| 3 skipped (318)` 文件，`2863 passed \| 16 skipped (2879)` 用例。核对摘要见批次日志。 |
-| B1.1 | ⬜ |  |  |
+| B1.1 | ✅ | 93aa60d (schema); 1fd5c18 (chunks); 14faa43 (map); a488610 (reduce); e15dc9a (estimate) | 临时库 `mirrai_v6_scratch` 0046 四步+升级路径：`push --force` 后 `migrate` 应用到 `0046_distillation_tables`（journal 44 条）；`--replay` `replayed 44 migration(s)`；`--rollback 1` 后三张表和 memories/records 新列消失；再 `migrate` 回来。升级路径 DROP 三表七列并删 journal 的 0046 后再 migrate，对象出现。库已 `dropdb`。`chunks.test.ts` 6 通过：不跨 2023-06-10 静默、每块 ≤ `CHUNK_MAX_CHARS`、两次 hash 相同、说话行各进一块、deep 预估块数=切块数、fast 预估 12 块。`pipeline-chunked.test.ts` 7 通过：deep map=块数、fast=12、坏引用不入库、expression 只引「我」丢弃、归并不含 `#\d+ ` 只含卡片、构建文案最近段标「（现在）」、失败超三成 `analysisStatus: error` 且含「三成」、技能包无 `#\d+`。`routers.skill-engine.test.ts`：`estimate` 块数与 `chunkRecords` 一致；`MAX_DISTILL_CALLS=1` 时 `triggerAnalysis` 抛 `/上限/`。`pipeline.test.ts` 5 通过（mock 补了三个导出，见偏差 64）。`Upload.test.tsx` 显示「这次会读 24 段…31 次」、120 次时确认可停。闸门 `318 passed \| 3 skipped (321)` 文件，`2897 passed \| 16 skipped (2913)` 用例。 |
 | B1.2 | ⬜ |  |  |
 | B1.3 | ⬜ |  |  |
 | B1.4 | ⬜ |  |  |
@@ -262,6 +262,10 @@
 | 58 | A7 | `letters` 最早一行 | `getUserMilestones` 只取 `kind = "letter"` 的最早 `createdAt` | 同表里还有「等 TA 回来再说」的 todo；`countLetters` 已经排除它们。「写下了第一封信」不该点亮在一条待办上。 |
 | 59 | A9 | `source` 指向运营方自己的官方页面 | `cn-national` 的 `source` 是疾控局新闻发布会页，不是卫健委设号通知原文 | nhc.gov.cn 这条通知本机 HTTP 412；疾控局页面（curl 200）写明全国 31 省已开通 12356。设号通知的全文是检索结果里拿到的，不当作本机打开的来源。 |
 | 60 | A8 | 「重建出来的」写在 `prompts.memoryExtraction` 里 | 这句单独放在 `prompts.memoryExtractionInApp`，只在应用内抽取时接在共用提示词后面 | 上传记录两边都是真的。共用提示词仍要求 `line`。 |
+| 61 | B1.1 | `approxCalls` 从固定数字改成由预估给出 | 未选中的预设仍显示写死的 `approxCalls`；选中项和上传页段落用 `skillEngine.estimate` | 预估要按模式切块，一次查询只算当前模式。未选中的仍用旧数字当量级。 |
+| 62 | B1.1 | 时期标「现在」的过去段文案未规定用字 | `distill.periodPast` zh 是 `{{from}} 至 {{to}}` | `copy.test.ts` 要求中文半边有汉字；用「–」会红。 |
+| 63 | B1.1 | 所有块的行数之和等于文本行数 | 之和等于 `user`/`assistant` 说话行（含非文本 kind） | 块里也装渲染后的非文本行；`kind === "text"` 会比装进去的少。 |
+| 64 | B1.1 | 现有 `pipeline.test.ts` 不改就通过 | mock 工厂补了 `iterateRecords` / `createDistillationChunk` / `createDistillationCard` 三行 | vitest 读未导出的 mock 会抛；行为断言没改。 |
 
 ## 未验证清单
 
@@ -519,3 +523,13 @@ A5、A7、A9 维持 ✅。A6、A8 改回 ⬜。
 - `17b934c` 美加拆成 `us` 和 `ca`。美国来源 https://988lifeline.org/ ，页面写 national mental health hotline: 988，描述「自杀与危机生命线」。加拿大来源 https://www.canada.ca/en/public-health/services/suicide-prevention/government-canada-doing-help-prevent-suicide.html ，当天又打开，写 call or text 9-8-8，服务名是 9-8-8: Suicide Crisis Helpline，描述「自杀危机援助热线」。`us-ca` 和「美国 / 加拿大」文案已删。`lastVerified` 仍是 2026-11-17。
 - `ef25b46` `getMemoriesFromPersona` 加上 `status = "active"`。已取代的行留在库里，不再进核对列表。普通记忆列表没动。
 - 闸门 `315 passed | 3 skipped (318)` 文件，`2868 passed | 16 skipped (2884)` 用例，`all six steps passed`。通过数比上一闸门 2865 多 3，跳过数仍是 16。
+
+### WP3 · 实现会话 · 2026-11-17 · B1.1
+
+- 独立验收留下的 `- [ ]` 无。进度表里没有「等 xxx」的推迟项。
+- 共用迁移 `93aa60d`：`distillation_chunks` / `distillation_cards` / `persona_versions`，memories 三列，records 的 act/emotion 四列。
+- 切块 `1fd5c18`。map 与存卡 `14faa43`。reduce 与接入 `a488610`（`startPersonaDistillation` 不再把记录读进内存；失败超三成不重试）。预估与界面 `e15dc9a`。
+- 0046 临时库四步+升级路径见进度表。`mirrai_live` 未碰。
+- 闸门 `318 passed | 3 skipped (321)` 文件，`2897 passed | 16 skipped (2913)` 用例，`all six steps passed`。相对 WP2 收尾（315/3 文件、2868/16 用例）：通过文件 +3、通过用例 +29；跳过数不变。
+- 偏差 61–64。未验证清单无新增。待用户决定无新增。
+- B1.1 标 ✅。下一条 B1.2。
