@@ -1868,6 +1868,12 @@ export const zh = {
     same: "和平时一样",
   },
 
+  evidence: {
+    toggle: "这一层的依据（{{count}}）",
+    inferred: "推断",
+    inferredHint: "这一层没有直接的原话依据，是模型根据其他内容归纳的。",
+  },
+
   research: {
     gapsTitle: "研究缺口",
     missingSources: "缺 {{count}} 处来源",

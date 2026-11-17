@@ -1855,6 +1855,12 @@ export const en = {
     same: "The same as usual",
   },
 
+  evidence: {
+    toggle: "Evidence for this layer ({{count}})",
+    inferred: "Inferred",
+    inferredHint: "This layer has no quoted line behind it. The model summarised it from the rest.",
+  },
+
   research: {
     gapsTitle: "Research gaps",
     missingSources: "{{count}} source(s) missing",

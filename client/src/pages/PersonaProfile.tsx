@@ -10,6 +10,8 @@ import NotFound from "@/pages/NotFound";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
 import DigitalPersonaBadge from "@/components/DigitalPersonaBadge";
 import FidelityPanel from "@/components/FidelityPanel";
+import EvidenceList from "@/components/v6/EvidenceList";
+import { emptyEvidenceByDimension, type EvidenceField } from "@shared/evidence-map";
 import { attachmentStyleLabel, loveLanguageLabel } from "@/lib/persona-options";
 import { normalizeMicroRules } from "@shared/micro-rules";
 import { Button } from "@/components/ui/button";
@@ -55,6 +57,11 @@ export default function PersonaProfile() {
     { personaId },
     { enabled: isAuthenticated && hasPersonaId },
   );
+  const { data: evidence } = trpc.persona.evidence.useQuery(
+    { id: personaId },
+    { enabled: isAuthenticated && hasPersonaId },
+  );
+  const evidenceDimensions = evidence?.dimensions ?? emptyEvidenceByDimension();
 
   // The spinner used to spin for ever.
   //
@@ -127,9 +134,9 @@ export default function PersonaProfile() {
    */
   const confirmedRules = normalizeMicroRules(data.microRules).filter((rule) => rule.verified);
 
-  const portrait: Array<{ label: string; value: string; icon?: any }> = [];
-  if (data.personality) portrait.push({ label: t("profile.personality"), value: data.personality });
-  if (data.speakingStyle) portrait.push({ label: t("profile.speakingStyle"), value: data.speakingStyle });
+  const portrait: Array<{ field?: EvidenceField; label: string; value: string }> = [];
+  if (data.personality) portrait.push({ field: "personality", label: t("profile.personality"), value: data.personality });
+  if (data.speakingStyle) portrait.push({ field: "speakingStyle", label: t("profile.speakingStyle"), value: data.speakingStyle });
   /**
    * The attachment style and the love language.
    *
@@ -141,14 +148,14 @@ export default function PersonaProfile() {
    * The localisers were already there — the lobby uses them.
    */
   if (data.attachmentStyle) {
-    portrait.push({ label: t("profile.attachmentStyle"), value: attachmentStyleLabel(data.attachmentStyle, t) });
+    portrait.push({ field: "attachmentStyle", label: t("profile.attachmentStyle"), value: attachmentStyleLabel(data.attachmentStyle, t) });
   }
   if (data.loveLanguage) {
-    portrait.push({ label: t("profile.loveLanguage"), value: loveLanguageLabel(data.loveLanguage, t) });
+    portrait.push({ field: "loveLanguage", label: t("profile.loveLanguage"), value: loveLanguageLabel(data.loveLanguage, t) });
   }
-  if (data.conflictStyle) portrait.push({ label: t("profile.conflictStyle"), value: data.conflictStyle });
-  if (data.memories) portrait.push({ label: t("profile.memories"), value: data.memories });
-  if (data.touchingMoments) portrait.push({ label: t("profile.touchingMoments"), value: data.touchingMoments });
+  if (data.conflictStyle) portrait.push({ field: "conflictStyle", label: t("profile.conflictStyle"), value: data.conflictStyle });
+  if (data.memories) portrait.push({ field: "memories", label: t("profile.memories"), value: data.memories });
+  if (data.touchingMoments) portrait.push({ field: "touchingMoments", label: t("profile.touchingMoments"), value: data.touchingMoments });
   if (data.summary) portrait.push({ label: t("profile.summary"), value: data.summary });
 
   return (
@@ -224,8 +231,13 @@ export default function PersonaProfile() {
             </p>
             <dl className="space-y-4">
               {portrait.map((item) => (
-                <div key={item.label}>
-                  <dt className="text-xs font-medium text-foreground/80">{item.label}</dt>
+                <div key={item.field ?? item.label}>
+                  <dt className="text-xs font-medium text-foreground/80 flex flex-wrap items-baseline">
+                    <span>{item.label}</span>
+                    {item.field && (
+                      <EvidenceList field={item.field} dimensions={evidenceDimensions} />
+                    )}
+                  </dt>
                   <dd className="text-sm text-muted-foreground mt-1 leading-relaxed">{item.value}</dd>
                 </div>
               ))}
@@ -238,7 +250,10 @@ export default function PersonaProfile() {
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
             className="surface p-5 sm:p-6"
           >
-            <h2 className="section-title">{t("profile.catchphrases")}</h2>
+            <h2 className="section-title flex flex-wrap items-baseline">
+              <span>{t("profile.catchphrases")}</span>
+              <EvidenceList field="catchphrases" dimensions={evidenceDimensions} />
+            </h2>
             <div className="flex flex-wrap gap-2 mt-3">
               {data.catchphrases.map((phrase: string) => (
                 <span key={phrase} className="text-xs px-2.5 py-1 rounded-md border border-border text-muted-foreground">

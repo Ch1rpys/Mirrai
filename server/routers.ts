@@ -41,7 +41,7 @@ import {
   getFileSummaryTitles,
   setUserLocale, getUserLocale,  createEmotionSnapshot, getEmotionSnapshots, getEmotionReport, getTodaySnapshot,
   getCollectedMessagesForPersona, getCollectedMessageSources,
-  countRecords, iterateRecords,
+  countRecords, iterateRecords, getRecordsByIds, listDistillationCards,
   getIntimacyData, updateIntimacy,
   getMessageVolume, getEmotionTimeline, getPersonaEngagement, getHourlyDistribution, getAnalyticsStats,
   createDiaryEntry, getDiaryEntries, getDiaryByDate, deleteDiaryEntry, getMessagesByDate, getDiaryDates,
@@ -106,6 +106,7 @@ import {
   pickClarifications,
 } from "@shared/clarify";
 import { normalizeStyleProfile } from "@shared/style-profile";
+import { collectEvidence } from "@shared/evidence-map";
 import type { PersonaData } from "./_core/persona-schema";
 import { isChatImportFileType, startImport } from "./importers";
 import { importUnpackRelKey } from "./importers/archive";
@@ -1323,6 +1324,25 @@ export const appRouter = router({
           });
           return { success: true };
         });
+      }),
+
+    evidence: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.id, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const cards = await listDistillationCards(input.id, ctx.user.id, { kind: "observation" });
+        const ids = [...new Set(
+          cards.flatMap((card) => {
+            const payload = card.payload as { quotes?: unknown } | null;
+            const quotes = Array.isArray(payload?.quotes) ? payload.quotes : [];
+            return quotes
+              .map((item) => (typeof item === "number" ? item : Number(item)))
+              .filter((id) => Number.isInteger(id) && id > 0);
+          }),
+        )];
+        const records = await getRecordsByIds(ids, ctx.user.id);
+        return { dimensions: collectEvidence(cards, records) };
       }),
 
     clarifications: protectedProcedure

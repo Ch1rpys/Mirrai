@@ -22,6 +22,14 @@ let memoryTotal = 0;
 let personaLoading = false;
 /** Whether the query failed. */
 let personaFailed = false;
+let evidenceDimensions: Record<string, unknown[]> = {
+  expression: [],
+  trigger: [],
+  conflict: [],
+  care: [],
+  memory: [],
+  habit: [],
+};
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -33,6 +41,13 @@ vi.mock("@/lib/trpc", () => ({
           isError: personaFailed,
           error: null,
           refetch: () => {},
+        }),
+      },
+      evidence: {
+        useQuery: () => ({
+          data: { dimensions: evidenceDimensions },
+          isLoading: false,
+          isError: false,
         }),
       },
     },
@@ -74,6 +89,14 @@ describe("the portrait", () => {
     locale = "zh";
     memoryItems = [];
     memoryTotal = 0;
+    evidenceDimensions = {
+      expression: [],
+      trigger: [],
+      conflict: [],
+      care: [],
+      memory: [],
+      habit: [],
+    };
   });
 
   it("says when the memories are cut short", () => {
@@ -199,5 +222,34 @@ describe("the portrait", () => {
     persona.personaData.microRules = [];
     render(<PersonaProfile />);
     expect(screen.queryByText(translate("zh", "profile.rules"))).toBeNull();
+  });
+
+  it("always marks attachment style as inferred", () => {
+    persona.personaData = { attachmentStyle: "安全型" };
+    evidenceDimensions.habit = [{
+      claim: "短句",
+      periodId: null,
+      quotes: [{ recordId: 7, at: null, speaker: "小满", text: "在的呀" }],
+    }];
+    render(<PersonaProfile />);
+    expect(screen.getByText(translate("zh", "evidence.inferred"))).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: translate("zh", "evidence.toggle", { count: 1 }) }),
+    ).toBeNull();
+  });
+
+  it("marks every layer as inferred when there are no cards", () => {
+    persona.personaData = {
+      personality: "温柔",
+      speakingStyle: "短句",
+      catchphrases: ["嗯嗯"],
+      attachmentStyle: "安全型",
+      loveLanguage: "肯定的言辞",
+      conflictStyle: "先冷静",
+      memories: "一起看过海",
+      touchingMoments: "记得细节",
+    };
+    render(<PersonaProfile />);
+    expect(screen.getAllByText(translate("zh", "evidence.inferred"))).toHaveLength(8);
   });
 });
