@@ -422,29 +422,28 @@ describe("the lobby", () => {
      * but the lobby must not push it forward, and it must not put
      * "想你了" on the card.
      *
-     * The day's quote is one of twelve, and two of them contain 想你,
-     * so the quote is pinned to one that does not.
+     * The day's quote is drawn at random from the pool on this page.
+     * The pool itself has to be free of 想你, or the assertion only
+     * holds for the one quote the test happened to pin.
      */
-    const random = vi.spyOn(Math, "random").mockReturnValue(0.1);
-    try {
-      const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
-      personas = [
-        makePersona({
-          id: 4,
-          name: "暂停的",
-          presence: "quiet",
-          lastUserMessageAt: weekAgo,
-          lastChatAt: weekAgo,
-        }),
-      ];
-
-      render(<Lobby />);
-
-      expect(screen.queryAllByText(/想你/)).toEqual([]);
-      expect(screen.queryByRole("heading", { name: "接着聊" })).toBeNull();
-    } finally {
-      random.mockRestore();
+    for (const quote of translate("zh", "lobby.quotes")) {
+      expect(quote).not.toMatch(/想你/);
     }
+    const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    personas = [
+      makePersona({
+        id: 4,
+        name: "暂停的",
+        presence: "quiet",
+        lastUserMessageAt: weekAgo,
+        lastChatAt: weekAgo,
+      }),
+    ];
+
+    render(<Lobby />);
+
+    expect(screen.queryAllByText(/想你/)).toEqual([]);
+    expect(screen.queryByRole("heading", { name: "接着聊" })).toBeNull();
   });
 
   it("picks up the persona the user spoke to most recently", () => {

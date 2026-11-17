@@ -366,9 +366,9 @@ export const en = {
       "Bind WeChat and they can talk with you there directly",
     ],
     quotes: [
-      "Eternity is simply this: every moment, thinking of you.",
+      "Eternity is simply the days, one after another.",
       "The warmest two words in the world are the goodnight spoken by your own lips.",
-      "When I miss you, even breathing turns sweet.",
+      "When it goes quiet, even breathing slows down.",
       "You are the most beautiful story I have ever written.",
       "Some people feel warm the moment you only think of them.",
       "Missing someone needs no reason, just as breathing needs no reminder.",
