@@ -948,6 +948,31 @@ describe("the lobby", () => {
   });
 });
 
+describe("the milestones", () => {
+  it("counts only this user's letters, sent sentences, and goodbyes", async () => {
+    await db.getUserMilestones(3);
+
+    expect(queries.map((query) => query.table)).toEqual([
+      "letters",
+      "outbound_letters",
+      "personas",
+    ]);
+
+    const letter = whereOf(0)[0];
+    expect(letter.sql).toContain('"letters"."userId"');
+    expect(letter.sql).toContain('"letters"."kind"');
+    expect(letter.params).toEqual(expect.arrayContaining([3, "letter"]));
+
+    const outbound = whereOf(1)[0];
+    expect(outbound.sql).toContain('"outbound_letters"."userId"');
+    expect(outbound.params).toContain(3);
+
+    const farewell = whereOf(2)[0];
+    expect(farewell.sql).toContain('"personas"."userId"');
+    expect(farewell.params).toContain(3);
+  });
+});
+
 describe("writing to a persona", () => {
   it("says whether a row was actually written", async () => {
     registry.returning.personas = [{ id: 5 }];
