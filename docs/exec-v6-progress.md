@@ -109,7 +109,7 @@
 | B8.3 | ⬜ |  |  |
 | B8.4 | ⬜ |  |  |
 | B8.5 | ⬜ |  |  |
-| B8.6 | ⬜ |  |  |
+| B8.6 | ✅ | 9c13769 | `metrics.test.ts`：`gives the same interval when the same scores are aggregated twice` 通过；`collapses the interval to a point when there is only one case` 通过。`compare-cli.test.ts`：`calls overlapping intervals within noise` 通过；`calls a separated improvement better` 通过。`run.test.ts`：`generates k lines for each case when asked` 通过，`samplesPerCase: 3` 时 2 个标答 `invokeWithProvider` 6 次。`uses saved tolerances rather than the defaults`：默认容差下 overlap 0.5→0.35 记退步，保存容差 0.2 后不记。闸门 `341 passed \| 4 skipped (345)` 文件，`3054 passed \| 18 skipped (3072)` 用例。 |
 | B8.7 | ✅ | dc2e6da | `dataset.test.ts`：`covers both periods, a distant line, and day and night on the fixture` 通过（夹具切出的标答含 p1/p2、`distant`、day 与 night；同一输入两次 `toEqual`）。原有「留出句不出现在上下文里」「不超过四分之一」等断言全部通过。`metrics.test.ts`：`breaks the run down by period, and the bucket counts add up` 通过，`perPeriod` 键为 `p1`/`p2`，桶 `count` 之和等于 `cases`。`run.test.ts`：`samples the act against the held-out line's own state` 通过，`planTurn` 收到 `actCondition.emotion === "distant"`。临时库 `mirrai_v6_scratch` 0047 四步+升级路径：push 后 migrate 应用到 `0047_eval_cases_period`；`--replay` `replayed 45 migration(s)`；`--rollback 1` 后 `eval_cases` 无 `periodId`；再 migrate 回来；DROP 列并删 journal 后再 migrate，`periodId` 出现。库已 `dropdb`。闸门 `341 passed \| 4 skipped (345)` 文件，`3047 passed \| 18 skipped (3065)` 用例。层数多于名额时见偏差 72。 |
 | B8.8 | ⬜ |  |  |
 | B8.9 | ⬜ |  |  |
@@ -662,3 +662,10 @@ B1.1、B1.3、B1.4、B1.5、C10.1、B1.6、B1.7、B1.8、B1.10 维持 ✅。B1.2
 - 闸门 `341 passed | 4 skipped (345)` 文件，`3047 passed | 18 skipped (3065)` 用例，`all six steps passed`。相对 B3.2（341/4 文件、3042/18 用例）：通过用例 +5；跳过数不变。
 - 偏差 72。未验证清单、待用户决定无新增。
 - B8.7 标 ✅。下一条 B8.6。
+
+### WP4 · 实现会话 · 2026-11-17 · B8.6
+
+- `9c13769`：`--k` 每条标答生成 k 句再平均；自助法 95% 区间；`--compare` 三种结论（better / worse / within noise）；`--calibrate --save` 把容差写入 `metricsJson.tolerances`，`--gate` 优先用它。
+- 闸门 `341 passed | 4 skipped (345)` 文件，`3054 passed | 18 skipped (3072)` 用例，`all six steps passed`。相对 B8.7（341/4 文件、3047/18 用例）：通过用例 +7；跳过数不变。
+- 偏差、未验证清单、待用户决定无新增。
+- B8.6 标 ✅。下一条 B8.1。
