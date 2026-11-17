@@ -40,7 +40,7 @@
 | B1.1 | ✅ | 93aa60d (schema); 1fd5c18 (chunks); 14faa43 (map); a488610 (reduce); e15dc9a (estimate) | 临时库 `mirrai_v6_scratch` 0046 四步+升级路径：`push --force` 后 `migrate` 应用到 `0046_distillation_tables`（journal 44 条）；`--replay` `replayed 44 migration(s)`；`--rollback 1` 后三张表和 memories/records 新列消失；再 `migrate` 回来。升级路径 DROP 三表七列并删 journal 的 0046 后再 migrate，对象出现。库已 `dropdb`。`chunks.test.ts` 6 通过：不跨 2023-06-10 静默、每块 ≤ `CHUNK_MAX_CHARS`、两次 hash 相同、说话行各进一块、deep 预估块数=切块数、fast 预估 12 块。`pipeline-chunked.test.ts` 7 通过：deep map=块数、fast=12、坏引用不入库、expression 只引「我」丢弃、归并不含 `#\d+ ` 只含卡片、构建文案最近段标「（现在）」、失败超三成 `analysisStatus: error` 且含「三成」、技能包无 `#\d+`。`routers.skill-engine.test.ts`：`estimate` 块数与 `chunkRecords` 一致；`MAX_DISTILL_CALLS=1` 时 `triggerAnalysis` 抛 `/上限/`。`pipeline.test.ts` 5 通过（mock 补了三个导出，见偏差 64）。`Upload.test.tsx` 显示「这次会读 24 段…31 次」、120 次时确认可停。闸门 `318 passed \| 3 skipped (321)` 文件，`2897 passed \| 16 skipped (2913)` 用例。 |
 | B1.2 | ✅ | dbd08ca | `chunks.test.ts` `selectChunks` 3 通过：budget 12 含第 1 块和最后 3 块、两个时期、白天和夜里、同一种子两次 hash 相同；budget > 块数返回全部；最晚一块的 `to` ≥ 记录时间跨度的 95%。闸门 `318 passed \| 3 skipped (321)` 文件，`2900 passed \| 16 skipped (2916)` 用例。情绪维等 B1.5。 |
 | B1.3 | ✅ | c1e9484 (parse/cues); ce3c3d9 (pipeline) | `memory-date.test.ts` 3 通过（`2021-05-21`/`05-21` 真，`02-30`/`last summer` 假）。`fact-cues.test.ts` 3 通过（「我生日是5月21号」命中，「在的呀」不命中）。`facts.test.ts` 8 通过：合法引用入库、跨块行号丢弃、非法日期置空、deep 读全部块、fast 不调无线索块、`createMemory` `category: anchor` `date: 05-21` `recordId: 11` `source: records`、同一事实第二次 `created: 0`。`pipeline-chunked.test.ts` 生日那条 `createMemory` 含 `anchor`/`05-21`/`records`；fast 无线索块的 `#id` 不在 fact 调用里；quote 999999 不入库；两遍蒸馏 `store.length` 不变。`retrieval.test.ts` `source: "records"` 时 `getFileSummariesByPersonaId` 未调用。闸门 `321 passed \| 3 skipped (324)` 文件，`2920 passed \| 16 skipped (2936)` 用例。 |
-| B1.4 | ⬜ |  |  |
+| B1.4 | ✅ | 89d0048 (rules); ade38b6 (label/pipeline) | 先红后绿：旧 `buildActProfile` 300 轮规则判不了的回复进入分布 80 条，断言 `samples > 200` 红在 `expected 80 to be greater than 200`。新路径 `labelActsForRecords` + 读已标注行：`acts-coverage.test.ts` 2 通过，standard 下 300 条全进分布；p2 只含 p2 行、真值 mock 后 `acknowledge` 占比在 0.3 ±5pp。`speech-acts.test.ts`：`precisionOnly` 下「我今天去了图书馆」为 `null`（旧规则 `share`）；`labelUserActByRule` 对「在吗」「嗯」「对不起」「想你」和普通陈述符合验收。`label-acts.test.ts` 同一批第二次模型调用 0；围栏内才有配对原文。`shared/act-profile.test.ts`、`server/eval/act-labels.test.ts` 通过。闸门 `323 passed \| 3 skipped (326)` 文件，`2931 passed \| 16 skipped (2947)` 用例。 |
 | B1.5 | ⬜ |  |  |
 | B1.6 | ⬜ |  |  |
 | B1.7 | ⬜ |  |  |
@@ -267,6 +267,7 @@
 | 63 | B1.1 | 所有块的行数之和等于文本行数 | 之和等于 `user`/`assistant` 说话行（含非文本 kind） | 块里也装渲染后的非文本行；`kind === "text"` 会比装进去的少。 |
 | 64 | B1.1 | 现有 `pipeline.test.ts` 不改就通过 | mock 工厂补了 `iterateRecords` / `createDistillationChunk` / `createDistillationCard` 三行 | vitest 读未导出的 mock 会抛；行为断言没改。 |
 | 65 | B1.3 | 预估含全部蒸馏调用 | `estimateDistillation` 仍只计观察卡的 map/reduce 和旧的 `approxCalls` | 手册 B1.3 没要求改预估；事实卡是额外调用。 |
+| 66 | B1.4 | 取样只写 fast 80 / standard 1500 / deep 全部 | `colleague` 按 1500，`celebrity` 按全部 | 手册没给这两种预设的标注预算；分别靠上 standard 和 deep。 |
 
 ## 未验证清单
 
@@ -549,3 +550,11 @@ A5、A7、A9 维持 ✅。A6、A8 改回 ⬜。
 - 闸门 `321 passed | 3 skipped (324)` 文件，`2920 passed | 16 skipped (2936)` 用例，`all six steps passed`。相对 B1.2（318/3 文件、2900/16 用例）：通过文件 +3、通过用例 +20；跳过数不变。
 - 偏差 65：预估不含事实卡。未验证清单、待用户决定无新增。
 - B1.3 标 ✅。下一条 B1.4。
+
+### WP3 · 实现会话 · 2026-11-17 · B1.4
+
+- `89d0048` `precisionOnly` 只留 silence / acknowledge / repair；新增 `USER_ACTS` 与 `labelUserActByRule`（「在吗」靠句末「吗」，因为疑问词开头锚点吃不到）。
+- `ade38b6` `labelActsForRecords` 按月分层取样、每批 60 对、围栏包好；`act` 写在 TA 一轮第一行，`prevAct` 写在用户一轮最后一行；`buildActProfile` 只计已标注行，无情绪的行不进带情绪的桶。蒸馏管线排在 `buildActProfile` 之前。`updateRecordLabels` 查询带 `eq(collectedMessages.userId, userId)`。
+- 闸门 `323 passed | 3 skipped (326)` 文件，`2931 passed | 16 skipped (2947)` 用例，`all six steps passed`。相对 B1.3（321/3 文件、2920/16 用例）：通过文件 +2、通过用例 +11；跳过数不变。
+- 偏差 66。未验证清单、待用户决定无新增。
+- B1.4 标 ✅。下一条 B1.5。
