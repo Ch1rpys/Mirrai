@@ -33,7 +33,7 @@
 | A3 | ✅ | 267d8c6 (with C1.2 wizard) | `csv-not-unlabelled.test.ts`：`renderFixture(buildXiaomanRecords(), "wechat-csv")` 经 wechat-csv 解析再 `guessRoles`/`assignRoles`，每行 `role` 为 `user` 或 `assistant`，`content` 不含 `IsSender`/`StrContent`/`StrTime`，`lineNo > 1`。先红后绿见偏差 40。闸门随 C1.2。 |
 | A4 | ✅ | 042d0bf (normalize); 507c44c (records) | `pipeline-v5-seam.test.ts` 2 通过。文本路径与 `records` 路径：`actProfile.samples ≥ 40`；相邻两段 `to`/`from` 同为静默后第一条的 ISO（夹具 p2 首条 `2023-07-12T08:16:09.000Z`）；该段 `suppressionsDelta` 含 `no_question_ending`；`openingProfile.samples > 0`；「下次带你去吃那家面」`whoSaid=them`，「说好的 周末看电影」`whoSaid=me`。先红后绿：提交 `042d0bf` 之前跑同一文件，`actProfile` 为 `null`。`db-store.test.ts` `toTimedTranscript`：`2023-07-12T08:16:09.000Z` + `Asia/Shanghai` → `2023-07-12 16:16 我：在吗`。`server/skill-engine/` 原有测试 + `prompt-golden.test.ts` 10 通过、快照未改。闸门 `303 passed \| 3 skipped (306)` 文件，`2796 passed \| 13 skipped (2809)` 用例。时期条数见偏差 46。 |
 | A5 | ✅ | 21981ee | 先红后绿：`Lobby.test.tsx` `does not put a daily letter in a persona's mouth` 旧代码红在 `expected <h2 class="section-title">TA 想对你说</h2> to be null`；改后该文件 11 通过。`rg -n "lobby\\.daily|DailyMessages" client/` 无结果。`i18n.test.ts` 与 Lobby 一起 26 通过。闸门 `310 passed \| 3 skipped (313)` 文件，`2837 passed \| 16 skipped (2853)` 用例，`all six steps passed`。 |
-| A6 | ⬜ |  |  |
+| A6 | ✅ | 8614668 | 先红后绿：`Lobby.test.tsx` 三条在改代码前红——quiet 分身页面有「很想你」；`getByRole("heading", { name: "接着聊" })` 找不到推荐标题；卡片没有「上次联系 3 天前」。改后该文件 14 通过。`lobby-eligibility.test.ts` 5 通过（未就绪 / 已毕业 / quiet / unreachable / relationshipEnded 各一条反例）。`db-behaviour.test.ts`：`relationship_events` 一次 `DISTINCT ON (personaId)`，breakup 与 `togetherTo` 都令 `relationshipEnded` 为真。`rg -n "missYou|getMissYouLevel" client/` 无结果。闸门 `311 passed \| 3 skipped (314)` 文件，`2847 passed \| 16 skipped (2863)` 用例。 |
 | A7 | ⬜ |  |  |
 | A8 | ⬜ |  |  |
 | A9 | ⬜ |  |  |
@@ -258,6 +258,7 @@
 | 54 | C1.3 | 微信 CSV 只有 IsSender、StrContent、StrTime、Type、SubType、NickName | 往返渲染多了 StickerKey、Transcript、Direction、Mode。解析器只在这些列存在时读进 meta | 夹具的表情键、转写和通话方向不在原表里。没有这些列的文件仍按原样解析。 |
 | 55 | C1.2 | A1 里上传后 `startImport` 在角色猜得出时就写入 | `cf3214d`：猜得出也停在 `needs_roles`，猜测放进 `parseReport.suggested` 供向导预填。只有 `confirm` 带齐两边才写。同一文件再次确认先删掉它自己的行再写 | 预览和确认之前不能入库。脱敏会改内容，旧的去重键会把原文留下。 |
 | 56 | C1.1 | 日月都看不出时两种顺序都对 | 短日期默认按月日，也就是手册里的 Android `M/D/YY`。文件里有大于 12 的日或月时，整份按那个证据 | 没有证据时必须选一边。原先默认日月，把 `3/1/22` 读成 1 月 3 日。 |
+| 57 | A6 | 验收写卡片显示「上次联系 3 天」 | 复用已有 `chat.lastContact`，渲染成「上次联系 3 天前」 | 做法明确写复用聊天页同一条文案；验收那句是做法里的中性说法。 |
 
 ## 未验证清单
 
@@ -449,3 +450,10 @@ A1、A2、A3、C1.3、C1.4、C1.5、C1.6、C1.7 维持 ✅。C1.1、A4、C1.2 �
 - 闸门 `310 passed | 3 skipped (313)` 文件，`2837 passed | 16 skipped (2853)` 用例，`all six steps passed`。相对 WP1 闸门（310/3 文件、2836/16 用例）：通过用例 +1；跳过数不变。
 - `mirrai_live` 未碰。本条无临时库。
 - A5 标 ✅。A6 起未做。
+
+### WP2 · 实现会话 · 2026-11-17 · A6
+
+- A6 一个提交：`8614668`。`getPersonasWithStats` 一次查出 `relationshipEnded`；`mayFeature` 管推荐和今日话题；卡片改成 `chat.lastContact`；删掉 `getMissYouLevel` / `lobby.missYou`。
+- 先红后绿（亲自跑过）：三条大厅断言在改代码前红（「很想你」、推荐标题、「上次联系 3 天前」）。
+- 闸门 `311 passed | 3 skipped (314)` 文件，`2847 passed | 16 skipped (2863)` 用例。相对 A5（310/3 文件、2837/16 用例）：通过文件 +1、通过用例 +10；跳过数不变。
+- A6 标 ✅。A7 起未做。
