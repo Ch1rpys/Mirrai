@@ -22,9 +22,30 @@ const createChatSummary = vi.fn();
 const claimMemoryExtraction = vi.fn();
 const createDistillationChunk = vi.fn();
 const createDistillationCard = vi.fn();
+const listDistillationChunks = vi.fn();
+const listDistillationCards = vi.fn();
+const deleteOrphanDistillationCards = vi.fn();
 const iterateRecords = vi.fn();
 const createMemory = vi.fn();
 const getMemoriesByPersonaId = vi.fn();
+
+const chunkRows: Array<{
+  personaId: number;
+  userId: number;
+  chunkHash: string;
+  phase: string;
+  cardCount: number;
+}> = [];
+const cardRows: Array<{
+  personaId: number;
+  userId: number;
+  chunkHash: string;
+  periodId: string | null;
+  kind: string;
+  dimension: string;
+  claim: string;
+  payload: { quotes: number[] };
+}> = [];
 
 vi.mock("../llm", () => ({
   llmService: {
@@ -51,6 +72,9 @@ vi.mock("../db", () => ({
   releaseMemoryExtraction: vi.fn(),
   createDistillationChunk: (...a: unknown[]) => createDistillationChunk(...a),
   createDistillationCard: (...a: unknown[]) => createDistillationCard(...a),
+  listDistillationChunks: (...a: unknown[]) => listDistillationChunks(...a),
+  listDistillationCards: (...a: unknown[]) => listDistillationCards(...a),
+  deleteOrphanDistillationCards: (...a: unknown[]) => deleteOrphanDistillationCards(...a),
   iterateRecords: (...a: unknown[]) => iterateRecords(...a),
   createMemory: (...a: unknown[]) => createMemory(...a),
   getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
@@ -224,6 +248,9 @@ describe("the layered distillation", () => {
       claimMemoryExtraction,
       createDistillationChunk,
       createDistillationCard,
+      listDistillationChunks,
+      listDistillationCards,
+      deleteOrphanDistillationCards,
       iterateRecords,
       createMemory,
       getMemoriesByPersonaId,
@@ -278,8 +305,53 @@ describe("the layered distillation", () => {
     });
     claimMemoryExtraction.mockResolvedValue(false);
     loadPrompt.mockReturnValue("prompt");
-    createDistillationChunk.mockResolvedValue(undefined);
-    createDistillationCard.mockResolvedValue(undefined);
+    chunkRows.length = 0;
+    cardRows.length = 0;
+    createDistillationChunk.mockImplementation(async (row: (typeof chunkRows)[number]) => {
+      if (
+        !chunkRows.some(
+          (existing) =>
+            existing.personaId === row.personaId &&
+            existing.userId === row.userId &&
+            existing.chunkHash === row.chunkHash &&
+            existing.phase === row.phase,
+        )
+      ) {
+        chunkRows.push(row);
+      }
+    });
+    createDistillationCard.mockImplementation(async (row: (typeof cardRows)[number]) => {
+      cardRows.push(row);
+    });
+    listDistillationChunks.mockImplementation(async (personaId: number, userId: number, phase?: string) =>
+      chunkRows.filter(
+        (row) =>
+          row.personaId === personaId &&
+          row.userId === userId &&
+          (phase ? row.phase === phase : true),
+      ),
+    );
+    listDistillationCards.mockImplementation(
+      async (personaId: number, userId: number, options: { kind?: string; chunkHash?: string } = {}) =>
+        cardRows.filter(
+          (row) =>
+            row.personaId === personaId &&
+            row.userId === userId &&
+            (options.kind ? row.kind === options.kind : true) &&
+            (options.chunkHash ? row.chunkHash === options.chunkHash : true),
+        ),
+    );
+    deleteOrphanDistillationCards.mockImplementation(
+      async (personaId: number, userId: number, keepHashes: string[]) => {
+        const keep = new Set(keepHashes);
+        for (let i = cardRows.length - 1; i >= 0; i--) {
+          const row = cardRows[i]!;
+          if (row.personaId === personaId && row.userId === userId && !keep.has(row.chunkHash)) {
+            cardRows.splice(i, 1);
+          }
+        }
+      },
+    );
     iterateRecords.mockImplementation(async function* () {});
     createMemory.mockResolvedValue(1);
     getMemoriesByPersonaId.mockResolvedValue([]);
@@ -520,5 +592,85 @@ describe("the layered distillation", () => {
     expect(first).toBeGreaterThan(0);
     await runSkillPipeline({ ...baseInput, mode: "deep" });
     expect(store.length).toBe(first);
+  }, 90_000);
+
+  it("does not map a block it has already read", async () => {
+    await runSkillPipeline({ ...baseInput, mode: "deep" });
+    const firstMap = invoke.mock.calls.filter((call) => isMapCall(call[0])).length;
+    const firstMerge = invoke.mock.calls.filter((call) => isMergeCall(call[0])).length;
+    expect(firstMap).toBe(xiaomanChunks.length);
+    expect(firstMerge).toBeGreaterThan(0);
+    invoke.mockClear();
+    await runSkillPipeline({ ...baseInput, mode: "deep" });
+    expect(invoke.mock.calls.filter((call) => isMapCall(call[0]))).toHaveLength(0);
+    expect(invoke.mock.calls.filter((call) => isMergeCall(call[0]))).toHaveLength(firstMerge);
+  }, 90_000);
+
+  it("maps only the blocks whose hash is new after more lines arrive", async () => {
+    await runSkillPipeline({ ...baseInput, mode: "deep" });
+    invoke.mockClear();
+    const last = xiaomanLines[xiaomanLines.length - 1]!;
+    const extra: RecordLine[] = Array.from({ length: 400 }, (_, i) => ({
+      id: last.id + i + 1,
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: i % 2 === 0 ? `追加我${i}` : `追加TA${i}`,
+      timestamp: new Date((last.timestamp?.getTime() ?? 0) + (i + 1) * 60_000),
+      kind: "text",
+    }));
+    const afterChunks = chunkRecords([...xiaomanLines, ...extra], {
+      timeZone: TIME_ZONE,
+      themName: XIAOMAN_NAME,
+    });
+    const beforeHashes = new Set(xiaomanChunks.map((chunk) => chunk.hash));
+    const expected = afterChunks.filter((chunk) => !beforeHashes.has(chunk.hash)).length;
+    expect(expected).toBeGreaterThan(0);
+    await runSkillPipeline({
+      ...baseInput,
+      records: [
+        ...xiaomanRecords,
+        ...extra.map((row) => ({
+          id: row.id,
+          role: row.role,
+          content: row.content,
+          timestamp: row.timestamp,
+          kind: "text" as const,
+        })),
+      ],
+      mode: "deep",
+    });
+    expect(invoke.mock.calls.filter((call) => isMapCall(call[0]))).toHaveLength(expected);
+  }, 90_000);
+
+  it("drops cards whose block is no longer in the cut", async () => {
+    await runSkillPipeline({ ...baseInput, mode: "deep" });
+    const last = xiaomanLines[xiaomanLines.length - 1]!;
+    const extra: RecordLine[] = Array.from({ length: 400 }, (_, i) => ({
+      id: last.id + i + 1,
+      role: i % 2 === 0 ? "user" : "assistant",
+      content: i % 2 === 0 ? `追加我${i}` : `追加TA${i}`,
+      timestamp: new Date((last.timestamp?.getTime() ?? 0) + (i + 1) * 60_000),
+      kind: "text",
+    }));
+    const afterChunks = chunkRecords([...xiaomanLines, ...extra], {
+      timeZone: TIME_ZONE,
+      themName: XIAOMAN_NAME,
+    });
+    const keep = new Set(afterChunks.map((chunk) => chunk.hash));
+    await runSkillPipeline({
+      ...baseInput,
+      records: [
+        ...xiaomanRecords,
+        ...extra.map((row) => ({
+          id: row.id,
+          role: row.role,
+          content: row.content,
+          timestamp: row.timestamp,
+          kind: "text" as const,
+        })),
+      ],
+      mode: "deep",
+    });
+    expect(cardRows.length).toBeGreaterThan(0);
+    expect(cardRows.every((row) => keep.has(row.chunkHash))).toBe(true);
   }, 90_000);
 });

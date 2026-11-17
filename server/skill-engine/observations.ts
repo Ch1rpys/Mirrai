@@ -15,6 +15,8 @@ import {
 } from "./chunks";
 import * as db from "../db";
 
+export const OBSERVATION_PHASE = "observation";
+
 export const OBSERVATION_DIMENSIONS = [
   "expression",
   "trigger",
@@ -52,6 +54,15 @@ export class DistillationMapFailed extends Error {
   }
 }
 
+export interface CachedObservationRow {
+  chunkHash: string;
+  periodId?: string | null;
+  kind?: string | null;
+  dimension?: string | null;
+  claim?: string | null;
+  payload?: unknown;
+}
+
 export interface ObservationStore {
   saveChunk: (row: {
     userId: number;
@@ -70,12 +81,16 @@ export interface ObservationStore {
     claim: string;
     payload: { quotes: number[] };
   }) => Promise<unknown>;
+  listCached?: (
+    personaId: number,
+    userId: number,
+  ) => Promise<{ hashes: string[]; cards: CachedObservationRow[] }>;
 }
 
-function dbFn(name: string): ((row: never) => Promise<unknown>) | undefined {
+function dbCall<T>(name: string): T | undefined {
   try {
     const value = (db as Record<string, unknown>)[name];
-    return typeof value === "function" ? (value as (row: never) => Promise<unknown>) : undefined;
+    return typeof value === "function" ? (value as T) : undefined;
   } catch {
     return undefined;
   }
@@ -83,10 +98,30 @@ function dbFn(name: string): ((row: never) => Promise<unknown>) | undefined {
 
 const defaultStore: ObservationStore = {
   saveChunk: async (row) => {
-    await dbFn("createDistillationChunk")?.(row as never);
+    await dbCall<(row: never) => Promise<unknown>>("createDistillationChunk")?.(row as never);
   },
   saveCard: async (row) => {
-    await dbFn("createDistillationCard")?.(row as never);
+    await dbCall<(row: never) => Promise<unknown>>("createDistillationCard")?.(row as never);
+  },
+  listCached: async (personaId, userId) => {
+    const listChunks = dbCall<
+      (personaId: number, userId: number, phase?: string) => Promise<Array<{ chunkHash?: string }>>
+    >("listDistillationChunks");
+    const listCards = dbCall<
+      (
+        personaId: number,
+        userId: number,
+        options?: { kind?: string },
+      ) => Promise<CachedObservationRow[]>
+    >("listDistillationCards");
+    const chunks = listChunks ? await listChunks(personaId, userId, OBSERVATION_PHASE) : [];
+    const cards = listCards ? await listCards(personaId, userId, { kind: "observation" }) : [];
+    return {
+      hashes: chunks
+        .map((row) => String(row.chunkHash ?? ""))
+        .filter(Boolean),
+      cards,
+    };
   },
 };
 
@@ -193,9 +228,35 @@ async function mapPool<T, R>(
   return results;
 }
 
+function cardsFromCache(rows: CachedObservationRow[], chunk: RecordChunk): ObservationCard[] {
+  const inChunk = new Set(chunk.rows.map((row) => row.id));
+  const out: ObservationCard[] = [];
+  for (const row of rows) {
+    if (row.chunkHash !== chunk.hash) continue;
+    if (row.kind && row.kind !== "observation") continue;
+    if (!isDimension(row.dimension)) continue;
+    const payload =
+      row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+        ? (row.payload as Record<string, unknown>)
+        : {};
+    const quotes = quoteIds(payload.quotes).filter((id) => inChunk.has(id));
+    const claim = String(row.claim ?? "").trim().slice(0, MAX_CLAIM_CHARS);
+    if (!claim || quotes.length === 0) continue;
+    out.push({
+      dimension: row.dimension,
+      claim,
+      quotes,
+      chunkHash: chunk.hash,
+      periodId: chunk.periodId,
+    });
+  }
+  return out;
+}
+
 /**
- * Runs the map stage: one call per selected block, then stores every
- * block (even those that produced no card).
+ * Runs the map stage: one call per selected block that has not already
+ * been read, then stores every fresh block (even those that produced
+ * no card).
  */
 export async function mapObservationCards(
   input: MapObservationsInput,
@@ -208,15 +269,36 @@ export async function mapObservationCards(
     distillChunkSeed(input.personaId, input.chunks.length),
   );
   const store = input.store ?? defaultStore;
-  const total = selected.length;
-  if (total === 0) return [];
+  if (selected.length === 0) return [];
+
+  const cached = store.listCached
+    ? await store.listCached(input.personaId, input.userId)
+    : { hashes: [] as string[], cards: [] as CachedObservationRow[] };
+  const known = new Set(cached.hashes);
+  const reusedChunks = selected.filter((chunk) => known.has(chunk.hash));
+  const freshChunks = selected.filter((chunk) => !known.has(chunk.hash));
+  input.onProgress?.(
+    copy(locale, "distill.reusedChunks", {
+      reused: reusedChunks.length,
+      fresh: freshChunks.length,
+    }),
+    reusedChunks.length,
+    selected.length,
+  );
+
+  const cards: ObservationCard[] = [];
+  for (const chunk of reusedChunks) {
+    cards.push(...cardsFromCache(cached.cards, chunk));
+  }
+
+  if (freshChunks.length === 0) return cards;
 
   let completed = 0;
   let failed = 0;
-  const cards: ObservationCard[] = [];
+  const total = freshChunks.length;
 
   const results = await mapPool(
-    selected,
+    freshChunks,
     input.concurrency ?? MAP_CONCURRENCY,
     async (chunk) => {
       const messages: LLMMessage[] = [
@@ -269,7 +351,7 @@ export async function mapObservationCards(
       userId: input.userId,
       personaId: input.personaId,
       chunkHash: result.chunk.hash,
-      phase: "observation",
+      phase: OBSERVATION_PHASE,
       cardCount: result.cards.length,
     });
     for (const card of result.cards) {

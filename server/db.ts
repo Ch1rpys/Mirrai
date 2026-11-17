@@ -1,4 +1,4 @@
-import { eq, desc, and, or, sql, count, sum, gte, ilike, asc, lt, lte, max, min, inArray, isNull } from "drizzle-orm";
+import { eq, desc, and, or, sql, count, sum, gte, ilike, asc, lt, lte, max, min, inArray, notInArray, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import {
   InsertUser, users,
@@ -5882,4 +5882,32 @@ export async function listDistillationCards(
         ...(options.chunkHash ? [eq(distillationCards.chunkHash, options.chunkHash)] : []),
       ),
     );
+}
+
+/**
+ * Drops cards whose block is no longer in this cut.
+ *
+ * The last block's hash changes when new lines arrive. Its old cards
+ * are then cited by nothing, and a later merge that read every stored
+ * card would mix them back in.
+ */
+export async function deleteOrphanDistillationCards(
+  personaId: number,
+  userId: number,
+  keepHashes: string[],
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  if (keepHashes.length === 0) return 0;
+  const rows = await db
+    .delete(distillationCards)
+    .where(
+      and(
+        eq(distillationCards.personaId, personaId),
+        eq(distillationCards.userId, userId),
+        notInArray(distillationCards.chunkHash, keepHashes),
+      ),
+    )
+    .returning({ id: distillationCards.id });
+  return rows.length;
 }

@@ -236,6 +236,10 @@ export const V6 = {
     zh: "正在读第 {{done}} / {{total}} 段",
     en: "Reading block {{done}} / {{total}}",
   },
+  "distill.reusedChunks": {
+    zh: "{{reused}} 段读过了，这次读新的 {{fresh}} 段。",
+    en: "{{reused}} block(s) were already read; this run reads {{fresh}} new block(s).",
+  },
   "distill.tooManyChunkFailures": {
     zh: "有 {{failed}} / {{total}} 段读不出来，超过了三成，这一次没有继续。",
     en: "{{failed}} of {{total}} blocks could not be read — more than a third — so this run stopped.",

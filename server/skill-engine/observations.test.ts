@@ -112,6 +112,67 @@ describe("mapObservationCards", () => {
     expect(invoke).toHaveBeenCalledTimes(12);
   });
 
+  it("does not call the model for a block it has already read", async () => {
+    const chunks = [chunkWith([them, me])];
+    const invoke = vi.fn(async () =>
+      JSON.stringify({
+        observations: [{ dimension: "habit", claim: "会说在的呀", quotes: [10] }],
+      }),
+    );
+    const saved = { hashes: [] as string[], cards: [] as Array<{
+      chunkHash: string;
+      kind: string;
+      dimension: string;
+      claim: string;
+      payload: { quotes: number[] };
+    }> };
+    const store = {
+      saveChunk: vi.fn(async (row: { chunkHash: string }) => {
+        saved.hashes.push(row.chunkHash);
+      }),
+      saveCard: vi.fn(async (row: {
+        chunkHash: string;
+        kind: string;
+        dimension: string;
+        claim: string;
+        payload: { quotes: number[] };
+      }) => {
+        saved.cards.push(row);
+      }),
+      listCached: async () => ({ hashes: [...saved.hashes], cards: [...saved.cards] }),
+    };
+    await mapObservationCards({
+      chunks,
+      personaId: 1,
+      userId: 1,
+      name: "小满",
+      mode: "deep",
+      invoke,
+      store,
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
+    invoke.mockClear();
+    const cards = await mapObservationCards({
+      chunks,
+      personaId: 1,
+      userId: 1,
+      name: "小满",
+      mode: "deep",
+      invoke,
+      store,
+    });
+    expect(invoke).toHaveBeenCalledTimes(0);
+    expect(cards).toEqual([
+      {
+        dimension: "habit",
+        claim: "会说在的呀",
+        quotes: [10],
+        chunkHash: chunks[0]!.hash,
+        periodId: "period-1",
+      },
+    ]);
+  });
+
   it("fails the run when more than a third of the blocks throw twice", async () => {
     const chunks = Array.from({ length: 3 }, (_, i) =>
       chunkWith([line(1 + i, "assistant", "在")]),

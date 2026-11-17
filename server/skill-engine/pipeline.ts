@@ -1867,6 +1867,21 @@ async function runSkillPipelineOnce(
       });
     });
 
+    if (usedChunkedAnalysis) {
+      const prune = dbFn("deleteOrphanDistillationCards") as
+        | ((personaId: number, userId: number, keepHashes: string[]) => Promise<unknown>)
+        | undefined;
+      try {
+        await prune?.(
+          personaId,
+          userId,
+          recordChunks.map((chunk) => chunk.hash),
+        );
+      } catch (error) {
+        console.warn("[SkillEngine] Orphan distillation cards were not cleared:", error);
+      }
+    }
+
     if (jobId) {
       await db.updateSkillJob(jobId, userId, {
         pipelineStage: "complete",
