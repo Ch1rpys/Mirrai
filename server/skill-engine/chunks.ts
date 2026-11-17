@@ -26,6 +26,10 @@ export interface RecordLine {
   kind?: string | null;
   speaker?: string | null;
   meta?: Record<string, unknown> | null;
+  act?: string | null;
+  actSource?: string | null;
+  emotion?: string | null;
+  emotionSource?: string | null;
 }
 
 export interface RecordChunk {

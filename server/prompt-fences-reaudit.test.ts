@@ -69,6 +69,11 @@ const SITES: Array<{ file: string; what: string; pattern: RegExp }> = [
     what: "the distillation merge",
     pattern: /asMaterial\(payload, locale\)/,
   },
+  {
+    file: "server/skill-engine/label-acts.ts",
+    what: "the act labelling",
+    pattern: /asMaterial\(JSON\.stringify\(payload\), locale\)/,
+  },
 ];
 
 describe("the places the user's own words reach a model", () => {

@@ -79,6 +79,7 @@ import { storageToDataUrl } from "../storage";
 import { chunkRecords, type RecordLine } from "./chunks";
 import { DistillationMapFailed, mapObservationCards } from "./observations";
 import { extractFactsFromRecords } from "./facts";
+import { labelActsForRecords } from "./label-acts";
 import { reduceObservationCards } from "./reduce";
 import { registerSkillPrompts } from "@shared/copy/skill-prompts";
 
@@ -140,6 +141,11 @@ export type PipelineRecord = {
   content: string;
   timestamp: Date | null;
   kind: RecordKind;
+  speaker?: string | null;
+  act?: string | null;
+  actSource?: string | null;
+  emotion?: string | null;
+  emotionSource?: string | null;
 };
 
 export type PipelineInput = {
@@ -912,6 +918,10 @@ function toRecordLine(row: {
   kind?: string | null;
   speaker?: string | null;
   meta?: unknown;
+  act?: string | null;
+  actSource?: string | null;
+  emotion?: string | null;
+  emotionSource?: string | null;
 }): RecordLine | null {
   if (row.role !== "user" && row.role !== "assistant" && row.role !== "other") {
     return null;
@@ -930,6 +940,10 @@ function toRecordLine(row: {
     kind: row.kind,
     speaker: row.speaker,
     meta: asMeta(row.meta),
+    act: row.act ?? null,
+    actSource: row.actSource ?? null,
+    emotion: row.emotion ?? null,
+    emotionSource: row.emotionSource ?? null,
   };
 }
 
@@ -951,31 +965,47 @@ async function loadPipelineRecords(input: PipelineInput): Promise<RecordLine[]> 
   return rows;
 }
 
-function transcriptRowsFrom(
-  input: PipelineInput,
-  loaded: RecordLine[] = [],
-): Array<{
+type TranscriptRow = {
+  id: number;
   role: string;
   content: string;
   timestamp: Date | null;
-}> {
+  kind?: string | null;
+  speaker?: string | null;
+  act?: string | null;
+  actSource?: string | null;
+  emotion?: string | null;
+};
+
+function transcriptRowsFrom(
+  input: PipelineInput,
+  loaded: RecordLine[] = [],
+): TranscriptRow[] {
   const rows = loaded.length > 0 ? loaded : input.records ?? [];
   if (rows.length > 0) {
     return rows
       .filter((row) => (row.role === "user" || row.role === "assistant") && isTextRecord(row))
       .map((row) => ({
+        id: row.id,
         role: row.role,
         content: row.content,
         timestamp: coerceTimestamp(row.timestamp, input.timeZone),
+        kind: row.kind,
+        speaker: "speaker" in row ? row.speaker : undefined,
+        act: "act" in row ? row.act : undefined,
+        actSource: "actSource" in row ? row.actSource : undefined,
+        emotion: "emotion" in row ? row.emotion : undefined,
       }));
   }
   return toMinerRows(
     parseTranscriptMessages(input.chatContent, { personaName: input.name }),
     input.name,
-  ).map((row) => ({
+  ).map((row, index) => ({
+    id: index + 1,
     role: row.role,
     content: row.content,
     timestamp: coerceTimestamp(row.timestamp, input.timeZone),
+    kind: "text",
   }));
 }
 
@@ -1596,10 +1626,23 @@ async function runSkillPipelineOnce(
       ...mineForgetStyles({ messages: transcriptRows, locale }),
     ];
     const minedLifeEvents = mineOpenLoops({ messages: transcriptRows });
+    await labelActsForRecords({
+      personaId,
+      userId,
+      mode: preset.id,
+      locale,
+      timeZone: input.timeZone,
+      records: transcriptRows,
+      write: recordLines.length > 0,
+      invoke: invokeForDistill,
+    }).catch((e) =>
+      console.warn("[SkillEngine] The acts could not be labelled:", e.message),
+    );
     const minedActProfile = await buildActProfile({
       messages: transcriptRows,
       userId,
       locale,
+      timezone: input.timeZone,
       relationshipPhase: enrichedData.relationshipPhase,
     }).catch(() => null);
     const exchanges = exchangesFromRecords(

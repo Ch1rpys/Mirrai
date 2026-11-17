@@ -113,8 +113,18 @@ function isMergeCall(req: unknown): boolean {
   return blobOf(req).includes("归并成四段");
 }
 
+function payloadText(req: unknown): string {
+  if (typeof req === "string") return req;
+  if (Array.isArray(req)) return req.map((item) => payloadText(item)).join("\n");
+  if (req && typeof req === "object") {
+    const record = req as { content?: unknown; messages?: unknown };
+    return [payloadText(record.messages), payloadText(record.content)].join("\n");
+  }
+  return "";
+}
+
 function actLabelsFrom(req: unknown): string | null {
-  const blob = JSON.stringify(req);
+  const blob = payloadText(req);
   if (!blob.includes('"prev"') || !/"i":/.test(blob)) return null;
   const indices = new Set<number>();
   for (const match of blob.matchAll(/"i":\s*(\d+)/g)) {
@@ -123,7 +133,7 @@ function actLabelsFrom(req: unknown): string | null {
   if (indices.size === 0) return null;
   const max = Math.max(...indices);
   return JSON.stringify(
-    Array.from({ length: max + 1 }, (_, i) => ({ i, act: "answer" })),
+    Array.from({ length: max + 1 }, (_, i) => ({ i, act: "answer", prevAct: "other" })),
   );
 }
 

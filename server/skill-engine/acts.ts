@@ -103,6 +103,8 @@ export async function buildActProfile(params: {
     content: string;
     timestamp?: Date | string | null;
     kind?: string | null;
+    act?: string | null;
+    emotion?: string | null;
   }>;
   userId: number;
   locale?: Locale;
@@ -110,8 +112,13 @@ export async function buildActProfile(params: {
   relationshipPhase?: string | null;
   emotionalState?: string | null;
 }): Promise<ActProfile | null> {
-  const locale = params.locale ?? "zh";
-  const theirs: ActLabelInput[] = [];
+  const theirs: Array<{
+    act: SpeechAct;
+    timestamp?: Date | string | null;
+    previousUser: string | null;
+    emotion?: string;
+    relationshipPhase?: string | null;
+  }> = [];
   let previousUser: string | null = null;
   for (const row of params.messages) {
     if (!isTextRecord(row)) continue;
@@ -120,44 +127,41 @@ export async function buildActProfile(params: {
       continue;
     }
     if (row.role !== "assistant") continue;
+    if (!isSpeechAct(row.act)) continue;
     theirs.push({
-      content: row.content,
+      act: row.act,
       timestamp: row.timestamp,
       previousUser,
-      emotionalState: params.emotionalState ?? "warm",
+      emotion: row.emotion?.trim() || undefined,
       relationshipPhase: params.relationshipPhase ?? "initial",
     });
   }
   if (theirs.length < ACT_MIN_SAMPLES) return null;
 
-  const unlabeled = theirs.filter((row) => !labelSpeechActByRule(row.content, row.previousUser));
-  const modelled = await labelWithModel({ unlabeled, userId: params.userId, locale });
-
   const unconditional: ActCounts = emptyCounts();
   const bucketMap = new Map<string, ActBucket>();
 
   for (const row of theirs) {
-    const labelled = labelSpeechActByRule(row.content, row.previousUser)
-      ?? modelled.get(row.content);
-    if (!labelled) continue;
-    Object.assign(unconditional, incrementCount(unconditional, labelled));
+    Object.assign(unconditional, incrementCount(unconditional, row.act));
     const at = row.timestamp ? new Date(row.timestamp) : null;
     const hour = at && !Number.isNaN(at.getTime()) ? zonedHour(at, params.timezone) : 12;
+    const asking = Boolean(row.previousUser && /[?？]$/.test(row.previousUser));
+    const emotion = row.emotion || undefined;
     const key = [
-      Boolean(row.previousUser && /[?？]$/.test(row.previousUser)) ? "ask" : "say",
-      row.emotionalState ?? "warm",
+      asking ? "ask" : "say",
+      emotion ?? "",
       dayPartFromHour(hour),
       row.relationshipPhase ?? "initial",
     ].join("|");
     const existing = bucketMap.get(key) ?? {
-      asking: Boolean(row.previousUser && /[?？]$/.test(row.previousUser)),
-      emotion: row.emotionalState ?? "warm",
+      asking,
+      ...(emotion ? { emotion } : {}),
       dayPart: dayPartFromHour(hour),
       relationshipPhase: row.relationshipPhase ?? "initial",
       counts: emptyCounts(),
       samples: 0,
     };
-    existing.counts = incrementCount(existing.counts, labelled);
+    existing.counts = incrementCount(existing.counts, row.act);
     existing.samples += 1;
     bucketMap.set(key, existing);
   }

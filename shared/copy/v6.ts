@@ -298,4 +298,27 @@ export const V6 = {
     zh: "事实超过一千条，只留下了更重要、更近的 {{kept}} 条。",
     en: "There were more than a thousand facts; only the {{kept}} more important, more recent ones were kept.",
   },
+  "prompt.userAct.ask": { zh: "在问一件事", en: "asking something" },
+  "prompt.userAct.complain": { zh: "在抱怨、发火", en: "complaining or angry" },
+  "prompt.userAct.other": { zh: "上面都不是", en: "none of the above" },
+  "prompts.distill.labelActs": {
+    zh: [
+      "你在给一轮对话标言语动作。prev 是用户说的，text 是对方说的。",
+      "act 必须是这些之一（对方）：",
+      "{{taActs}}",
+      "prevAct 必须是这些之一（用户）：",
+      "{{userActs}}",
+      "不在名单里的值不要写。只输出 JSON 数组，不要解释：",
+      '[{ "i": 0, "act": "", "prevAct": "" }]',
+    ].join("\n"),
+    en: [
+      "You are labelling one round of chat with speech acts. prev is what the user said; text is what the other person said.",
+      "act must be one of these (the other person):",
+      "{{taActs}}",
+      "prevAct must be one of these (the user):",
+      "{{userActs}}",
+      "Drop values that are not on the lists. Return a JSON array only, with no explanation:",
+      '[{ "i": 0, "act": "", "prevAct": "" }]',
+    ].join("\n"),
+  },
 } as const satisfies CopyTable;

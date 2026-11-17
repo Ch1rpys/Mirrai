@@ -4656,6 +4656,34 @@ export async function getRecordsByIds(
     .orderBy(asc(spokenAtColumn()), asc(collectedMessages.id));
 }
 
+export interface RecordLabelPatch {
+  act?: string | null;
+  actSource?: string | null;
+  emotion?: string | null;
+  emotionSource?: string | null;
+}
+
+/**
+ * Writes a speech-act or emotion label onto one record.
+ *
+ * Distillation labels in bulk and has to refuse another user's row even
+ * when it was handed the id. The owner check belongs in the query.
+ */
+export async function updateRecordLabels(
+  id: number,
+  userId: number,
+  patch: RecordLabelPatch,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const [row] = await db
+    .update(collectedMessages)
+    .set(patch)
+    .where(and(eq(collectedMessages.id, id), eq(collectedMessages.userId, userId)))
+    .returning({ id: collectedMessages.id });
+  return Boolean(row);
+}
+
 export interface RecordsAround {
   target: CollectedMessage | undefined;
   before: CollectedMessage[];
