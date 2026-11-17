@@ -1461,6 +1461,8 @@ export const evalCases = pgTable("eval_cases", {
   source: varchar("source", { length: 32 }).default("collected").notNull(),
   /** The timestamp of the held-out reply in the original conversation. */
   occurredAt: timestamp("occurredAt"),
+  /** Which stretch of the record the held-out line sat in. */
+  periodId: varchar("periodId", { length: 32 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => ({
   personaIdx: index("eval_cases_persona_idx").on(table.personaId),

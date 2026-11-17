@@ -32,6 +32,7 @@ vi.mock("../chat/prompt", () => ({
 
 import { runEval } from "./run";
 import type { EvalCaseData } from "./dataset";
+import * as generate from "../chat/generate";
 
 const persona = {
   id: 1,
@@ -271,6 +272,34 @@ describe("running the cases", () => {
 
     const context = buildPromptForPersona.mock.calls[0][0] as any;
     expect(context.locale).toBe("en");
+  });
+
+  it("samples the act against the held-out line's own state", async () => {
+    const spy = vi.spyOn(generate, "planTurn");
+    await runEval({
+      persona,
+      userId: 1,
+      cases: [
+        {
+          context: [{ role: "user", content: "在吗", timestamp: null }],
+          expected: {
+            role: "assistant",
+            content: "哦。",
+            timestamp: new Date("2022-03-01T15:00:00.000Z"),
+          },
+          expectedState: "distant",
+          dayPart: "night",
+          periodId: "p1",
+        },
+      ],
+      trainingTexts: ["嗯嗯"],
+    });
+    expect(spy).toHaveBeenCalled();
+    const input = spy.mock.calls[0][0];
+    expect(input.actCondition?.emotion).toBe("distant");
+    expect(input.actCondition?.dayPart).toBe("night");
+    expect(input.periodId).toBe("p1");
+    spy.mockRestore();
   });
 
   it("measures the rules-only run the same way as the default one", async () => {

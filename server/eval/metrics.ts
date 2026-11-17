@@ -53,11 +53,15 @@ export interface EvalCaseScore {
   /** The shape of the generated line. */
   generatedShape: LineShape;
   /** The emotion the real line carried. */
-  expectedState: EmotionTriggerState | null;
+  expectedState: EmotionTriggerState | "warm" | null;
   /** The emotion the generated line reads as. */
   actualState: EmotionTriggerState | null;
   /** The persona's own declared state, when the run recorded one. */
-  declaredState: EmotionTriggerState | null;
+  declaredState: EmotionTriggerState | "warm" | null;
+  /** Which stretch of the record the held-out line sat in. */
+  periodId?: string | null;
+  /** Day or night when the held-out line was said. */
+  dayPart?: string | null;
   /**
    * The real line, and the line the persona said.
    *
@@ -102,6 +106,21 @@ export interface EvalMetrics {
   emotionMatrix: Record<string, Record<string, number>>;
   /** The same numbers, per expected state. */
   perState: Record<
+    string,
+    { count: number; overlap: number; lengthGap: number; sentenceGap: number; addressGap: number }
+  >;
+  /** The same numbers, per stretch of the record. */
+  perPeriod?: Record<
+    string,
+    { count: number; overlap: number; lengthGap: number; sentenceGap: number; addressGap: number }
+  >;
+  /** The same numbers, per day vs night. */
+  perDayPart?: Record<
+    string,
+    { count: number; overlap: number; lengthGap: number; sentenceGap: number; addressGap: number }
+  >;
+  /** The same numbers, per held-out speech act. */
+  perAct?: Record<
     string,
     { count: number; overlap: number; lengthGap: number; sentenceGap: number; addressGap: number }
   >;
@@ -302,7 +321,11 @@ export function scoreCase(params: {
   expected: string;
   generated: string;
   model: CharNgramModel;
-  declaredState?: EmotionTriggerState | null;
+  declaredState?: EmotionTriggerState | "warm" | null;
+  /** When set, this is the held-out line's labelled (or trigger) state. */
+  expectedState?: EmotionTriggerState | "warm" | null;
+  periodId?: string | null;
+  dayPart?: string | null;
   /**
    * The language the lines are written in.
    *
@@ -319,7 +342,10 @@ export function scoreCase(params: {
   lengthCeiling?: number | null;
 }): EvalCaseScore {
   const locale = params.locale ?? "zh";
-  const expectedState = matchEmotionTrigger(params.expected, locale);
+  const expectedState =
+    params.expectedState !== undefined
+      ? params.expectedState
+      : matchEmotionTrigger(params.expected, locale);
   const actualState = matchEmotionTrigger(params.generated, locale);
   const expectedLog = params.model.logProb(params.expected);
   const generatedLog = params.model.logProb(params.generated);
@@ -335,6 +361,8 @@ export function scoreCase(params: {
     expectedState,
     actualState,
     declaredState: params.declaredState ?? null,
+    periodId: params.periodId ?? null,
+    dayPart: params.dayPart ?? null,
     expectedText: params.expected,
     generatedText: params.generated,
     expectedAct: params.expectedAct ?? labelSpeechActByRule(params.expected, params.previousUser),
@@ -421,6 +449,9 @@ export function aggregateScores(
       emotionAccuracy: 0,
       emotionMatrix: {},
       perState: {},
+      perPeriod: {},
+      perDayPart: {},
+      perAct: {},
       scores: [],
       actMatch: 0,
       residueRate: 0,
@@ -435,33 +466,44 @@ export function aggregateScores(
   // The per-state buckets. A persona that is only right in the happy
   // state is half a persona, so each state is measured on its own: the
   // words, and the shape of the line they came in.
-  const perState: Record<
-    string,
-    { count: number; overlap: number; lengthGap: number; sentenceGap: number; addressGap: number }
-  > = {};
-  for (const score of scores) {
-    const key = score.expectedState ?? "none";
-    const bucket = perState[key] ?? {
-      count: 0,
-      overlap: 0,
-      lengthGap: 0,
-      sentenceGap: 0,
-      addressGap: 0,
-    };
-    bucket.count += 1;
-    bucket.overlap += score.overlap;
-    bucket.lengthGap += Math.abs(score.generatedShape.chars - score.expectedShape.chars);
-    bucket.sentenceGap += Math.abs(score.generatedShape.sentences - score.expectedShape.sentences);
-    bucket.addressGap += Math.abs(score.generatedShape.addresses - score.expectedShape.addresses);
-    perState[key] = bucket;
+  type ShapeBucket = {
+    count: number;
+    overlap: number;
+    lengthGap: number;
+    sentenceGap: number;
+    addressGap: number;
+  };
+  function bucketsBy(keyOf: (score: EvalCaseScore) => string): Record<string, ShapeBucket> {
+    const out: Record<string, ShapeBucket> = {};
+    for (const score of scores) {
+      const key = keyOf(score);
+      const bucket = out[key] ?? {
+        count: 0,
+        overlap: 0,
+        lengthGap: 0,
+        sentenceGap: 0,
+        addressGap: 0,
+      };
+      bucket.count += 1;
+      bucket.overlap += score.overlap;
+      bucket.lengthGap += Math.abs(score.generatedShape.chars - score.expectedShape.chars);
+      bucket.sentenceGap += Math.abs(score.generatedShape.sentences - score.expectedShape.sentences);
+      bucket.addressGap += Math.abs(score.generatedShape.addresses - score.expectedShape.addresses);
+      out[key] = bucket;
+    }
+    for (const key of Object.keys(out)) {
+      const bucket = out[key]!;
+      bucket.overlap = bucket.overlap / bucket.count;
+      bucket.lengthGap = bucket.lengthGap / bucket.count;
+      bucket.sentenceGap = bucket.sentenceGap / bucket.count;
+      bucket.addressGap = bucket.addressGap / bucket.count;
+    }
+    return out;
   }
-  for (const key of Object.keys(perState)) {
-    const bucket = perState[key];
-    bucket.overlap = bucket.overlap / bucket.count;
-    bucket.lengthGap = bucket.lengthGap / bucket.count;
-    bucket.sentenceGap = bucket.sentenceGap / bucket.count;
-    bucket.addressGap = bucket.addressGap / bucket.count;
-  }
+  const perState = bucketsBy((score) => score.expectedState ?? "none");
+  const perPeriod = bucketsBy((score) => score.periodId ?? "?");
+  const perDayPart = bucketsBy((score) => score.dayPart ?? "?");
+  const perAct = bucketsBy((score) => score.expectedAct ?? "?");
 
   // The length comparison is between two *distributions*: the real lines
   // and the generated ones. Comparing them pairwise would punish a
@@ -502,6 +544,9 @@ export function aggregateScores(
     emotionAccuracy: emotionDenominator ? emotionMatches / emotionDenominator : 0,
     emotionMatrix,
     perState,
+    perPeriod,
+    perDayPart,
+    perAct,
     scores,
     actMatch: actDenom ? actHits / actDenom : 0,
     residueRate,

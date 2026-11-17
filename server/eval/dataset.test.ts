@@ -6,7 +6,7 @@ import {
   trainingTexts,
   type EvalSourceMessage,
 } from "./dataset";
-import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
+import { buildXiaomanRecords, shanghaiDate } from "../test-fixtures/xiaoman";
 import { buildCharNgramModel } from "./metrics";
 
 /**
@@ -383,6 +383,54 @@ describe("what the model is fitted on", () => {
     // have seen either copy.
     expect(cases.length).toBe(1);
     expect(texts).not.toContain("在的");
+  });
+});
+
+function xiaomanEvalMessages(): EvalSourceMessage[] {
+  return buildXiaomanRecords().flatMap((row) => {
+    if (row.role !== "user" && row.role !== "assistant") return [];
+    return [{
+      id: row.id,
+      role: row.role,
+      content: row.content,
+      timestamp: row.timestamp,
+      kind: row.kind,
+      emotion: row.truth.state,
+      act: row.truth.act,
+    }];
+  });
+}
+
+function xiaomanEvalPeriods() {
+  return [
+    {
+      id: "p1",
+      from: shanghaiDate(2022, 3, 1).toISOString(),
+      to: shanghaiDate(2023, 6, 10).toISOString(),
+    },
+    {
+      id: "p2",
+      from: shanghaiDate(2023, 7, 5).toISOString(),
+      to: shanghaiDate(2025, 1, 1).toISOString(),
+    },
+  ];
+}
+
+describe("stratifying the held-out cases", () => {
+  it("covers both periods, a distant line, and day and night on the fixture", () => {
+    const records = xiaomanEvalMessages();
+    const options = {
+      periods: xiaomanEvalPeriods(),
+      timezone: "Asia/Shanghai",
+    };
+    const cases = buildEvalCases(records, options);
+    const periodIds = new Set(cases.map((item) => item.periodId));
+    expect(periodIds.has("p1")).toBe(true);
+    expect(periodIds.has("p2")).toBe(true);
+    expect(cases.some((item) => item.expectedState === "distant")).toBe(true);
+    expect(cases.some((item) => item.dayPart === "day")).toBe(true);
+    expect(cases.some((item) => item.dayPart === "night")).toBe(true);
+    expect(buildEvalCases(records, options)).toEqual(cases);
   });
 });
 

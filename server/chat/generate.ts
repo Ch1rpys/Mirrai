@@ -14,7 +14,7 @@ import type { LLMMessage, LLMProvider } from "../llm/types";
 import { llmService } from "../llm";
 import { copy } from "@shared/copy";
 import { isTextRecord } from "@shared/records";
-import { dayPartFromHour, normalizeActProfile, sampleAct } from "@shared/act-profile";
+import { dayPartFromHour, normalizeActProfile, sampleAct, type ActDayPart } from "@shared/act-profile";
 import { isUserAsking, type SpeechAct } from "@shared/speech-acts";
 import { loadBehaviorProfile, seededRandom } from "../_core/behavior-profile";
 import { zonedHour } from "@shared/timezone";
@@ -52,6 +52,12 @@ export interface TurnInput {
   layerOverrides?: Partial<Record<LayerId, boolean>>;
   exclude?: { recordIds?: number[]; texts?: string[] };
   seed: string;
+  /**
+   * When set, the act is sampled as if the persona were in this mood at
+   * this hour. Evaluation uses the held-out line's own state and day
+   * part; chat leaves it unset and uses the live persona and the clock.
+   */
+  actCondition?: { emotion?: string | null; dayPart?: ActDayPart | null };
   /** Chat-only extras so `composeMessages` keeps the same callers. */
   contextLimit?: number;
   providerName?: string;
@@ -101,8 +107,10 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
         actProfile,
         {
           asking: isUserAsking(input.userMessage),
-          emotion: input.persona.emotionalState ?? "warm",
-          dayPart: dayPartFromHour(zonedHour(input.now, (input.persona as { timezone?: string }).timezone)),
+          emotion: input.actCondition?.emotion ?? input.persona.emotionalState ?? "warm",
+          dayPart:
+            input.actCondition?.dayPart ??
+            dayPartFromHour(zonedHour(input.now, (input.persona as { timezone?: string }).timezone)),
           relationshipPhase: (input.persona.personaData as { relationshipPhase?: string } | null)?.relationshipPhase ?? "initial",
         },
         { dropSilence, rng },

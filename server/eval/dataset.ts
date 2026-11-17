@@ -17,7 +17,10 @@
  */
 import { matchEmotionTrigger, type EmotionTriggerState } from "@shared/emotion-triggers";
 import { isTextRecord } from "@shared/records";
+import { dayPartFromHour, type ActDayPart } from "@shared/act-profile";
 import { isSpeechAct, labelSpeechActByRule, type SpeechAct } from "@shared/speech-acts";
+import { FINGERPRINT_STATES } from "@shared/style-fingerprint";
+import { zonedHour } from "@shared/timezone";
 
 /** A message as the records store it. */
 export interface EvalSourceMessage {
@@ -26,17 +29,30 @@ export interface EvalSourceMessage {
   content: string;
   timestamp: Date | null;
   kind?: string | null;
+  emotion?: string | null;
+  act?: string | null;
+  actSource?: string | null;
+}
+
+export interface EvalPeriodRange {
+  id: string;
+  from: string;
+  to: string;
 }
 
 /** One held-out exchange. */
 export interface EvalCaseData {
   context: EvalSourceMessage[];
   expected: EvalSourceMessage;
-  /** The emotion the real line carried, read from the trigger words. */
-  expectedState: EmotionTriggerState | null;
+  /** The emotion the real line carried. Prefers the labelled row, then trigger words. */
+  expectedState: EmotionTriggerState | "warm" | null;
   /** The speech act of the held-out line. Cached; evaluation does not relabel. */
   expectedAct?: SpeechAct | null;
   expectedActSource?: "rule" | "model" | null;
+  /** Which stretch of the record the held-out line sat in. */
+  periodId?: string | null;
+  /** Day or night in the persona's timezone when the line was said. */
+  dayPart?: ActDayPart | null;
 }
 
 export interface EvalCaseOptions {
@@ -72,6 +88,22 @@ export interface EvalCaseOptions {
    * carried no state at all — and every per-state bucket was empty.
    */
   locale?: "zh" | "en";
+  /** Stretches of the record, from personaData.periods. */
+  periods?: EvalPeriodRange[];
+  /** The persona's timezone, for day vs night. */
+  timezone?: string | null;
+}
+
+const KNOWN_STATES = new Set<string>(FINGERPRINT_STATES);
+
+/**
+ * How many lines to hold out when the caller did not ask for a number.
+ *
+ * Two percent of their lines, never fewer than twelve and never more
+ * than sixty. The quarter-of-the-record ceiling still sits on top.
+ */
+export function defaultEvalMaxCases(assistantCount: number): number {
+  return Math.min(60, Math.max(12, Math.floor(assistantCount * 0.02)));
 }
 
 /**
@@ -106,6 +138,121 @@ function contextBefore(
   return cut ? window.slice(cut) : window;
 }
 
+function periodIdAt(at: Date | null, periods: EvalPeriodRange[]): string | null {
+  if (!at || !periods.length) return null;
+  const time = at.getTime();
+  for (let i = 0; i < periods.length; i++) {
+    const period = periods[i]!;
+    const from = Date.parse(period.from);
+    const to = Date.parse(period.to);
+    if (!Number.isFinite(from) || !Number.isFinite(to)) continue;
+    const last = i === periods.length - 1;
+    if (time >= from && (last ? time <= to : time < to)) return period.id;
+  }
+  return null;
+}
+
+function labelledState(value: string | null | undefined): EmotionTriggerState | "warm" | null {
+  if (!value || !KNOWN_STATES.has(value)) return null;
+  return value as EmotionTriggerState | "warm";
+}
+
+function dayPartOf(at: Date | null, timezone: string | null | undefined): ActDayPart | null {
+  if (!at) return null;
+  return dayPartFromHour(zonedHour(at, timezone));
+}
+
+function layerKey(periodId: string | null, emotion: string | null, dayPart: string | null): string {
+  return `${periodId ?? "?"}|${emotion ?? "?"}|${dayPart ?? "?"}`;
+}
+
+function pickEven<T>(items: T[], n: number): T[] {
+  if (n <= 0 || items.length === 0) return [];
+  if (n >= items.length) return items;
+  if (n === 1) return [items[Math.floor((items.length - 1) / 2)]!];
+  const out: T[] = [];
+  for (let i = 0; i < n; i++) {
+    out.push(items[Math.round((i * (items.length - 1)) / (n - 1))]!);
+  }
+  return out;
+}
+
+function allocateLayerQuotas(sizes: Map<string, number>, maxCases: number): Map<string, number> {
+  const keys = [...sizes.keys()];
+  const quotas = new Map<string, number>();
+  if (!keys.length || maxCases <= 0) return quotas;
+  if (keys.length >= maxCases) {
+    const ranked = keys
+      .map((key) => ({ key, n: sizes.get(key) ?? 0 }))
+      .sort((a, b) => b.n - a.n || a.key.localeCompare(b.key));
+    for (const row of ranked.slice(0, maxCases)) quotas.set(row.key, 1);
+    return quotas;
+  }
+  for (const key of keys) quotas.set(key, 1);
+  let remaining = maxCases - keys.length;
+  const total = keys.reduce((sum, key) => sum + (sizes.get(key) ?? 0), 0);
+  const extras = keys.map((key) => {
+    const share = total === 0 ? 0 : remaining * ((sizes.get(key) ?? 0) / total);
+    return { key, floor: Math.floor(share), frac: share - Math.floor(share) };
+  });
+  for (const extra of extras) quotas.set(extra.key, 1 + extra.floor);
+  remaining -= extras.reduce((sum, extra) => sum + extra.floor, 0);
+  extras.sort((a, b) => b.frac - a.frac || a.key.localeCompare(b.key));
+  for (let i = 0; remaining > 0 && i < extras.length; i++) {
+    quotas.set(extras[i]!.key, (quotas.get(extras[i]!.key) ?? 0) + 1);
+    remaining -= 1;
+  }
+  let leftover = 0;
+  for (const key of keys) {
+    const cap = sizes.get(key) ?? 0;
+    const quota = quotas.get(key) ?? 0;
+    if (quota > cap) {
+      leftover += quota - cap;
+      quotas.set(key, cap);
+    }
+  }
+  while (leftover > 0) {
+    const room = keys
+      .map((key) => ({ key, room: (sizes.get(key) ?? 0) - (quotas.get(key) ?? 0) }))
+      .filter((row) => row.room > 0)
+      .sort((a, b) => b.room - a.room || a.key.localeCompare(b.key));
+    if (!room.length) break;
+    quotas.set(room[0]!.key, (quotas.get(room[0]!.key) ?? 0) + 1);
+    leftover -= 1;
+  }
+  return quotas;
+}
+
+function pickStratified(candidates: EvalCaseData[], maxCases: number): EvalCaseData[] {
+  if (candidates.length <= maxCases) return candidates;
+  const layers = new Map<string, EvalCaseData[]>();
+  for (const item of candidates) {
+    const key = layerKey(item.periodId ?? null, item.expectedState ?? null, item.dayPart ?? null);
+    const list = layers.get(key) ?? [];
+    list.push(item);
+    layers.set(key, list);
+  }
+  // There is no room to give every layer one line. Spread across the
+  // whole conversation instead, the way the ruler used to.
+  if (layers.size > maxCases) return pickEven(candidates, maxCases);
+  const sizes = new Map<string, number>();
+  for (const [key, list] of layers) sizes.set(key, list.length);
+  const quotas = allocateLayerQuotas(sizes, maxCases);
+  const picked: EvalCaseData[] = [];
+  for (const [key, list] of layers) {
+    const n = quotas.get(key) ?? 0;
+    if (n <= 0) continue;
+    picked.push(...pickEven(list, n));
+  }
+  picked.sort((a, b) => {
+    const aTime = a.expected.timestamp?.getTime() ?? 0;
+    const bTime = b.expected.timestamp?.getTime() ?? 0;
+    if (aTime !== bTime) return aTime - bTime;
+    return (a.expected.id ?? 0) - (b.expected.id ?? 0);
+  });
+  return picked;
+}
+
 /**
  * Cuts the cases out of a conversation.
  *
@@ -114,6 +261,9 @@ function contextBefore(
  * tentative, the middle ones are the ordinary middle, the last ones are
  * the goodbyes — and a set of cases drawn from only one part of it
  * measures that part and nothing else.
+ *
+ * When the record has periods, labelled moods, and times, the spread is
+ * by those layers first, then even inside each layer.
  */
 export function buildEvalCases(
   messages: EvalSourceMessage[],
@@ -123,6 +273,7 @@ export function buildEvalCases(
   const minExpectedChars = Math.max(1, options.minExpectedChars ?? 2);
   const locale = options.locale ?? "zh";
   const sceneBreakMs = (options.sceneBreakHours ?? 6) * 3_600_000;
+  const periods = options.periods ?? [];
 
   const assistantCount = messages.filter((m) => m.role === "assistant" && isTextRecord(m)).length;
   // A conversation with a single one of their lines leaves nothing to
@@ -140,8 +291,10 @@ export function buildEvalCases(
     1,
     Math.floor(assistantCount * Math.max(0, Math.min(1, fraction))),
   );
+  const requested =
+    options.maxCases === undefined ? defaultEvalMaxCases(assistantCount) : options.maxCases;
   const maxCases = Math.min(
-    Math.max(1, options.maxCases ?? 12),
+    Math.max(1, requested),
     holdoutCeiling,
     assistantCount - 1,
   );
@@ -162,32 +315,29 @@ export function buildEvalCases(
     if (!window.some((m) => m.role === "user")) continue;
 
     const previousUser = [...window].reverse().find((m) => m.role === "user")?.content ?? null;
-    const expectedAct = labelSpeechActByRule(message.content, previousUser);
+    const labelledAct = message.act && isSpeechAct(message.act) ? message.act : null;
+    const expectedAct = labelledAct ?? labelSpeechActByRule(message.content, previousUser);
+    const periodId = periodIdAt(message.timestamp, periods);
+    const expectedState =
+      labelledState(message.emotion) ?? matchEmotionTrigger(message.content, locale);
     candidates.push({
       context: window,
       expected: message,
-      expectedState: matchEmotionTrigger(message.content, locale),
+      expectedState,
       expectedAct,
-      expectedActSource: expectedAct ? "rule" : null,
+      expectedActSource: labelledAct
+        ? message.actSource === "model"
+          ? "model"
+          : "rule"
+        : expectedAct
+          ? "rule"
+          : null,
+      periodId,
+      dayPart: dayPartOf(message.timestamp, options.timezone),
     });
   }
 
-  if (candidates.length <= maxCases) return candidates;
-
-  // Spread the picks evenly, so the cases cover the whole conversation —
-  // including its end, which the old stride never reached.
-  const picked: EvalCaseData[] = [];
-  if (maxCases === 1) {
-    // One case is the middle of the conversation, which is the most
-    // representative line there is. The first line is usually a
-    // greeting, and it says nothing about how the person talks.
-    picked.push(candidates[Math.floor((candidates.length - 1) / 2)]);
-    return picked;
-  }
-  for (let i = 0; i < maxCases; i++) {
-    picked.push(candidates[Math.round((i * (candidates.length - 1)) / (maxCases - 1))]);
-  }
-  return picked;
+  return pickStratified(candidates, maxCases);
 }
 
 /**
@@ -209,6 +359,7 @@ export function casesFromRows(
     expectedState?: string | null;
     expectedAct?: string | null;
     expectedActSource?: string | null;
+    periodId?: string | null;
   }>,
 ): EvalCaseData[] {
   const out: EvalCaseData[] = [];
@@ -224,9 +375,11 @@ export function casesFromRows(
     out.push({
       context,
       expected,
-      expectedState: (row.expectedState as EmotionTriggerState | null) ?? null,
+      expectedState: labelledState(row.expectedState),
       expectedAct: storedAct ?? labelSpeechActByRule(expected.content, previousUser),
       expectedActSource: (row.expectedActSource as EvalCaseData["expectedActSource"]) ?? (storedAct ? "rule" : null),
+      periodId: typeof row.periodId === "string" && row.periodId ? row.periodId : null,
+      dayPart: null,
     });
   }
   return out;
@@ -251,6 +404,9 @@ function toMessage(value: unknown): EvalSourceMessage | null {
     content,
     timestamp: timestamp && !Number.isNaN(timestamp.getTime()) ? timestamp : null,
     kind: typeof record.kind === "string" ? record.kind : undefined,
+    emotion: typeof record.emotion === "string" ? record.emotion : undefined,
+    act: typeof record.act === "string" ? record.act : undefined,
+    actSource: typeof record.actSource === "string" ? record.actSource : undefined,
   };
 }
 

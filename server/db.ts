@@ -5416,6 +5416,7 @@ export async function saveEvalCases(
     expectedActSource?: string | null;
     source?: string;
     occurredAt?: Date | null;
+    periodId?: string | null;
   }>,
 ) {
   const db = await getDb();
@@ -5445,6 +5446,7 @@ export async function saveEvalCases(
       expectedActSource: c.expectedActSource ?? null,
       source: c.source ?? "collected",
       occurredAt: c.occurredAt ?? null,
+      periodId: c.periodId ?? null,
     })));
     return cases.length;
   });

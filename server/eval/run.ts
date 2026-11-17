@@ -22,6 +22,8 @@ import type { EvalCaseData } from "./dataset";
 import { isLayerId, type LayerId } from "@shared/layers";
 import type { SpeechAct } from "@shared/speech-acts";
 import { normalizeStyleProfile } from "@shared/style-profile";
+import { dayPartFromHour, type ActDayPart } from "@shared/act-profile";
+import { zonedHour } from "@shared/timezone";
 
 /**
  * Which version of the persona to measure.
@@ -145,7 +147,17 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
   for (let i = 0; i < options.cases.length; i++) {
     const caseData = options.cases[i];
     const lastUser = [...caseData.context].reverse().find((m) => m.role === "user");
-    const now = options.now ?? new Date();
+    const now = caseData.expected.timestamp ?? options.now ?? new Date();
+    const dayPart: ActDayPart | null =
+      caseData.dayPart ??
+      (caseData.expected.timestamp
+        ? dayPartFromHour(
+            zonedHour(
+              caseData.expected.timestamp,
+              (options.persona as { timezone?: string }).timezone,
+            ),
+          )
+        : null);
     const seed = `eval:${options.persona.id}:${i}:${caseData.expected.content}`;
     const turnInput = {
       persona: options.persona,
@@ -158,6 +170,11 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
       now,
       locale,
       seed,
+      periodId: caseData.periodId ?? null,
+      actCondition: {
+        emotion: caseData.expectedState,
+        dayPart,
+      },
       layerOverrides,
       exclude: {
         recordIds: caseData.expected.id ? [caseData.expected.id] : undefined,
@@ -212,6 +229,9 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
         generated,
         model,
         declaredState: caseData.expectedState ?? null,
+        expectedState: caseData.expectedState ?? null,
+        periodId: caseData.periodId ?? null,
+        dayPart,
         locale,
         expectedAct: caseData.expectedAct ?? null,
         sampledAct,

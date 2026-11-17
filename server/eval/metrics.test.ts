@@ -335,6 +335,17 @@ describe("aggregating a run", () => {
     const metrics = aggregateScores([score(0.5, 0, 10, 10)]);
     expect(metrics.styleDistance).toBeNull();
   });
+
+  it("breaks the run down by period, and the bucket counts add up", () => {
+    const metrics = aggregateScores([
+      { ...score(0.4, 0, 10, 10), periodId: "p1", dayPart: "day", expectedAct: "acknowledge" },
+      { ...score(0.6, 0, 10, 10), periodId: "p2", dayPart: "night", expectedAct: "answer" },
+    ]);
+    expect(Object.keys(metrics.perPeriod ?? {}).sort()).toEqual(["p1", "p2"]);
+    expect(
+      Object.values(metrics.perPeriod ?? {}).reduce((sum, bucket) => sum + bucket.count, 0),
+    ).toBe(metrics.cases);
+  });
 });
 
 describe("reading the emotion of a line", () => {

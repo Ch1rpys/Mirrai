@@ -25,6 +25,9 @@ import {
   type EvalCaseData,
   type EvalSourceMessage,
 } from "../server/eval/dataset";
+import { normalizePeriods } from "../shared/periods";
+import { dayPartFromHour } from "../shared/act-profile";
+import { zonedHour } from "../shared/timezone";
 import { labelEvalCases } from "../server/eval/act-labels";
 import { runEval } from "../server/eval/run";
 import {
@@ -87,7 +90,8 @@ const compare = args.includes("--compare");
  * nothing saying which is which.
  */
 const pairs = args.includes("--pairs");
-const maxCases = Number(flag("max") ?? 12);
+const maxFlag = flag("max");
+const maxCases = maxFlag !== undefined ? Number(maxFlag) : undefined;
 /**
  * The language the records are written in.
  *
@@ -150,6 +154,10 @@ async function loadRecords(): Promise<EvalSourceMessage[]> {
       role: row.role === "assistant" ? ("assistant" as const) : ("user" as const),
       content: row.content,
       timestamp: row.timestamp ?? null,
+      kind: (row as { kind?: string | null }).kind,
+      emotion: (row as { emotion?: string | null }).emotion,
+      act: (row as { act?: string | null }).act,
+      actSource: (row as { actSource?: string | null }).actSource,
     }))
     .filter((message) => message.content.trim().length > 0);
 }
@@ -160,15 +168,43 @@ if (!records.length) {
   process.exit(1);
 }
 
+/**
+ * The persona and the training texts.
+ *
+ * They were declared further down — after the branches that use them —
+ * so the `--pairs` branch could not reach them. The declarations are
+ * here now, before the first use. Cutting cases also needs the periods
+ * and the timezone, so the persona is loaded before the cut.
+ */
+const persona = await db.getPersonaById(personaId, userId);
+if (!persona) {
+  console.error("No such persona.");
+  process.exit(1);
+}
+
+const periods = normalizePeriods(
+  (persona.personaData as { periods?: unknown } | null)?.periods,
+);
+const timezone = (persona as { timezone?: string | null }).timezone ?? null;
+
+function withDayPart(item: EvalCaseData): EvalCaseData {
+  if (item.dayPart) return item;
+  if (!item.expected.timestamp) return item;
+  return {
+    ...item,
+    dayPart: dayPartFromHour(zonedHour(item.expected.timestamp, timezone)),
+  };
+}
+
 // The stored cases are the ones that get measured. Cutting a fresh set
 // every time would measure a different question each time — and the
 // comparison with the baseline would be between two different things,
 // which is the one thing a gate must never be.
-const stored = casesFromRows(await db.getEvalCases(personaId, userId));
+const stored = casesFromRows(await db.getEvalCases(personaId, userId)).map(withDayPart);
 const cut = stored.length
   ? stored
-  : buildEvalCases(records, { maxCases, locale });
-const cases = await labelEvalCases(cut, { userId, locale });
+  : buildEvalCases(records, { maxCases, locale, periods, timezone });
+const cases = (await labelEvalCases(cut, { userId, locale })).map(withDayPart);
 if (!stored.length || cut.some((item) => !item.expectedAct)) {
   await db.saveEvalCases(
     personaId,
@@ -181,6 +217,7 @@ if (!stored.length || cut.some((item) => !item.expectedAct)) {
       expectedActSource: item.expectedActSource ?? null,
       source: "collected",
       occurredAt: item.expected.timestamp ?? null,
+      periodId: item.periodId ?? null,
     })),
   );
 }
@@ -188,19 +225,6 @@ console.log(
   `[eval] ${records.length} records → ${cases.length} held-out cases` +
     (stored.length ? " (the stored ones)" : ""),
 );
-
-/**
- * The persona and the training texts.
- *
- * They were declared further down — after the branches that use them —
- * so the `--pairs` branch could not reach them. The declarations are
- * here now, before the first use.
- */
-const persona = await db.getPersonaById(personaId, userId);
-if (!persona) {
-  console.error("No such persona.");
-  process.exit(1);
-}
 
 const training = trainingTexts(records, cases);
 
@@ -437,11 +461,17 @@ if (metrics.variant?.includes("picked")) {
   console.log(`[eval] why it won   : ${metrics.variant}`);
 }
 
-if (Object.keys(metrics.perState).length) {
-  console.log("[eval] per state (words, then the shape of the line):");
-  for (const [state, bucket] of Object.entries(metrics.perState)) {
+function printBuckets(
+  title: string,
+  buckets:
+    | Record<string, { count: number; overlap: number; lengthGap: number; sentenceGap: number; addressGap: number }>
+    | undefined,
+) {
+  if (!buckets || !Object.keys(buckets).length) return;
+  console.log(`[eval] ${title}:`);
+  for (const [key, bucket] of Object.entries(buckets)) {
     console.log(
-      `  · ${state.padEnd(10)} n=${String(bucket.count).padStart(2)}` +
+      `  · ${key.padEnd(10)} n=${String(bucket.count).padStart(2)}` +
         `  overlap=${bucket.overlap.toFixed(4)}` +
         `  length±${bucket.lengthGap.toFixed(1)}` +
         `  sentences±${bucket.sentenceGap.toFixed(2)}` +
@@ -449,6 +479,11 @@ if (Object.keys(metrics.perState).length) {
     );
   }
 }
+
+printBuckets("per state (words, then the shape of the line)", metrics.perState);
+printBuckets("per period", metrics.perPeriod);
+printBuckets("per day part", metrics.perDayPart);
+printBuckets("per act", metrics.perAct);
 
 const matrix = (metrics as any).emotionMatrix as
   | Record<string, Record<string, number>>
