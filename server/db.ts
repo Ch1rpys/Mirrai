@@ -30,6 +30,7 @@ import {
   type PersonaSettings,
 } from "@shared/persona-settings";
 import { normalizeStyleProfile, type StyleProfile } from "@shared/style-profile";
+import { RELATIONSHIP_PHASE_EVENTS } from "@shared/user-side";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -1220,12 +1221,40 @@ export async function getPersonasWithStats(userId: number) {
   const filesByPersona = new Map(fileCounts.map((r) => [r.personaId, Number(r.c)]));
   const bindingsByPersona = new Map(bindings.map((r) => [r.personaId, Number(r.c)]));
 
-  return list.map((p) => ({
-    ...p,
-    lastMessage: lastByPersona.get(p.id) ?? null,
-    fileCount: filesByPersona.get(p.id) ?? 0,
-    wechatBound: (bindingsByPersona.get(p.id) ?? 0) > 0,
-  }));
+  /**
+   * The latest relationship-phase event of each persona.
+   *
+   * One grouped query, not one round trip per persona. A breakup or
+   * an "apart" is enough for the lobby to stop putting them forward;
+   * a later reconciliation is enough to let them back.
+   */
+  const latestPhase = await db
+    .selectDistinctOn([relationshipEvents.personaId], {
+      personaId: relationshipEvents.personaId,
+      kind: relationshipEvents.kind,
+    })
+    .from(relationshipEvents)
+    .where(and(
+      eq(relationshipEvents.userId, userId),
+      inArray(relationshipEvents.personaId, ids),
+      inArray(relationshipEvents.kind, [...RELATIONSHIP_PHASE_EVENTS]),
+    ))
+    .orderBy(relationshipEvents.personaId, desc(relationshipEvents.happenedAt));
+
+  const phaseByPersona = new Map(latestPhase.map((r) => [r.personaId, r.kind]));
+
+  return list.map((p) => {
+    const lastPhase = phaseByPersona.get(p.id);
+    const togetherEnded = Boolean((p.togetherTo ?? "").trim());
+    const relationshipEnded = togetherEnded || lastPhase === "breakup" || lastPhase === "apart";
+    return {
+      ...p,
+      lastMessage: lastByPersona.get(p.id) ?? null,
+      fileCount: filesByPersona.get(p.id) ?? 0,
+      wechatBound: (bindingsByPersona.get(p.id) ?? 0) > 0,
+      relationshipEnded,
+    };
+  });
 }
 
 export async function getUserStats(userId: number, timezone?: string | null) {

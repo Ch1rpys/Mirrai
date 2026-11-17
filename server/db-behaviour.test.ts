@@ -918,6 +918,34 @@ describe("the lobby", () => {
     expect((orders[0] as any).name).toBe("personaId");
     expect(sqlOf(orders[1]).sql).toContain('"messages"."createdAt" desc');
   });
+
+  it("asks for one latest phase event per persona, not one query each", async () => {
+    registry.select.personas = [{ id: 5, userId: 3, updatedAt: new Date(), togetherTo: null }];
+    registry.select.messages = [];
+    registry.select.persona_files = [];
+    registry.select.wechat_bindings = [];
+    registry.select.relationship_events = [{ personaId: 5, kind: "breakup" }];
+
+    const rows = await db.getPersonasWithStats(3);
+
+    const eventQuery = queries.findIndex((q) => q.table === "relationship_events");
+    expect(eventQuery).toBeGreaterThanOrEqual(0);
+    expect(queries[eventQuery].distinctOn).toBeTruthy();
+    const on = queries[eventQuery].distinctOn!.map((c: any) => c.name);
+    expect(on).toContain("personaId");
+    expect(rows[0].relationshipEnded).toBe(true);
+  });
+
+  it("marks a persona with a togetherTo date as ended even without an event", async () => {
+    registry.select.personas = [{ id: 5, userId: 3, updatedAt: new Date(), togetherTo: "2024-06-01" }];
+    registry.select.messages = [];
+    registry.select.persona_files = [];
+    registry.select.wechat_bindings = [];
+    registry.select.relationship_events = [];
+
+    const rows = await db.getPersonasWithStats(3);
+    expect(rows[0].relationshipEnded).toBe(true);
+  });
 });
 
 describe("writing to a persona", () => {

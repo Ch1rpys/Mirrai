@@ -404,10 +404,6 @@ export const zh = {
       days: "{{count}}天前",
       weeks: "{{count}}周前",
     },
-    missYou: {
-      strong: "很想你",
-      mild: "想你了",
-    },
     hero: {
       daysLabel: "已陪伴",
       daysUnit: "天",
@@ -417,7 +413,7 @@ export const zh = {
       todayUnit: "条",
     },
     recommendation: {
-      title: "今日推荐",
+      title: "接着聊",
       lastChat: "上次对话 {{time}}",
       never: "还没有对话过",
       chat: "聊聊",

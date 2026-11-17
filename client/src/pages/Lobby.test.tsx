@@ -127,6 +127,9 @@ function makePersona(overrides: Record<string, any> = {}) {
     relationshipDesc: "前女友",
     analysisStatus: "ready",
     graduationStatus: "active",
+    presence: "active",
+    reachability: "reachable",
+    relationshipEnded: false,
     isPinned: false,
     chatCount: 0,
     createdAt: new Date("2026-01-01").toISOString(),
@@ -398,5 +401,73 @@ describe("the lobby", () => {
     ]) {
       expect(screen.queryByText(line)).toBeNull();
     }
+  });
+
+  it("does not say a quiet persona misses the user, and does not recommend them", () => {
+    /**
+     * A paused persona still sits in the list — it is the user's —
+     * but the lobby must not push it forward, and it must not put
+     * "想你了" on the card.
+     *
+     * The day's quote is one of twelve, and two of them contain 想你,
+     * so the quote is pinned to one that does not.
+     */
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.1);
+    try {
+      const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+      personas = [
+        makePersona({
+          id: 4,
+          name: "暂停的",
+          presence: "quiet",
+          lastUserMessageAt: weekAgo,
+          lastChatAt: weekAgo,
+        }),
+      ];
+
+      render(<Lobby />);
+
+      expect(screen.queryAllByText(/想你/)).toEqual([]);
+      expect(screen.queryByRole("heading", { name: "接着聊" })).toBeNull();
+    } finally {
+      random.mockRestore();
+    }
+  });
+
+  it("picks up the persona the user spoke to most recently", () => {
+    personas = [
+      makePersona({
+        id: 1,
+        name: "更早的",
+        lastUserMessageAt: "2026-03-01T00:00:00.000Z",
+      }),
+      makePersona({
+        id: 2,
+        name: "刚聊过的",
+        lastUserMessageAt: "2026-03-10T00:00:00.000Z",
+      }),
+    ];
+
+    render(<Lobby />);
+
+    const heading = screen.getByRole("heading", { name: "接着聊" });
+    const block = heading.closest("div.mb-8");
+    expect(block?.textContent).toContain("刚聊过的");
+    expect(block?.textContent).not.toContain("更早的");
+  });
+
+  it("says on the card how many days since the user last spoke", () => {
+    const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    personas = [
+      makePersona({
+        id: 3,
+        name: "小A",
+        lastUserMessageAt: threeDaysAgo,
+      }),
+    ];
+
+    render(<Lobby />);
+
+    expect(screen.getByText("上次联系 3 天前")).toBeInTheDocument();
   });
 });

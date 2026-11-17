@@ -405,10 +405,6 @@ export const en = {
       days: "{{count}} d ago",
       weeks: "{{count}} w ago",
     },
-    missYou: {
-      strong: "Missing you badly",
-      mild: "Missing you",
-    },
     hero: {
       daysLabel: "Together for",
       daysUnit: "days",
@@ -418,7 +414,7 @@ export const en = {
       todayUnit: "messages",
     },
     recommendation: {
-      title: "Today's pick",
+      title: "Pick up where you left off",
       lastChat: "Last chat {{time}}",
       never: "Never chatted yet",
       chat: "Talk",

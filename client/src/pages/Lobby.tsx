@@ -33,9 +33,10 @@ import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { normaliseLoveLanguage } from "@shared/love-language";
 import MoodCheckIn from "@/components/MoodCheckIn";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionDefinition } from "@/lib/emotions";
-import { localDateKey, zonedDateKey, zonedHour } from "@shared/timezone";
+import { localDateKey, zonedDateKey, zonedHour, daysSinceContact } from "@shared/timezone";
 import { attachmentStyleLabel, loveLanguageLabel } from "@/lib/persona-options";
 import { normalizeIntimacyLevel } from "@shared/intimacy";
+import { mayFeature } from "@/lib/lobby-eligibility";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 
@@ -266,14 +267,6 @@ export function getDaysUntilAnniversary(
   return diff <= 30 ? diff : null;
 }
 
-function getMissYouLevel(lastChatAt: string | Date | null): "lobby.missYou.strong" | "lobby.missYou.mild" | null {
-  if (!lastChatAt) return null;
-  const days = Math.floor((Date.now() - new Date(lastChatAt).getTime()) / 86400000);
-  if (days >= 7) return "lobby.missYou.strong";
-  if (days >= 3) return "lobby.missYou.mild";
-  return null;
-}
-
 function getCompatibilityScore(persona: any): number {
   const chatWeight = Math.min((persona.chatCount || 0) / 100, 1) * 40;
   const daysTogether = persona.togetherFrom ? daysBetween(persona.togetherFrom) : null;
@@ -439,12 +432,12 @@ function StatCell({ value, label }: { value: string | number; label: string }) {
 function TodayRecommendation({ personas, onChat }: { personas: any[]; onChat: (id: number) => void }) {
   const { t, locale } = useLocale();
   const recommended = useMemo(() => {
-    const ready = personas.filter((p: any) => p.analysisStatus === "ready" && p.graduationStatus !== "graduated");
+    const ready = personas.filter(mayFeature);
     if (ready.length === 0) return null;
     return ready.sort((a, b) => {
-      const aTime = a.lastChatAt ? new Date(a.lastChatAt).getTime() : 0;
-      const bTime = b.lastChatAt ? new Date(b.lastChatAt).getTime() : 0;
-      return aTime - bTime;
+      const aTime = a.lastUserMessageAt ? new Date(a.lastUserMessageAt).getTime() : 0;
+      const bTime = b.lastUserMessageAt ? new Date(b.lastUserMessageAt).getTime() : 0;
+      return bTime - aTime;
     })[0];
   }, [personas]);
 
@@ -452,18 +445,12 @@ function TodayRecommendation({ personas, onChat }: { personas: any[]; onChat: (i
   const emotion = emotionOf(recommended.emotionalState) || EMOTIONS.warm;
   const EmotionIcon = emotion.icon;
   const pd = (recommended.personaData as any) || {};
-  const missLevel = getMissYouLevel(recommended.lastChatAt);
 
   return (
     <div className="mb-8 border-t border-border pt-5">
       <PanelTitle
         icon={Bookmark}
         title={t("lobby.recommendation.title")}
-        right={missLevel && (
-          <span className="inline-flex items-center gap-1 text-[0.625rem] px-2 py-0.5 rounded-md border text-mood-nostalgic bg-mood-nostalgic/10 border-mood-nostalgic/30">
-            <Heart className="w-2.5 h-2.5" /> {t(missLevel)}
-          </span>
-        )}
       />
       <div className="flex items-center gap-3">
         <div className="mood-ring-sm flex-shrink-0" style={{ "--mood-color": emotionColor(recommended.emotionalState) } as CSSProperties}>
@@ -779,7 +766,7 @@ function ChatStreak() {
 
 function ConversationStarters({ personas, onChat }: { personas: any[]; onChat: (id: number) => void }) {
   const { t } = useLocale();
-  const ready = personas.filter((p: any) => p.analysisStatus === "ready" && p.graduationStatus !== "graduated");
+  const ready = personas.filter(mayFeature);
   const questions = useMemo(() => Array.from(t("lobby.starters.questions")), [t]);
   const [starterIdx, setStarterIdx] = useState(() => Math.floor(Math.random() * questions.length));
 
@@ -1055,14 +1042,13 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
       : null;
   const catchphrases: string[] = pd.catchphrases || [];
   /**
-   * The "missing you" badge.
+   * How long since the user last spoke.
    *
-   * It used to read the last time *anything* was written — so a
-   * persona that messages the user every night made the badge say the
-   * user had been gone for zero days, and the badge could never
-   * appear. It reads the moment the *user* spoke now.
+   * It used to say "想你了" after a few quiet days. The number is the
+   * same fact the chat header already shows; the lobby just states it.
    */
-  const missLevel = getMissYouLevel(persona.lastUserMessageAt ?? persona.lastChatAt);
+  const daysSinceTalk = daysSinceContact(persona.lastUserMessageAt);
+  const showLastContact = daysSinceTalk !== null && daysSinceTalk > 0;
   const compatibility = isReady ? getCompatibilityScore(persona) : null;
 
   const [showLetter, setShowLetter] = useState(false);
@@ -1092,7 +1078,11 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
             : <Square className="w-4 h-4" />}
         </button>
       )}
-      {(isGraduated || (!isGraduated && milestone && MilestoneIcon) || missLevel) && (
+      {(isGraduated
+        || (!isGraduated && milestone && MilestoneIcon)
+        || showLastContact
+        || (!isGraduated && persona.presence === "quiet")
+        || (!isGraduated && persona.reachability === "unreachable")) && (
         <div className="flex flex-wrap gap-1.5 mb-3">
           {isGraduated && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-medium text-mood-melancholy bg-mood-melancholy/10 border-mood-melancholy/30">
@@ -1120,9 +1110,9 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
               <MilestoneIcon className="w-3 h-3" /> {t(milestone.labelKey)}
             </span>
           )}
-          {missLevel && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-medium text-mood-nostalgic bg-mood-nostalgic/10 border-mood-nostalgic/30">
-              <Heart className="w-2.5 h-2.5" /> {t(missLevel)}
+          {showLastContact && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-medium text-muted-foreground bg-muted/60 border-border">
+              <Clock className="w-2.5 h-2.5" /> {t("chat.lastContact", { days: daysSinceTalk })}
             </span>
           )}
         </div>
@@ -1408,7 +1398,6 @@ function QuickChatBar({ personas, onChat }: { personas: any[]; onChat: (id: numb
         {readyPersonas.map((p: any) => {
           const emotion = emotionOf(p.emotionalState) || EMOTIONS.warm;
           const EmotionBadge = emotion.icon;
-          const miss = getMissYouLevel(p.lastChatAt);
           return (
             <button key={p.id} onClick={() => onChat(p.id)}
               className="flex flex-col items-center gap-1.5 flex-shrink-0 group relative">
@@ -1420,9 +1409,6 @@ function QuickChatBar({ personas, onChat }: { personas: any[]; onChat: (id: numb
                   style={{ borderColor: emotionColor(p.emotionalState), color: emotionColor(p.emotionalState) }}>
                   <EmotionBadge className="w-2.5 h-2.5" />
                 </span>
-                {miss && (
-                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-mood-nostalgic animate-pulse" />
-                )}
               </div>
               <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors truncate max-w-[60px]">
                 {p.name}
