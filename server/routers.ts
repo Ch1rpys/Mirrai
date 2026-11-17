@@ -95,6 +95,7 @@ import {
   previousDateKey,
   zonedDateKey,
 } from "@shared/timezone";
+import { isMemoryDate } from "@shared/memory-date";
 import { resolveRelationshipPhase, parseRecalledIds } from "@shared/user-side";
 import { copy, localizeScene } from "@shared/copy";
 import { isChatImportFileType, startImport } from "./importers";
@@ -603,32 +604,6 @@ async function assertNoRunningDistillation(
  * a model they never chose. A custom endpoint is expressed by pointing a
  * registered provider (OpenAI, for instance) at a different `baseUrl`.
  */
-/**
- * Whether a string is a date a memory can carry.
- *
- * A memory's date is either a whole day — "2026-02-14" — or a month
- * and a day, for a yearly anniversary — "02-14".
- *
- * It used to be any string at all, up to fifty characters. So "sometime
- * last summer" was stored as a date: the anniversary sweep compares
- * the month and the day, so the anniversary was never announced, and
- * nothing ever said that the date could not be read.
- */
-function isMemoryDate(value: string): boolean {
-  const trimmed = value.trim();
-  if (isRealDayKey(trimmed)) return true;
-  const match = /^(\d{2})-(\d{2})$/.exec(trimmed);
-  if (!match) return false;
-  const month = Number(match[1]);
-  const day = Number(match[2]);
-  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
-  // The last day of that month. `Date.UTC` counts the month from zero,
-  // and a day of zero is the last day of the month before — which is
-  // the month we want.
-  const lastDay = new Date(Date.UTC(2000, month, 0)).getUTCDate();
-  return day <= lastDay;
-}
-
 function assertKnownProvider(providerName: string, locale: "zh" | "en" = "zh"): void {
   const known = registry.list().map((p) => p.name.toLowerCase());
   if (known.includes(providerName.trim().toLowerCase())) return;

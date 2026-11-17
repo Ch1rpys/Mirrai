@@ -272,4 +272,30 @@ export const V6 = {
     zh: "这次预估要调用 {{calls}} 次，超过了上限 {{max}}。换一个更轻的模式。",
     en: "This run would make {{calls}} calls, over the ceiling of {{max}}. Pick a lighter mode.",
   },
+  "prompts.distill.factCard": {
+    zh: [
+      "你在读 {{name}} 的一段聊天记录。只根据这一段，抽出事实、人物和态度。",
+      "每条必须引用这段里真实存在的行号（# 后面的数字）。引用必须真实存在。",
+      "date 只填 YYYY-MM-DD 或 MM-DD，不确定就填 null。",
+      "只写这段里看得到的，不要概括整个人。没有可写的就返回空数组。",
+      "只输出 JSON，不要解释：",
+      '{ "facts": [{ "title": "", "description": "", "category": "anchor|milestone|anniversary|memory", "subject": "them|me", "date": "YYYY-MM-DD 或 MM-DD 或 null", "quote": 123 }], "people": [{ "name": "", "relation": "", "side": "them|me|both", "quote": 123 }], "stances": [{ "topic": "", "polarity": "like|dislike|fear|care|opinion", "statement": "", "quote": 123 }] }',
+    ].join("\n"),
+    en: [
+      "You are reading one stretch of {{name}}'s chat. Pull facts, people and stances from only this stretch.",
+      "Every item must cite a line number from this stretch (the number after #). The ids must be real.",
+      "Dates are YYYY-MM-DD or MM-DD, or null when you are not sure.",
+      "Stay inside this stretch. Do not summarise the whole person. If there is nothing to write, return empty arrays.",
+      "Return JSON only, with no explanation:",
+      '{ "facts": [{ "title": "", "description": "", "category": "anchor|milestone|anniversary|memory", "subject": "them|me", "date": "YYYY-MM-DD or MM-DD or null", "quote": 123 }], "people": [{ "name": "", "relation": "", "side": "them|me|both", "quote": 123 }], "stances": [{ "topic": "", "polarity": "like|dislike|fear|care|opinion", "statement": "", "quote": 123 }] }',
+    ].join("\n"),
+  },
+  "distill.readingFacts": {
+    zh: "正在抽第 {{done}} / {{total}} 段里的事实",
+    en: "Reading facts in block {{done}} / {{total}}",
+  },
+  "distill.factsTruncated": {
+    zh: "事实超过一千条，只留下了更重要、更近的 {{kept}} 条。",
+    en: "There were more than a thousand facts; only the {{kept}} more important, more recent ones were kept.",
+  },
 } as const satisfies CopyTable;

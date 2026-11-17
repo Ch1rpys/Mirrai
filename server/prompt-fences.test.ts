@@ -159,4 +159,53 @@ describe("the distillation's observation and merge stages", () => {
       ],
     });
   });
+
+  it("fences the block when extracting facts", async () => {
+    const { extractFactsFromRecords } = await import("./skill-engine/facts");
+    const timestamp = new Date("2023-07-12T08:16:09.000Z");
+    const invoke = async (messages: Array<{ role: string; content: unknown }>) => {
+      const raw = messages.find((message) => message.role === "user")?.content;
+      const user = typeof raw === "string" ? raw : "";
+      expect(user).toContain(HOSTILE_NOTE);
+      const unfencedUser = user.replace(
+        /MATERIAL>>>:[0-9a-f]+\n[\s\S]*?<<<END MATERIAL>>>:[0-9a-f]+/g,
+        "",
+      );
+      expect(unfencedUser).not.toContain(HOSTILE_NOTE);
+      return JSON.stringify({ facts: [], people: [], stances: [] });
+    };
+    await extractFactsFromRecords({
+      personaId: 1,
+      userId: 1,
+      name: "小满",
+      locale: "zh",
+      mode: "deep",
+      invoke,
+      rows: [{
+        id: 7,
+        role: "assistant",
+        content: HOSTILE_NOTE,
+        timestamp,
+        kind: "text",
+      }],
+      chunks: [
+        {
+          index: 0,
+          hash: "abc",
+          from: timestamp,
+          to: timestamp,
+          periodId: "p1",
+          dayPart: "day",
+          chars: HOSTILE_NOTE.length,
+          rows: [{
+            id: 7,
+            role: "assistant",
+            content: HOSTILE_NOTE,
+            timestamp,
+            kind: "text",
+          }],
+        },
+      ],
+    });
+  });
 });
