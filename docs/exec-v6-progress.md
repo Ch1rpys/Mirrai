@@ -43,7 +43,7 @@
 | B1.4 | ✅ | 89d0048 (rules); ade38b6 (label/pipeline) | 先红后绿：旧 `buildActProfile` 300 轮规则判不了的回复进入分布 80 条，断言 `samples > 200` 红在 `expected 80 to be greater than 200`。新路径 `labelActsForRecords` + 读已标注行：`acts-coverage.test.ts` 2 通过，standard 下 300 条全进分布；p2 只含 p2 行、真值 mock 后 `acknowledge` 占比在 0.3 ±5pp。`speech-acts.test.ts`：`precisionOnly` 下「我今天去了图书馆」为 `null`（旧规则 `share`）；`labelUserActByRule` 对「在吗」「嗯」「对不起」「想你」和普通陈述符合验收。`label-acts.test.ts` 同一批第二次模型调用 0；围栏内才有配对原文。`shared/act-profile.test.ts`、`server/eval/act-labels.test.ts` 通过。闸门 `323 passed \| 3 skipped (326)` 文件，`2931 passed \| 16 skipped (2947)` 用例。 |
 | B1.5 | ✅ | db75f76 | 先红后绿：未回标时 `buildActProfile` 的桶没有 `emotion`（旧代码全是 `warm`），断言存在 `emotion: "distant"` 的桶为红。`act-buckets-emotion.test.ts` 3 通过：真值 mock 后有 `distant` 桶且样本 > 0；`countsForCondition` 对该条件 `fallback === false`；designed distant 场景里 TA 行全部 `emotion: "distant"`、用户行没有；`fast` 不调模型；无触发词且不调模型时 `emotion` 为空；同一批第二次调用 0。闸门 `324 passed \| 3 skipped (327)` 文件，`2935 passed \| 16 skipped (2951)` 用例。 |
 | B1.6 | ✅ | 4709167 (pick/apply); ada73e8 (routes/UI) | `shared/clarify.test.ts` 22 通过：表中每题触发正反例；各回答补丁符合表；「不确定」只记 `clarified`、无内容补丁；数据齐全的夹具只问 `never_says`、`avoid_topic`、`confirm_rule:r-one`。`routers.clarify.test.ts` 3 通过：`address_angry` 写入 `source: "manual"` `verified: true`；重复回答 `BAD_REQUEST`；写在 `withPersonaDataLock` 里。`ClarifyCard.test.tsx` 2 通过：记下后前进；跳过不调 mutation。`prompt-fences.test.ts` `a line they would never say`：敌意文本只在 `<persona_data>` 围栏内。`pipeline-decisions.test.ts` 重跑保住 `clarified`。闸门 `333 passed \| 3 skipped (336)` 文件，`2986 passed \| 16 skipped (3002)` 用例。 |
-| B1.7 | ⬜ |  |  |
+| B1.7 | ✅ | 8499939 | `pipeline-chunked.test.ts`：同一份记录蒸两次，第二次 map 0 次、归并次数与第一次相同；追加 400 行后 map 次数等于 `chunkRecords` 里 hash 不在上次切块集合中的块数；第二次之后 `cardRows` 的 `chunkHash` 都在当前切块集合里。`observations.test.ts` 已读过的块不调模型。闸门 `333 passed \| 3 skipped (336)` 文件，`2990 passed \| 16 skipped (3006)` 用例。 |
 | B1.8 | ⬜ |  |  |
 | B1.9 | ⬜ |  |  |
 | B1.10 | ⬜ |  |  |
@@ -584,3 +584,10 @@ A5、A7、A9 维持 ✅。A6、A8 改回 ⬜。
 - 闸门 `333 passed | 3 skipped (336)` 文件，`2986 passed | 16 skipped (3002)` 用例，`all six steps passed`。相对 C10.1（330/3 文件、2957/16 用例）：通过文件 +3、通过用例 +29；跳过数不变。
 - 偏差 68。未验证清单、待用户决定无新增。
 - B1.6 标 ✅。下一条 B1.7。
+
+### WP3 · 实现会话 · 2026-11-17 · B1.7
+
+- `8499939` map 前按 `(chunkHash, phase=observation)` 复用已存卡；归并仍每次重跑；成功后 `deleteOrphanDistillationCards` 清掉当前切块集合之外的卡。进度文案 `distill.reusedChunks`。
+- 闸门 `333 passed | 3 skipped (336)` 文件，`2990 passed | 16 skipped (3006)` 用例，`all six steps passed`。相对 B1.6（333/3 文件、2986/16 用例）：通过用例 +4；跳过数不变。
+- 偏差无新增。未验证清单、待用户决定无新增。
+- B1.7 标 ✅。下一条 B1.8。
