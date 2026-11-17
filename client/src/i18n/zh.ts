@@ -1527,6 +1527,22 @@ export const zh = {
       copied: "链接已复制",
       progress: "第 {{current}} / {{total}} 组",
     },
+    audition: {
+      title: "试镜",
+      run: "让每个模型都试一遍",
+      running: "正在试…",
+      hint: "会用你配置过的 {{count}} 个模型各回答 {{cases}} 道题，一共约 {{calls}} 次调用。",
+      colModel: "模型",
+      colComposite: "像不像（综合）",
+      colOverlap: "用词",
+      colStyle: "语气",
+      colResidue: "残渣",
+      colChars: "平均字数",
+      colMs: "平均耗时",
+      useThis: "给这个分身用它",
+      failed: "这个模型没有答出来",
+      none: "还没有配置过模型。",
+    },
   },
 
   templates: {

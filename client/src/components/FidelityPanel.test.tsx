@@ -56,6 +56,11 @@ vi.mock("@/lib/trpc", () => ({
           isPending: false,
         }),
       },
+      auditionInfo: { useQuery: () => ({ data: { count: 0, cases: 0, calls: 0 } }) },
+      audition: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    persona: {
+      update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
   },
 }));

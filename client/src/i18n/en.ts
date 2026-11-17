@@ -1521,6 +1521,22 @@ export const en = {
       copied: "Link copied",
       progress: "Pair {{current}} / {{total}}",
     },
+    audition: {
+      title: "Audition",
+      run: "Try every model",
+      running: "Trying…",
+      hint: "Each of the {{count}} models you have configured will answer {{cases}} questions, about {{calls}} calls in all.",
+      colModel: "Model",
+      colComposite: "How alike (overall)",
+      colOverlap: "Wording",
+      colStyle: "Voice",
+      colResidue: "Residue",
+      colChars: "Mean length",
+      colMs: "Mean time",
+      useThis: "Use this for the persona",
+      failed: "This model did not answer.",
+      none: "No model has been configured yet.",
+    },
   },
 
   templates: {

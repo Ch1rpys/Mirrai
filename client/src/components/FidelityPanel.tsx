@@ -10,6 +10,7 @@ import FingerprintView from "@/components/v6/FingerprintView";
 import DiscriminatorView, {
   type DiscriminatorReportView,
 } from "@/components/v6/DiscriminatorView";
+import AuditionView from "@/components/v6/AuditionView";
 
 /**
  * The ruler, and the timing.
@@ -430,6 +431,8 @@ export default function FidelityPanel({
         ) : (
           <p className="text-xs text-muted-foreground">{t("fidelity.noRun")}</p>
         )}
+
+        <AuditionView personaId={personaId} />
 
         {/**
          * The runs.
