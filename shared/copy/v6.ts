@@ -208,4 +208,8 @@ export const V6 = {
     zh: "［文件］",
     en: "[file]",
   },
+  "distill.speakerMe": {
+    zh: "我",
+    en: "me",
+  },
 } as const satisfies CopyTable;
