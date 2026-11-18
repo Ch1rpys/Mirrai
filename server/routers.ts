@@ -36,6 +36,7 @@ import {
   getUserTimezone,
   createMemory, getMemoriesByPersonaId, getMemoriesFromPersona, countMemories, getMemoryTitles, deleteMemory, updateMemory,
   createFidelityFeedback, listFidelityFeedbackForMessage, listFidelityFeedbackForPersona,
+  listFidelityRewritePairs, setFidelityFeedbackRewrite,
   getMemoriesByFactKey, supersedeMemory, getMessageById,
   countDiaryEntries,
   getFileSummaryTitles,
@@ -115,7 +116,8 @@ import { isChatImportFileType, startImport } from "./importers";
 import { importUnpackRelKey } from "./importers/archive";
 import { afterRecordsRemoved } from "./_core/style-profile";
 import { asMaterial } from "./_core/material";
-import { buildEvalCases, casesFromRows, trainingTexts } from "./eval/dataset";
+import { buildEvalCases, buildFeedbackEvalCases, casesFromRows, trainingTexts } from "./eval/dataset";
+import type { EvalCaseData } from "./eval/dataset";
 import { labelEvalCases } from "./eval/act-labels";
 import { runEval } from "./eval/run";
 import { listAuditionProviders, runAudition } from "./eval/audition";
@@ -657,6 +659,30 @@ function noonInTheUsersZone(dayKey: string, timezone: string | null | undefined)
    * own wall clock, and the interface renders it in the reader's zone.
    */
   return zonedNoonForDayKey(dayKey, timezone);
+}
+
+/**
+ * Held-out cases from unlike marks that already have a rewrite.
+ *
+ * The expected line is what they would have said. The context is the
+ * in-app conversation that led up to the marked reply.
+ */
+async function evalCasesFromRewrites(personaId: number, userId: number): Promise<EvalCaseData[]> {
+  const rows = await getMessagesByPersonaId(personaId, userId, 5000);
+  const pairs = typeof listFidelityRewritePairs === "function"
+    ? await listFidelityRewritePairs(personaId, userId, 1000)
+    : [];
+  const messages = rows.flatMap((row) => {
+    if (row.origin === "system-notice") return [];
+    if (row.role !== "user" && row.role !== "assistant") return [];
+    return [{
+      id: row.id,
+      role: row.role as "user" | "assistant",
+      content: row.content,
+      timestamp: row.createdAt ?? null,
+    }];
+  });
+  return buildFeedbackEvalCases(messages, pairs);
 }
 
 export const appRouter = router({
@@ -4890,18 +4916,30 @@ export const appRouter = router({
           buildEvalCases(messages, { locale: input.locale }),
           { userId: ctx.user.id, locale: input.locale },
         );
+        const feedback = await evalCasesFromRewrites(input.personaId, ctx.user.id);
         const saved = await saveEvalCases(
           input.personaId,
           ctx.user.id,
-          cases.map((item) => ({
-            context: item.context,
-            expected: item.expected,
-            expectedState: item.expectedState,
-            expectedAct: item.expectedAct ?? null,
-            expectedActSource: item.expectedActSource ?? null,
-            source: "collected",
-            occurredAt: item.expected.timestamp ?? null,
-          })),
+          [
+            ...cases.map((item) => ({
+              context: item.context,
+              expected: item.expected,
+              expectedState: item.expectedState,
+              expectedAct: item.expectedAct ?? null,
+              expectedActSource: item.expectedActSource ?? null,
+              source: "collected" as const,
+              occurredAt: item.expected.timestamp ?? null,
+            })),
+            ...feedback.map((item) => ({
+              context: item.context,
+              expected: item.expected,
+              expectedState: item.expectedState,
+              expectedAct: item.expectedAct ?? null,
+              expectedActSource: item.expectedActSource ?? null,
+              source: "feedback" as const,
+              occurredAt: item.expected.timestamp ?? null,
+            })),
+          ],
         );
         return { saved };
       }),
@@ -4978,9 +5016,12 @@ export const appRouter = router({
           // time, and the comparison with the last run would be between
           // two different things.
           const stored = casesFromRows(await getEvalCases(input.personaId, ctx.user.id));
+          const feedback = stored.length
+            ? []
+            : await evalCasesFromRewrites(input.personaId, ctx.user.id);
           const cut = stored.length
             ? stored
-            : buildEvalCases(messages, { locale: input.locale });
+            : [...buildEvalCases(messages, { locale: input.locale }), ...feedback];
           const cases = await labelEvalCases(cut, { userId: ctx.user.id, locale: input.locale });
           if (!cases.length) {
             throw new TRPCError({
@@ -5002,7 +5043,7 @@ export const appRouter = router({
                 expectedState: item.expectedState,
                 expectedAct: item.expectedAct ?? null,
                 expectedActSource: item.expectedActSource ?? null,
-                source: "collected",
+                source: item.source === "feedback" ? "feedback" : "collected",
                 occurredAt: item.expected.timestamp ?? null,
               })),
             );
@@ -5129,9 +5170,12 @@ export const appRouter = router({
             timestamp: row.timestamp ?? null,
           }));
           const stored = casesFromRows(await getEvalCases(input.personaId, ctx.user.id));
+          const feedback = stored.length
+            ? []
+            : await evalCasesFromRewrites(input.personaId, ctx.user.id);
           const cut = stored.length
             ? stored
-            : buildEvalCases(messages, { locale: input.locale });
+            : [...buildEvalCases(messages, { locale: input.locale }), ...feedback];
           const cases = await labelEvalCases(cut, { userId: ctx.user.id, locale: input.locale });
           if (!cases.length) {
             throw new TRPCError({
@@ -5389,6 +5433,7 @@ export const appRouter = router({
         personaId: z.number(),
         messageId: z.number(),
         reason: z.enum(["act", "complete", "ask", "word", "invented", "mood", "timing"]),
+        rewrite: z.string().trim().min(1).max(200).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
@@ -5400,7 +5445,23 @@ export const appRouter = router({
           personaId: input.personaId,
           messageId: input.messageId,
           reason: input.reason,
+          rewrite: input.rewrite,
         });
+        return { id: row.id };
+      }),
+
+    setRewrite: protectedProcedure
+      .input(z.object({
+        feedbackId: z.number(),
+        rewrite: z.string().trim().min(1).max(200),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const row = await setFidelityFeedbackRewrite(
+          input.feedbackId,
+          ctx.user.id,
+          input.rewrite,
+        );
+        if (!row) throw new TRPCError({ code: "NOT_FOUND" });
         return { id: row.id };
       }),
 

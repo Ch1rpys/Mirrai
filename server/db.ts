@@ -1,4 +1,4 @@
-import { eq, desc, and, or, sql, count, sum, gte, ilike, asc, lt, lte, max, min, inArray, notInArray, isNull } from "drizzle-orm";
+import { eq, desc, and, or, sql, count, sum, gte, ilike, asc, lt, lte, max, min, inArray, notInArray, isNull, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import {
   InsertUser, users,
@@ -20,7 +20,7 @@ import {
   InsertResearchProfile, InsertCollectedMessage, CollectedMessage,
   InsertCollectionJob,
   InsertDistillationChunk, InsertDistillationCard,
-  InsertEvalCase, InsertEvalRun, InsertOutboundLetter, InsertFidelityFeedback,
+  InsertEvalCase, InsertEvalRun, InsertOutboundLetter, InsertFidelityFeedback, FidelityFeedback,
   InsertFidelityPair,
   InsertBlindSession, InsertRecordEmbedding,
   userMoods, relationshipEvents, letters, memoryExtractions,
@@ -1728,6 +1728,77 @@ export async function listFidelityFeedbackForPersona(personaId: number, userId: 
     .from(fidelityFeedback)
     .where(and(eq(fidelityFeedback.personaId, personaId), eq(fidelityFeedback.userId, userId)))
     .orderBy(desc(fidelityFeedback.createdAt));
+}
+
+/**
+ * An unlike mark that already has a rewrite, joined to the line that
+ * was marked. Named so the isolation scan does not treat a return-type
+ * brace as the start of the function body.
+ */
+export interface FidelityRewritePair {
+  id: number;
+  messageId: number;
+  reason: string;
+  rewrite: string;
+  unlike: string;
+  createdAt: Date;
+}
+
+/**
+ * The most recent unlike marks that have a rewrite, for this persona
+ * and this user. Used in the prompt, in evaluation, and in the export.
+ */
+export async function listFidelityRewritePairs(
+  personaId: number,
+  userId: number,
+  limit = 3,
+): Promise<FidelityRewritePair[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const cap = Math.max(1, Math.min(1000, limit));
+  const rows = await db
+    .select({
+      id: fidelityFeedback.id,
+      messageId: fidelityFeedback.messageId,
+      reason: fidelityFeedback.reason,
+      rewrite: fidelityFeedback.rewrite,
+      unlike: messages.content,
+      createdAt: fidelityFeedback.createdAt,
+    })
+    .from(fidelityFeedback)
+    .innerJoin(messages, eq(messages.id, fidelityFeedback.messageId))
+    .where(
+      and(
+        eq(fidelityFeedback.personaId, personaId),
+        eq(fidelityFeedback.userId, userId),
+        eq(messages.userId, userId),
+        eq(messages.personaId, personaId),
+        isNotNull(fidelityFeedback.rewrite),
+        sql`btrim(${fidelityFeedback.rewrite}) <> ''`,
+      ),
+    )
+    .orderBy(desc(fidelityFeedback.createdAt))
+    .limit(cap);
+  return rows.filter((row): row is FidelityRewritePair => typeof row.rewrite === "string" && row.rewrite.trim().length > 0);
+}
+
+/**
+ * Fills in a rewrite on a mark the caller owns. Somebody else's row
+ * is a miss, not an update of the wrong person.
+ */
+export async function setFidelityFeedbackRewrite(
+  id: number,
+  userId: number,
+  rewrite: string,
+): Promise<FidelityFeedback | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .update(fidelityFeedback)
+    .set({ rewrite })
+    .where(and(eq(fidelityFeedback.id, id), eq(fidelityFeedback.userId, userId)))
+    .returning();
+  return rows[0] ?? null;
 }
 
 export async function createFidelityPair(data: InsertFidelityPair) {

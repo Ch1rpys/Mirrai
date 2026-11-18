@@ -1582,6 +1582,8 @@ export const fidelityFeedback = pgTable("fidelity_feedback", {
   personaId: integer("personaId").notNull(),
   messageId: integer("messageId").notNull(),
   reason: varchar("reason", { length: 16 }).notNull(),
+  /** What they would have said. Empty until the reader fills it in. */
+  rewrite: text("rewrite"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => ({
   personaUserIdx: index("fidelity_feedback_persona_user_idx").on(table.personaId, table.userId),

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildEvalCases,
+  buildFeedbackEvalCases,
   casesFromRows,
   describeCase,
   trainingTexts,
@@ -383,6 +384,24 @@ describe("what the model is fitted on", () => {
     // have seen either copy.
     expect(cases.length).toBe(1);
     expect(texts).not.toContain("在的");
+  });
+
+  it("does not train on a rewrite the person never said", () => {
+    const record: EvalSourceMessage[] = [
+      { id: 1, role: "user", content: "在吗", timestamp: null },
+      { id: 2, role: "assistant", content: "你好吗", timestamp: null },
+      { id: 3, role: "user", content: "今天好累", timestamp: null },
+      { id: 4, role: "assistant", content: "怎么了", timestamp: null },
+    ];
+    const cases = buildFeedbackEvalCases(record, [{ messageId: 2, rewrite: "那才像" }]);
+    expect(cases).toHaveLength(1);
+    expect(cases[0]?.source).toBe("feedback");
+    expect(cases[0]?.expected.content).toBe("那才像");
+    const texts = trainingTexts(
+      [...record, { role: "assistant", content: "那才像", timestamp: null }],
+      cases,
+    );
+    expect(texts).not.toContain("那才像");
   });
 });
 

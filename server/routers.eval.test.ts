@@ -22,6 +22,8 @@ const saveEvalCases = vi.fn();
 const saveEvalRun = vi.fn();
 const getLatestPersonaVersion = vi.fn();
 const setPersonaVersionEvalRun = vi.fn();
+const getMessagesByPersonaId = vi.fn();
+const listFidelityRewritePairs = vi.fn();
 
 vi.mock("./db", () => ({
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
@@ -33,6 +35,8 @@ vi.mock("./db", () => ({
   saveEvalRun: (...a: unknown[]) => saveEvalRun(...a),
   getLatestPersonaVersion: (...a: unknown[]) => getLatestPersonaVersion(...a),
   setPersonaVersionEvalRun: (...a: unknown[]) => setPersonaVersionEvalRun(...a),
+  getMessagesByPersonaId: (...a: unknown[]) => getMessagesByPersonaId(...a),
+  listFidelityRewritePairs: (...a: unknown[]) => listFidelityRewritePairs(...a),
 }));
 
 const runEval = vi.fn();
@@ -115,6 +119,8 @@ describe("the fidelity evaluation", () => {
       await new Promise((resolve) => setTimeout(resolve, 30));
       return { score: 0.8 } as any;
     });
+    getMessagesByPersonaId.mockResolvedValue([]);
+    listFidelityRewritePairs.mockResolvedValue([]);
     listAuditionProviders.mockResolvedValue([]);
     runAudition.mockImplementation(async () => {
       await new Promise((resolve) => setTimeout(resolve, 30));
@@ -181,5 +187,40 @@ describe("the fidelity evaluation", () => {
       caller.eval.audition({ personaId: 5, locale: "zh" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(runAudition).not.toHaveBeenCalled();
+  });
+
+  it("cuts a feedback case from a rewrite and leaves it out of training", async () => {
+    const { trainingTexts } = await import("./eval/dataset");
+    listFidelityRewritePairs.mockResolvedValue([
+      { id: 1, messageId: 2, reason: "word", rewrite: "那才像", unlike: "你好吗", createdAt: new Date() },
+    ]);
+    getMessagesByPersonaId.mockResolvedValue([
+      { id: 1, role: "user", content: "吃饭了吗", createdAt: new Date(), origin: "web" },
+      { id: 2, role: "assistant", content: "你好吗", createdAt: new Date(), origin: "web" },
+    ]);
+    const caller = appRouter.createCaller(ctxFor(1));
+    await caller.eval.buildCases({ personaId: 5, locale: "zh" });
+    expect(saveEvalCases).toHaveBeenCalled();
+    const saved = saveEvalCases.mock.calls[0][2] as Array<{
+      source?: string;
+      expected: { content: string };
+      context: Array<{ role: string; content: string }>;
+    }>;
+    const feedback = saved.filter((item) => item.source === "feedback");
+    expect(feedback).toHaveLength(1);
+    expect(feedback[0]?.expected.content).toBe("那才像");
+    const texts = trainingTexts(
+      [
+        { role: "assistant", content: "在的", timestamp: null },
+        { role: "assistant", content: "那才像", timestamp: null },
+      ],
+      saved.map((item) => ({
+        context: item.context as never,
+        expected: item.expected as never,
+        expectedState: null,
+        source: item.source,
+      })),
+    );
+    expect(texts).not.toContain("那才像");
   });
 });

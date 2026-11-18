@@ -56,6 +56,8 @@ export interface EvalCaseData {
   periodId?: string | null;
   /** Day or night in the persona's timezone when the line was said. */
   dayPart?: ActDayPart | null;
+  /** `collected` from the records, `feedback` from an unlike rewrite. */
+  source?: "collected" | "feedback" | string;
 }
 
 export interface EvalCaseOptions {
@@ -344,6 +346,55 @@ export function buildEvalCases(
 }
 
 /**
+ * Held-out cases from unlike marks that already have a rewrite.
+ *
+ * The expected line is what they would have said, not the generated
+ * line that was marked. These cases do not count against the hold-out
+ * ceiling — they are extra questions, not a cut of the record.
+ */
+export function buildFeedbackEvalCases(
+  messages: EvalSourceMessage[],
+  pairs: Array<{ messageId: number; rewrite: string }>,
+  options: { contextSize?: number; sceneBreakHours?: number } = {},
+): EvalCaseData[] {
+  const contextSize = Math.max(1, options.contextSize ?? 6);
+  const sceneBreakMs = (options.sceneBreakHours ?? 6) * 3_600_000;
+  const indexOf = new Map<number, number>();
+  for (let i = 0; i < messages.length; i++) {
+    const id = messages[i]?.id;
+    if (typeof id === "number") indexOf.set(id, i);
+  }
+  const seen = new Set<number>();
+  const out: EvalCaseData[] = [];
+  for (const pair of pairs) {
+    const rewrite = pair.rewrite.replace(/\s+/g, " ").trim();
+    if (!rewrite) continue;
+    if (seen.has(pair.messageId)) continue;
+    seen.add(pair.messageId);
+    const index = indexOf.get(pair.messageId);
+    if (index === undefined) continue;
+    const marked = messages[index];
+    if (!marked) continue;
+    const window = contextBefore(messages, index, contextSize, sceneBreakMs);
+    if (!window.some((item) => item.role === "user")) continue;
+    const previousUser = [...window].reverse().find((item) => item.role === "user")?.content ?? null;
+    out.push({
+      context: window,
+      expected: {
+        role: "assistant",
+        content: rewrite,
+        timestamp: marked.timestamp,
+      },
+      expectedState: labelledState(marked.emotion),
+      expectedAct: labelSpeechActByRule(rewrite, previousUser),
+      expectedActSource: "rule",
+      source: "feedback",
+    });
+  }
+  return out;
+}
+
+/**
  * The cases that are already stored, read back.
  *
  * The stored cases are the *标答* — the held-out lines the persona has to
@@ -363,6 +414,7 @@ export function casesFromRows(
     expectedAct?: string | null;
     expectedActSource?: string | null;
     periodId?: string | null;
+    source?: string | null;
   }>,
 ): EvalCaseData[] {
   const out: EvalCaseData[] = [];
@@ -383,6 +435,7 @@ export function casesFromRows(
       expectedActSource: (row.expectedActSource as EvalCaseData["expectedActSource"]) ?? (storedAct ? "rule" : null),
       periodId: typeof row.periodId === "string" && row.periodId ? row.periodId : null,
       dayPart: null,
+      source: row.source === "feedback" ? "feedback" : row.source || "collected",
     });
   }
   return out;
