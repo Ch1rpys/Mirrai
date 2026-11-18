@@ -13,14 +13,14 @@ import type { Persona } from "../../drizzle/schema";
 import type { LLMMessage, LLMProvider } from "../llm/types";
 import { llmService } from "../llm";
 import { copy } from "@shared/copy";
-import { isTextRecord } from "@shared/records";
 import { dayPartFromHour, normalizeActProfile, sampleAct, type ActDayPart } from "@shared/act-profile";
 import { isUserAsking, type SpeechAct } from "@shared/speech-acts";
 import { loadBehaviorProfile, seededRandom } from "../_core/behavior-profile";
 import { zonedHour } from "@shared/timezone";
 import { pickRerankWinner, type RerankResult } from "./rerank";
+import { buildRerankModel, getRerankModel } from "./rerank-model";
+import { sparseModelFromUnknown } from "../eval/ab-pairs";
 import { retrieveExemplars } from "./exemplars";
-import { filterHarm } from "@shared/harm";
 import { buildPromptForPersona } from "./prompt";
 import * as db from "../db";
 import {
@@ -100,7 +100,11 @@ function actProfileForTurn(
 
 export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   const layers = applyLayerOverrides(layersFromSettings(input.persona), input.layerOverrides);
-  const layersUsed = layersInEffect(layers, input.persona);
+  let layersUsed = layersInEffect(layers, input.persona);
+  if (layersUsed.includes("rerank") && !input.exclude) {
+    const model = await getRerankModel(input.persona.id, input.userId);
+    if (!model) layersUsed = layersUsed.filter((id) => id !== "rerank");
+  }
   const rng = seededRandom(input.seed);
   const timingEnabled =
     Boolean((input.persona as { timingEnabled?: boolean }).timingEnabled) &&
@@ -126,6 +130,11 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   const sampledAct = sampled?.act === "silence" ? null : sampled?.act ?? null;
   const length = lengthCapForTurn(layers.lengthCap, input);
   const projectionOn = Boolean(layers.projection && fingerprintCoreForTurn(input));
+  const fingerprintRerankOn = Boolean(
+    layers.fingerprintRerank &&
+      layersUsed.includes("rerank") &&
+      fingerprintCoreForTurn(input),
+  );
 
   if (sampled?.act === "silence" && timingEnabled && !input.exclude) {
     return {
@@ -173,7 +182,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       sampledAct,
       messages,
       ...length,
-      layersUsed: withMeasuredLayers(layersUsed, length, projectionOn),
+      layersUsed: withMeasuredLayers(layersUsed, length, projectionOn, fingerprintRerankOn),
       exemplarIds: [],
       seedRecordIds: [],
       recalled: [],
@@ -200,7 +209,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     sampledAct,
     messages: composed.messages,
     ...length,
-    layersUsed: withMeasuredLayers(layersUsed, length, projectionOn),
+    layersUsed: withMeasuredLayers(layersUsed, length, projectionOn, fingerprintRerankOn),
     exemplarIds: [],
     seedRecordIds: [],
     recalled: composed.recalled,
@@ -234,10 +243,12 @@ function withMeasuredLayers(
   layersUsed: LayerId[],
   length: { maxChars?: number },
   projectionOn: boolean,
+  fingerprintRerankOn: boolean,
 ): LayerId[] {
   const extra: LayerId[] = [];
   if (length.maxChars != null) extra.push("lengthCap");
   if (projectionOn) extra.push("projection");
+  if (fingerprintRerankOn) extra.push("fingerprintRerank");
   if (extra.length === 0) return layersUsed;
   const used = new Set<LayerId>([...layersUsed, ...extra]);
   return LAYERS.filter((id) => used.has(id));
@@ -323,8 +334,17 @@ export async function* executePlan(
   };
   const locale = input.locale;
   const useRerank = io.rerank && plan.layersUsed.includes("rerank");
+  const rerankModel = useRerank
+    ? io.trainingTexts
+      ? buildRerankModel(
+          input.exclude?.texts
+            ? io.trainingTexts.filter((text) => !input.exclude?.texts?.includes(text))
+            : io.trainingTexts,
+        )
+      : await getRerankModel(input.persona.id, input.userId)
+    : null;
 
-  if (useRerank) {
+  if (useRerank && rerankModel) {
     yield { type: "thinking" };
     const texts = await Promise.all(
       Array.from({ length: 4 }, async () => {
@@ -353,19 +373,16 @@ export async function* executePlan(
       excludeIds: input.exclude?.recordIds,
       personaData: personaData as never,
     });
-    const filteredRecords = filterHarm(records, personaData as never);
-    const training =
-      io.trainingTexts ??
-      filteredRecords
-        .filter((row) => row.role === "assistant" && isTextRecord(row))
-        .map((row) => row.content)
-        .slice(-80);
+    const profile = effectiveStyleProfile(input.persona);
     const picked = pickRerankWinner({
       candidates: texts.map((text) => ({ text })),
-      trainingTexts: input.exclude?.texts
-        ? training.filter((text) => !input.exclude?.texts?.includes(text))
-        : training,
+      model: rerankModel,
       exemplars: exemplars.map((item) => item.content),
+      fingerprint: fingerprintCoreForTurn(input),
+      fingerprintRerank: plan.layersUsed.includes("fingerprintRerank"),
+      sampledAct: plan.sampledAct,
+      discriminator: sparseModelFromUnknown(profile.discriminator),
+      weights: profile.rerankWeights as Record<string, number> | undefined,
     });
     const surviving = texts.filter(Boolean);
     if (!picked && !surviving.length) {

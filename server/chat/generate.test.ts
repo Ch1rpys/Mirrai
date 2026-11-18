@@ -537,3 +537,91 @@ describe("the length cap layer", () => {
   });
 });
 
+function personaWithRerankFingerprint() {
+  const next = personaWithFingerprint();
+  next.rerankEnabled = true;
+  next.styleProfile.fingerprint.endings = {
+    period: 0,
+    ellipsis: 0,
+    question: 0,
+    exclaim: 0,
+    tilde: 0,
+    emoji: 0,
+    particle: 0.4,
+    other: 0.6,
+  };
+  next.styleProfile.fingerprint.punctuation = {
+    commaPerChar: 0.01,
+    spaceAsComma: 0,
+    ellipsisForms: { unicode: 0, dots: 0, cjkDots: 0 },
+    exclaimRuns: [],
+    questionRuns: [],
+    halfWidthRate: 0.5,
+    markCount: 0,
+  };
+  next.styleProfile.fingerprint.laugh = { rate: 0, forms: {}, haRuns: [] };
+  next.styleProfile.fingerprint.emoji = { rate: 0.2, perLine: 0, top: [] };
+  next.styleProfile.fingerprint.length = { median: 4, p90: 8, p95: 10, histogram: [] };
+  next.styleProfile.fingerprint.particles = { none: 0.6, 呀: 0.4 };
+  return next;
+}
+
+describe("fingerprint rerank layer", () => {
+  it("lists fingerprintRerank when the switch is on and a fingerprint is there", async () => {
+    const plan = await planTurn({
+      persona: personaWithRerankFingerprint(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "fingerprint-rerank:on",
+      exclude: { texts: [HELD_OUT] },
+    });
+    expect(plan.layersUsed).toContain("rerank");
+    expect(plan.layersUsed).toContain("fingerprintRerank");
+  });
+
+  it("puts the four scores on the final event", async () => {
+    invokeWithProvider.mockResolvedValue("好的呀");
+    const input = {
+      persona: personaWithRerankFingerprint(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "fingerprint-rerank:scores",
+      exclude: { texts: [HELD_OUT] },
+    };
+    const plan = await planTurn(input);
+    let final: { text: string; rerank?: { scores: unknown[] } } | null = null;
+    for await (const event of executePlan(plan, input, {
+      provider: stubProvider,
+      mode: "once",
+      rerank: true,
+      options: {},
+      trainingTexts: Array.from({ length: 40 }, (_, i) => `嗯${i}`),
+    })) {
+      if (event.type === "final") final = event;
+    }
+    expect(final?.rerank?.scores).toHaveLength(4);
+  });
+
+  it("leaves fingerprintRerank off with --without fingerprintRerank", async () => {
+    const plan = await planTurn({
+      persona: personaWithRerankFingerprint(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "fingerprint-rerank:off",
+      exclude: { texts: [HELD_OUT] },
+      layerOverrides: layerOverridesForEval({ without: ["fingerprintRerank"] }),
+    });
+    expect(plan.layersUsed).toContain("rerank");
+    expect(plan.layersUsed).not.toContain("fingerprintRerank");
+  });
+});
+

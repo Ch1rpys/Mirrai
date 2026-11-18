@@ -30,6 +30,7 @@ import TagInput from "@/components/v6/TagInput";
 import { normalizeHarmReport } from "@shared/harm";
 import { useLocale } from "@/contexts/LocaleContext";
 import { copy } from "@shared/copy";
+import { RERANK_MIN_ASSISTANT_LINES } from "@shared/eval-limits";
 
 /**
  * The largest character card the app will import.
@@ -101,7 +102,14 @@ export default function PersonaEdit() {
     { personaId },
     { enabled: isAuthenticated && hasPersonaId },
   );
+  const { data: material, isLoading: materialLoading } = trpc.material.report.useQuery(
+    { personaId },
+    { enabled: isAuthenticated && hasPersonaId },
+  );
   const hasRhythm = Boolean(behavior?.profile);
+  const theirsText =
+    material?.layers.find((layer) => layer.id === "fingerprint")?.have ?? 0;
+  const hasRerankCorpus = theirsText >= RERANK_MIN_ASSISTANT_LINES;
 
   const updateMutation = trpc.persona.update.useMutation({
     onSuccess: () => { toast.success(t("personaEdit.basicSaved")); refetch(); },
@@ -350,7 +358,7 @@ export default function PersonaEdit() {
     presence,
     reachability,
     proactiveFrequencyHours: proactiveHours,
-    rerankEnabled,
+    rerankEnabled: materialLoading ? rerankEnabled : rerankEnabled && hasRerankCorpus,
     timingEnabled: behaviorLoading ? timingEnabled : timingEnabled && hasRhythm,
     timezone: timezone || null,
     });
@@ -529,13 +537,19 @@ export default function PersonaEdit() {
             <label className="flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={rerankEnabled}
+                checked={rerankEnabled && hasRerankCorpus}
+                disabled={!hasRerankCorpus}
                 onChange={(e) => setRerankEnabled(e.target.checked)}
                 className="mt-0.5"
               />
               <span>
                 <span className="block">{t("personaEdit.rerank")}</span>
-                <span className="block text-xs text-muted-foreground leading-relaxed">{t("personaEdit.rerankNote")}</span>
+                <span className="block text-xs text-muted-foreground leading-relaxed">
+                  {t("personaEdit.rerankNote")}
+                  {!hasRerankCorpus
+                    ? ` ${t("personaEdit.rerankTooFew", { name })}`
+                    : ""}
+                </span>
               </span>
             </label>
             <label className="flex items-start gap-2 text-sm">

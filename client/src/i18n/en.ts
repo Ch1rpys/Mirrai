@@ -1304,6 +1304,7 @@ export const en = {
     saveBasic: "Save basic details",
     rerank: "Pick one of four",
     rerankNote: "About four times the reply cost. The screen says they are thinking, then the chosen line arrives whole. Off by default.",
+    rerankTooFew: "There are not enough lines to rerank. {{name}} needs at least 40 of their own.",
     timing: "On their time",
     timingNote: "The wait before a reply, bursts, and a turn with no reply. It cannot be turned on without a behaviour profile. Off by default.",
     switchesTitle: "Switches for this persona",

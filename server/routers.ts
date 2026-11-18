@@ -119,6 +119,7 @@ import { labelEvalCases } from "./eval/act-labels";
 import { runEval } from "./eval/run";
 import { listAuditionProviders, runAudition } from "./eval/audition";
 import { collectOutboundCandidates } from "./chat/outbound";
+import { getRerankModel } from "./chat/rerank-model";
 import { loadBehaviorProfile, measureAndSaveBehaviorProfile } from "./_core/behavior-profile";
 import { mergePersonaSettings, normalizePersonaSettings } from "@shared/persona-settings";
 import { personaSettingsPatchSchema } from "./routers-v6/persona-settings-patch";
@@ -1235,7 +1236,21 @@ export const appRouter = router({
         if (rest.proactiveFrequencyHours !== undefined) {
           data.proactiveFrequencyHours = rest.proactiveFrequencyHours;
         }
-        if (rest.rerankEnabled !== undefined) data.rerankEnabled = rest.rerankEnabled;
+        if (rest.rerankEnabled !== undefined) {
+          if (rest.rerankEnabled) {
+            const current = await getPersonaById(id, ctx.user.id);
+            const model = await getRerankModel(id, ctx.user.id);
+            if (!model) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: copy(ctx.locale, "errors.rerankTooFew", {
+                  name: current?.name ?? "",
+                }),
+              });
+            }
+          }
+          data.rerankEnabled = rest.rerankEnabled;
+        }
         if (rest.timingEnabled !== undefined) {
           if (rest.timingEnabled) {
             const current = await getPersonaById(id, ctx.user.id);

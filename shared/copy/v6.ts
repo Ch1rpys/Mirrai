@@ -8,6 +8,10 @@ export const V6 = {
     zh: "这个分身已经有 {{current}} 条记录，再写入 {{incoming}} 条会超过上限 {{max}}。",
     en: "This persona already has {{current}} records; writing {{incoming}} more would go past the limit of {{max}}.",
   },
+  "errors.rerankTooFew": {
+    zh: "记录不够，重排选不出来。至少要有 40 条 {{name}} 的话。",
+    en: "There are not enough lines to rerank. {{name}} needs at least 40 of their own.",
+  },
   "errors.importFailed": {
     zh: "这份文件没有整理成记录。",
     en: "This file was not turned into records.",

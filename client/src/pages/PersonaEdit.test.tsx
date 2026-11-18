@@ -28,6 +28,8 @@ const importCard = vi.fn();
 
 /** The persona the server sends back. */
 let persona: any;
+/** How many of their text lines the material report currently counts. */
+let theirsText = 100;
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -50,6 +52,16 @@ vi.mock("@/lib/trpc", () => ({
     },
     llmConfig: { listProviders: { useQuery: () => ({ data: [] }) } },
     behavior: { get: { useQuery: () => ({ data: { profile: null }, isLoading: false }) } },
+    material: {
+      report: {
+        useQuery: () => ({
+          data: {
+            layers: [{ id: "fingerprint", have: theirsText, need: 40, ok: theirsText >= 40 }],
+          },
+          isLoading: false,
+        }),
+      },
+    },
     useUtils: () => ({
       persona: { get: { invalidate: vi.fn() } },
     }),
@@ -105,6 +117,7 @@ import PersonaEdit from "./PersonaEdit";
 describe("editing a persona", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    theirsText = 100;
     persona = {
       id: 1,
       name: "小A",
@@ -290,5 +303,13 @@ describe("editing a persona", () => {
     await user.click(screen.getByText(translate("zh", "personaEdit.rerank")));
     await user.click(screen.getByText(translate("zh", "personaEdit.saveBasic")));
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ rerankEnabled: true }));
+  });
+
+  it("greys the rerank switch when there are not enough of their lines", () => {
+    theirsText = 15;
+    render(<PersonaEdit />);
+    const box = screen.getByText(translate("zh", "personaEdit.rerank")).closest("label")?.querySelector("input");
+    expect(box).toBeDisabled();
+    expect(screen.getByText(/记录不够，重排选不出来/)).toBeInTheDocument();
   });
 });

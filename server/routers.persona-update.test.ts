@@ -21,6 +21,11 @@ vi.mock("./db", () => ({
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
 }));
 
+const getRerankModel = vi.fn();
+vi.mock("./chat/rerank-model", () => ({
+  getRerankModel: (...a: unknown[]) => getRerankModel(...a),
+}));
+
 import { appRouter } from "./routers";
 
 function ctxFor(userId: number): TrpcContext {
@@ -50,6 +55,8 @@ describe("saving a persona", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     updatePersona.mockResolvedValue(true);
+    getPersonaById.mockResolvedValue({ id: 5, name: "小A" });
+    getRerankModel.mockResolvedValue({ texts: Array.from({ length: 40 }, () => "嗯") });
   });
 
   it("says it saved when the row was written", async () => {
@@ -71,5 +78,13 @@ describe("saving a persona", () => {
     await expect(
       appRouter.createCaller(ctxFor(1)).persona.update({ id: 999999, name: "小B" }),
     ).rejects.toThrow();
+  });
+
+  it("refuses to turn rerank on when there are not enough lines", async () => {
+    getRerankModel.mockResolvedValue(null);
+    await expect(
+      appRouter.createCaller(ctxFor(1)).persona.update({ id: 5, rerankEnabled: true }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(updatePersona).not.toHaveBeenCalled();
   });
 });

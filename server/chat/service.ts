@@ -1083,6 +1083,7 @@ async function* runConversationTurn(
   let replyText = "";
   let streamedText = "";
   let projection: string[] = [];
+  let rerank: unknown;
   let failed = false;
   let failureMessage = "";
   const invokeOptions = {
@@ -1186,6 +1187,7 @@ async function* runConversationTurn(
       if (event.type === "final") {
         replyText = event.text || replyText;
         projection = event.projection;
+        rerank = event.rerank;
       }
     }
     if (!timingEnabled && streamedText && replyText && replyText !== streamedText) {
@@ -1471,6 +1473,7 @@ async function* runConversationTurn(
     sampledAct: sampled?.act ?? null,
     periodId: options.periodId ?? null,
     ...(projection.length > 0 ? { projection } : {}),
+    ...(rerank ? { rerank } : {}),
   };
   let parts = [finalText];
   if (timingEnabled && behavior) {

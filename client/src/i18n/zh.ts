@@ -1305,6 +1305,7 @@ export const zh = {
     saveBasic: "保存基本信息",
     rerank: "四选一重排",
     rerankNote: "大约四倍回复费用。打开后这一轮先显示「在想」，再一次交出选中的全文。默认关。",
+    rerankTooFew: "记录不够，重排选不出来。至少要有 40 条 {{name}} 的话。",
     timing: "按 TA 的时间",
     timingNote: "回复前的等待、连发、以及这一轮可以不回。没有画像时开不了。默认关。",
     switchesTitle: "这个分身的开关",
