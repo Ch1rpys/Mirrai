@@ -113,7 +113,7 @@
 | B8.7 | ✅ | dc2e6da | `dataset.test.ts`：`covers both periods, a distant line, and day and night on the fixture` 通过（夹具切出的标答含 p1/p2、`distant`、day 与 night；同一输入两次 `toEqual`）。原有「留出句不出现在上下文里」「不超过四分之一」等断言全部通过。`metrics.test.ts`：`breaks the run down by period, and the bucket counts add up` 通过，`perPeriod` 键为 `p1`/`p2`，桶 `count` 之和等于 `cases`。`run.test.ts`：`samples the act against the held-out line's own state` 通过，`planTurn` 收到 `actCondition.emotion === "distant"`。临时库 `mirrai_v6_scratch` 0047 四步+升级路径：push 后 migrate 应用到 `0047_eval_cases_period`；`--replay` `replayed 45 migration(s)`；`--rollback 1` 后 `eval_cases` 无 `periodId`；再 migrate 回来；DROP 列并删 journal 后再 migrate，`periodId` 出现。库已 `dropdb`。闸门 `341 passed \| 4 skipped (345)` 文件，`3047 passed \| 18 skipped (3065)` 用例。层数多于名额时见偏差 72。 |
 | B8.8 | ✅ | 26e83a6 (server); ef5bead (UI) | `service.test.ts`：开关开、`chatCount` 8 时 `invokeWithProvider` 2 次，事件有 `choice`（`好的呀`/`好的。`）、无 assistant 落库、无 `done`。通道 `wechat` 同开关只调用 1 次且落一句 assistant。`commitPendingChoice` / `fidelity.choose`：选中句落库、`createFidelityPair` 一行。`ab-pairs.test.ts`：30 行总选短句，`length` 权重为负。`db-delete-coverage` 通过。临时库 `mirrai_v6_scratch` 0049 四步+升级路径：push 后 migrate 到 `0049_fidelity_pairs`；`--replay` `replayed 47 migration(s)`；`--rollback 1` 后无 `fidelity_pairs`；再 migrate 回来；DROP 表并删 journal 后再 migrate，表出现。库已 `dropdb`。`ChoiceBubble.test.tsx`：标题「哪句更像 小A」，点「好的呀」调 `fidelity.choose`。`PersonaSwitches.test.tsx`：开关「偶尔让我二选一」，勾上走 `updateSettings` `patch.layers.abPairs: true`。闸门 `353 passed \| 4 skipped (357)` 文件，`3120 passed \| 18 skipped (3138)` 用例。`chatCount === 0` 与 `ll` 占位见偏差 75、76。 |
 | B8.9 | ✅ | 600eca3 | `FidelityHistory.test.tsx`：三次运行曲线 3 个点；空状态含「怎么开始」；`isError` 显示重试并调用 `refetch`；两个人设版本对比区 2 列。`routers.blind.test.ts`：`lists the last three finished sittings and hides somebody else's` 通过，只返回 3 场且无 `groups`。闸门 `354 passed \| 4 skipped (358)` 文件，`3126 passed \| 18 skipped (3144)` 用例。 |
-| B8.10 | ⬜ |  |  |
+| B8.10 | ✅ | e80c4d0 (server); ec91af6 (UI) | 临时库 `mirrai_v6_scratch`：`material.test.ts` 3 通过：`theirs` 等于夹具 TA 行数 3332；`periods.ok`；前 30 行 `fingerprint` 不 ok，`need - have` = `MIN_FINGERPRINT_SAMPLES - 15`；别人的分身 `NOT_FOUND`。`material-report.test.ts`：每层 `need` 等于对应常量。`MaterialReport.test.tsx`：不够的层显示「还差 25」。闸门 `356 passed \| 5 skipped (361)` 文件，`3129 passed \| 21 skipped (3150)` 用例。固定回法一层等 B2.2。 |
 | B9.1 | 🔒 |  |  |
 | B9.2 | 🔒 |  |  |
 | B9.3 | ⬜ |  |  |
@@ -278,6 +278,7 @@
 | 74 | B8.4 | 只写 `eval.audition({ personaId })` | 另加只读 `eval.auditionInfo`，返回模型数、标答数和预估调用数 | 按钮旁要在开跑前写出「一共约 N 次调用」；mutation 本身会调模型，不能拿它当预览。 |
 | 75 | B8.8 | `chatCount % 8 === 0` 含 0 | `shouldOfferChoice` 要求 `chatCount > 0` | 第 0 轮还没有往来，不必付两倍费用。待选的两句存在用户消息 `metadata.pendingChoice`。 |
 | 76 | B8.8 | 特征含 B3.3 的 `ll` | 现码 `ll` 恒为 0 | B3.3 未做，没有 token log-likelihood。长度、surprise、residue、act、real 已按现有函数填。 |
+| 77 | B8.10 | 闸门跳过数不能增加 | 无 `DATABASE_URL` 时 `material.test.ts` 3 条 `skipIf`，跳过文件 5、跳过用例 21 | 手册 2.3 要求库测试 `skipIf(!DATABASE_URL)`。带临时库跑这 3 条全过。与偏差 20、47、49、51、69 同类。路由测试不走 `appRouter`，避免 `node:sqlite`。固定回法一层未列入 `layers`，等 B2.2。 |
 
 ## 未验证清单
 
@@ -729,3 +730,13 @@ B1.1、B1.3、B1.4、B1.5、C10.1、B1.6、B1.7、B1.8、B1.10 维持 ✅。B1.2
 - 闸门 `354 passed | 4 skipped (358)` 文件，`3126 passed | 18 skipped (3144)` 用例，`all six steps passed`。相对 B8.8（353/4 文件、3120/18 用例）：通过文件 +1、通过用例 +6；跳过数不变。
 - 偏差、未验证清单、待用户决定无新增。
 - B8.9 标 ✅。下一条 B8.10。
+
+### WP4 · 实现会话 · 2026-11-18 · B8.10
+
+- `e80c4d0`：`material.report` 用聚合查询算条数和各层够不够；门槛从 `MIN_FINGERPRINT_SAMPLES` 等常量读；`EVAL_MIN_ASSISTANT_LINES` 与 `buildEvalCases` 共用。固定回法一层等 B2.2，未写入 `layers`。
+- `ec91af6`：上传页挂 `MaterialReport`，不够的层写还差多少和怎么补。
+- 临时库 `mirrai_v6_scratch`：`drizzle-kit push --force` 后 `material.test.ts` 3 通过。库随后 `dropdb`。`mirrai_live` 未碰。
+- 闸门 `356 passed | 5 skipped (361)` 文件，`3129 passed | 21 skipped (3150)` 用例，`all six steps passed`。相对 B8.9（354/4 文件、3126/18 用例）：通过文件 +2、通过用例 +3；跳过文件 +1、跳过用例 +3，全部来自 `material.test.ts` 的 `skipIf`（偏差 77）。
+- README「建议至少 100 条消息」后指向这张表，等 WP18。
+- 未验证清单、待用户决定无新增。
+- B8.10 标 ✅。WP4 可做条目全部完成。独立验收另开会话。
