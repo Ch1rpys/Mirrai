@@ -11,6 +11,7 @@ import {
   collectionJobs,
   distillationChunks, distillationCards, personaVersions,
   evalCases, evalRuns, outboundLetters, fidelityFeedback, fidelityPairs, blindSessions,
+  recordEmbeddings,
   InsertPersona, InsertPersonaFile, InsertMessage,
   InsertWechatBinding, InsertSkillJob, InsertLlmConfig,
   InsertMemory, InsertEmotionSnapshot, InsertDiaryEntry, InsertScene,
@@ -21,7 +22,7 @@ import {
   InsertDistillationChunk, InsertDistillationCard,
   InsertEvalCase, InsertEvalRun, InsertOutboundLetter, InsertFidelityFeedback,
   InsertFidelityPair,
-  InsertBlindSession,
+  InsertBlindSession, InsertRecordEmbedding,
   userMoods, relationshipEvents, letters, memoryExtractions,
   InsertUserMood, InsertRelationshipEvent, InsertLetter,
 } from "../drizzle/schema";
@@ -1092,6 +1093,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(personaQuestionnaireAnswers).where(eq(personaQuestionnaireAnswers.userId, id));
     await tx.delete(personaTemplates).where(eq(personaTemplates.userId, id));
     await tx.delete(personaVersions).where(eq(personaVersions.userId, id));
+    await tx.delete(recordEmbeddings).where(eq(recordEmbeddings.userId, id));
     await tx.delete(relationshipEvents).where(eq(relationshipEvents.userId, id));
     await tx.delete(reminderDeliveries).where(eq(reminderDeliveries.userId, id));
     await tx.delete(researchProfiles).where(eq(researchProfiles.userId, id));
@@ -1465,6 +1467,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(channelDefaultPersonas).where(and(eq(channelDefaultPersonas.personaId, id), eq(channelDefaultPersonas.userId, userId)));
     await tx.delete(chatSummaries).where(and(eq(chatSummaries.personaId, id), eq(chatSummaries.userId, userId)));
     await tx.delete(collectedMessages).where(and(eq(collectedMessages.personaId, id), eq(collectedMessages.userId, userId)));
+    await tx.delete(recordEmbeddings).where(and(eq(recordEmbeddings.personaId, id), eq(recordEmbeddings.userId, userId)));
     await tx.delete(collectionJobs).where(and(eq(collectionJobs.personaId, id), eq(collectionJobs.userId, userId)));
     await tx.delete(diaryEntries).where(and(eq(diaryEntries.personaId, id), eq(diaryEntries.userId, userId)));
     await tx.delete(distillationCards).where(and(eq(distillationCards.personaId, id), eq(distillationCards.userId, userId)));
@@ -1751,6 +1754,64 @@ export async function countFidelityPairs(personaId: number, userId: number): Pro
     .from(fidelityPairs)
     .where(and(eq(fidelityPairs.personaId, personaId), eq(fidelityPairs.userId, userId)));
   return Number(row?.n ?? 0);
+}
+
+export async function upsertRecordEmbedding(data: InsertRecordEmbedding) {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .insert(recordEmbeddings)
+    .values(data)
+    .onConflictDoUpdate({
+      target: [recordEmbeddings.personaId, recordEmbeddings.recordId, recordEmbeddings.model],
+      set: { vec: data.vec, dim: data.dim, userId: data.userId },
+      setWhere: eq(recordEmbeddings.userId, data.userId),
+    });
+}
+
+export type RecordEmbeddingRow = { recordId: number; dim: number; vec: Buffer };
+
+export async function listRecordEmbeddings(
+  personaId: number,
+  userId: number,
+  model: string,
+): Promise<RecordEmbeddingRow[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select({
+      recordId: recordEmbeddings.recordId,
+      dim: recordEmbeddings.dim,
+      vec: recordEmbeddings.vec,
+    })
+    .from(recordEmbeddings)
+    .where(
+      and(
+        eq(recordEmbeddings.personaId, personaId),
+        eq(recordEmbeddings.userId, userId),
+        eq(recordEmbeddings.model, model),
+      ),
+    );
+}
+
+export async function listEmbeddedRecordIds(
+  personaId: number,
+  userId: number,
+  model: string,
+): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({ recordId: recordEmbeddings.recordId })
+    .from(recordEmbeddings)
+    .where(
+      and(
+        eq(recordEmbeddings.personaId, personaId),
+        eq(recordEmbeddings.userId, userId),
+        eq(recordEmbeddings.model, model),
+      ),
+    );
+  return rows.map((row) => row.recordId);
 }
 
 function metadataObject(value: unknown): Record<string, unknown> {

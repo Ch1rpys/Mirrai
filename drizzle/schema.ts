@@ -1,5 +1,12 @@
 import { sql } from "drizzle-orm";
-import { boolean, index, integer, pgEnum, pgTable, serial, text, timestamp, uniqueIndex, varchar, jsonb } from "drizzle-orm/pg-core";
+import { boolean, customType, index, integer, pgEnum, pgTable, serial, text, timestamp, uniqueIndex, varchar, jsonb } from "drizzle-orm/pg-core";
+
+/** Stored embedding vectors. Drizzle has no built-in bytea column. */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 export const roleEnum = pgEnum("role", ["user", "admin"]);
 export const analysisStatusEnum = pgEnum("analysis_status", ["pending", "analyzing", "ready", "error"]);
@@ -1634,3 +1641,28 @@ export const blindSessions = pgTable("blind_sessions", {
 
 export type BlindSession = typeof blindSessions.$inferSelect;
 export type InsertBlindSession = typeof blindSessions.$inferInsert;
+
+/**
+ * One embedding of a record, for the optional second exemplar scorer.
+ *
+ * The vector is the previous user burst of a TA turn, L2-normalised and
+ * stored as int8. The model name is part of the key so a later embed
+ * model does not mix with an older one.
+ */
+export const recordEmbeddings = pgTable("record_embeddings", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  recordId: integer("recordId").notNull(),
+  model: varchar("model", { length: 64 }).notNull(),
+  dim: integer("dim").notNull(),
+  vec: bytea("vec").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  personaRecordModelIdx: uniqueIndex("record_embeddings_persona_record_model_idx")
+    .on(table.personaId, table.recordId, table.model),
+  personaUserIdx: index("record_embeddings_persona_user_idx").on(table.personaId, table.userId),
+}));
+
+export type RecordEmbedding = typeof recordEmbeddings.$inferSelect;
+export type InsertRecordEmbedding = typeof recordEmbeddings.$inferInsert;

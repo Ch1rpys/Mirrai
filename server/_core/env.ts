@@ -203,6 +203,8 @@ export const ENV = {
 
   ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
   ollamaModel: process.env.OLLAMA_MODEL ?? "llama3",
+  /** Local embedding model for B2.3. Empty falls back to bge-m3. */
+  ollamaEmbedModel: process.env.OLLAMA_EMBED_MODEL ?? "bge-m3",
 
   difyApiKey: process.env.DIFY_API_KEY ?? "",
   difyUrl: process.env.DIFY_URL ?? "",

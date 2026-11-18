@@ -18,6 +18,7 @@ const CALL_SITES: Array<{ file: string; purpose: string }> = [
   { file: "server/llm/providers/openai.ts", purpose: "OpenAI-compatible chat and speech-to-text" },
   { file: "server/llm/providers/claude.ts", purpose: "Anthropic Messages API" },
   { file: "server/llm/providers/ollama.ts", purpose: "Ollama /api/chat" },
+  { file: "server/chat/embeddings.ts", purpose: "Ollama /api/embed for local exemplar retrieval" },
   { file: "server/llm/providers/dify.ts", purpose: "Dify /chat-messages" },
   { file: "server/llm/providers/xunfei.ts", purpose: "iFlytek Spark WebSocket" },
   { file: "server/wechat/ilink/client.ts", purpose: "WeChat iLink HTTP" },

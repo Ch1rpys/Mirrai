@@ -88,6 +88,27 @@ export const EGRESS_ITEMS: EgressItem[] = [
     },
   },
   {
+    id: "ollama-embed",
+    side: "server",
+    destination: {
+      zh: "本机 Ollama 的 /api/embed（地址来自 OLLAMA_URL，通常是 http://127.0.0.1:11434）",
+      en: "This machine's Ollama at /api/embed (OLLAMA_URL, usually http://127.0.0.1:11434)",
+    },
+    payload: {
+      zh: "要检索的那一句，以及每一轮 TA 回复之前用户那一轮的原文。连本机时数据不出这台机器",
+      en: "The query, and the user burst that came before each of their turns. A local URL does not leave this machine",
+    },
+    when: {
+      zh: "本机 Ollama 装着嵌入模型时：测量画像之后给记录建向量，以及检索示范时",
+      en: "When local Ollama has an embedding model: after measuring the style profile, and when retrieving exemplars",
+    },
+    defaultOn: false,
+    offHow: {
+      zh: "停掉 Ollama，或不装嵌入模型（OLLAMA_EMBED_MODEL）",
+      en: "Stop Ollama, or do not install the embedding model (OLLAMA_EMBED_MODEL)",
+    },
+  },
+  {
     id: "llm-ollama",
     side: "server",
     destination: {
