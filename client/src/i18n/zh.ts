@@ -1441,6 +1441,22 @@ export const zh = {
     verified: "已确认，会生效",
   },
 
+  people: {
+    title: "TA 身边的人",
+    hint: "记录里常出现的人。确认之后，聊到这个人时才会进提示词。",
+    empty: "还没有人物。从聊天记录里挖一批，或者自己写一条。",
+    add: "加一个人",
+    name: "名字",
+    relation: "关系",
+    confirm: "确认",
+    reject: "不是",
+    mine: "从记录里挖",
+    verified: "已确认，提到时会生效",
+    mergeInto: "合并进",
+    mentions: "{{n}} 次",
+    aliases: "也叫 {{names}}",
+  },
+
   /**
    * Imperfection, per state.
    *

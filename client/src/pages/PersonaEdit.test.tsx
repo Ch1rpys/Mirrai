@@ -111,6 +111,9 @@ vi.mock("@/components/V5FidelityEditors", () => ({
 vi.mock("@/components/v6/LexiconEditor", () => ({
   default: () => <div data-testid="lexicon-editor" />,
 }));
+vi.mock("@/components/v6/WorldEditors", () => ({
+  default: () => <div data-testid="world-editors" />,
+}));
 vi.mock("@/components/v6/PersonaSampling", () => ({
   default: () => <div data-testid="persona-sampling" />,
 }));

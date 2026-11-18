@@ -294,6 +294,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       imperfectionProfile: layers.imperfection ? undefined : null,
       suppressions: layers.suppressions ? undefined : null,
       lexicon: layers.lexicon ? undefined : null,
+      peopleSection: layers.people ? undefined : null,
       skipExemplars: !layers.exemplars,
       restrictExemplarsToAct: clustersOn,
       actClusterLines: clusterLines,
@@ -326,6 +327,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
         historyMessages,
         closingTurn.closing,
         inSessionShare,
+        layers.people,
       )
       : undefined;
     return {
@@ -348,6 +350,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
         clustersOn,
         emotionInertiaOn,
         closingTurn.closing,
+        peopleLayerOn(layers.people, messages, input.locale),
       ),
       exemplarIds: [],
       seedRecordIds: seeds.excludeIds,
@@ -385,6 +388,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     seedTurnsNote: seeds.note,
     styleReminderLines: reminder.lines,
     reanchorIssues: reminder.issues,
+    peopleSection: layers.people ? undefined : null,
   });
   const historyMessages = composed.messages.filter((row) => row.role !== "system");
   const plannerMessages = twoStageOn
@@ -394,6 +398,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
         historyMessages,
         closingTurn.closing,
         inSessionShare,
+        layers.people,
       )
     : undefined;
   return {
@@ -416,6 +421,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       clustersOn,
       emotionInertiaOn,
       closingTurn.closing,
+      peopleLayerOn(layers.people, composed.messages, input.locale),
     ),
     exemplarIds: [],
     seedRecordIds: seeds.excludeIds,
@@ -509,6 +515,15 @@ function lengthCapForTurn(
   };
 }
 
+function peopleLayerOn(
+  enabled: boolean,
+  messages: LLMMessage[],
+  locale: "zh" | "en",
+): boolean {
+  if (!enabled) return false;
+  return String(messages[0]?.content ?? "").includes(copy(locale, "prompt.peopleHeading"));
+}
+
 function withMeasuredLayers(
   layersUsed: LayerId[],
   length: { maxChars?: number },
@@ -522,6 +537,7 @@ function withMeasuredLayers(
   actClustersOn = false,
   emotionInertiaOn = false,
   closingOn = false,
+  peopleOn = false,
 ): LayerId[] {
   const extra: LayerId[] = [];
   if (length.maxChars != null) extra.push("lengthCap");
@@ -535,6 +551,7 @@ function withMeasuredLayers(
   if (actClustersOn) extra.push("actClusters");
   if (emotionInertiaOn) extra.push("emotionInertia");
   if (closingOn) extra.push("closing");
+  if (peopleOn) extra.push("people");
   if (extra.length === 0) return layersUsed;
   const used = new Set<LayerId>([...layersUsed, ...extra]);
   return LAYERS.filter((id) => used.has(id));
@@ -546,6 +563,7 @@ async function plannerMessagesForTurn(
   history: LLMMessage[],
   closing = false,
   inSessionShare: string | null = null,
+  peopleEnabled = true,
 ): Promise<LLMMessage[]> {
   const built = await buildPromptBundleForPersona({
     persona: input.persona,
@@ -567,6 +585,7 @@ async function plannerMessagesForTurn(
     imperfectionProfile: null,
     suppressions: null,
     lexicon: null,
+    peopleSection: peopleEnabled ? undefined : null,
     closing,
     inSessionShare,
   });

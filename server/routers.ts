@@ -153,6 +153,13 @@ import { mineForgetStyles, mineSuppressions } from "./skill-engine/suppressions"
 import { mineMultiPoint } from "@shared/multi-point";
 import { mineLexicon } from "./skill-engine/lexicon";
 import { lexiconRejectedKey, normalizeLexicon } from "@shared/lexicon";
+import {
+  aggregatePeople,
+  mergePeople,
+  normalizePeople,
+  peopleRejectedKey,
+  type PersonRecordLine,
+} from "@shared/people";
 import { mineOpenLoops } from "./skill-engine/open-loops";
 import { feedbackRowsFromBlindSessions } from "./eval/blind";
 import {
@@ -5826,6 +5833,92 @@ export const appRouter = router({
             personaData: { ...data, lexicon: entries, rejectedFeedbackKeys: rejected },
           });
           return { entries };
+        });
+      }),
+  }),
+
+  people: router({
+    list: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const people = normalizePeople((persona.personaData as { people?: unknown } | null)?.people);
+        return {
+          people,
+          hint: people.length ? undefined : copy(ctx.locale, "labels.people.minedNone"),
+        };
+      }),
+    mine: protectedProcedure
+      .input(z.object({ personaId: z.number(), locale: z.enum(["zh", "en"]).default("zh") }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const cards = await listDistillationCards(input.personaId, ctx.user.id, { kind: "person" });
+          const rows: PersonRecordLine[] = [];
+          for await (const row of iterateRecords(input.personaId, ctx.user.id)) {
+            rows.push({
+              content: row.content,
+              kind: row.kind,
+              meta: (row as { meta?: Record<string, unknown> | null }).meta ?? null,
+              timestamp: row.timestamp,
+            });
+          }
+          const mined = aggregatePeople(cards, rows);
+          const data = (persona.personaData as Record<string, unknown>) || {};
+          const rejected = Array.isArray(data.rejectedFeedbackKeys)
+            ? data.rejectedFeedbackKeys.filter((key: unknown): key is string => typeof key === "string")
+            : [];
+          const people = mergePeople(data.people, mined, rejected);
+          if (!mined.length) {
+            return { people, hint: copy(input.locale, "labels.people.minedNone") };
+          }
+          await updatePersona(input.personaId, ctx.user.id, {
+            personaData: { ...data, people },
+          });
+          return { people, hint: copy(input.locale, "labels.people.mine") };
+        });
+      }),
+    save: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        people: z.array(z.object({
+          id: z.string().max(64).optional(),
+          name: z.string().min(1).max(40),
+          aliases: z.array(z.string().max(40)).max(20).default([]),
+          relation: z.string().max(20).default(""),
+          side: z.enum(["them", "me", "both"]).default("them"),
+          mentions: z.number().int().min(0).default(0),
+          lastMentionedAt: z.string().max(40).optional(),
+          evidence: z.array(z.object({
+            at: z.string().max(40).optional(),
+            snippet: z.string().max(1000),
+          })).max(20).default([]),
+          source: z.enum(["auto", "manual"]).default("manual"),
+          verified: z.boolean().default(true),
+        })).max(200),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const data = (persona.personaData as Record<string, unknown>) || {};
+          const previous = normalizePeople(data.people);
+          const people = normalizePeople(input.people);
+          const nextNames = new Set(people.flatMap((row) => [row.name, ...row.aliases]));
+          const rejected = Array.isArray(data.rejectedFeedbackKeys)
+            ? data.rejectedFeedbackKeys.filter((key: unknown): key is string => typeof key === "string")
+            : [];
+          for (const row of previous) {
+            if (nextNames.has(row.name) || row.aliases.some((alias) => nextNames.has(alias))) continue;
+            const key = peopleRejectedKey(row.name);
+            if (!rejected.includes(key)) rejected.push(key);
+          }
+          await updatePersona(input.personaId, ctx.user.id, {
+            personaData: { ...data, people, rejectedFeedbackKeys: rejected },
+          });
+          return { people };
         });
       }),
   }),

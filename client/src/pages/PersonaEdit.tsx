@@ -24,6 +24,7 @@ import MicroRulesEditor from "@/components/MicroRulesEditor";
 import ImperfectionEditor from "@/components/ImperfectionEditor";
 import V5FidelityEditors from "@/components/V5FidelityEditors";
 import LexiconEditor from "@/components/v6/LexiconEditor";
+import WorldEditors from "@/components/v6/WorldEditors";
 import PersonaSwitches from "@/components/v6/PersonaSwitches";
 import PersonaSampling from "@/components/v6/PersonaSampling";
 import HarmNotice from "@/components/v6/HarmNotice";
@@ -812,6 +813,8 @@ export default function PersonaEdit() {
             <ImperfectionEditor personaId={personaId} />
             <hr className="rule" />
             <LexiconEditor personaId={personaId} />
+            <hr className="rule" />
+            <WorldEditors personaId={personaId} />
             <hr className="rule" />
             <V5FidelityEditors personaId={personaId} />
           </section>

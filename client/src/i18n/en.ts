@@ -1440,6 +1440,22 @@ export const en = {
     verified: "Confirmed — in effect",
   },
 
+  people: {
+    title: "People around them",
+    hint: "People who keep turning up in the records. Once confirmed, they reach the prompt only when this turn mentions them.",
+    empty: "No people yet. Mine some from the records, or write one yourself.",
+    add: "Add a person",
+    name: "Name",
+    relation: "Relation",
+    confirm: "Confirm",
+    reject: "Not them",
+    mine: "Mine from the records",
+    verified: "Confirmed — in effect when mentioned",
+    mergeInto: "Merge into",
+    mentions: "{{n}} times",
+    aliases: "also {{names}}",
+  },
+
   /**
    * Imperfection, per state.
    *

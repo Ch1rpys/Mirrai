@@ -175,6 +175,10 @@ export interface SystemPromptOptions {
   sceneOverlay?: string | null;
   /** Retrieved memories, already formatted. */
   memorySection?: string;
+  /**
+   * Confirmed people mentioned this turn. Material: it is fenced.
+   */
+  peopleSection?: string | null;
   /** Anchor memories, already formatted. */
   anchorSection?: string;
   /** Summary of older conversation. */
@@ -557,6 +561,7 @@ export function buildSystemPromptParts(
       identitySection,
       options.anchorSection ? asMaterial(options.anchorSection) : "",
       options.memorySection ? asMaterial(options.memorySection) : "",
+      options.peopleSection ? asMaterial(options.peopleSection) : "",
       options.relationshipEvents ? asMaterial(options.relationshipEvents) : "",
       options.userContext ? asMaterial(options.userContext) : "",
     ]
@@ -691,6 +696,7 @@ export function buildSystemPromptParts(
     },
     { kind: "volatile", text: options.anchorSection ? asMaterial(options.anchorSection) : "" },
     { kind: "volatile", text: options.memorySection ? asMaterial(options.memorySection) : "" },
+    { kind: "volatile", text: options.peopleSection ? asMaterial(options.peopleSection) : "" },
     {
       kind: "volatile",
       text: options.exemplarSection ? asMaterial(options.exemplarSection) : "",

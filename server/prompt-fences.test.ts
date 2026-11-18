@@ -223,6 +223,31 @@ describe("the simulated user in a drift run", () => {
   });
 });
 
+describe("a person's relation", () => {
+  it("reaches the prompt only inside the fence", async () => {
+    const { renderPeopleSection } = await import("@shared/people");
+    const peopleSection = renderPeopleSection(
+      [
+        {
+          id: "p1",
+          name: "琪琪",
+          aliases: [],
+          relation: HOSTILE_NOTE,
+          side: "them",
+          mentions: 12,
+          evidence: [],
+          source: "auto",
+          verified: true,
+        },
+      ],
+      "zh",
+    );
+    const prompt = buildSystemPrompt(persona(), { peopleSection });
+    expect(prompt).toContain(HOSTILE_NOTE);
+    expect(unfenced(prompt)).not.toContain(HOSTILE_NOTE);
+  });
+});
+
 describe("a private word's gloss", () => {
   it("reaches the prompt only inside the fence", () => {
     const prompt = buildSystemPrompt(

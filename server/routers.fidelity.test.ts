@@ -32,6 +32,8 @@ const getPersonaBehaviorProfile = vi.fn();
 const setPersonaBehaviorProfile = vi.fn();
 const getMessagesByPersonaId = vi.fn();
 const getMessagesByPersonaIdPaged = vi.fn();
+const listDistillationCards = vi.fn();
+const iterateRecords = vi.fn();
 const invoke = vi.fn();
 
 vi.mock("./db", () => ({
@@ -54,6 +56,8 @@ vi.mock("./db", () => ({
   setPersonaBehaviorProfile: (...a: unknown[]) => setPersonaBehaviorProfile(...a),
   getMessagesByPersonaId: (...a: unknown[]) => getMessagesByPersonaId(...a),
   getMessagesByPersonaIdPaged: (...a: unknown[]) => getMessagesByPersonaIdPaged(...a),
+  listDistillationCards: (...a: unknown[]) => listDistillationCards(...a),
+  iterateRecords: (...a: unknown[]) => iterateRecords(...a),
   listFidelityRewritePairs: vi.fn().mockResolvedValue([]),
   setFidelityFeedbackRewrite: vi.fn(),
   createFidelityFeedback: vi.fn().mockResolvedValue({ id: 1 }),
@@ -184,6 +188,8 @@ beforeEach(() => {
     getPersonaBehaviorProfile,
     setPersonaBehaviorProfile,
     getMessagesByPersonaId,
+    listDistillationCards,
+    iterateRecords,
     invoke,
   ]) {
     fn.mockReset();
@@ -209,6 +215,8 @@ beforeEach(() => {
   getPersonaBehaviorProfile.mockResolvedValue(null);
   getMessagesByPersonaId.mockResolvedValue([]);
   getMessagesByPersonaIdPaged.mockResolvedValue([]);
+  listDistillationCards.mockResolvedValue([]);
+  iterateRecords.mockImplementation(async function* () {});
   invoke.mockResolvedValue("嗯嗯");
 });
 
@@ -593,5 +601,63 @@ describe("the private lexicon", () => {
     const written = (updatePersona.mock.calls[0][2] as any).personaData;
     expect(written.lexicon).toEqual([]);
     expect(written.rejectedFeedbackKeys).toContain("lexicon:咕咕");
+  });
+});
+
+describe("the people around them", () => {
+  it("refuses a persona the user does not own", async () => {
+    getPersonaById.mockResolvedValue(null);
+    const caller = appRouter.createCaller(makeCtx());
+    await expect(caller.people.list({ personaId: 1 })).rejects.toThrow();
+  });
+
+  it("writes confirmed people into the persona's own data", async () => {
+    const caller = appRouter.createCaller(makeCtx());
+    await caller.people.save({
+      personaId: 1,
+      people: [
+        {
+          name: "琪琪",
+          relation: "室友",
+          side: "them",
+          mentions: 12,
+          source: "manual",
+          verified: true,
+          aliases: [],
+          evidence: [{ snippet: "琪琪今天也在" }],
+        },
+      ],
+    });
+    expect(updatePersona).toHaveBeenCalled();
+    const written = (updatePersona.mock.calls[0][2] as { personaData: { people: Array<{ name: string }> } }).personaData;
+    expect(written.people).toHaveLength(1);
+    expect(written.people[0].name).toBe("琪琪");
+  });
+
+  it("remembers a rejected name so a later mine does not bring it back", async () => {
+    getPersonaById.mockResolvedValue(persona({
+      personaData: {
+        personality: "温柔",
+        speakingStyle: "短句",
+        people: [
+          {
+            id: "p1",
+            name: "琪琪",
+            aliases: [],
+            relation: "室友",
+            side: "them",
+            mentions: 12,
+            evidence: [],
+            source: "auto",
+            verified: false,
+          },
+        ],
+      },
+    }));
+    const caller = appRouter.createCaller(makeCtx());
+    await caller.people.save({ personaId: 1, people: [] });
+    const written = (updatePersona.mock.calls[0][2] as { personaData: { people: unknown; rejectedFeedbackKeys: string[] } }).personaData;
+    expect(written.people).toEqual([]);
+    expect(written.rejectedFeedbackKeys).toContain("people:琪琪");
   });
 });

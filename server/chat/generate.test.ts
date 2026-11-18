@@ -824,7 +824,102 @@ describe("the lexicon layer", () => {
     expect(plan.layersUsed).not.toContain("lexicon");
     expect(plan.messages[0]?.content).not.toContain("咕咕");
   });
+});
 
+describe("the people layer", () => {
+  function qiqi(verified: boolean) {
+    return {
+      id: "p1",
+      name: "琪琪",
+      aliases: [],
+      relation: "室友",
+      side: "them" as const,
+      mentions: 12,
+      evidence: [{ snippet: "琪琪今天也在" }],
+      source: "auto" as const,
+      verified,
+    };
+  }
+
+  function personaWithPeople(verified: boolean) {
+    const row = persona();
+    row.personaData = {
+      personality: "温柔",
+      people: [qiqi(verified)],
+    };
+    return row;
+  }
+
+  it("puts a confirmed person in the prompt when this turn names them", async () => {
+    const plan = await planTurn({
+      persona: personaWithPeople(true),
+      userId: 1,
+      userMessage: "琪琪来了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "people:on",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    const line = copy("zh", "prompt.peopleLine", { name: "琪琪", relation: "室友" });
+    expect(plan.layersUsed).toContain("people");
+    expect(prompt).toContain(copy("zh", "prompt.peopleHeading"));
+    expect(prompt).toContain(line);
+    expect(prompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "")).not.toContain(line);
+  });
+
+  it("omits the section when nobody is named", async () => {
+    const plan = await planTurn({
+      persona: personaWithPeople(true),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "people:none",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(plan.layersUsed).not.toContain("people");
+    expect(prompt).not.toContain(copy("zh", "prompt.peopleHeading"));
+  });
+
+  it("omits an unconfirmed person even when named", async () => {
+    const plan = await planTurn({
+      persona: personaWithPeople(false),
+      userId: 1,
+      userMessage: "琪琪来了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "people:unverified",
+      exclude: { texts: [HELD_OUT] },
+    });
+    expect(plan.layersUsed).not.toContain("people");
+    expect(String(plan.messages[0]?.content ?? "")).not.toContain(copy("zh", "prompt.peopleHeading"));
+  });
+
+  it("omits them with --without people", async () => {
+    const plan = await planTurn({
+      persona: personaWithPeople(true),
+      userId: 1,
+      userMessage: "琪琪来了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "people:off",
+      exclude: { texts: [HELD_OUT] },
+      layerOverrides: layerOverridesForEval({ without: ["people"] }),
+    });
+    expect(plan.layersUsed).not.toContain("people");
+    expect(String(plan.messages[0]?.content ?? "")).not.toContain(
+      copy("zh", "prompt.peopleLine", { name: "琪琪", relation: "室友" }),
+    );
+  });
+});
+
+describe("seeded record exchanges", () => {
   it("puts retrieved record exchanges after the system prompt and before the live history", async () => {
     const day = (n: number) => new Date(Date.UTC(2022, 2, n, 12, 0, 0));
     getCollectedMessagesForPersona.mockResolvedValue([

@@ -659,4 +659,12 @@ export const V6 = {
     zh: "{{name}}：你的{{relation}}",
     en: "{{name}}: your {{relation}}",
   },
+  "labels.people.mine": {
+    zh: "从记录里挖人物",
+    en: "Mine people from the records",
+  },
+  "labels.people.minedNone": {
+    zh: "记录里没有挖到常出现的人。",
+    en: "The records did not yield a recurring person.",
+  },
 } as const satisfies CopyTable;

@@ -16,6 +16,7 @@ import type { MicroRule } from "@shared/micro-rules";
 import type { ImperfectionEntry } from "@shared/imperfection";
 import type { Suppression } from "@shared/suppressions";
 import type { LexiconEntry } from "@shared/lexicon";
+import { mentionedPeople, normalizePeople, renderPeopleSection } from "@shared/people";
 import type { SpeechAct } from "@shared/speech-acts";
 import { renderExemplars } from "./exemplars";
 import { retrieveExemplarsWithEmbed } from "./embeddings";
@@ -110,6 +111,13 @@ export interface PromptContext {
   imperfectionProfile?: ImperfectionEntry[] | null;
   suppressions?: Suppression[] | null;
   lexicon?: LexiconEntry[] | null;
+  /**
+   * People mentioned this turn.
+   *
+   * `null` turns the layer off. Omit to compute from the persona
+   * and the current words.
+   */
+  peopleSection?: string | null;
   sampledAct?: SpeechAct | null;
   actClusterLines?: string[] | null;
   coldLines?: string[] | null;
@@ -194,6 +202,7 @@ export async function buildPromptBundleForPersona(
     emotionalState: context.emotionalState ?? null,
     anchorSection: formatAnchorsForPrompt(anchors, locale),
     memorySection: formatMemoriesForPrompt(ordinary, locale),
+    peopleSection: peopleSectionFor(context, locale),
     summarySection:
       context.summarySection ??
       (summary?.summary ? `${copy(locale, "prompt.summarySectionHeading")}\n${summary.summary}` : ""),
@@ -269,6 +278,19 @@ export async function buildPromptForPersona(
   context: PromptContext,
 ): Promise<string> {
   return (await buildPromptBundleForPersona(context)).prompt;
+}
+
+function peopleSectionFor(context: PromptContext, locale: "zh" | "en"): string {
+  if (context.peopleSection === null) return "";
+  if (typeof context.peopleSection === "string") return context.peopleSection;
+  const people = normalizePeople(
+    (context.persona.personaData as { people?: unknown } | null)?.people,
+  );
+  const texts = [
+    context.userMessage ?? "",
+    ...(context.history ?? []).slice(-6).map((row) => row.content),
+  ];
+  return renderPeopleSection(mentionedPeople(people, texts), locale);
 }
 
 function applyPeriod<T>(
