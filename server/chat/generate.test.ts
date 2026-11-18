@@ -118,6 +118,7 @@ vi.mock("../_core/emotion", () => ({
 }));
 
 import { copy } from "@shared/copy";
+import { measureFingerprint } from "@shared/style-fingerprint";
 import { runConversation } from "./service";
 import { executePlan, planTurn } from "./generate";
 import { layerOverridesForEval, runEval } from "../eval/run";
@@ -988,4 +989,143 @@ describe("the ritual reply table", () => {
     expect(plan.messages.length).toBeGreaterThan(0);
   });
 });
+
+function numberedPool(prefix: string, n: number, suffix: string): string[] {
+  return Array.from({ length: n }, (_, i) => `${prefix}${i}${suffix}`);
+}
+
+function reminderLinesFrom(prompt: string): string[] {
+  const heading = copy("zh", "prompt.styleReminderHeading");
+  const at = prompt.indexOf(heading);
+  if (at < 0) return [];
+  const after = prompt.slice(at);
+  const open = after.indexOf("<persona_data>");
+  const close = after.indexOf("</persona_data>");
+  if (open < 0 || close < 0 || close < open) return [];
+  return after
+    .slice(open + "<persona_data>".length, close)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function personaWithReminder(overrides: Record<string, unknown> = {}) {
+  const fingerprint = measureFingerprint(
+    Array.from({ length: 40 }, () => ({ role: "assistant", content: "在的呀", kind: "text" })),
+  );
+  return {
+    ...persona(),
+    chatCount: 0,
+    emotionalState: "distant",
+    styleProfile: {
+      version: 1,
+      measuredAt: "2026-01-01T00:00:00.000Z",
+      recordsVersion: "40:40",
+      fingerprint,
+      samplePool: {
+        distant: numberedPool("远", 40, "。"),
+        warm: numberedPool("暖", 40, "呀"),
+        any: numberedPool("任", 40, "呀"),
+      },
+    },
+    ...overrides,
+  };
+}
+
+describe("style reminder", () => {
+  const longQuestion = "这是一句很长很长很长很长很长很长的问句对不对？";
+
+  it("keeps the same six lines from chatCount 0 to 5, then rotates, and uses the distant pool", async () => {
+    const distant = numberedPool("远", 40, "。");
+    const first = await planTurn({
+      persona: personaWithReminder({ chatCount: 0 }),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "reminder:a",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const fifth = await planTurn({
+      persona: personaWithReminder({ chatCount: 5 }),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "reminder:b",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const sixth = await planTurn({
+      persona: personaWithReminder({ chatCount: 6 }),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "reminder:c",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const firstLines = reminderLinesFrom(String(first.messages[0]?.content ?? ""));
+    const fifthLines = reminderLinesFrom(String(fifth.messages[0]?.content ?? ""));
+    const sixthLines = reminderLinesFrom(String(sixth.messages[0]?.content ?? ""));
+    expect(firstLines).toHaveLength(6);
+    expect(firstLines.every((line) => distant.includes(line))).toBe(true);
+    expect(fifthLines).toEqual(firstLines);
+    expect(sixthLines).not.toEqual(firstLines);
+    expect(first.layersUsed).toContain("styleReminder");
+  });
+
+  it("puts a drift reminder outside the fence on eight long questions, and not on their own lines", async () => {
+    const drifted = await planTurn({
+      persona: personaWithReminder(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: Array.from({ length: 8 }, () => ({ role: "assistant" as const, content: longQuestion })),
+      now: NOW,
+      locale: "zh",
+      seed: "reminder:drift",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(drifted.messages[0]?.content ?? "");
+    const reanchor = copy("zh", "prompt.reanchor", { issues: "写得比平时长、总以问句收尾" });
+    expect(prompt).toContain(reanchor);
+    expect(prompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "")).toContain(reanchor);
+    expect(drifted.reanchor).toEqual(expect.arrayContaining(["long", "question"]));
+
+    const own = await planTurn({
+      persona: personaWithReminder(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: Array.from({ length: 8 }, () => ({ role: "assistant" as const, content: "在的呀" })),
+      now: NOW,
+      locale: "zh",
+      seed: "reminder:own",
+      exclude: { texts: [HELD_OUT] },
+    });
+    expect(String(own.messages[0]?.content ?? "")).not.toContain(copy("zh", "prompt.reanchor", { issues: "写得比平时长、总以问句收尾" }));
+    expect(own.reanchor).toBeUndefined();
+  });
+
+  it("omits the sample pool and the drift reminder with --without styleReminder", async () => {
+    const plan = await planTurn({
+      persona: personaWithReminder(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: Array.from({ length: 8 }, () => ({ role: "assistant" as const, content: longQuestion })),
+      now: NOW,
+      locale: "zh",
+      seed: "reminder:off",
+      exclude: { texts: [HELD_OUT] },
+      layerOverrides: layerOverridesForEval({ without: ["styleReminder"] }),
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(plan.layersUsed).not.toContain("styleReminder");
+    expect(prompt).not.toContain(copy("zh", "prompt.styleReminderHeading"));
+    expect(prompt).not.toContain("写得比平时长");
+    expect(plan.reanchor).toBeUndefined();
+  });
+});
+
 

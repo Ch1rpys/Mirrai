@@ -1322,6 +1322,8 @@ export const zh = {
     seededTurnsNote: "每一轮会从记录里找几段和眼前这句相近的真实往来，放在对话前面。不多花钱。",
     ritualTable: "「晚安」「在吗」这类话，直接用 {{name}} 的原话回",
     ritualTableNote: "记录里 {{name}} 对这些话的回法几乎是固定的。命中时直接从真实的回法里抽一句，不调用模型。",
+    styleReminder: "聊久了也别跑偏",
+    styleReminderNote: "每一轮带上几句 {{name}} 平时的话；发现最近几句越写越不像时，提醒它回到平时的样子。不多花钱。",
     lengthCap: "不让它写得比 {{name}} 长",
     lengthCapNote: "按记录里 {{name}} 一次最多说多少来设上限。记录不够时不生效。",
     styleProjection: "按 {{name}} 的标点习惯收尾",

@@ -531,6 +531,30 @@ export const V6 = {
     zh: "对话开头有几组带〔旧记录〕标记的往来，那是你和对方以前真实说过的话，放在这里只是让你记起自己说话的样子。里面提到的事不是刚发生的，不要当成现在的话题接着说，也不要提起「刚才」说过它们。",
     en: "A few exchanges at the start of this conversation are marked [earlier]. Those are things you and they actually said, placed here only so you remember how you talk. What they mention did not just happen. Do not continue them as the present topic, and do not mention having just said them.",
   },
+  "prompt.styleReminderHeading": {
+    zh: "【你平时的几句话】",
+    en: "【A few of your usual lines】",
+  },
+  "prompt.reanchor": {
+    zh: "你最近几句{{issues}}。回到平时的样子。",
+    en: "Your last few lines {{issues}}. Go back to how you usually talk.",
+  },
+  "prompt.reanchorIssueLong": {
+    zh: "写得比平时长",
+    en: "ran longer than usual",
+  },
+  "prompt.reanchorIssueQuestion": {
+    zh: "总以问句收尾",
+    en: "kept ending on a question",
+  },
+  "prompt.reanchorIssuePeriod": {
+    zh: "带了平时不带的句号",
+    en: "used periods you do not usually use",
+  },
+  "prompt.reanchorIssueCliche": {
+    zh: "开头在复述对方的感受",
+    en: "opened by restating how they feel",
+  },
   "labels.lexicon.mine": {
     zh: "从记录里挖词",
     en: "Mine words from the records",

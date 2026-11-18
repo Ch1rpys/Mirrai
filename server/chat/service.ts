@@ -30,6 +30,7 @@ import { buildPromptForPersona } from "./prompt";
 import { splitBurst } from "./burst";
 import { loadBehaviorProfile } from "../_core/behavior-profile";
 import { planTurn, executePlan } from "./generate";
+import type { ReanchorIssue } from "@shared/style-reminder";
 import { sampleBurstSize, sampleReplyDelayMs } from "@shared/behavior-profile";
 import { localDateKey, zonedDateKey, zonedDayStart } from "@shared/timezone";
 import { extractMemories, isExtractionDue } from "./memory-extract";
@@ -451,6 +452,8 @@ export async function composeMessages(params: {
   excludeExemplarTexts?: string[];
   skipExemplars?: boolean;
   seedTurnsNote?: string | null;
+  styleReminderLines?: string[] | null;
+  reanchorIssues?: ReanchorIssue[] | null;
 }): Promise<{
   messages: LLMMessage[];
   recalled: Array<{ id: number; title: string; subject: string }>;
@@ -542,6 +545,8 @@ export async function composeMessages(params: {
     excludeExemplarTexts: params.excludeExemplarTexts,
     skipExemplars: params.skipExemplars,
     seedTurnsNote: params.seedTurnsNote ?? null,
+    styleReminderLines: params.styleReminderLines ?? null,
+    reanchorIssues: params.reanchorIssues ?? null,
     history: history.slice(-(contextLimit - 1)).map((row) => ({
       role: row.role === "user" ? "user" : "assistant",
       content: row.content,
@@ -1505,6 +1510,7 @@ async function* runConversationTurn(
           verbatim: { type: "ritual" as const, recordId: plan.ritual.recordId },
         }
       : {}),
+    ...(plan.reanchor && plan.reanchor.length > 0 ? { reanchor: plan.reanchor } : {}),
   };
   let parts = [finalText];
   if (timingEnabled && behavior) {

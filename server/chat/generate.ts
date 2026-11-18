@@ -50,6 +50,12 @@ import {
   sampleRitualReply,
   RITUAL_COOLDOWN_MS,
 } from "@shared/ritual-table";
+import {
+  detectReanchor,
+  pickStyleReminderLines,
+  styleReminderSeed,
+  type ReanchorIssue,
+} from "@shared/style-reminder";
 import { normalizeAddressHistory } from "@shared/address-history";
 import type { ScoredMemory } from "./retrieval";
 
@@ -105,6 +111,7 @@ export interface TurnPlan {
   seedRecordIds: number[];
   recalled: Array<{ id: number; title: string; subject: string }>;
   rng: () => number;
+  reanchor?: ReanchorIssue[];
 }
 
 function actProfileForTurn(
@@ -188,9 +195,19 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     };
   }
 
-  const seeds = await seedPlanForTurn(input, layers.seededTurns, sampledAct);
+  const seeds = await seedPlanForTurn(
+    input,
+    layers.seededTurns,
+    sampledAct,
+    Boolean(layers.styleReminder && layers.exemplars),
+  );
   const seedMsgs = seedMessagesFor(seeds.exchanges, input.locale);
   const seededOn = seeds.exchanges.length > 0;
+  const reminder = await styleReminderForTurn(input, layers.styleReminder, [
+    ...seeds.foundTexts,
+    ...seeds.excludeTexts,
+  ]);
+  const reminderOn = reminder.lines.length > 0 || reminder.issues.length > 0;
 
   if (input.exclude) {
     const systemPrompt = await buildPromptForPersona({
@@ -213,6 +230,8 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       excludeExemplarIds: [...(input.exclude.recordIds ?? []), ...seeds.excludeIds],
       excludeExemplarTexts: [...(input.exclude.texts ?? []), ...seeds.excludeTexts],
       seedTurnsNote: seeds.note,
+      styleReminderLines: reminder.lines,
+      reanchorIssues: reminder.issues,
       markRecalled: false,
       history: input.history,
     });
@@ -229,11 +248,21 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       sampledAct,
       messages,
       ...length,
-      layersUsed: withMeasuredLayers(layersUsed, length, projectionOn, fingerprintRerankOn, lexiconOn, seededOn, false),
+      layersUsed: withMeasuredLayers(
+        layersUsed,
+        length,
+        projectionOn,
+        fingerprintRerankOn,
+        lexiconOn,
+        seededOn,
+        false,
+        reminderOn,
+      ),
       exemplarIds: [],
       seedRecordIds: seeds.excludeIds,
       recalled: [],
       rng,
+      ...(reminder.issues.length > 0 ? { reanchor: reminder.issues } : {}),
     };
   }
 
@@ -254,17 +283,29 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     excludeExemplarTexts: seeds.excludeTexts,
     skipExemplars: !layers.exemplars,
     seedTurnsNote: seeds.note,
+    styleReminderLines: reminder.lines,
+    reanchorIssues: reminder.issues,
   });
   return {
     kind: "model",
     sampledAct,
     messages: spliceAfterSystem(composed.messages, seedMsgs),
     ...length,
-    layersUsed: withMeasuredLayers(layersUsed, length, projectionOn, fingerprintRerankOn, lexiconOn, seededOn, false),
+    layersUsed: withMeasuredLayers(
+      layersUsed,
+      length,
+      projectionOn,
+      fingerprintRerankOn,
+      lexiconOn,
+      seededOn,
+      false,
+      reminderOn,
+    ),
     exemplarIds: [],
     seedRecordIds: seeds.excludeIds,
     recalled: composed.recalled,
     rng,
+    ...(reminder.issues.length > 0 ? { reanchor: reminder.issues } : {}),
   };
 }
 
@@ -272,14 +313,22 @@ async function seedPlanForTurn(
   input: TurnInput,
   enabled: boolean,
   sampledAct: SpeechAct | null,
+  retrieveForSkip = false,
 ): Promise<{
   exchanges: SeedExchange[];
   excludeIds: number[];
   excludeTexts: string[];
   note: string | null;
+  foundTexts: string[];
 }> {
-  const empty = { exchanges: [] as SeedExchange[], excludeIds: [] as number[], excludeTexts: [] as string[], note: null as string | null };
-  if (!enabled) return empty;
+  const empty = {
+    exchanges: [] as SeedExchange[],
+    excludeIds: [] as number[],
+    excludeTexts: [] as string[],
+    note: null as string | null,
+    foundTexts: [] as string[],
+  };
+  if (!enabled && !retrieveForSkip) return empty;
   let records: Array<{ role: string; content: string; id?: number; kind?: string | null }> = [];
   try {
     records = await db.getCollectedMessagesForPersona(input.persona.id, input.userId, { newest: true });
@@ -304,6 +353,8 @@ async function seedPlanForTurn(
     personaId: input.persona.id,
     userId: input.userId,
   });
+  const foundTexts = found.flatMap((item) => [...(item.rawTurn ?? item.turn), ...item.previousUserTurn]);
+  if (!enabled) return { ...empty, foundTexts };
   const exchanges = selectSeedExchanges({ exemplars: found });
   return {
     exchanges,
@@ -314,6 +365,7 @@ async function seedPlanForTurn(
         [...(item.rawTurn ?? item.turn), ...item.previousUserTurn].filter((line) => !isSafeSeedLine(line)),
       ),
     ],
+    foundTexts,
     note: exchanges.length > 0 ? copy(input.locale, "prompt.seedTurnsNote") : null,
   };
 }
@@ -348,6 +400,7 @@ function withMeasuredLayers(
   lexiconOn: boolean,
   seededOn = false,
   ritualOn = false,
+  styleReminderOn = false,
 ): LayerId[] {
   const extra: LayerId[] = [];
   if (length.maxChars != null) extra.push("lengthCap");
@@ -356,9 +409,50 @@ function withMeasuredLayers(
   if (lexiconOn) extra.push("lexicon");
   if (seededOn) extra.push("seededTurns");
   if (ritualOn) extra.push("ritual");
+  if (styleReminderOn) extra.push("styleReminder");
   if (extra.length === 0) return layersUsed;
   const used = new Set<LayerId>([...layersUsed, ...extra]);
   return LAYERS.filter((id) => used.has(id));
+}
+
+async function historyForReanchor(input: TurnInput): Promise<TurnInput["history"]> {
+  if (input.history.length > 0) return input.history;
+  try {
+    const rows = await db.getMessagesByPersonaId(input.persona.id, input.userId, 200);
+    return rows
+      .filter((row) => (row as { origin?: string }).origin !== "system-notice")
+      .map((row) => ({
+        role: row.role === "user" ? "user" : "assistant",
+        content: row.content,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+async function styleReminderForTurn(
+  input: TurnInput,
+  enabled: boolean,
+  foundTexts: string[],
+): Promise<{ lines: string[]; issues: ReanchorIssue[] }> {
+  if (!enabled) return { lines: [], issues: [] };
+  const profile = effectiveStyleProfile(input.persona);
+  const skip = new Set<string>([...foundTexts, ...(input.exclude?.texts ?? [])]);
+  const lines = profile.samplePool
+    ? pickStyleReminderLines({
+        pool: profile.samplePool,
+        state: input.actCondition?.emotion ?? input.persona.emotionalState,
+        rng: seededRandom(styleReminderSeed(input.persona.id, Number(input.persona.chatCount) || 0)),
+        skip,
+      })
+    : [];
+  const history = await historyForReanchor(input);
+  const detected = detectReanchor({
+    history,
+    fingerprint: profile.fingerprint ?? null,
+    core: fingerprintCoreForTurn(input) ?? profile.fingerprint ?? null,
+  });
+  return { lines, issues: detected?.issues ?? [] };
 }
 
 function ritualTriggerOf(metadata: unknown): string | null {

@@ -303,6 +303,16 @@ describe("a jailbreak line in the record", () => {
   });
 });
 
+describe("a style sample from the records", () => {
+  it("reaches the prompt only inside the fence", () => {
+    const prompt = buildSystemPrompt(persona(), {
+      styleReminderLines: [HOSTILE_NOTE],
+    });
+    expect(prompt).toContain(HOSTILE_NOTE);
+    expect(unfenced(prompt)).not.toContain(HOSTILE_NOTE);
+  });
+});
+
 describe("a line they would never say", () => {
   it("reaches the prompt only inside the fence", async () => {
     const { applyClarification } = await import("@shared/clarify");

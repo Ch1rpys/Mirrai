@@ -1321,6 +1321,8 @@ export const en = {
     seededTurnsNote: "Each turn finds a few real exchanges close to this one and puts them in front of the conversation. It does not cost extra.",
     ritualTable: "Answer “goodnight” and “you there?” in {{name}}'s own words",
     ritualTableNote: "{{name}} answered these almost the same way every time. On a hit, one of those real lines is used and the model is not called.",
+    styleReminder: "Don't drift the longer you talk",
+    styleReminderNote: "Each turn carries a few of {{name}}'s usual lines. If the last few stop sounding like them, it is told to go back. It does not cost extra.",
     lengthCap: "Don't let them write longer than {{name}}",
     lengthCapNote: "The cap is how long {{name}} went in one turn in the record. It stays off until there are enough lines.",
     styleProjection: "End the way {{name}} punctuates",

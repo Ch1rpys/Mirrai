@@ -47,6 +47,7 @@ describe("the persona switches section", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("开口前先看几句 小满 的原话")).toBeInTheDocument();
     expect(screen.getByText("「晚安」「在吗」这类话，直接用 小满 的原话回")).toBeInTheDocument();
+    expect(screen.getByText("聊久了也别跑偏")).toBeInTheDocument();
     expect(screen.getByText("不让它写得比 小满 长")).toBeInTheDocument();
     expect(screen.getByText("按 小满 的标点习惯收尾")).toBeInTheDocument();
     expect(screen.getByText("偶尔让我二选一")).toBeInTheDocument();

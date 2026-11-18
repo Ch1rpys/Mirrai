@@ -19,6 +19,7 @@ import type { LexiconEntry } from "@shared/lexicon";
 import type { SpeechAct } from "@shared/speech-acts";
 import { renderExemplars } from "./exemplars";
 import { retrieveExemplarsWithEmbed } from "./embeddings";
+import type { ReanchorIssue } from "@shared/style-reminder";
 
 /**
  * The user's own time zone, for the parts of the prompt that are about
@@ -121,6 +122,8 @@ export interface PromptContext {
   history?: Array<{ role: "user" | "assistant"; content: string }>;
   /** Instruction that the opening exchanges are old record lines. */
   seedTurnsNote?: string | null;
+  styleReminderLines?: string[] | null;
+  reanchorIssues?: ReanchorIssue[] | null;
 }
 
 /**
@@ -228,6 +231,8 @@ export async function buildPromptForPersona(
     now,
     periodId: context.periodId ?? null,
     seedTurnsNote: context.seedTurnsNote ?? null,
+    styleReminderLines: context.styleReminderLines ?? null,
+    reanchorIssues: context.reanchorIssues ?? null,
   });
 }
 

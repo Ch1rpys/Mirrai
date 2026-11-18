@@ -16,6 +16,10 @@ import { shouldInstructHarm } from "@shared/harm";
 import { normalizeAddressHistory, pickThemToMeAddress } from "@shared/address-history";
 import { normalizeLexicon, renderLexicon, type LexiconEntry } from "@shared/lexicon";
 import { relationshipIsOver } from "@shared/relationship-ended";
+import {
+  formatReanchorIssues,
+  type ReanchorIssue,
+} from "@shared/style-reminder";
 
 export { INTIMACY_LEVELS, normalizeIntimacyLevel };
 
@@ -283,6 +287,14 @@ export interface SystemPromptOptions {
    * message list, outside the fence.
    */
   seedTurnsNote?: string | null;
+  /**
+   * Six of their usual lines. Material: it is fenced.
+   */
+  styleReminderLines?: string[] | null;
+  /**
+   * Which drift tells fired. Instruction: it sits outside the fence.
+   */
+  reanchorIssues?: ReanchorIssue[] | null;
 }
 
 export function buildSystemPrompt(persona: any, sceneOverlay?: string | null): string;
@@ -534,6 +546,11 @@ export function buildSystemPrompt(
     // Subtractions sit next to the discriminative rules, still fenced.
     suppressionsSection ? asMaterial(suppressionsSection) : "",
     actInstruction,
+    options.reanchorIssues && options.reanchorIssues.length > 0
+      ? copy(locale, "prompt.reanchor", {
+          issues: formatReanchorIssues(options.reanchorIssues, locale),
+        })
+      : "",
     options.userContext ? asMaterial(options.userContext) : "",
     options.quotedSection ? asMaterial(options.quotedSection) : "",
     options.relationshipEvents ? asMaterial(options.relationshipEvents) : "",
@@ -544,6 +561,12 @@ export function buildSystemPrompt(
     options.anchorSection ? asMaterial(options.anchorSection) : "",
     options.memorySection ? asMaterial(options.memorySection) : "",
     options.exemplarSection ? asMaterial(options.exemplarSection) : "",
+    options.styleReminderLines && options.styleReminderLines.length > 0
+      ? asMaterial(
+          copy(locale, "prompt.styleReminderHeading"),
+          options.styleReminderLines.join("\n"),
+        )
+      : "",
     options.memoryConflictSection ? asMaterial(options.memoryConflictSection) : "",
     options.summarySection ? asMaterial(options.summarySection) : "",
     p.memories ? asMaterial(copy(locale, "prompt.memoriesHeading"), p.memories) : "",
