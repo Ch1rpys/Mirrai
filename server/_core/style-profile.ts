@@ -31,6 +31,12 @@ import {
   type FingerprintRow,
 } from "@shared/style-fingerprint";
 import { measureUserSide } from "@shared/user-side-profile";
+import {
+  mergeManualRituals,
+  mineRituals,
+  normalizeRituals,
+  turnsFromRecords,
+} from "@shared/ritual-table";
 import { schedulePersonaEmbeddings } from "../chat/embeddings";
 
 export async function measureStyleProfile(params: {
@@ -90,6 +96,8 @@ export async function measureStyleProfile(params: {
     { fingerprint, doubleText: current?.doubleText, stickers: current?.stickers, replyDelay: current?.replyDelay },
     { locale, rows },
   );
+  const minedRituals = mineRituals(turnsFromRecords(rows));
+  const rituals = mergeManualRituals(minedRituals, normalizeRituals(current?.rituals));
   const next = normalizeStyleProfile({
     ...(current ?? {}),
     version: 1,
@@ -99,6 +107,7 @@ export async function measureStyleProfile(params: {
     userSide: userSide ?? undefined,
     imperfectionDrafts: drafts,
     addressHistory,
+    ...(rituals.length > 0 ? { rituals } : { rituals: undefined }),
   });
   return applyRerankWeightsFromPairs(personaId, userId, next, { persistAlways: true });
 }

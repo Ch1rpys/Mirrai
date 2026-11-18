@@ -9,6 +9,7 @@ import { copy, type Locale } from "./copy";
 import type { ImperfectionEntry } from "./imperfection";
 import type { MicroRule } from "./micro-rules";
 import { normalizeMicroRules } from "./micro-rules";
+import { normalizeRituals, type RitualEntry } from "./ritual-table";
 import type { StyleProfile } from "./style-profile";
 import { normalizeStyleProfile } from "./style-profile";
 import type { Suppression } from "./suppressions";
@@ -107,16 +108,14 @@ function fingerprintAddress(styleProfile: StyleProfile | null | undefined): stri
   return ranked[0]?.[0] ?? "";
 }
 
-function ritualList(styleProfile: StyleProfile | null | undefined): Array<Record<string, unknown>> {
-  const rituals = styleProfile?.rituals;
-  if (!Array.isArray(rituals)) return [];
-  return rituals.filter((row): row is Record<string, unknown> => !!row && typeof row === "object");
+function ritualList(styleProfile: StyleProfile | null | undefined): RitualEntry[] {
+  return normalizeRituals(styleProfile?.rituals);
 }
 
 // i18n:allow-input — matched against a measured ritual cue, not shown as copy.
 function hasGoodnightRitual(styleProfile: StyleProfile | null | undefined): boolean {
   return ritualList(styleProfile).some((row) => {
-    const cue = String(row.cue ?? row.id ?? "");
+    const cue = [row.trigger, ...row.variants].join(" ");
     return cue.includes("晚安") || cue.toLowerCase().includes("goodnight");
   });
 }
@@ -474,7 +473,14 @@ export function applyClarification(
           ...style,
           rituals: [
             ...ritualList(style),
-            { cue: locale === "en" ? "goodnight" : "晚安", reply: text, manual: true },
+            {
+              trigger: locale === "en" ? "goodnight" : "晚安",
+              variants: [locale === "en" ? "goodnight" : "晚安"],
+              n: 1,
+              replies: [{ text, n: 1, recordId: 0 }],
+              coverage: 1,
+              manual: true,
+            },
           ],
         },
       };

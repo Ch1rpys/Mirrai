@@ -241,7 +241,14 @@ describe("what an answer writes", () => {
       styleProfile: style,
     });
     expect(written?.styleProfile.rituals).toEqual([
-      { cue: "晚安", reply: "晚安呀", manual: true },
+      {
+        trigger: "晚安",
+        variants: ["晚安"],
+        n: 1,
+        replies: [{ text: "晚安呀", n: 1, recordId: 0 }],
+        coverage: 1,
+        manual: true,
+      },
     ]);
   });
 

@@ -22,6 +22,7 @@ vi.mock("../db", () => ({
   listFidelityPairs: (...a: unknown[]) => listFidelityPairs(...a),
 }));
 
+import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
 import { afterRecordsChanged, afterRecordsRemoved, measureStyleProfile } from "./style-profile";
 
 describe("measureStyleProfile", () => {
@@ -90,6 +91,55 @@ describe("measureStyleProfile", () => {
     });
     expect(measured.fingerprint?.samples).toBe(40);
     expect(measured.fingerprint?.particles["呀"]).toBe(1);
+  });
+
+  it("writes the fixture's 晚安 / 早 / 在吗 table and keeps a handwritten one", async () => {
+    getRecordsVersion.mockResolvedValue("3200:3200");
+    getPersonaStyleProfile.mockResolvedValue({
+      version: 1,
+      measuredAt: "2026-01-01T00:00:00.000Z",
+      recordsVersion: "1:1",
+      rituals: [
+        {
+          trigger: "嗨",
+          variants: ["嗨"],
+          n: 1,
+          replies: [{ text: "嗨", n: 1, recordId: 1 }],
+          coverage: 1,
+          manual: true,
+        },
+      ],
+    });
+    getPersonaById.mockResolvedValue({
+      id: 5,
+      userId: 1,
+      name: "小满",
+      personaData: { nickname: "树树" },
+    });
+    getUserById.mockResolvedValue({ id: 1, name: "阿树" });
+    iterateRecords.mockImplementation(async function* () {
+      for (const row of buildXiaomanRecords()) {
+        yield {
+          id: row.id,
+          role: row.role,
+          content: row.content,
+          timestamp: row.timestamp,
+          kind: row.kind,
+          speaker: row.speaker,
+        };
+      }
+    });
+    const measured = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    const rituals = measured.rituals as Array<{ trigger: string; manual?: boolean; coverage: number }> | undefined;
+    expect(rituals?.map((entry) => entry.trigger)).toEqual(
+      expect.arrayContaining(["晚安", "早", "在吗", "嗨"]),
+    );
+    expect(rituals?.find((entry) => entry.trigger === "晚安")?.coverage).toBe(1);
+    expect(rituals?.find((entry) => entry.trigger === "嗨")?.manual).toBe(true);
   });
 
   it("trains a negative length weight from thirty short-line picks even when the records have not moved", async () => {

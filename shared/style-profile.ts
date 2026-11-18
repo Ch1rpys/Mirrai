@@ -9,6 +9,7 @@
 import type { AddressEntry } from "./address-history";
 import type { StyleFingerprint } from "./style-fingerprint";
 import type { ImperfectionDrafts } from "./imperfection-draft";
+import { normalizeRituals, type RitualEntry } from "./ritual-table";
 import type { UserSideProfile } from "./user-side-profile";
 
 export const STYLE_PROFILE_KEYS = [
@@ -51,7 +52,7 @@ export interface StyleProfile {
   recordsVersion: string;
   fingerprint?: StyleFingerprint;
   userSide?: UserSideProfile;
-  rituals?: unknown; // 由 B2.2 填
+  rituals?: RitualEntry[];
   samplePool?: unknown; // 由 B2.6 填
   imperfectionDrafts?: ImperfectionDrafts;
   discriminator?: unknown; // 由 B8.1 填
@@ -97,6 +98,11 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
   const profile: StyleProfile = { version, measuredAt, recordsVersion };
   for (const key of STYLE_PROFILE_KEYS) {
     if (key in source && source[key] !== undefined) {
+      if (key === "rituals") {
+        const rituals = normalizeRituals(source.rituals);
+        if (rituals.length > 0) profile.rituals = rituals;
+        continue;
+      }
       (profile as unknown as Record<string, unknown>)[key] = source[key];
     }
   }
