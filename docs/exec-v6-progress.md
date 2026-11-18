@@ -62,7 +62,7 @@
 | B3.4 | 🟡 | 16c888f (rules); 498033c (wire) | `shared/style-projection.test.ts` 27 通过：每条规则生效/不够/不该动；夹具 happy 把「知道了。哈哈」投成 `/^知道了哈{2,}$/`；distant「随便。」仍带句号；50 句同种子两次等于一次。`generate.test.ts`：层开着「好的。」→「好的」且 `projection` 含 `strip_period`；`--without projection` 原文不动、`layersUsed` 不含该层。`service.test.ts`：事件 `delta`→`replace`（「好的」）→`done`，落库「好的」；无指纹无 `replace`、落库「好的。」。`stream.test.ts` SSE 同序。`chat-stream-e2e.test.ts` `onReplace` 收到「好的」。`PersonaSwitches.test.tsx` 文案「按 小满 的标点习惯收尾」。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `359 passed \| 5 skipped (364)` 文件，`3185 passed \| 21 skipped (3206)` 用例。效果量见未验证清单。 |
 | B3.5 | ✅ | 6dbb539 | `state-rules.test.ts` 3 通过：夹具产出 `["。"]`/`["陈树"]` 两条，meaning 都是「疏离」，各 3 条证据且含 trigger；distant 删到 15 行无候选；`mergeUserDecisions` 已确认的 `["。"]` 只留一条。`fidelity-prompt.test.ts` `says nothing about a rule the user has not confirmed` 通过。`micro-rules.test.ts` `does not mine at all when the caller does not want it` 通过。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `362 passed \| 5 skipped (367)` 文件，`3201 passed \| 21 skipped (3222)` 用例。 |
 | B3.6 | ✅ | b15124e | `shared/imperfection-draft.test.ts`：夹具 distant 草稿含「话很短」「句末带句号」，warm 无草稿。`ImperfectionEditor.test.tsx`：点「用这句」后输入框是那句话、`save` 未调用；已有用户内容的状态不显示草稿。`fidelity-prompt.test.ts` `does not put a counted draft into the prompt until the user takes it` 通过。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `363 passed \| 5 skipped (368)` 文件，`3205 passed \| 21 skipped (3226)` 用例。 |
-| B3.7 | ⬜ |  |  |
+| B3.7 | 🟡 | d2397b8 (count); 7e4a4ff (prompt/UI) | `lexicon.test.ts` 5 通过：夹具候选有「咕咕」、`count` 在 14–16、`evidence[0]` 是第一次出现的那句；「今天」不在送给模型的清单；模型自造的词被丢掉；重跑保住已确认的「咕咕」，`lexicon:专属黑话` 不再出现。`fidelity-prompt.test.ts`：未确认没有「咕咕」；确认后「你们之间的说法：咕咕——放鸽子」在围栏内；`lexicon: null` 不出现。`generate.test.ts`：层开着 `layersUsed` 含 `lexicon`；`--without lexicon` 不含，提示词没有「咕咕」。`prompt-fences.test.ts` 敌意 gloss 只在围栏内。`LexiconEditor.test.tsx` 确认/拒绝/手写各调 `lexicon.save`。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `367 passed \| 5 skipped (372)` 文件，`3231 passed \| 21 skipped (3252)` 用例。效果量见未验证清单。 |
 | B3.8 | ✅ | 03c7200 | `address-history.test.ts`：夹具 `them_to_me` 有「树树」「陈树」；陈树 `byState` 只有 distant；中间词「图书馆」即使列入 known 也不产出。提示词：最近季度最常用是「陈树」；`periodId: p1` 是「树树」；无称呼史仍是「宝贝」。`prompt-fences.test.ts` 敌意称呼只在围栏内。`prompt-golden.test.ts` 10 通过、快照未改。`AddressHistoryView.test.tsx` / `PersonaProfile.test.tsx` 渲染「树树」。闸门 `365 passed \| 5 skipped (370)` 文件，`3213 passed \| 21 skipped (3234)` 用例。 |
 | B4.1 | ⬜ |  |  |
 | B4.2 | ⬜ |  |  |
@@ -295,6 +295,9 @@
 | 91 | B3.6 | 未写跳过 warm | 不给 warm 起草 | 验收写 warm 没有草稿（它就是基准）。其余状态相对 warm 的笑率会让 warm 命中「不笑」。 |
 | 92 | B3.8 | 行首呼语后面只跟逗号、感叹号、波浪号、空格或行尾 | 句号、问号、省略号也算断开 | 夹具「陈树。」47 条，句号不在手册那张表里。 |
 | 93 | B3.8 | 呼语只按行首/行末形态挖 | 已知称呼贴在行首、中间没有逗号时也算 | 夹具把「树树」直接接在下一句前面，595 条没有分隔符。 |
+| 94 | B3.7 | 更长短语次数达到短词八成就丢掉短的 | 短词若只是被语气助词/常用词包着，丢掉长的 | 夹具 15 条「又咕咕了」，按原文会丢掉「咕咕」。验收要「咕咕」。 |
+| 95 | B3.7 | 先计数、再删常用词表里有的、再取前 80 | 先在原文里盖掉常用词再切 n-gram | 夹具 `fitLength` 会拼出「今天还好今天晚上」这类三、四字串，次数上千，「咕咕」进不了前 80。 |
+| 96 | B3.7 | `lexicon` 进 `BUILT_LAYERS` | 不进；只在已确认且 `who` 为 them/both 的词存在时写入 `layersUsed` | 没有词时这一层改不了回复。消融表对老分身仍是五层。 |
 
 ## 未验证清单
 
@@ -305,6 +308,7 @@
 | B2.7 | 长度上限有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare lengthCap --k 3` | 配了真实模型、并且该分身已有指纹和分层标答的人 |
 | B3.4 | 标点投影有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare projection --k 3` | 配了真实模型、并且该分身已有指纹和分层标答的人 |
 | B3.3 | 指纹重排有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare fingerprintRerank --k 3` | 配了真实模型、并且该分身已有指纹和分层标答的人 |
+| B3.7 | 专属词进提示词有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare lexicon --k 3` | 配了真实模型、并且该分身已确认词和分层标答的人 |
 
 ## 待用户决定
 
@@ -841,3 +845,11 @@ B3.1、B3.2、B8.3、B8.4、B8.9、B8.10 维持 ✅。B8.1 改 🟡。B8.2、B8.
 - 闸门 `365 passed | 5 skipped (370)` 文件，`3213 passed | 21 skipped (3234)` 用例，`all six steps passed`。相对 B3.6（363/5 文件、3205/21 用例）：通过文件 +2、通过用例 +8；跳过数不变。
 - 偏差 92–93。未验证清单、待用户决定无新增。
 - B3.8 标 ✅。下一条 B3.7。
+
+### WP5 · 实现会话 · 2026-11-18 · B3.7
+
+- `d2397b8`：2–4 字中文 n-gram 和拉丁整词计数；常用词表（zh ≥800、en ≥300）；模型只许勾清单里的词。`lexicon.test.ts` 夹具「咕咕」约 15 次，「今天」不进送给模型的清单。
+- `7e4a4ff`：`personaData.lexicon`、`mergeUserDecisions`、说话方式围栏、`lexicon.list/mine/save`、`LexiconEditor`。未确认不进提示词；`--without lexicon` 关掉；拒绝键 `lexicon:${term}`。
+- 闸门 `367 passed | 5 skipped (372)` 文件，`3231 passed | 21 skipped (3252)` 用例，`all six steps passed`。相对 B3.8（365/5 文件、3213/21 用例）：通过文件 +2、通过用例 +18；跳过数不变。
+- 偏差 94–96。未验证清单新增 B3.7。待用户决定无新增。
+- B3.7 标 🟡。WP5 可做条目全部完成。独立验收另开会话。不开始 WP6。
