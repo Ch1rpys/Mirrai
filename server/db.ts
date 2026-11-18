@@ -35,6 +35,10 @@ import {
 } from "@shared/persona-settings";
 import { normalizeStyleProfile, type StyleProfile } from "@shared/style-profile";
 import { RELATIONSHIP_PHASE_EVENTS } from "@shared/user-side";
+import { BEHAVIOR_MAX_GAP_SEC, BEHAVIOR_MIN_GAP_SEC } from "@shared/behavior-profile";
+import { DEFAULT_SCENE_BREAK_HOURS } from "@shared/scenes";
+import { PERIOD_SILENCE_DAYS } from "@shared/periods";
+import type { MaterialCounts } from "@shared/material-report";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -6238,6 +6242,217 @@ export async function updateBlindSessionByTokenHash(
     .where(eq(blindSessions.tokenHash, tokenHash))
     .returning();
   return row;
+}
+
+function asCount(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * How much of the record each generation layer can stand on.
+ *
+ * Counts only. The thresholds live next to the layers themselves.
+ * The queries are aggregates — a million-row import is not read into
+ * memory as rows.
+ */
+export async function getMaterialCounts(
+  personaId: number,
+  userId: number,
+): Promise<MaterialCounts> {
+  const empty: MaterialCounts = {
+    total: 0,
+    theirs: 0,
+    mine: 0,
+    others: 0,
+    from: null,
+    to: null,
+    withTimestamps: 0,
+    byKind: {},
+    byEmotion: {},
+    theirsText: 0,
+    theirsLabeledAct: 0,
+    timedExchanges: 0,
+    openings: 0,
+    periodHave: 0,
+  };
+  const db = await getDb();
+  if (!db) return empty;
+  const filter = recordsWhere(personaId, userId);
+  const [totals] = await db
+    .select({
+      total: count(),
+      theirs: sql<number>`count(*) FILTER (WHERE ${collectedMessages.role} = 'assistant')`,
+      mine: sql<number>`count(*) FILTER (WHERE ${collectedMessages.role} = 'user')`,
+      others: sql<number>`count(*) FILTER (WHERE ${collectedMessages.role} = 'other')`,
+      from: min(collectedMessages.timestamp),
+      to: max(collectedMessages.timestamp),
+      withTimestamps: sql<number>`count(*) FILTER (WHERE ${collectedMessages.timestamp} IS NOT NULL)`,
+      theirsText: sql<number>`count(*) FILTER (
+        WHERE ${collectedMessages.role} = 'assistant'
+          AND COALESCE(${collectedMessages.kind}, 'text') = 'text'
+      )`,
+      theirsLabeledAct: sql<number>`count(*) FILTER (
+        WHERE ${collectedMessages.role} = 'assistant'
+          AND ${collectedMessages.act} IS NOT NULL
+          AND ${collectedMessages.act} <> ''
+      )`,
+    })
+    .from(collectedMessages)
+    .where(
+      and(
+        eq(collectedMessages.personaId, personaId),
+        eq(collectedMessages.userId, userId),
+        filter,
+      ),
+    );
+  const kindRows = await db
+    .select({
+      kind: sql<string>`COALESCE(${collectedMessages.kind}, 'text')`,
+      n: count(),
+    })
+    .from(collectedMessages)
+    .where(
+      and(
+        eq(collectedMessages.personaId, personaId),
+        eq(collectedMessages.userId, userId),
+        filter,
+      ),
+    )
+    .groupBy(sql`COALESCE(${collectedMessages.kind}, 'text')`);
+  const emotionRows = await db
+    .select({
+      emotion: collectedMessages.emotion,
+      n: count(),
+    })
+    .from(collectedMessages)
+    .where(
+      and(
+        eq(collectedMessages.personaId, personaId),
+        eq(collectedMessages.userId, userId),
+        eq(collectedMessages.role, "assistant"),
+        sql`${collectedMessages.emotion} IS NOT NULL AND ${collectedMessages.emotion} <> ''`,
+        filter,
+      ),
+    )
+    .groupBy(collectedMessages.emotion);
+  const sceneBreakSec = DEFAULT_SCENE_BREAK_HOURS * 3600;
+  const windowed = sql`
+    (
+      SELECT
+        role,
+        LAG(role) OVER (ORDER BY "timestamp", id) AS prev_role,
+        LAG("timestamp") OVER (ORDER BY "timestamp", id) AS prev_at,
+        EXTRACT(EPOCH FROM (
+          "timestamp" - LAG("timestamp") OVER (ORDER BY "timestamp", id)
+        )) AS gap_sec
+      FROM collected_messages
+      WHERE "personaId" = ${personaId}
+        AND "userId" = ${userId}
+        AND "timestamp" IS NOT NULL
+        AND (
+          meta IS NULL
+          OR meta->>'register' IS NULL
+          OR meta->>'register' = 'private'
+        )
+    ) AS material_windows
+  `;
+  const [windows] = await db
+    .select({
+      timedExchanges: sql<number>`count(*) FILTER (
+        WHERE role = 'assistant'
+          AND prev_role = 'user'
+          AND gap_sec IS NOT NULL
+          AND gap_sec >= ${BEHAVIOR_MIN_GAP_SEC}
+          AND gap_sec <= ${BEHAVIOR_MAX_GAP_SEC}
+      )`,
+      openings: sql<number>`count(*) FILTER (
+        WHERE role = 'assistant'
+          AND (prev_at IS NULL OR gap_sec >= ${sceneBreakSec})
+      )`,
+    })
+    .from(windowed);
+  const silenceSec = PERIOD_SILENCE_DAYS * 86_400;
+  const periodSub = sql`
+    (
+      SELECT COALESCE(MAX(LEAST(left_n, right_n)), 0) AS period_have
+      FROM (
+        SELECT
+          (
+            SELECT COUNT(*) FROM collected_messages m
+            WHERE m."personaId" = ${personaId}
+              AND m."userId" = ${userId}
+              AND m.role = 'assistant'
+              AND m."timestamp" IS NOT NULL
+              AND m."timestamp" < g.gap_at
+              AND (
+                m.meta IS NULL
+                OR m.meta->>'register' IS NULL
+                OR m.meta->>'register' = 'private'
+              )
+          ) AS left_n,
+          (
+            SELECT COUNT(*) FROM collected_messages m
+            WHERE m."personaId" = ${personaId}
+              AND m."userId" = ${userId}
+              AND m.role = 'assistant'
+              AND m."timestamp" IS NOT NULL
+              AND m."timestamp" >= g.gap_at
+              AND (
+                m.meta IS NULL
+                OR m.meta->>'register' IS NULL
+                OR m.meta->>'register' = 'private'
+              )
+          ) AS right_n
+        FROM (
+          SELECT at AS gap_at
+          FROM (
+            SELECT
+              "timestamp" AS at,
+              LAG("timestamp") OVER (ORDER BY "timestamp", id) AS prev_at
+            FROM collected_messages
+            WHERE "personaId" = ${personaId}
+              AND "userId" = ${userId}
+              AND "timestamp" IS NOT NULL
+              AND (
+                meta IS NULL
+                OR meta->>'register' IS NULL
+                OR meta->>'register' = 'private'
+              )
+          ) dated
+          WHERE prev_at IS NOT NULL
+            AND EXTRACT(EPOCH FROM (at - prev_at)) >= ${silenceSec}
+        ) g
+      ) sides
+    ) AS material_periods
+  `;
+  const [period] = await db
+    .select({
+      periodHave: sql<number>`period_have`,
+    })
+    .from(periodSub);
+  const byKind: Record<string, number> = {};
+  for (const row of kindRows) byKind[row.kind] = asCount(row.n);
+  const byEmotion: Record<string, number> = {};
+  for (const row of emotionRows) {
+    if (row.emotion) byEmotion[row.emotion] = asCount(row.n);
+  }
+  return {
+    total: asCount(totals?.total),
+    theirs: asCount(totals?.theirs),
+    mine: asCount(totals?.mine),
+    others: asCount(totals?.others),
+    from: totals?.from ?? null,
+    to: totals?.to ?? null,
+    withTimestamps: asCount(totals?.withTimestamps),
+    byKind,
+    byEmotion,
+    theirsText: asCount(totals?.theirsText),
+    theirsLabeledAct: asCount(totals?.theirsLabeledAct),
+    timedExchanges: asCount(windows?.timedExchanges),
+    openings: asCount(windows?.openings),
+    periodHave: asCount(period?.periodHave),
+  };
 }
 
 /** The evaluation runs with these ids, scoped to their owner. */

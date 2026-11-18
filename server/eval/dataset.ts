@@ -21,6 +21,9 @@ import { dayPartFromHour, type ActDayPart } from "@shared/act-profile";
 import { isSpeechAct, labelSpeechActByRule, type SpeechAct } from "@shared/speech-acts";
 import { FINGERPRINT_STATES } from "@shared/style-fingerprint";
 import { zonedHour } from "@shared/timezone";
+import { EVAL_MIN_ASSISTANT_LINES } from "@shared/eval-limits";
+
+export { EVAL_MIN_ASSISTANT_LINES };
 
 /** A message as the records store it. */
 export interface EvalSourceMessage {
@@ -278,7 +281,7 @@ export function buildEvalCases(
   const assistantCount = messages.filter((m) => m.role === "assistant" && isTextRecord(m)).length;
   // A conversation with a single one of their lines leaves nothing to
   // measure against and nothing to learn the person's habits from.
-  if (assistantCount < 2) return [];
+  if (assistantCount < EVAL_MIN_ASSISTANT_LINES) return [];
 
   // At least one of their lines has to stay behind. The n-gram model is
   // fitted on the rest, and a model fitted on nothing would rate every
