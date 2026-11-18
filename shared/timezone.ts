@@ -68,6 +68,23 @@ export function zonedMinute(date: Date, timeZone?: string | null): number {
 }
 
 /**
+ * Whose wall clock a persona's day is read on.
+ *
+ * The persona's own zone wins. The user's zone is the fallback for a
+ * persona that was never given one. The server's local hour is not a
+ * clock either of them chose.
+ */
+export function preferredClockZone(
+  personaZone?: string | null,
+  userZone?: string | null,
+): string | null {
+  const persona = typeof personaZone === "string" ? personaZone.trim() : "";
+  if (persona) return persona;
+  const user = typeof userZone === "string" ? userZone.trim() : "";
+  return user || null;
+}
+
+/**
  * A timestamp that names a wall clock but no zone.
  *
  * "2026-03-01 14:30" is the user's own clock — it is their chat

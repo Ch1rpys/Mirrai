@@ -2,6 +2,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { copy } from "@shared/copy";
 import { normalizeTriggers } from "@shared/conflicts";
 import { USER_ACT_COPY_KEYS } from "@shared/speech-acts";
+import { zonedDateKey } from "@shared/timezone";
 
 /**
  * The user-acts that used to precede a freeze.
@@ -12,9 +13,12 @@ import { USER_ACT_COPY_KEYS } from "@shared/speech-acts";
 export default function TriggersView({
   name,
   triggers,
+  timeZone,
 }: {
   name: string;
   triggers?: unknown;
+  /** TA's zone, then the user's. Dates are that calendar day, not UTC. */
+  timeZone?: string | null;
 }) {
   const { t, locale } = useLocale();
   const rows = normalizeTriggers(triggers) ?? [];
@@ -38,7 +42,7 @@ export default function TriggersView({
                     <li key={`${example.recordId ?? index}:${example.text}`}>
                       <span>{example.text}</span>
                       {example.at ? (
-                        <span className="ml-2">{example.at.slice(0, 10)}</span>
+                        <span className="ml-2">{zonedDateKey(new Date(example.at), timeZone)}</span>
                       ) : null}
                     </li>
                   ))}

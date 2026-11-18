@@ -461,6 +461,42 @@ describe("runConversation", () => {
     expect(events.some((event) => event.type === "emotion" && event.state === "distant")).toBe(true);
   });
 
+  it("writes a decayed mood back before the reply is planned", async () => {
+    const now = new Date("2026-01-15T12:00:00.000Z");
+    inferEmotionalState.mockResolvedValue({ state: "warm", source: "heuristic" });
+    for await (const _event of runConversation({
+      persona: persona({
+        emotionalState: "distant",
+        emotionalStateSince: new Date(now.getTime() - 400 * 60_000),
+        styleProfile: {
+          version: 1,
+          measuredAt: "2026-01-15T12:00:00.000Z",
+          recordsVersion: "100:100",
+          emotionDynamics: {
+            transitions: { distant: { distant: 20, warm: 4 } },
+            dwell: { distant: { medianMin: 300, p75Min: 360, episodes: 6 } },
+            modal: "warm",
+            samples: 40,
+          },
+        },
+      }),
+      userId: 1,
+      message: "吃饭了吗",
+      mode: "once",
+      now,
+    })) {
+      // drain
+    }
+    expect(updatePersona).toHaveBeenCalledWith(
+      1,
+      1,
+      expect.objectContaining({
+        emotionalState: "warm",
+        emotionalStateSince: now,
+      }),
+    );
+  });
+
   it("keeps the crisis path even when a ritual table is present", async () => {
     const events = [];
     for await (const event of runConversation({

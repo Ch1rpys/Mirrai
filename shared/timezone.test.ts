@@ -8,6 +8,7 @@ import {
   shiftDateKey,
   zonedDateKey,
   zoneForRecords,
+  preferredClockZone,
   zonedHour,
   zonedOffsetHours,
   zonedOffsetMinutes,
@@ -159,6 +160,14 @@ describe("the day in a given time zone", () => {
   it("falls back rather than throwing on a zone it does not know", () => {
     const moment = new Date("2026-01-01T16:00:00.000Z");
     expect(zonedDateKey(moment, "Not/AZone")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("whose clock a persona uses", () => {
+  it("prefers the persona's zone, then the user's", () => {
+    expect(preferredClockZone("America/New_York", "Asia/Shanghai")).toBe("America/New_York");
+    expect(preferredClockZone(null, "Asia/Shanghai")).toBe("Asia/Shanghai");
+    expect(preferredClockZone("  ", "")).toBeNull();
   });
 });
 

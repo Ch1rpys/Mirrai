@@ -1173,7 +1173,7 @@ export function buildXiaomanRecords(options?: {
   const multiUsers = genericUsers.slice(7, 47);
   const multiPairs: Array<{ row: Draft; reply: Draft }> = [];
   for (const row of multiUsers) {
-    row.content = "晚上吃饭，然后去超市，还有记得带伞";
+    row.content = "晚上吃饭。然后去超市！还有记得带伞";
     row.truth = { ...row.truth, locked: true, userAct: "multi-point", ritual: "multi-point" };
     const idx = drafts.indexOf(row);
     const reply = drafts.slice(idx + 1).find((r) => r.role === "assistant" && r.kind === "text");
@@ -1186,7 +1186,7 @@ export function buildXiaomanRecords(options?: {
   ]);
   multiPairs.forEach((pair, i) => {
     const lastOnly = lastOnlyFlags[i] ?? true;
-    pair.reply.content = lastOnly ? "伞我帮你带" : "吃饭超市伞都好";
+    pair.reply.content = lastOnly ? "记得带伞" : "晚上吃饭";
     pair.reply.truth = {
       ...pair.reply.truth,
       locked: true,

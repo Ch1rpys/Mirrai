@@ -23,6 +23,7 @@ describe("how they used to pick up one of several things", () => {
     expect(measured!.coverageMedian).toBeGreaterThan(0.25);
     expect(measured!.coverageMedian).toBeLessThan(0.42);
     expect(measured!.preferLast).toBeGreaterThanOrEqual(0.7);
+    expect(measured!.preferLast).toBeLessThanOrEqual(0.9);
   });
 
   it("mines a last-thing candidate with three examples", () => {

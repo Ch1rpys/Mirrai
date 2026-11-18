@@ -1818,6 +1818,41 @@ describe("persona sampling on the reply", () => {
     expect(prompt).not.toContain(copy("zh", "prompt.closingHeading"));
   });
 
+  it("uses the user's zone for bedtime when the persona has none", async () => {
+    const now = new Date("2024-10-30T14:21:00.000Z");
+    getSessionStartAt.mockResolvedValue(new Date(now.getTime() - 12 * 60_000));
+    const row = persona();
+    row.timezone = null;
+    row.styleProfile = {
+      version: 1,
+      measuredAt: NOW.toISOString(),
+      recordsVersion: "80:80",
+      sessions: {
+        scenes: 30,
+        lengthMin: { median: 15, p90: 400 },
+        closeByThemRate: 0.8,
+        closers: [{ text: "晚安", n: 20 }],
+        bedtime: { median: 1341, p25: 1310, p75: 1383, days: 40 },
+      },
+    };
+    const input = {
+      persona: row,
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now,
+      locale: "zh" as const,
+      seed: "closing:zone",
+      exclude: { texts: [HELD_OUT] },
+    };
+    getUserTimezone.mockResolvedValue("Asia/Shanghai");
+    const shanghai = await planTurn(input);
+    expect(shanghai.closing).toBe(true);
+    getUserTimezone.mockResolvedValue("UTC");
+    const utc = await planTurn({ ...input, seed: "closing:zone-utc" });
+    expect(utc.closing).toBeUndefined();
+  });
+
   it("omits the closing overlay with --without closing", async () => {
     getSessionStartAt.mockResolvedValue(new Date(NOW.getTime() - 70 * 60_000));
     const plan = await planTurn({
@@ -1882,6 +1917,22 @@ describe("persona sampling on the reply", () => {
     expect(prompt).toContain(line);
     const unfenced = prompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "");
     expect(unfenced).toContain(line);
+  });
+
+  it("still adds a confirmed life event that is longer than a seed line", async () => {
+    const detail = "事".repeat(200);
+    const plan = await planTurn({
+      persona: personaWithInSession(1, [{ ...lifeEvent, detail }]),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "in-session:long",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(prompt).toContain(copy("zh", "prompt.inSessionShare", { fact: detail }));
   });
 
   it("omits the in-session share when there is no material", async () => {

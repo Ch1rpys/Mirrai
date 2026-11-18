@@ -1116,6 +1116,13 @@ async function* runConversationTurn(
       persona.emotionalState = decayed as Persona["emotionalState"];
       (persona as { emotionalStateSince?: Date | null }).emotionalStateSince = now;
       inertia.sinceMin = 0;
+      // Persist before planning. A silence turn returns without the
+      // end-of-turn write, and the decayed mood would otherwise exist
+      // only on this request's copy of the persona.
+      await db.updatePersona(persona.id, userId, {
+        emotionalState: decayed as Persona["emotionalState"],
+        emotionalStateSince: now,
+      });
     }
   }
   const turnInput = {

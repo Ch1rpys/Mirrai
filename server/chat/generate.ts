@@ -22,13 +22,13 @@ import {
   type UserAct,
 } from "@shared/speech-acts";
 import { loadBehaviorProfile, seededRandom } from "../_core/behavior-profile";
-import { zonedHour } from "@shared/timezone";
+import { preferredClockZone, zonedHour } from "@shared/timezone";
 import { pickRerankWinner, type RerankResult } from "./rerank";
 import { buildRerankModel, getRerankModel } from "./rerank-model";
 import { sparseModelFromUnknown } from "../eval/ab-pairs";
 import { retrieveExemplarsWithEmbed } from "./embeddings";
 import { buildPromptBundleForPersona } from "./prompt";
-import { isSafeSeedLine } from "@shared/seed-safety";
+import { clipPromptFact, isSafeSeedLine } from "@shared/seed-safety";
 import {
   selectSeedExchanges,
   seedMessagesFor,
@@ -746,10 +746,11 @@ function inSessionShareForTurn(input: TurnInput, enabled: boolean): string | nul
   if (!profile) return null;
   const draw = seededRandom(`${input.seed}:in-session`)();
   if (draw >= profile.selfStartRate) return null;
-  const fact = pickInSessionFact(
+  const raw = pickInSessionFact(
     normalizeLifeEvents((input.persona.personaData as { lifeEvents?: unknown } | null)?.lifeEvents),
   );
-  if (!fact || !isSafeSeedLine(fact)) return null;
+  const fact = raw ? clipPromptFact(raw) : null;
+  if (!fact) return null;
   return copy(input.locale, "prompt.inSessionShare", { fact });
 }
 
@@ -779,7 +780,16 @@ async function closingForTurn(
   } catch {
     closedThisSession = false;
   }
-  const timeZone = (input.persona as { timezone?: string | null }).timezone ?? null;
+  const personaZone = (input.persona as { timezone?: string | null }).timezone ?? null;
+  let userZone: string | null = null;
+  if (!personaZone?.trim()) {
+    try {
+      userZone = await db.getUserTimezone(input.userId);
+    } catch {
+      userZone = null;
+    }
+  }
+  const timeZone = preferredClockZone(personaZone, userZone);
   const closing = shouldClose({
     sessionMin,
     personaMinuteOfDay: minuteOfDay(input.now, timeZone),

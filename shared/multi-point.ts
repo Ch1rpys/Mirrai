@@ -19,8 +19,8 @@ export const MULTI_POINT_PREFER_LAST = 0.65;
 export const MULTI_POINT_PREFER_FIRST = 0.35;
 export const MULTI_POINT_EVIDENCE = 3;
 
-/** Handbook separators, plus the commas the fixture (and Chinese lists) use. */
-const POINT_SPLIT = /[。！？!?；;\n，,、]+/u;
+/** 。！？!?；; and newlines. Commas stay inside a point. */
+const POINT_SPLIT = /[。！？!?；;\n]+/u;
 
 export interface MultiPointLine {
   role: string;
@@ -56,11 +56,10 @@ function compactChars(text: string): string[] {
   return Array.from(String(text ?? "").replace(/\s+/g, ""));
 }
 
-/** Unigrams and character bigrams, so a short pickup still scores. */
+/** Character bigrams. A point shorter than two characters covers nothing. */
 function tokens(text: string): Set<string> {
   const chars = compactChars(text);
   const out = new Set<string>();
-  for (const ch of chars) out.add(ch);
   for (let i = 0; i < chars.length - 1; i++) out.add(chars[i]! + chars[i + 1]!);
   return out;
 }

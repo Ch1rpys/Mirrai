@@ -285,7 +285,7 @@ export default function PersonaProfile() {
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.115 }}
             className="surface p-5 sm:p-6"
           >
-            <TriggersView name={persona.name} triggers={triggers} />
+            <TriggersView name={persona.name} triggers={triggers} timeZone={persona.timezone} />
           </motion.section>
         )}
 

@@ -19,8 +19,14 @@ const PREFIX = /^(#|\[系统\]|\[system\])/i;
 
 export function isSafeSeedLine(text: string): boolean {
   const trimmed = text.trim();
+  if (!trimmed || trimmed.length > SEED_LINE_MAX_CHARS) return false;
+  return isSafePromptMaterial(trimmed);
+}
+
+/** A life-event fact may be longer than a seed line. Markers still reject it. */
+export function isSafePromptMaterial(text: string): boolean {
+  const trimmed = text.trim();
   if (!trimmed) return false;
-  if (trimmed.length > SEED_LINE_MAX_CHARS) return false;
   for (const marker of FENCE_MARKERS) {
     if (trimmed.includes(marker)) return false;
   }
@@ -29,4 +35,18 @@ export function isSafeSeedLine(text: string): boolean {
   if (PREFIX.test(trimmed)) return false;
   if (isHarmfulLine(trimmed)) return false;
   return true;
+}
+
+export const PROMPT_FACT_MAX_CHARS = 200;
+
+/**
+ * A confirmed fact for an instruction slot.
+ *
+ * Over-long text is clipped. A jailbreak, a fence, or a harmful line
+ * is dropped whole, even when the marker would have fallen past the clip.
+ */
+export function clipPromptFact(text: string, max = PROMPT_FACT_MAX_CHARS): string | null {
+  const trimmed = text.trim();
+  if (!isSafePromptMaterial(trimmed)) return null;
+  return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
 }

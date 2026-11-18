@@ -18,6 +18,7 @@ import {
 import { mergePersonaSettings } from "@shared/persona-settings";
 import { normalizePeriods } from "@shared/periods";
 import { mineAddressForms } from "@shared/address-history";
+import { preferredClockZone } from "@shared/timezone";
 import { draftImperfection } from "@shared/imperfection-draft";
 import { normalizeStyleProfile, type StyleProfile } from "@shared/style-profile";
 import {
@@ -90,10 +91,10 @@ export async function measureStyleProfile(params: {
   const knownForms = [
     ...new Set([nickname, userName, personaName, ...defaultAddressForms()].filter(Boolean)),
   ];
-  const timeZone =
-    (typeof user?.timezone === "string" && user.timezone) ||
-    (typeof persona?.timezone === "string" && persona.timezone) ||
-    null;
+  const userZone = typeof user?.timezone === "string" ? user.timezone : null;
+  const personaZone = typeof persona?.timezone === "string" ? persona.timezone : null;
+  const timeZone = userZone || personaZone || null;
+  const sessionZone = preferredClockZone(personaZone, userZone);
   const addressHistory = mineAddressForms(rows, knownForms, { timeZone });
   const minedForms = addressHistory
     .filter((entry) => entry.direction === "them_to_me")
@@ -130,7 +131,7 @@ export async function measureStyleProfile(params: {
   const conflictEpisodes = mineConflictEpisodes(labelledScenes);
   const conflict = summarizeConflicts(conflictEpisodes, rawData);
   const triggers = groupConflictTriggers(conflictEpisodes);
-  const sessions = measureSessions(labelledScenes, timeZone);
+  const sessions = measureSessions(labelledScenes, sessionZone);
   const multiPoint = measureMultiPoint(labelledScenes.flatMap((scene) => toTurns(scene)));
   const inSession = measureInSessionFromScenes(labelledScenes);
   const next = normalizeStyleProfile({
