@@ -1349,6 +1349,8 @@ export const zh = {
     actClustersNote: "比如这一轮是「开玩笑」，就带上几句 {{name}} 以前开玩笑的原话。",
     emotionInertia: "{{name}} 的情绪按 {{name}} 的节奏变",
     emotionInertiaNote: "记录里 {{name}} 生气一般要过一阵才好。打开后，分身不会因为一句玩笑就立刻翻篇。",
+    closing: "{{name}} 会自己说「我先睡了」",
+    closingNote: "聊得比 {{name}} 平时久了，或者到了 {{name}} 平时睡觉的点，分身会用 {{name}} 的方式收尾。之后你还可以接着说。",
     abPairs: "偶尔让我二选一",
     abPairsNote: "每八轮左右，分身会给两句回复让你挑更像的那句。那一轮的费用是两倍。你的选择会用来调重排。",
     twoStage: "先想好说什么，再用 {{name}} 的话说",

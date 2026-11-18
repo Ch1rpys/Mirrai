@@ -563,6 +563,14 @@ export const V6 = {
     zh: "【你以前是这样和好的】",
     en: "【How you used to make up】",
   },
+  "prompt.closingOverlay": {
+    zh: "这一轮说完就该结束这次聊天了。用你平时收尾的方式。",
+    en: "This turn should end the chat. Close it the way you usually do.",
+  },
+  "prompt.closingHeading": {
+    zh: "【你平时这样收尾】",
+    en: "【How you usually close】",
+  },
   "prompt.contrastHeading": {
     zh: "【不像的，和像的】",
     en: "【Unlike, and like】",

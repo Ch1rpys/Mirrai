@@ -120,6 +120,7 @@ vi.mock("../_core/emotion", () => ({
   inferEmotionalState: (...a: unknown[]) => inferEmotionalState(...a),
 }));
 
+import { copy } from "@shared/copy";
 import {
   runConversation,
   commitPendingChoice,
@@ -597,6 +598,41 @@ describe("runConversation", () => {
 
     const done = events.find((e) => e.type === "done");
     expect(done?.careNote?.kind).toBe("long_session");
+  });
+
+  it("lets them close a long session themselves instead of appending the care note", async () => {
+    const now = new Date("2026-01-15T12:00:00Z");
+    getSessionStartAt.mockResolvedValue(new Date(now.getTime() - 3 * 60 * 60 * 1000));
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona({
+        timezone: "Asia/Shanghai",
+        styleProfile: {
+          version: 1,
+          measuredAt: now.toISOString(),
+          recordsVersion: "80:80",
+          sessions: {
+            scenes: 30,
+            lengthMin: { median: 15, p90: 40 },
+            closeByThemRate: 0.8,
+            closers: [{ text: "晚安", n: 20 }],
+          },
+        },
+      }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      now,
+    })) {
+      events.push(event);
+    }
+    const done = events.find((e) => e.type === "done");
+    expect(done?.careNote?.kind).toBe("long_session");
+    expect(done?.careNote?.text).toBe("");
+    const stored = createMessage.mock.calls.find((call) => call[0].role === "assistant");
+    expect(stored?.[0].content).not.toContain(copy("zh", "labels.care.longSession"));
+    expect(stored?.[0].metadata?.closing).toBe(true);
+    expect(createSafetyEvent).toHaveBeenCalled();
   });
 
   it("refuses to talk to a persona that has graduated", async () => {

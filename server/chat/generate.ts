@@ -56,6 +56,12 @@ import {
   shouldForceRepair,
 } from "@shared/conflicts";
 import { normalizeEmotionDynamics } from "@shared/emotion-dynamics";
+import {
+  CLOSER_PROMPT_MAX,
+  normalizeSessionProfile,
+  shouldClose,
+} from "@shared/session-profile";
+import { minuteOfDay } from "@shared/proactive-decision";
 import { filterHarm } from "@shared/harm";
 import { relationshipIsOver } from "@shared/relationship-ended";
 import {
@@ -132,6 +138,8 @@ export interface TurnPlan {
   recalled: Array<{ id: number; title: string; subject: string }>;
   rng: () => number;
   reanchor?: ReanchorIssue[];
+  /** This turn is closing the chat the way they used to. */
+  closing?: boolean;
 }
 
 function actProfileForTurn(
@@ -180,6 +188,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   let sampledAct = sampled?.act === "silence" ? null : sampled?.act ?? null;
   const conflictTurn = conflictMaterialForTurn(input, layers.emotionInertia);
   if (conflictTurn.forceRepair) sampledAct = "repair";
+  const closingTurn = await closingForTurn(input, layers.closing);
   const actMeta = {
     userAct,
     ...(sampled?.via ? { actVia: sampled.via } : {}),
@@ -219,11 +228,25 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       ...actMeta,
       ritual,
       messages: [],
-      layersUsed: withMeasuredLayers(layersUsed, {}, false, false, false, false, true),
+      layersUsed: withMeasuredLayers(
+        layersUsed,
+        {},
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        closingTurn.closing,
+      ),
       exemplarIds: [],
       seedRecordIds: [],
       recalled: [],
       rng,
+      ...(closingTurn.closing ? { closing: true } : {}),
     };
   }
 
@@ -274,6 +297,8 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       coldLines: conflictTurn.coldLines,
       repairLines: conflictTurn.repairLines,
       triggerLines: conflictTurn.triggerLines,
+      closing: closingTurn.closing,
+      closerLines: closingTurn.closerLines,
       excludeExemplarIds: [...(input.exclude.recordIds ?? []), ...seeds.excludeIds],
       excludeExemplarTexts: [...(input.exclude.texts ?? []), ...seeds.excludeTexts],
       seedTurnsNote: seeds.note,
@@ -291,7 +316,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       seedMsgs,
     );
     const plannerMessages = twoStageOn
-      ? await plannerMessagesForTurn(input, sampledAct, historyMessages)
+      ? await plannerMessagesForTurn(input, sampledAct, historyMessages, closingTurn.closing)
       : undefined;
     return {
       kind: "model",
@@ -312,12 +337,14 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
         twoStageOn,
         clustersOn,
         emotionInertiaOn,
+        closingTurn.closing,
       ),
       exemplarIds: [],
       seedRecordIds: seeds.excludeIds,
       recalled: [],
       rng,
       ...(reminder.issues.length > 0 ? { reanchor: reminder.issues } : {}),
+      ...(closingTurn.closing ? { closing: true } : {}),
     };
   }
 
@@ -342,13 +369,15 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     coldLines: conflictTurn.coldLines,
     repairLines: conflictTurn.repairLines,
     triggerLines: conflictTurn.triggerLines,
+    closing: closingTurn.closing,
+    closerLines: closingTurn.closerLines,
     seedTurnsNote: seeds.note,
     styleReminderLines: reminder.lines,
     reanchorIssues: reminder.issues,
   });
   const historyMessages = composed.messages.filter((row) => row.role !== "system");
   const plannerMessages = twoStageOn
-    ? await plannerMessagesForTurn(input, sampledAct, historyMessages)
+    ? await plannerMessagesForTurn(input, sampledAct, historyMessages, closingTurn.closing)
     : undefined;
   return {
     kind: "model",
@@ -369,12 +398,14 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       twoStageOn,
       clustersOn,
       emotionInertiaOn,
+      closingTurn.closing,
     ),
     exemplarIds: [],
     seedRecordIds: seeds.excludeIds,
     recalled: composed.recalled,
     rng,
     ...(reminder.issues.length > 0 ? { reanchor: reminder.issues } : {}),
+    ...(closingTurn.closing ? { closing: true } : {}),
   };
 }
 
@@ -473,6 +504,7 @@ function withMeasuredLayers(
   twoStageOn = false,
   actClustersOn = false,
   emotionInertiaOn = false,
+  closingOn = false,
 ): LayerId[] {
   const extra: LayerId[] = [];
   if (length.maxChars != null) extra.push("lengthCap");
@@ -485,6 +517,7 @@ function withMeasuredLayers(
   if (twoStageOn) extra.push("twoStage");
   if (actClustersOn) extra.push("actClusters");
   if (emotionInertiaOn) extra.push("emotionInertia");
+  if (closingOn) extra.push("closing");
   if (extra.length === 0) return layersUsed;
   const used = new Set<LayerId>([...layersUsed, ...extra]);
   return LAYERS.filter((id) => used.has(id));
@@ -494,6 +527,7 @@ async function plannerMessagesForTurn(
   input: TurnInput,
   sampledAct: SpeechAct | null,
   history: LLMMessage[],
+  closing = false,
 ): Promise<LLMMessage[]> {
   const built = await buildPromptBundleForPersona({
     persona: input.persona,
@@ -515,6 +549,7 @@ async function plannerMessagesForTurn(
     imperfectionProfile: null,
     suppressions: null,
     lexicon: null,
+    closing,
   });
   return [asSystemMessage(built.prompt, built.cacheBreak), ...history];
 }
@@ -684,6 +719,47 @@ async function ritualPlanForTurn(
   });
   if (!picked) return null;
   return { trigger: entry.trigger, reply: picked.text, recordId: picked.recordId };
+}
+
+async function closingForTurn(
+  input: TurnInput,
+  enabled: boolean,
+): Promise<{ closing: boolean; closerLines: string[] }> {
+  const empty = { closing: false, closerLines: [] as string[] };
+  if (!enabled) return empty;
+  const profile = normalizeSessionProfile(effectiveStyleProfile(input.persona).sessions);
+  if (!profile) return empty;
+  let sessionStart: Date | null = null;
+  try {
+    sessionStart = await db.getSessionStartAt(input.persona.id, input.userId);
+  } catch {
+    sessionStart = null;
+  }
+  if (!sessionStart) return empty;
+  const sessionMin = (input.now.getTime() - sessionStart.getTime()) / 60_000;
+  let closedThisSession = false;
+  try {
+    const recent = await db.getMessagesSince(input.persona.id, input.userId, sessionStart);
+    closedThisSession = recent.some((row) => {
+      const meta = row.metadata as { closing?: unknown } | null | undefined;
+      return Boolean(meta && typeof meta === "object" && meta.closing === true);
+    });
+  } catch {
+    closedThisSession = false;
+  }
+  const timeZone = (input.persona as { timezone?: string | null }).timezone ?? null;
+  const closing = shouldClose({
+    sessionMin,
+    personaMinuteOfDay: minuteOfDay(input.now, timeZone),
+    profile,
+    closedThisSession,
+  });
+  return {
+    closing,
+    closerLines: closing
+      ? profile.closers.slice(0, CLOSER_PROMPT_MAX).map((row) => row.text)
+      : [],
+  };
 }
 
 function conflictMaterialForTurn(

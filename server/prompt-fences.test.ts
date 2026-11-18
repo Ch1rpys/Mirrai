@@ -357,6 +357,17 @@ describe("a line from how they used to make up", () => {
   });
 });
 
+describe("a line they used to close with", () => {
+  it("reaches the prompt only inside the fence", () => {
+    const prompt = buildSystemPrompt(persona(), {
+      closing: true,
+      closerLines: [HOSTILE_NOTE],
+    });
+    expect(prompt).toContain(HOSTILE_NOTE);
+    expect(unfenced(prompt)).not.toContain(HOSTILE_NOTE);
+  });
+});
+
 describe("a style sample from the records", () => {
   it("reaches the prompt only inside the fence", () => {
     const prompt = buildSystemPrompt(persona(), {

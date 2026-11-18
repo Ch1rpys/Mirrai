@@ -52,6 +52,7 @@ describe("the persona switches section", () => {
     expect(screen.getByText("按 小满 的标点习惯收尾")).toBeInTheDocument();
     expect(screen.getByText("做同一件事时，照 小满 做过的样子")).toBeInTheDocument();
     expect(screen.getByText("小满 的情绪按 小满 的节奏变")).toBeInTheDocument();
+    expect(screen.getByText("小满 会自己说「我先睡了」")).toBeInTheDocument();
     expect(screen.getByText("偶尔让我二选一")).toBeInTheDocument();
     expect(screen.getByText("先想好说什么，再用 小满 的话说")).toBeInTheDocument();
   });

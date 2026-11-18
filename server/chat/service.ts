@@ -465,6 +465,8 @@ export async function composeMessages(params: {
   coldLines?: string[] | null;
   repairLines?: string[] | null;
   triggerLines?: string[] | null;
+  closing?: boolean;
+  closerLines?: string[] | null;
   restrictExemplarsToAct?: boolean;
   periodId?: string | null;
   excludeExemplarIds?: number[];
@@ -563,6 +565,8 @@ export async function composeMessages(params: {
     coldLines: params.coldLines ?? null,
     repairLines: params.repairLines ?? null,
     triggerLines: params.triggerLines ?? null,
+    closing: Boolean(params.closing),
+    closerLines: params.closerLines ?? null,
     restrictExemplarsToAct: params.restrictExemplarsToAct,
     periodId: params.periodId ?? null,
     excludeExemplarIds: params.excludeExemplarIds,
@@ -1509,6 +1513,9 @@ async function* runConversationTurn(
       }).catch((e) => console.warn("[Safety] Failed to record usage event:", e));
     }
   }
+  if (plan.closing && careNote?.kind === "long_session") {
+    careNote = { ...careNote, text: "", showBanner: false };
+  }
 
   // The trajectory is assessed here, before the reply is composed, so that
   // a user whose emotional direction has turned can be noticed in the same
@@ -1633,6 +1640,7 @@ async function* runConversationTurn(
     ...(plan.reanchor && plan.reanchor.length > 0 ? { reanchor: plan.reanchor } : {}),
     ...(twoStage === "fallback" ? { twoStage: "fallback" as const } : {}),
     ...(emotionMeta ? { emotion: emotionMeta } : {}),
+    ...(plan.closing ? { closing: true } : {}),
   };
   let parts = [finalText];
   if (timingEnabled && behavior) {

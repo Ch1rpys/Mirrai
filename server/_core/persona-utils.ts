@@ -283,6 +283,15 @@ export interface SystemPromptOptions {
    */
   triggerLines?: string[] | null;
   /**
+   * This turn should close the chat. Instruction: it sits outside the fence.
+   */
+  closing?: boolean;
+  /**
+   * Lines they used to close with. Material: it is fenced, and it only
+   * appears when this turn is closing.
+   */
+  closerLines?: string[] | null;
+  /**
    * Past replies of theirs, already formatted and fenced by the caller.
    */
   exemplarSection?: string | null;
@@ -529,6 +538,7 @@ export function buildSystemPromptParts(
   const actInstruction = options.sampledAct
     ? renderActInstruction(options.sampledAct, locale)
     : "";
+  const closingInstruction = options.closing ? copy(locale, "prompt.closingOverlay") : "";
 
   if (options.promptMode === "planner") {
     const actLabel = options.sampledAct
@@ -631,6 +641,7 @@ export function buildSystemPromptParts(
     { kind: "stable", text: microRulesSection ? asMaterial(microRulesSection) : "" },
     { kind: "stable", text: suppressionsSection ? asMaterial(suppressionsSection) : "" },
     { kind: "volatile", text: actInstruction, id: "act" },
+    { kind: "volatile", text: closingInstruction },
     {
       kind: "volatile",
       text:
@@ -638,6 +649,16 @@ export function buildSystemPromptParts(
           ? asMaterial(
               copy(locale, "prompt.actClustersHeading"),
               options.actClusterLines.join("\n"),
+            )
+          : "",
+    },
+    {
+      kind: "volatile",
+      text:
+        options.closing && options.closerLines && options.closerLines.length > 0
+          ? asMaterial(
+              copy(locale, "prompt.closingHeading"),
+              options.closerLines.join("\n"),
             )
           : "",
     },

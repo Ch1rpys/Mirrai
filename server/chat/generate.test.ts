@@ -1746,6 +1746,97 @@ describe("persona sampling on the reply", () => {
     expect(prompt).not.toContain(copy("zh", "prompt.coldLinesHeading"));
     expect(prompt).not.toContain(copy("zh", "prompt.repairLinesHeading"));
   });
+
+  /** i18n:allow-input — recorded closing lines used only as material. */
+  function sessionProfile() {
+    return {
+      scenes: 30,
+      lengthMin: { median: 15, p90: 40 },
+      closeByThemRate: 0.8,
+      closers: [
+        { text: "晚安", n: 20 },
+        { text: "安", n: 8 },
+        { text: "睡啦", n: 5 },
+        { text: "我先睡了", n: 4 },
+      ],
+    };
+  }
+
+  function personaWithSessions() {
+    const row = persona();
+    row.styleProfile = {
+      version: 1,
+      measuredAt: NOW.toISOString(),
+      recordsVersion: "80:80",
+      sessions: sessionProfile(),
+    };
+    return row;
+  }
+
+  it("puts a closing instruction outside the fence after seventy minutes", async () => {
+    getSessionStartAt.mockResolvedValue(new Date(NOW.getTime() - 70 * 60_000));
+    const plan = await planTurn({
+      persona: personaWithSessions(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "closing:long",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    const overlay = copy("zh", "prompt.closingOverlay");
+    const heading = copy("zh", "prompt.closingHeading");
+    expect(plan.closing).toBe(true);
+    expect(plan.layersUsed).toContain("closing");
+    expect(prompt).toContain(overlay);
+    expect(prompt).toContain(heading);
+    expect(prompt).toContain("晚安");
+    const unfenced = prompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "");
+    expect(unfenced).toContain(overlay);
+    expect(unfenced).not.toContain("晚安");
+  });
+
+  it("does not close again in a session that already did", async () => {
+    getSessionStartAt.mockResolvedValue(new Date(NOW.getTime() - 70 * 60_000));
+    getMessagesSince.mockResolvedValue([{ metadata: { closing: true } }]);
+    const plan = await planTurn({
+      persona: personaWithSessions(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "closing:again",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(plan.closing).toBeUndefined();
+    expect(plan.layersUsed).not.toContain("closing");
+    expect(prompt).not.toContain(copy("zh", "prompt.closingOverlay"));
+    expect(prompt).not.toContain(copy("zh", "prompt.closingHeading"));
+  });
+
+  it("omits the closing overlay with --without closing", async () => {
+    getSessionStartAt.mockResolvedValue(new Date(NOW.getTime() - 70 * 60_000));
+    const plan = await planTurn({
+      persona: personaWithSessions(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "closing:off",
+      exclude: { texts: [HELD_OUT] },
+      layerOverrides: layerOverridesForEval({ without: ["closing"] }),
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(plan.closing).toBeUndefined();
+    expect(plan.layersUsed).not.toContain("closing");
+    expect(prompt).not.toContain(copy("zh", "prompt.closingOverlay"));
+    expect(prompt).not.toContain(copy("zh", "prompt.closingHeading"));
+  });
 });
 
 

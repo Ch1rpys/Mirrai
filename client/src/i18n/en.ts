@@ -1348,6 +1348,8 @@ export const en = {
     actClustersNote: "If this turn is a tease, a few of the lines {{name}} used to tease with come along.",
     emotionInertia: "{{name}}'s mood changes at {{name}}'s pace",
     emotionInertiaNote: "In the record, {{name}} usually stayed angry for a while. On, a joke will not end that stretch at once.",
+    closing: "{{name}} will say “I'm turning in” themselves",
+    closingNote: "When you've talked longer than {{name}} used to, or it's the hour {{name}} used to go to sleep, the persona closes in {{name}}'s way. You can keep talking after that.",
     abPairs: "Offer me a choice now and then",
     abPairsNote: "About every eight turns they give two unreplied lines and you pick the one that sounds more like them. That turn costs twice as much. The choice trains the rerank.",
     twoStage: "Think of what to say first, then say it in {{name}}'s voice",
