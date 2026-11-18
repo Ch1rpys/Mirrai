@@ -14,6 +14,7 @@ const fixtures = vi.hoisted(() => ({
     sampledAct?: string | null;
   }>,
   profile: null as Record<string, unknown> | null,
+  events: [] as Array<Record<string, unknown>>,
   confirm: vi.fn(),
   reject: vi.fn(),
   invalidate: vi.fn(),
@@ -31,7 +32,7 @@ vi.mock("@/lib/trpc", () => ({
       mine: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     lifeEvent: {
-      list: { useQuery: () => ({ data: { events: [], hint: "empty" } }) },
+      list: { useQuery: () => ({ data: { events: fixtures.events, hint: "empty" } }) },
       save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       mine: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
@@ -67,6 +68,7 @@ describe("the fifth-stage editors", () => {
     vi.clearAllMocks();
     fixtures.items = [];
     fixtures.profile = null;
+    fixtures.events = [];
   });
 
   it("shows the four editors", () => {
@@ -124,5 +126,25 @@ describe("the fifth-stage editors", () => {
     expect(screen.getByText("在问一件事")).toBeInTheDocument();
     expect(screen.getByText(/回答被问到的事 90%/)).toBeInTheDocument();
     expect(screen.getByText(/开玩笑、损一下 10%/)).toBeInTheDocument();
+  });
+
+  it("shows the hours of a mined routine so they can be changed", () => {
+    fixtures.events = [{
+      id: "r1",
+      kind: "routine",
+      title: "周三下午上课",
+      detail: "",
+      whoSaid: "them",
+      closed: false,
+      source: "auto",
+      verified: false,
+      evidence: [],
+      schedule: { weekdays: [3], startHour: 14, endHour: 16 },
+    }];
+    render(<V5FidelityEditors personaId={1} />);
+    expect(screen.getByText("周三下午上课")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("14")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("16")).toBeInTheDocument();
+    expect(screen.getByText(translate("zh", "v5.routineHint"))).toBeInTheDocument();
   });
 });

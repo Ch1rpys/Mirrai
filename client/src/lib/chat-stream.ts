@@ -26,6 +26,8 @@ export interface StreamDoneInfo {
    * had been pulled from the store rather than invented.
    */
   recalled?: Array<{ id: number; title: string; subject: string }>;
+  /** Confirmed routine window this reply used. */
+  routine?: string;
   /**
    * A gentle nudge from the safety layer.
    *

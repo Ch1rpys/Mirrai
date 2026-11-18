@@ -16,6 +16,7 @@ import { shouldInstructHarm } from "@shared/harm";
 import { normalizeAddressHistory, pickThemToMeAddress } from "@shared/address-history";
 import { normalizeLexicon, renderLexicon, type LexiconEntry } from "@shared/lexicon";
 import { relationshipIsOver } from "@shared/relationship-ended";
+import { currentRoutines, normalizeLifeEvents, renderRoutineNowLine } from "@shared/life-events";
 import {
   formatReanchorIssues,
   type ReanchorIssue,
@@ -782,7 +783,17 @@ export function buildSystemPromptParts(
     },
     {
       kind: "volatile",
-      text: buildTimeAwareness(timeOfDay, togetherDays, locale, isOver),
+      text: buildTimeAwareness(
+        timeOfDay,
+        togetherDays,
+        locale,
+        isOver,
+        currentRoutines(
+          normalizeLifeEvents((p as { lifeEvents?: unknown }).lifeEvents),
+          now,
+          options.timeZone ?? persona.timezone,
+        )[0]?.title,
+      ),
     },
     {
       kind: "volatile",
@@ -903,9 +914,13 @@ function buildTimeAwareness(
   togetherDays: number | null,
   locale: "zh" | "en",
   relationshipEnded = false,
+  routineTitle?: string,
 ): string {
   const parts: string[] = [];
   parts.push(copy(locale, "prompt.timeNow", { label: timeOfDay.label }));
+  if (routineTitle) {
+    parts.push(renderRoutineNowLine(routineTitle, locale));
+  }
   if (timeOfDay.intimate) {
     parts.push(copy(locale, "prompt.timeQuiet"));
   }

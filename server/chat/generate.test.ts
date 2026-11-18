@@ -2163,4 +2163,100 @@ describe("persona sampling on the reply", () => {
   });
 });
 
+describe("the daily rhythm", () => {
+  const routine = {
+    id: "r1",
+    kind: "routine" as const,
+    title: "周三下午上课",
+    detail: "",
+    whoSaid: "them",
+    closed: false,
+    source: "auto" as const,
+    verified: true,
+    evidence: [{ snippet: "刚下课" }],
+    schedule: { weekdays: [3], startHour: 14, endHour: 16 },
+  };
+
+  function personaWithRoutine(verified: boolean) {
+    const row = persona();
+    row.personaData = {
+      personality: "温柔",
+      lifeEvents: [{ ...routine, verified }],
+    };
+    return row;
+  }
+
+  it("names the window when now is inside a confirmed one", async () => {
+    const plan = await planTurn({
+      persona: personaWithRoutine(true),
+      userId: 1,
+      userMessage: "在吗",
+      history: CONTEXT,
+      now: new Date("2026-11-18T07:00:00Z"),
+      locale: "zh",
+      seed: "routine:on",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    const line = copy("zh", "prompt.timeRoutine", { title: "周三下午上课" });
+    expect(prompt).toContain(line);
+    expect(plan.routine).toBe("r1");
+  });
+
+  it("omits the line on another day, and when it is not confirmed", async () => {
+    const thursday = await planTurn({
+      persona: personaWithRoutine(true),
+      userId: 1,
+      userMessage: "在吗",
+      history: CONTEXT,
+      now: new Date("2026-11-19T07:00:00Z"),
+      locale: "zh",
+      seed: "routine:thu",
+      exclude: { texts: [HELD_OUT] },
+    });
+    expect(String(thursday.messages[0]?.content ?? "")).not.toContain(
+      copy("zh", "prompt.timeRoutine", { title: "周三下午上课" }),
+    );
+    expect(thursday.routine).toBeUndefined();
+    const unverified = await planTurn({
+      persona: personaWithRoutine(false),
+      userId: 1,
+      userMessage: "在吗",
+      history: CONTEXT,
+      now: new Date("2026-11-18T07:00:00Z"),
+      locale: "zh",
+      seed: "routine:unverified",
+      exclude: { texts: [HELD_OUT] },
+    });
+    expect(String(unverified.messages[0]?.content ?? "")).not.toContain(
+      copy("zh", "prompt.timeRoutine", { title: "周三下午上课" }),
+    );
+  });
+
+  it("can add the window as the one thing of their own mid-chat", async () => {
+    const row = persona();
+    row.styleProfile = {
+      version: 1,
+      measuredAt: NOW.toISOString(),
+      recordsVersion: "80:80",
+      inSession: { samples: 200, selfStartRate: 1 },
+    };
+    row.personaData = { personality: "温柔", lifeEvents: [routine] };
+    const plan = await planTurn({
+      persona: row,
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: new Date("2026-11-18T07:00:00Z"),
+      locale: "zh",
+      seed: "routine:share",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const line = copy("zh", "prompt.inSessionShare", { fact: "周三下午上课" });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(prompt).toContain(line);
+    expect(prompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "")).toContain(line);
+  });
+});
+
 

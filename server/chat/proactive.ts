@@ -172,6 +172,7 @@ async function pickProactiveMaterial(params: {
   persona: Persona;
   userId: number;
   relationshipEnded: boolean;
+  now?: Date;
 }): Promise<{
   opening: ProactiveOpening | null;
   fact: string;
@@ -182,7 +183,11 @@ async function pickProactiveMaterial(params: {
   const data = (params.persona.personaData as any) ?? {};
   const events = normalizeLifeEvents(data.lifeEvents);
   const loops = openLoops(events);
-  const lives = inProgressLife(events);
+  const lives = inProgressLife(
+    events,
+    params.now,
+    (params.persona as { timezone?: string | null }).timezone,
+  );
   const openingProfile = normalizeOpeningProfile(data.openingProfile);
   const recent = await db.getMessagesByPersonaId(params.persona.id, params.userId, 40).catch(() => []);
   const recentOpenings = recent
@@ -284,6 +289,7 @@ export async function composeProactiveMessage(params: {
     persona,
     userId: params.userId,
     relationshipEnded: context.relationshipEnded,
+    now,
   });
   if (!picked) return null;
   context.opening = picked.opening;

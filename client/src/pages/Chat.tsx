@@ -64,6 +64,12 @@ export function failedSendKeepsTheMessage(result: unknown): boolean {
   return Boolean((result as { failed?: boolean } | null | undefined)?.failed);
 }
 
+function routineFromMetadata(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const value = (metadata as { routine?: unknown }).routine;
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
 function pendingChoiceFromMetadata(metadata: unknown): { options: [string, string] } | null {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
   const raw = (metadata as { pendingChoice?: unknown }).pendingChoice;
@@ -561,6 +567,7 @@ export default function Chat() {
       replyToContent: m.replyToId ? (byId.get(m.replyToId)?.content ?? null) : null,
       recalled: (m.recalled ?? []).filter((r: any) => r.title),
       pendingChoice: pendingChoiceFromMetadata(m.metadata),
+      routine: routineFromMetadata(m.metadata),
     }));
 
     // The history is polled, so it can arrive while a reply is still
@@ -803,6 +810,7 @@ export default function Chat() {
                     createdAt: new Date(),
                     isStreaming: false,
                     recalled: info.recalled,
+                    routine: info.routine ?? null,
                   }
                 : m
               ));

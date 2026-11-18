@@ -75,6 +75,8 @@ export type ChatEvent =
       messageId: number;
       /** The memories that were injected into this turn. */
       recalled?: Array<{ id: number; title: string; subject: string }>;
+      /** Confirmed routine window this reply used. */
+      routine?: string;
       emotionalState: string;
       graduationSuggested: boolean;
       careNote: CareNote | null;
@@ -1654,6 +1656,7 @@ async function* runConversationTurn(
     ...(twoStage === "fallback" ? { twoStage: "fallback" as const } : {}),
     ...(emotionMeta ? { emotion: emotionMeta } : {}),
     ...(plan.closing ? { closing: true } : {}),
+    ...(plan.routine ? { routine: plan.routine } : {}),
   };
   let parts = [finalText];
   if (timingEnabled && behavior) {
@@ -1834,6 +1837,7 @@ async function* runConversationTurn(
     careNote,
     crisis: false,
     recalled,
+    ...(plan.routine ? { routine: plan.routine } : {}),
   };
 }
 

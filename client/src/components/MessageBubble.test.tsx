@@ -156,6 +156,17 @@ describe("the message bubble", () => {
     expect(screen.getByText("22:04")).toBeInTheDocument();
   });
 
+  it("marks a reply that used a remembered weekly window", () => {
+    render(
+      <MessageBubble
+        msg={makeMessage({ routine: "r1" })}
+        personaName="小A"
+        showMood={false}
+      />,
+    );
+    expect(screen.getByText(translate("zh", "chat.routineMarker"))).toBeInTheDocument();
+  });
+
   it("shows what was said", () => {
     render(
       <MessageBubble msg={makeMessage({ content: "今天过得怎么样？" })} personaName="小A" showMood={false} />,

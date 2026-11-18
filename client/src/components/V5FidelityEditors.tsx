@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { copy } from "@shared/copy";
 import { SPEECH_ACTS, USER_ACTS, USER_ACT_COPY_KEYS, FEEDBACK_REASONS, type SpeechAct } from "@shared/speech-acts";
 import { SUPPRESSION_KINDS, normalizeSuppressions, type Suppression, type SuppressionKind } from "@shared/suppressions";
-import { normalizeLifeEvents, type LifeEvent } from "@shared/life-events";
+import { normalizeLifeEvents, type LifeEvent, type LifeEventKind } from "@shared/life-events";
 import { ACT_MIN_SAMPLES, emptyCounts, normalizeActProfile, topRepliesForUserAct, type ActCounts } from "@shared/act-profile";
 
 /**
@@ -130,11 +130,29 @@ function LifeEventsEditor({ personaId }: { personaId: number }) {
     onError: (e: any) => toast.error(e.message),
   });
   const [title, setTitle] = useState("");
-  const [kind, setKind] = useState<"life" | "open_loop">("open_loop");
+  const [kind, setKind] = useState<LifeEventKind>("open_loop");
+  const [weekday, setWeekday] = useState(3);
+  const [startHour, setStartHour] = useState(14);
+  const [endHour, setEndHour] = useState(16);
   const events = normalizeLifeEvents(data?.events);
 
   function persist(next: LifeEvent[]) {
     save.mutate({ personaId, events: next });
+  }
+
+  function patchSchedule(event: LifeEvent, patch: Partial<{ weekday: number; startHour: number; endHour: number }>): LifeEvent {
+    const schedule = event.schedule ?? { weekdays: [weekday], startHour, endHour };
+    const nextWeekday = patch.weekday ?? schedule.weekdays[0] ?? 3;
+    const nextStart = patch.startHour ?? schedule.startHour;
+    const nextEnd = patch.endHour ?? schedule.endHour;
+    return {
+      ...event,
+      schedule: {
+        weekdays: [nextWeekday],
+        startHour: Math.max(0, Math.min(23, nextStart)),
+        endHour: Math.max(nextStart + 1, Math.min(24, nextEnd)),
+      },
+    };
   }
 
   return (
@@ -142,6 +160,7 @@ function LifeEventsEditor({ personaId }: { personaId: number }) {
       <header className="space-y-1">
         <h3 className="text-sm font-medium">{t("v5.lifeEventsTitle")}</h3>
         <p className="text-xs text-muted-foreground">{t("v5.lifeEventsHint")}</p>
+        <p className="text-xs text-muted-foreground">{t("v5.routineHint")}</p>
         {data?.hint ? <p className="text-[11px] text-muted-subtle">{data.hint}</p> : null}
       </header>
       {isError ? <p className="text-xs text-destructive" role="alert">{t("common.error")}</p> : null}
@@ -150,6 +169,43 @@ function LifeEventsEditor({ personaId }: { personaId: number }) {
           <li key={event.id} className="rounded-md border border-border p-3 space-y-1.5">
             <p className="text-sm font-medium">{event.title}</p>
             {event.detail ? <p className="text-xs text-muted-foreground">{event.detail}</p> : null}
+            {event.kind === "routine" && event.schedule ? (
+              <div className="flex flex-wrap gap-2 items-center">
+                <select
+                  aria-label={t("v5.weekday")}
+                  className="h-8 rounded-md border border-input bg-card px-2 text-xs"
+                  value={event.schedule.weekdays[0] ?? 0}
+                  onChange={(e) => persist(events.map((row) => row.id === event.id ? patchSchedule(row, { weekday: Number(e.target.value) }) : row))}
+                >
+                  {[0, 1, 2, 3, 4, 5, 6].map((day) => (
+                    <option key={day} value={day}>{copy(lang, `labels.routine.weekday.${day}` as "labels.routine.weekday.3")}</option>
+                  ))}
+                </select>
+                <Input
+                  type="number"
+                  min={0}
+                  max={23}
+                  className="h-8 w-20"
+                  aria-label={t("v5.scheduleStart")}
+                  value={event.schedule.startHour}
+                  onChange={(e) => persist(events.map((row) => row.id === event.id ? patchSchedule(row, { startHour: Number(e.target.value) }) : row))}
+                />
+                <Input
+                  type="number"
+                  min={1}
+                  max={24}
+                  className="h-8 w-20"
+                  aria-label={t("v5.scheduleEnd")}
+                  value={event.schedule.endHour}
+                  onChange={(e) => persist(events.map((row) => row.id === event.id ? patchSchedule(row, { endHour: Number(e.target.value) }) : row))}
+                />
+                <span className="text-[11px] text-muted-subtle">
+                  {copy(lang, `labels.routine.weekday.${event.schedule.weekdays[0] ?? 0}` as "labels.routine.weekday.3")}
+                  {" "}
+                  {event.schedule.startHour}–{event.schedule.endHour}
+                </span>
+              </div>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               {!event.verified ? (
                 <Button size="sm" variant="outline" onClick={() => persist(events.map((row) => row.id === event.id ? { ...row, verified: true } : row))}>
@@ -171,12 +227,24 @@ function LifeEventsEditor({ personaId }: { personaId: number }) {
         ))}
       </ul>
       <div className="flex flex-col sm:flex-row gap-2">
-        <select value={kind} onChange={(e) => setKind(e.target.value as "life" | "open_loop")} className="h-9 rounded-md border border-input bg-card px-2 text-sm">
-          <option value="open_loop">open_loop</option>
-          <option value="life">life</option>
+        <select value={kind} onChange={(e) => setKind(e.target.value as LifeEventKind)} className="h-9 rounded-md border border-input bg-card px-2 text-sm">
+          <option value="open_loop">{t("v5.kindLoop")}</option>
+          <option value="life">{t("v5.kindLife")}</option>
+          <option value="routine">{t("v5.kindRoutine")}</option>
         </select>
         <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("v5.eventPlaceholder")} maxLength={80} />
-        <Button size="sm" disabled={!title.trim() || save.isPending} onClick={() => {
+        {kind === "routine" ? (
+          <>
+            <select aria-label={t("v5.weekday")} value={weekday} onChange={(e) => setWeekday(Number(e.target.value))} className="h-9 rounded-md border border-input bg-card px-2 text-sm">
+              {[0, 1, 2, 3, 4, 5, 6].map((day) => (
+                <option key={day} value={day}>{copy(lang, `labels.routine.weekday.${day}` as "labels.routine.weekday.3")}</option>
+              ))}
+            </select>
+            <Input type="number" min={0} max={23} className="h-9 w-20" aria-label={t("v5.scheduleStart")} value={startHour} onChange={(e) => setStartHour(Number(e.target.value))} />
+            <Input type="number" min={1} max={24} className="h-9 w-20" aria-label={t("v5.scheduleEnd")} value={endHour} onChange={(e) => setEndHour(Number(e.target.value))} />
+          </>
+        ) : null}
+        <Button size="sm" disabled={!title.trim() || save.isPending || (kind === "routine" && endHour <= startHour)} onClick={() => {
           persist([...events, {
             id: nextId("event"),
             kind,
@@ -187,6 +255,7 @@ function LifeEventsEditor({ personaId }: { personaId: number }) {
             source: "manual",
             verified: true,
             evidence: [],
+            ...(kind === "routine" ? { schedule: { weekdays: [weekday], startHour, endHour } } : {}),
           }]);
           setTitle("");
         }}>{t("v5.addEvent")}</Button>

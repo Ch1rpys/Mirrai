@@ -48,6 +48,13 @@ export interface Message {
    * "proactive" — the persona spoke first.
    */
   origin?: "letter" | "proactive" | "system-notice" | null;
+  /**
+   * A confirmed routine window this reply used.
+   *
+   * The records are old. The marker says the clock was inside a
+   * window they used to keep — not that they still keep it.
+   */
+  routine?: string | null;
   /** An unanswered A/B pair sitting on the user's own message. */
   pendingChoice?: { options: [string, string] } | null;
 }
@@ -537,6 +544,9 @@ export function MessageBubble({
             The retrieval used to be entirely invisible, so the persona
             could bring up something from three months ago and there was
             no way to know it had been recalled rather than invented. */}
+        {!isUser && msg.routine && (
+          <span className="text-[11px] text-muted-subtle">{t("chat.routineMarker")}</span>
+        )}
         {!isUser && msg.recalled && msg.recalled.length > 0 && (
           <details className="group w-full">
             <summary className="cursor-pointer list-none text-[11px] text-muted-subtle hover:text-muted-foreground transition-colors flex items-center gap-1">

@@ -19,7 +19,10 @@ import {
 import type { TranslationKey } from "@/i18n";
 
 /**
- * The world around them: people, later stances and the daily rhythm.
+ * The world around them: people they mention, and how they feel about things.
+ *
+ * Daily rhythm lives with the life-event editor — it is a kind of
+ * life event, not a third table.
  *
  * Each row is only a candidate until the user says it is real.
  * Confirming puts it in the prompt on the turns that mention it;

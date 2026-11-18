@@ -63,7 +63,7 @@ import {
 } from "@shared/session-profile";
 import { minuteOfDay } from "@shared/proactive-decision";
 import { normalizeInSession, pickInSessionFact } from "@shared/in-session";
-import { normalizeLifeEvents } from "@shared/life-events";
+import { currentRoutines, normalizeLifeEvents } from "@shared/life-events";
 import { filterHarm } from "@shared/harm";
 import { relationshipIsOver } from "@shared/relationship-ended";
 import {
@@ -142,6 +142,8 @@ export interface TurnPlan {
   reanchor?: ReanchorIssue[];
   /** This turn is closing the chat the way they used to. */
   closing?: boolean;
+  /** Confirmed routine window this clock is inside. */
+  routine?: string;
 }
 
 function actProfileForTurn(
@@ -192,6 +194,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   if (conflictTurn.forceRepair) sampledAct = "repair";
   const closingTurn = await closingForTurn(input, layers.closing);
   const inSessionShare = inSessionShareForTurn(input, layers.act);
+  const routineId = routineForTurn(input);
   const actMeta = {
     userAct,
     ...(sampled?.via ? { actVia: sampled.via } : {}),
@@ -359,6 +362,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       rng,
       ...(reminder.issues.length > 0 ? { reanchor: reminder.issues } : {}),
       ...(closingTurn.closing ? { closing: true } : {}),
+      ...(routineId ? { routine: routineId } : {}),
     };
   }
 
@@ -431,6 +435,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     rng,
     ...(reminder.issues.length > 0 ? { reanchor: reminder.issues } : {}),
     ...(closingTurn.closing ? { closing: true } : {}),
+    ...(routineId ? { routine: routineId } : {}),
   };
 }
 
@@ -515,6 +520,19 @@ function lengthCapForTurn(
     stop: budget.stop,
     maxChars: budget.maxChars,
   };
+}
+
+function routineForTurn(input: TurnInput): string | null {
+  const events = normalizeLifeEvents(
+    (input.persona.personaData as { lifeEvents?: unknown } | null)?.lifeEvents,
+  );
+  return (
+    currentRoutines(
+      events,
+      input.now,
+      (input.persona as { timezone?: string | null }).timezone,
+    )[0]?.id ?? null
+  );
 }
 
 function peopleLayerOn(
@@ -774,6 +792,8 @@ function inSessionShareForTurn(input: TurnInput, enabled: boolean): string | nul
   if (draw >= profile.selfStartRate) return null;
   const raw = pickInSessionFact(
     normalizeLifeEvents((input.persona.personaData as { lifeEvents?: unknown } | null)?.lifeEvents),
+    input.now,
+    (input.persona as { timezone?: string | null }).timezone,
   );
   const fact = raw ? clipPromptFact(raw) : null;
   if (!fact) return null;
