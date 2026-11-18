@@ -268,6 +268,10 @@ export interface SystemPromptOptions {
    */
   exemplarSection?: string | null;
   /**
+   * Unlike marks with a rewrite, already formatted. Material: it is fenced.
+   */
+  contrastSection?: string | null;
+  /**
    * A note that two memories of the same fact do not agree.
    */
   memoryConflictSection?: string | null;
@@ -561,6 +565,7 @@ export function buildSystemPrompt(
     options.anchorSection ? asMaterial(options.anchorSection) : "",
     options.memorySection ? asMaterial(options.memorySection) : "",
     options.exemplarSection ? asMaterial(options.exemplarSection) : "",
+    options.contrastSection ? asMaterial(options.contrastSection) : "",
     options.styleReminderLines && options.styleReminderLines.length > 0
       ? asMaterial(
           copy(locale, "prompt.styleReminderHeading"),

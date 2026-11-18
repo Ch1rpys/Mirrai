@@ -124,6 +124,8 @@ export interface PromptContext {
   seedTurnsNote?: string | null;
   styleReminderLines?: string[] | null;
   reanchorIssues?: ReanchorIssue[] | null;
+  /** Unlike/like pairs. Empty when the exemplars layer is off. */
+  contrastSection?: string | null;
 }
 
 /**
@@ -223,6 +225,11 @@ export async function buildPromptForPersona(
     exemplarSection: context.skipExemplars
       ? ""
       : await exemplarSectionFor(context, locale),
+    contrastSection: context.skipExemplars
+      ? ""
+      : context.contrastSection !== undefined
+        ? context.contrastSection
+        : await contrastSectionFor(context, locale),
     memoryConflictSection: memoryConflictSectionFor(
       await optionalCall(() => db.getMemoriesByPersonaId(persona.id, userId), []),
       locale,
@@ -274,6 +281,37 @@ export function actProfileForTurn(
   const period = periodOf(persona, periodId);
   if (period?.actProfileDelta) return period.actProfileDelta;
   return (persona.personaData as any)?.actProfile ?? null;
+}
+
+/**
+ * Unlike marks that already have a rewrite, as a fenced block.
+ *
+ * Belongs with the exemplars: the same switch turns both off.
+ */
+export function renderContrastPairs(
+  pairs: Array<{ unlike: string; rewrite: string }>,
+  locale: "zh" | "en",
+): string {
+  const lines: string[] = [];
+  for (const pair of pairs) {
+    const unlike = pair.unlike.replace(/\s+/g, " ").trim().slice(0, 80);
+    const rewrite = pair.rewrite.replace(/\s+/g, " ").trim().slice(0, 80);
+    if (!unlike || !rewrite) continue;
+    lines.push(copy(locale, "prompt.contrastLine", { unlike, rewrite }));
+  }
+  if (!lines.length) return "";
+  return [copy(locale, "prompt.contrastHeading"), ...lines].join("\n");
+}
+
+async function contrastSectionFor(
+  context: PromptContext,
+  locale: "zh" | "en",
+): Promise<string> {
+  const pairs = await optionalCall(
+    () => db.listFidelityRewritePairs(context.persona.id, context.userId, 3),
+    [],
+  );
+  return renderContrastPairs(pairs, locale);
 }
 
 async function exemplarSectionFor(

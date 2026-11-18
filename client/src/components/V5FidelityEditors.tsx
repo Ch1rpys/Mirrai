@@ -328,6 +328,7 @@ function FeedbackItem({
     messageId: number;
     kind: "suppression" | "act" | "memory" | "display";
     snippet?: string;
+    rewrite?: string;
     sampledAct?: SpeechAct | null;
   };
   pending: boolean;
@@ -344,7 +345,13 @@ function FeedbackItem({
           ? t(`chat.unlikeReasons.${item.reason}` as "chat.unlikeReasons.act")
           : item.reason}
       </p>
-      {item.snippet ? <p className="text-xs text-muted-foreground">{item.snippet}</p> : null}
+      {item.snippet && item.rewrite ? (
+        <p className="text-xs text-muted-foreground">
+          {t("v5.rewriteContrast", { unlike: item.snippet, rewrite: item.rewrite })}
+        </p>
+      ) : item.snippet ? (
+        <p className="text-xs text-muted-foreground">{item.snippet}</p>
+      ) : null}
       {item.kind === "act" ? (
         <label className="flex items-center gap-2 text-xs">
           <span className="text-muted-foreground">{t("v5.sampledAct")}</span>

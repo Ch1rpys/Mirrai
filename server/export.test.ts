@@ -86,6 +86,14 @@ function bundle(): ExportBundle {
             createdAt: new Date("2024-02-01T00:00:00Z"),
           },
         ],
+        rewritePairs: [
+          {
+            unlike: "你好吗？",
+            rewrite: "嗯",
+            reason: "word",
+            createdAt: new Date("2024-03-01T00:00:00Z"),
+          },
+        ],
       },
     ],
     moods: [
@@ -180,6 +188,17 @@ describe("the export", () => {
     expect(markdown).toContain("第一次一起看海");
     expect(markdown).toContain("## 对话日记");
     expect(markdown).toContain("有点堵");
+  });
+
+  it("writes unlike/like pairs into the bundle", () => {
+    const parsed = JSON.parse(exportAsJson(bundle()));
+    expect(parsed.personas[0].rewritePairs).toEqual([
+      expect.objectContaining({ unlike: "你好吗？", rewrite: "嗯" }),
+    ]);
+    const markdown = exportAsMarkdown(bundle(), "zh");
+    expect(markdown).toContain("## 不像的，和像的");
+    expect(markdown).toContain("不像：你好吗？");
+    expect(markdown).toContain("像：嗯");
   });
 
   it("writes the letters into the Markdown", () => {

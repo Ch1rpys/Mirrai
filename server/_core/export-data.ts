@@ -107,6 +107,17 @@ export interface ExportBundle {
       repliedAt: Date | null;
       createdAt: Date;
     }>;
+    /**
+     * Unlike marks that already have a rewrite. Kept for a later
+     * adapter: the pair is what they did not sound like, and what they
+     * would have said.
+     */
+    rewritePairs?: Array<{
+      unlike: string;
+      rewrite: string;
+      reason: string;
+      createdAt: Date;
+    }>;
   }>;
   /** The user's own moods, across every persona's time. */
   moods: Array<{ date: string; mood: UserMood; note: string | null }>;
@@ -143,7 +154,7 @@ export async function buildExportBundle(userId: number): Promise<ExportBundle | 
   const personas: ExportBundle["personas"] = [];
   const truncated: ExportBundle["truncated"] = [];
   for (const persona of personaList) {
-    const [messageList, memoryList, diaryList, snapshotList, eventList, letterList] = await Promise.all([
+    const [messageList, memoryList, diaryList, snapshotList, eventList, letterList, rewritePairList] = await Promise.all([
       // The export is loaded into memory, put into one object and then
       // serialised into one string. A hundred thousand messages per
       // persona is hundreds of megabytes, and the process that builds it
@@ -163,6 +174,9 @@ export async function buildExportBundle(userId: number): Promise<ExportBundle | 
       // Ten thousand, like the other lists — a thousand dropped the
       // *oldest* letters, from a bundle that says "all of my data".
       db.getLetters(persona.id, userId, 10000),
+      typeof db.listFidelityRewritePairs === "function"
+        ? db.listFidelityRewritePairs(persona.id, userId, 1000)
+        : Promise.resolve([]),
     ]);
     /**
      * What did not fit.
@@ -237,6 +251,16 @@ export async function buildExportBundle(userId: number): Promise<ExportBundle | 
         repliedAt: l.repliedAt,
         createdAt: l.createdAt,
       })),
+      ...(rewritePairList.length
+        ? {
+            rewritePairs: rewritePairList.map((pair) => ({
+              unlike: pair.unlike,
+              rewrite: pair.rewrite,
+              reason: pair.reason,
+              createdAt: pair.createdAt,
+            })),
+          }
+        : {}),
     });
   }
 
@@ -391,6 +415,20 @@ export function exportAsMarkdown(bundle: ExportBundle, locale: Locale = bundle.l
       lines.push("");
       for (const memory of persona.memories) {
         lines.push(`- **${memory.title}**${memory.date ? ` (${memory.date})` : ""}${memory.description ? `\n  ${memory.description}` : ""}`);
+      }
+      lines.push("");
+    }
+
+    if (persona.rewritePairs && persona.rewritePairs.length > 0) {
+      lines.push(`## ${copy(locale, "labels.export.rewritePairs")}`);
+      lines.push("");
+      for (const pair of persona.rewritePairs) {
+        lines.push(
+          `- ${copy(locale, "labels.export.rewritePair", {
+            unlike: pair.unlike,
+            rewrite: pair.rewrite,
+          })}`,
+        );
       }
       lines.push("");
     }

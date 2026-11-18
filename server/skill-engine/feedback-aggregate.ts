@@ -21,6 +21,7 @@ export interface FeedbackRow {
   messageId: number;
   reason: string;
   createdAt?: Date | string | null;
+  rewrite?: string | null;
 }
 
 export interface FeedbackCandidate {
@@ -30,6 +31,7 @@ export interface FeedbackCandidate {
   kind: "suppression" | "act" | "memory" | "display";
   suppression?: Suppression;
   snippet?: string;
+  rewrite?: string;
   sampledAct?: SpeechAct | null;
 }
 
@@ -93,6 +95,12 @@ export function aggregateFidelityFeedback(params: {
     const key = feedbackKey(row);
     if (rejected.has(key) || seen.has(key)) continue;
     seen.add(key);
+    const rewrite = typeof row.rewrite === "string" ? row.rewrite.replace(/\s+/g, " ").trim() : "";
+    const extra = rewrite ? { rewrite } : {};
+    const evidence = [
+      { snippet: `message:${row.messageId}` },
+      ...(rewrite ? [{ snippet: rewrite.slice(0, 80) }] : []),
+    ];
     const suppressionKind = SUPPRESSION_FOR[reason];
     if (suppressionKind) {
       const suppression = normalizeSuppressions([
@@ -103,7 +111,7 @@ export function aggregateFidelityFeedback(params: {
           confidence: 0.5,
           source: "auto",
           verified: false,
-          evidence: [{ snippet: `message:${row.messageId}` }],
+          evidence,
         },
       ])[0];
       out.push({
@@ -112,18 +120,19 @@ export function aggregateFidelityFeedback(params: {
         messageId: row.messageId,
         kind: "suppression",
         suppression,
+        ...extra,
       });
       continue;
     }
     if (reason === "act") {
-      out.push({ key, reason, messageId: row.messageId, kind: "act" });
+      out.push({ key, reason, messageId: row.messageId, kind: "act", ...extra });
       continue;
     }
     if (reason === "invented") {
-      out.push({ key, reason, messageId: row.messageId, kind: "memory" });
+      out.push({ key, reason, messageId: row.messageId, kind: "memory", ...extra });
       continue;
     }
-    out.push({ key, reason, messageId: row.messageId, kind: "display" });
+    out.push({ key, reason, messageId: row.messageId, kind: "display", ...extra });
   }
   return out;
 }

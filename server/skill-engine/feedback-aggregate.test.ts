@@ -56,6 +56,14 @@ describe("feeding unlike marks back", () => {
     expect(draft.description).toContain("那家店");
   });
 
+  it("keeps a rewrite as evidence on the candidate", () => {
+    const candidates = aggregateFidelityFeedback({
+      rows: [{ id: 1, messageId: 9, reason: "word", rewrite: "那才像" }],
+    });
+    expect(candidates[0]?.rewrite).toBe("那才像");
+    expect(candidates[0]?.suppression?.evidence?.some((row) => row.snippet === "那才像")).toBe(true);
+  });
+
   it("reads the sampled act off the message", () => {
     expect(sampledActFromMetadata({ sampledAct: "tease" })).toBe("tease");
     expect(sampledActFromMetadata({ sampledAct: "nope" })).toBeNull();

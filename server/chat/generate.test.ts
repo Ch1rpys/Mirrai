@@ -43,6 +43,7 @@ const getLastExtractionAttemptAt = vi.fn();
 const getLastExtractionAt = vi.fn();
 const getMessageById = vi.fn();
 const updateEmotionSnapshot = vi.fn();
+const listFidelityRewritePairs = vi.fn();
 
 vi.mock("../storage", () => ({
   storageToDataUrl: vi.fn(),
@@ -91,6 +92,7 @@ vi.mock("../db", () => ({
   getLastExtractionAt: (...a: unknown[]) => getLastExtractionAt(...a),
   getMessageById: (...a: unknown[]) => getMessageById(...a),
   updateEmotionSnapshot: (...a: unknown[]) => updateEmotionSnapshot(...a),
+  listFidelityRewritePairs: (...a: unknown[]) => listFidelityRewritePairs(...a),
   updateMessageMetadata: vi.fn().mockResolvedValue(true),
   createFidelityPair: vi.fn(),
   clearMessagePendingChoice: vi.fn().mockResolvedValue(true),
@@ -171,6 +173,7 @@ beforeEach(() => {
     getDailyChatCounts, getSessionStartAt, getUserMessageCountSince, getDailyUserChatCounts,
     getUserMessageCountForPersonaSince, getCollectedMessagesForPersona,
     getLastExtractionAttemptAt, getLastExtractionAt, getMessageById, updateEmotionSnapshot,
+    listFidelityRewritePairs,
     getUserTimezone, getUserById, getRecentUserMood, getRelationshipEvents,
     invoke, invokeWithProvider, streamWithProvider, resolveProviderForUser,
   ]) {
@@ -212,6 +215,7 @@ beforeEach(() => {
   hasSafetyEventSince.mockResolvedValue(false);
   touchMemoryRecalled.mockResolvedValue(undefined);
   getCollectedMessagesForPersona.mockResolvedValue([]);
+  listFidelityRewritePairs.mockResolvedValue([]);
   getLastExtractionAttemptAt.mockResolvedValue(NOW);
   getLastExtractionAt.mockResolvedValue(NOW);
   incrementChatCount.mockResolvedValue(11);
@@ -1125,6 +1129,73 @@ describe("style reminder", () => {
     expect(prompt).not.toContain(copy("zh", "prompt.styleReminderHeading"));
     expect(prompt).not.toContain("写得比平时长");
     expect(plan.reanchor).toBeUndefined();
+  });
+});
+
+describe("unlike/like contrast pairs", () => {
+  const pairs = [
+    {
+      id: 1,
+      messageId: 2,
+      reason: "word",
+      rewrite: "嗯",
+      unlike: "你好吗？我们一起加油吧",
+      createdAt: NOW,
+    },
+    {
+      id: 2,
+      messageId: 4,
+      reason: "ask",
+      rewrite: "随便",
+      unlike: "你想多了是不是",
+      createdAt: NOW,
+    },
+  ];
+
+  it("puts two rewrites next to the exemplars, inside the fence", async () => {
+    listFidelityRewritePairs.mockResolvedValue(pairs);
+    const plan = await planTurn({
+      persona: persona(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "contrast:on",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    const heading = copy("zh", "prompt.contrastHeading");
+    const line = copy("zh", "prompt.contrastLine", {
+      unlike: "你好吗？我们一起加油吧",
+      rewrite: "嗯",
+    });
+    expect(prompt).toContain(heading);
+    expect(prompt).toContain(line);
+    expect(prompt).toContain(copy("zh", "prompt.contrastLine", {
+      unlike: "你想多了是不是",
+      rewrite: "随便",
+    }));
+    const fenced = prompt.match(/<persona_data>[\s\S]*?<\/persona_data>/g)?.join("\n") ?? "";
+    expect(fenced).toContain(line);
+    expect(prompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "")).not.toContain("你好吗？我们一起加油吧");
+  });
+
+  it("omits the contrast when exemplars are off", async () => {
+    listFidelityRewritePairs.mockResolvedValue(pairs);
+    const plan = await planTurn({
+      persona: persona(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "contrast:off",
+      exclude: { texts: [HELD_OUT] },
+      layerOverrides: layerOverridesForEval({ without: ["exemplars"] }),
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(prompt).not.toContain(copy("zh", "prompt.contrastHeading"));
   });
 });
 

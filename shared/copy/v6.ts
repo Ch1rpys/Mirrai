@@ -535,6 +535,22 @@ export const V6 = {
     zh: "【你平时的几句话】",
     en: "【A few of your usual lines】",
   },
+  "prompt.contrastHeading": {
+    zh: "【不像的，和像的】",
+    en: "【Unlike, and like】",
+  },
+  "prompt.contrastLine": {
+    zh: "不像：{{unlike}}　像：{{rewrite}}",
+    en: "Unlike: {{unlike}}  Like: {{rewrite}}",
+  },
+  "labels.export.rewritePairs": {
+    zh: "不像的，和像的",
+    en: "Unlike, and like",
+  },
+  "labels.export.rewritePair": {
+    zh: "不像：{{unlike}}　像：{{rewrite}}",
+    en: "Unlike: {{unlike}}  Like: {{rewrite}}",
+  },
   "prompt.reanchor": {
     zh: "你最近几句{{issues}}。回到平时的样子。",
     en: "Your last few lines {{issues}}. Go back to how you usually talk.",

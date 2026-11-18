@@ -257,6 +257,8 @@ export const en = {
     period: "From a stretch of time",
     periodCurrent: "Now",
     unlikeMarked: "Noted",
+    unlikeRewriteLabel: "What would {{name}} have said? (optional)",
+    unlikeRewritePlaceholder: "Write it as you remember. This line is used as a contrast.",
     unlikeReasons: {
       act: "The action was wrong",
       complete: "Too complete",
@@ -2076,6 +2078,7 @@ export const en = {
     verify: "Confirm",
     verified: "Confirmed",
     jumpReply: "Jump to that reply",
+    rewriteContrast: "Unlike: {{unlike}}  Like: {{rewrite}}",
     closeLoop: "Finished",
     addEvent: "Write this down",
     addRule: "Write a subtraction",

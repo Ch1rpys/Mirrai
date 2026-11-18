@@ -303,6 +303,19 @@ describe("a jailbreak line in the record", () => {
   });
 });
 
+describe("an unlike rewrite from the reader", () => {
+  it("reaches the prompt only inside the fence", () => {
+    const prompt = buildSystemPrompt(persona(), {
+      contrastSection: [
+        copy("zh", "prompt.contrastHeading"),
+        copy("zh", "prompt.contrastLine", { unlike: HOSTILE_NOTE, rewrite: "嗯" }),
+      ].join("\n"),
+    });
+    expect(prompt).toContain(HOSTILE_NOTE);
+    expect(unfenced(prompt)).not.toContain(HOSTILE_NOTE);
+  });
+});
+
 describe("a style sample from the records", () => {
   it("reaches the prompt only inside the fence", () => {
     const prompt = buildSystemPrompt(persona(), {

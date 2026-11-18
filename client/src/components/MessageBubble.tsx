@@ -309,11 +309,15 @@ export function MessageBubble({
 }) {
   const { t, locale } = useLocale();
   const [unlikeOpen, setUnlikeOpen] = useState(false);
+  const [pickedReason, setPickedReason] = useState<(typeof FEEDBACK_REASONS)[number] | null>(null);
+  const [rewriteDraft, setRewriteDraft] = useState("");
   const unlikeRef = useRef<HTMLSpanElement>(null);
   const markUnlike = trpc.fidelity.mark.useMutation({
     onSuccess: () => {
       toast.success(t("chat.unlikeMarked"));
       setUnlikeOpen(false);
+      setPickedReason(null);
+      setRewriteDraft("");
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -337,14 +341,36 @@ export function MessageBubble({
     messageId,
   );
 
+  function closeUnlikeMenu() {
+    setUnlikeOpen(false);
+    setPickedReason(null);
+    setRewriteDraft("");
+  }
+
+  function submitUnlike() {
+    if (!personaId || !messageId || !pickedReason) {
+      closeUnlikeMenu();
+      return;
+    }
+    const rewrite = rewriteDraft.trim().slice(0, 200);
+    markUnlike.mutate({
+      personaId,
+      messageId,
+      reason: pickedReason,
+      ...(rewrite ? { rewrite } : {}),
+    });
+  }
+
   useEffect(() => {
     if (!unlikeOpen) return;
     const onPointerDown = (event: PointerEvent) => {
-      if (!unlikeRef.current?.contains(event.target as Node)) setUnlikeOpen(false);
+      if (unlikeRef.current?.contains(event.target as Node)) return;
+      if (pickedReason) submitUnlike();
+      else closeUnlikeMenu();
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [unlikeOpen]);
+  }, [unlikeOpen, pickedReason, rewriteDraft, personaId, messageId]);
   const mood = emotionOf(msg.emotionalState);
   const [imgExpanded, setImgExpanded] = useState(false);
   /**
@@ -673,7 +699,16 @@ export function MessageBubble({
                   <span ref={unlikeRef} className="relative">
                     <button
                       type="button"
-                      onClick={() => setUnlikeOpen((open) => !open)}
+                      onClick={() => {
+                        if (unlikeOpen) {
+                          if (pickedReason) submitUnlike();
+                          else closeUnlikeMenu();
+                          return;
+                        }
+                        setPickedReason(null);
+                        setRewriteDraft("");
+                        setUnlikeOpen(true);
+                      }}
                       title={t("chat.unlike")}
                       aria-label={t("chat.unlike")}
                       aria-expanded={unlikeOpen}
@@ -684,7 +719,7 @@ export function MessageBubble({
                     {unlikeOpen && (
                       <div
                         role="menu"
-                        className="absolute bottom-full right-0 mb-1 z-20 min-w-[10rem] rounded-md border border-border bg-card p-1 shadow-md"
+                        className="absolute bottom-full right-0 mb-1 z-20 min-w-[12rem] rounded-md border border-border bg-card p-1 shadow-md"
                       >
                         {FEEDBACK_REASONS.map((reason) => (
                           <button
@@ -692,15 +727,35 @@ export function MessageBubble({
                             type="button"
                             role="menuitem"
                             disabled={markUnlike.isPending}
-                            onClick={() => {
-                              if (!personaId || !messageId) return;
-                              markUnlike.mutate({ personaId, messageId, reason });
-                            }}
-                            className="block w-full text-left text-xs px-2.5 py-1.5 rounded-sm hover:bg-muted/60 disabled:opacity-50"
+                            onClick={() => setPickedReason(reason)}
+                            className={`block w-full text-left text-xs px-2.5 py-1.5 rounded-sm hover:bg-muted/60 disabled:opacity-50 ${
+                              pickedReason === reason ? "bg-muted/60" : ""
+                            }`}
                           >
                             {t(`chat.unlikeReasons.${reason}` as "chat.unlikeReasons.act")}
                           </button>
                         ))}
+                        {pickedReason ? (
+                          <form
+                            className="px-2 pb-1.5 pt-1 space-y-1"
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              submitUnlike();
+                            }}
+                          >
+                            <label className="block text-[11px] text-muted-foreground leading-snug">
+                              {t("chat.unlikeRewriteLabel", { name: personaName })}
+                              <input
+                                value={rewriteDraft}
+                                maxLength={200}
+                                placeholder={t("chat.unlikeRewritePlaceholder")}
+                                aria-label={t("chat.unlikeRewriteLabel", { name: personaName })}
+                                onChange={(event) => setRewriteDraft(event.target.value.slice(0, 200))}
+                                className="mt-1 w-full rounded-sm border border-border bg-background px-2 py-1 text-xs text-foreground"
+                              />
+                            </label>
+                          </form>
+                        ) : null}
                       </div>
                     )}
                   </span>

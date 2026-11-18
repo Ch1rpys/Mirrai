@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
@@ -442,7 +442,35 @@ describe("the message bubble", () => {
     );
     await user.click(screen.getByLabelText(translate("zh", "chat.unlike")));
     await user.click(screen.getByRole("menuitem", { name: translate("zh", "chat.unlikeReasons.word") }));
+    expect(screen.getByPlaceholderText(translate("zh", "chat.unlikeRewritePlaceholder"))).toBeInTheDocument();
+    expect(markUnlike).not.toHaveBeenCalled();
+    fireEvent.pointerDown(document.body);
     expect(markUnlike).toHaveBeenCalledWith({ personaId: 3, messageId: 9, reason: "word" });
+  });
+
+  it("sends a rewrite with the unlike mark when the reader fills one in", async () => {
+    const user = userEvent.setup();
+    render(
+      <MessageBubble
+        msg={makeMessage({ id: 9, role: "assistant" })}
+        personaName="小A"
+        showMood={false}
+        personaId={3}
+      />,
+    );
+    await user.click(screen.getByLabelText(translate("zh", "chat.unlike")));
+    await user.click(screen.getByRole("menuitem", { name: translate("zh", "chat.unlikeReasons.word") }));
+    await user.type(
+      screen.getByPlaceholderText(translate("zh", "chat.unlikeRewritePlaceholder")),
+      "那才像",
+    );
+    await user.keyboard("{Enter}");
+    expect(markUnlike).toHaveBeenCalledWith({
+      personaId: 3,
+      messageId: 9,
+      reason: "word",
+      rewrite: "那才像",
+    });
   });
 
   it("does not treat a system notice as something they said", () => {

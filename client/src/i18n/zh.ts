@@ -256,6 +256,8 @@ export const zh = {
     period: "按某段时期",
     periodCurrent: "现在",
     unlikeMarked: "已记下",
+    unlikeRewriteLabel: "{{name}} 会怎么说？（可以不填）",
+    unlikeRewritePlaceholder: "照你记得的写。这句会被拿来对照。",
     unlikeReasons: {
       act: "动作错了",
       complete: "太完整",
@@ -2087,6 +2089,7 @@ export const zh = {
     verify: "确认",
     verified: "已确认",
     jumpReply: "回到那次回复",
+    rewriteContrast: "不像：{{unlike}}　像：{{rewrite}}",
     closeLoop: "已经结束",
     addEvent: "写下这件事",
     addRule: "写下一条减法",
