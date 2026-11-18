@@ -45,6 +45,7 @@ export const personaVersionRouter = router({
           id: row.id,
           reason: row.reason,
           createdAt: row.createdAt.toISOString(),
+          evalRunId: row.evalRunId,
           overlap:
             row.evalRunId != null ? (overlapByRun.get(row.evalRunId) ?? null) : null,
         })),

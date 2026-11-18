@@ -44,7 +44,7 @@ vi.mock("@/lib/trpc", () => ({
     eval: {
       latest: { useQuery: () => ({ data: { run: lastRun } }) },
       // The last runs, so the two variants can be compared.
-      list: { useQuery: () => ({ data: { runs: lastRun ? [lastRun] : [] } }) },
+      list: { useQuery: () => ({ data: { runs: [] }, isError: false, refetch: vi.fn() }) },
       // The mutation calls its own `onSuccess`, the way the real one
       // does — that is where the numbers are refreshed.
       run: {
@@ -61,6 +61,12 @@ vi.mock("@/lib/trpc", () => ({
     },
     persona: {
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    personaVersion: {
+      list: { useQuery: () => ({ data: { versions: [] }, isError: false, refetch: vi.fn() }) },
+    },
+    blind: {
+      list: { useQuery: () => ({ data: { sessions: [] }, isError: false, refetch: vi.fn() }) },
     },
   },
 }));

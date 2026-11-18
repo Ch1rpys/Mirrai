@@ -11,6 +11,7 @@ import DiscriminatorView, {
   type DiscriminatorReportView,
 } from "@/components/v6/DiscriminatorView";
 import AuditionView from "@/components/v6/AuditionView";
+import FidelityHistory from "@/components/v6/FidelityHistory";
 
 /**
  * The ruler, and the timing.
@@ -169,15 +170,6 @@ export default function FidelityPanel({
 
   const utils = trpc.useUtils();
   const { data: latest, isError: evalFailed } = trpc.eval.latest.useQuery({ personaId });
-  /**
-   * The last runs.
-   *
-   * Only the newest was fetched — so the comparison the panel exists
-   * for could not be made: the toggle changed what the *next* run
-   * measured, and the four numbers on screen were whichever run
-   * happened to be last.
-   */
-  const { data: history } = trpc.eval.list.useQuery({ personaId });
   const runMutation = trpc.eval.run.useMutation({
     onSuccess: () => {
       toast.success(t("fidelity.done"));
@@ -434,43 +426,7 @@ export default function FidelityPanel({
 
         <AuditionView personaId={personaId} />
 
-        {/**
-         * The runs.
-         *
-         * The two variants side by side — which is the whole point of
-         * the panel: a rule that does not move the numbers does not
-         * belong in the prompt.
-         */}
-        {history?.runs && history.runs.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-[11px] text-muted-subtle">{t("fidelity.history")}</p>
-            <ul className="space-y-1">
-              {history.runs.map((run: any) => {
-                const runMetrics = normaliseMetrics(run.metricsJson);
-                if (!runMetrics) return null;
-                return (
-                  <li
-                    key={run.id}
-                    className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[11px] text-muted-foreground"
-                  >
-                    <span className="text-foreground/80">
-                      {t(
-                        runMetrics.variant === "withoutRules"
-                          ? "fidelity.lastRunWithoutRules"
-                          : "fidelity.lastRunWithRules",
-                      )}
-                    </span>
-                    <span>{formatRunDate(run.createdAt, locale, timezone)}</span>
-                    <span>
-                      {t("fidelity.overlap")} {runMetrics.overlap.toFixed(3)} ·{" "}
-                      {t("fidelity.emotion")} {Math.round(runMetrics.emotionAccuracy * 100)}%
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
+        <FidelityHistory personaId={personaId} />
       </div>
     </section>
   );

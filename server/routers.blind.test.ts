@@ -238,6 +238,45 @@ describe("the in-app blind test", () => {
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
+  it("lists the last three finished sittings and hides somebody else's", async () => {
+    listBlindSessions.mockResolvedValue([
+      {
+        id: 4,
+        subject: "self",
+        startedAt: new Date("2026-03-04T00:00:00.000Z"),
+        finishedAt: new Date("2026-03-04T00:10:00.000Z"),
+        summary: { n: 12, pickedReal: 0.5, pickedPersona: 0.4, unsure: 0.1 },
+      },
+      {
+        id: 3,
+        subject: "friend",
+        startedAt: new Date("2026-03-03T00:00:00.000Z"),
+        finishedAt: new Date("2026-03-03T00:10:00.000Z"),
+        summary: { n: 12, pickedReal: 0.6, pickedPersona: 0.3, unsure: 0.1 },
+      },
+      {
+        id: 2,
+        subject: "self",
+        startedAt: new Date("2026-03-02T00:00:00.000Z"),
+        finishedAt: new Date("2026-03-02T00:10:00.000Z"),
+        summary: { n: 12, pickedReal: 0.4, pickedPersona: 0.4, unsure: 0.2 },
+      },
+      {
+        id: 1,
+        subject: "self",
+        startedAt: new Date("2026-03-01T00:00:00.000Z"),
+        finishedAt: new Date("2026-03-01T00:10:00.000Z"),
+        summary: { n: 12, pickedReal: 0.3, pickedPersona: 0.5, unsure: 0.2 },
+      },
+    ]);
+    const listed = await appRouter.createCaller(ctxFor(1)).blind.list({ personaId: 3 });
+    expect(listed.sessions.map((row) => row.id)).toEqual([4, 3, 2]);
+    expect(listed.sessions[0]).not.toHaveProperty("groups");
+    await expect(
+      appRouter.createCaller(ctxFor(2)).blind.list({ personaId: 3 }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
   it("rate-limits the guest routes", async () => {
     getBlindSessionByTokenHash.mockResolvedValue({
       id: 7,

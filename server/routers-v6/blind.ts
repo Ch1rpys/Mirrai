@@ -236,6 +236,24 @@ export const blindRouter = router({
       return { markdown };
     }),
 
+  list: protectedProcedure
+    .input(z.object({ personaId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      const rows = await listBlindSessions(input.personaId, ctx.user.id);
+      const finished = rows.filter((row) => row.finishedAt);
+      return {
+        sessions: finished.slice(0, 3).map((row) => ({
+          id: row.id,
+          subject: row.subject,
+          startedAt: row.startedAt.toISOString(),
+          finishedAt: row.finishedAt ? row.finishedAt.toISOString() : null,
+          summary: row.summary,
+        })),
+      };
+    }),
+
   invite: protectedProcedure
     .input(z.object({ sessionId: z.number() }))
     .mutation(async ({ ctx, input }) => {
