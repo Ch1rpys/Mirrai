@@ -113,6 +113,11 @@ vi.mock("../llm", () => ({
 
 vi.mock("../llm/user-provider", () => ({
   resolveProviderForUser: (...a: unknown[]) => resolveProviderForUser(...a),
+  resolveProviderForPurpose: (...a: unknown[]) => resolveProviderForUser(...a),
+  resolveProviderForPurposeWithOwnership: async (params: unknown) => ({
+    provider: await resolveProviderForUser(params as any),
+    owned: false,
+  }),
 }));
 
 vi.mock("../_core/emotion", () => ({

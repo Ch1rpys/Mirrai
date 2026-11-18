@@ -51,6 +51,11 @@ vi.mock("./llm/user-provider", () => ({
     owned: true,
   }),
   resolveProviderForUser: async () => null,
+  resolveProviderForPurpose: async () => null,
+  resolveProviderForPurposeWithOwnership: async () => ({
+    provider: { name: "Test" },
+    owned: true,
+  }),
   invalidateUserProviderCache: () => {},
 }));
 

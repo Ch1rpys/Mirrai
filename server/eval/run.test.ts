@@ -24,6 +24,19 @@ vi.mock("../llm/user-provider", () => ({
     isConfigured: () => true,
     invoke: (...a: unknown[]) => invokeWithProvider(...a),
   }),
+  resolveProviderForPurpose: async () => ({
+    name: "test",
+    isConfigured: () => true,
+    invoke: (...a: unknown[]) => invokeWithProvider(...a),
+  }),
+  resolveProviderForPurposeWithOwnership: async () => ({
+    provider: {
+      name: "test",
+      isConfigured: () => true,
+      invoke: (...a: unknown[]) => invokeWithProvider(...a),
+    },
+    owned: false,
+  }),
 }));
 
 vi.mock("../chat/prompt", () => ({

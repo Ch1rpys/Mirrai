@@ -12,7 +12,8 @@
  */
 import type { LLMMessage, LLMProvider } from "../llm/types";
 import { llmService } from "../llm";
-import { resolveProviderForUser } from "../llm/user-provider";
+import { resolveProviderForUser, resolveProviderForPurpose } from "../llm/user-provider";
+import { sanitizeRoles } from "../llm/roles";
 import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { computeIntimacy, getEmotionalStateDesc } from "../_core/persona-utils";
@@ -207,6 +208,9 @@ export function sanitizeExtraConfig(extra: unknown): Record<string, unknown> {
     }
     out[key] = clamp(value);
   }
+  const roles = sanitizeRoles(source.roles);
+  if (roles) out.roles = roles;
+  else delete out.roles;
   return out;
 }
 
@@ -327,9 +331,9 @@ async function maybeCompactHistory(params: {
     .join("\n");
 
   try {
-    const provider = await resolveProviderForUser({
+    const provider = await resolveProviderForPurpose({
       userId: params.userId,
-      providerName: params.providerName,
+      purpose: "summarize",
     });
     if (!provider) {
       // No provider at all. The turn says so in words, rather than
@@ -759,16 +763,16 @@ export async function commitPendingChoice(params: {
     throw new ChoiceMissingError();
   }
 
-  const provider = await resolveProviderForUser({
+  const classifyProvider = await resolveProviderForPurpose({
     userId: params.userId,
-    providerName: params.providerName,
+    purpose: "classify",
   });
   const emotion = await inferEmotionalState({
     userMessage: message.content,
     assistantReply: params.chosen,
     currentState: params.persona.emotionalState,
     provider: params.providerName,
-    providerInstance: provider ?? undefined,
+    providerInstance: classifyProvider ?? undefined,
     locale,
   });
   const newEmotionalState = emotion.state;
@@ -1463,8 +1467,6 @@ async function* runConversationTurn(
   const trajectory = await maybeAssessTrajectory({
     personaId: persona.id,
     userId,
-    providerName: options.providerName,
-    providerInstance: provider ?? undefined,
     locale,
     now,
   });
@@ -1515,6 +1517,13 @@ async function* runConversationTurn(
   // to be stored with the persona's previous state and inferred
   // afterwards, so the message showed the new mood live and the old one
   // after a reload — the same conversation, two different emotions.
+  const classifyProvider =
+    plan.kind === "ritual"
+      ? null
+      : await resolveProviderForPurpose({
+          userId,
+          purpose: "classify",
+        });
   const emotion =
     plan.kind === "ritual"
       ? { state: persona.emotionalState, reason: "ritual" }
@@ -1533,10 +1542,10 @@ async function* runConversationTurn(
     assistantReply: baseText,
     currentState: persona.emotionalState,
     provider: options.providerName,
-    // The classifier has to run on the same credentials as the reply —
-    // otherwise a user who configured their own key silently falls back to
-    // the environment one.
-    providerInstance: provider ?? undefined,
+    // Cheap work uses the classify role, not the persona's speaking
+    // provider. A user who configured their own key still never falls
+    // back to the environment one — that rule lives in the resolver.
+    providerInstance: classifyProvider ?? undefined,
     locale,
   });
   const newEmotionalState = emotion.state;
@@ -1825,8 +1834,6 @@ async function maybeExtractMemories(
 async function maybeAssessTrajectory(params: {
   personaId: number;
   userId: number;
-  providerName?: string;
-  providerInstance?: LLMProvider;
   locale?: "zh" | "en";
   now: Date;
 }): Promise<"improving" | "stable" | "worsening" | null> {
@@ -1855,11 +1862,14 @@ async function maybeAssessTrajectory(params: {
       if (age < TRAJECTORY_INTERVAL_MS) return latest.trajectory as any;
     }
 
+    const classifyProvider = await resolveProviderForPurpose({
+      userId: params.userId,
+      purpose: "classify",
+    });
     const assessment = await assessTrajectory({
       userId: params.userId,
       personaId: params.personaId,
-      provider: params.providerName,
-      providerInstance: params.providerInstance,
+      providerInstance: classifyProvider ?? undefined,
       locale: params.locale,
       now: params.now.getTime(),
     });

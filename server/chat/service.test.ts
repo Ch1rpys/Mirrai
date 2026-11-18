@@ -95,6 +95,7 @@ const invoke = vi.fn();
 const invokeWithProvider = vi.fn();
 const streamWithProvider = vi.fn();
 const resolveProviderForUser = vi.fn();
+const resolveProviderForPurpose = vi.fn();
 
 vi.mock("../llm", () => ({
   llmService: {
@@ -106,6 +107,11 @@ vi.mock("../llm", () => ({
 
 vi.mock("../llm/user-provider", () => ({
   resolveProviderForUser: (...a: unknown[]) => resolveProviderForUser(...a),
+  resolveProviderForPurpose: (...a: unknown[]) => resolveProviderForPurpose(...a),
+  resolveProviderForPurposeWithOwnership: async (params: unknown) => ({
+    provider: await resolveProviderForPurpose(params as any),
+    owned: false,
+  }),
 }));
 
 const inferEmotionalState = vi.fn();
@@ -159,7 +165,7 @@ describe("runConversation", () => {
       incrementChatCount, updateMessageMetadata, createFidelityPair, clearMessagePendingChoice,
       getMessageById, updateEmotionSnapshot,
       invoke, invokeWithProvider,
-      streamWithProvider, resolveProviderForUser, inferEmotionalState,
+      streamWithProvider, resolveProviderForUser, resolveProviderForPurpose, inferEmotionalState,
     ]) {
       fn.mockReset();
     }
@@ -215,6 +221,7 @@ describe("runConversation", () => {
         yield { text: "" };
       },
     });
+    resolveProviderForPurpose.mockImplementation((...a: unknown[]) => resolveProviderForUser(...a));
     invokeWithProvider.mockResolvedValue("在的。");
     updateMessageMetadata.mockResolvedValue(true);
     createFidelityPair.mockResolvedValue({ id: 1 });
@@ -499,17 +506,17 @@ describe("runConversation", () => {
     expect(updatePersona).toHaveBeenCalled();
   });
 
-  it("hands the resolved provider to the emotion classifier", async () => {
-    // The classifier has to run on the same credentials as the reply —
-    // otherwise a user who configured their own key falls back to the
-    // environment one.
-    const providerInstance = {
-      name: "UserProvider",
+  it("hands the classify provider to the emotion classifier", async () => {
+    // Cheap work uses the classify role. A user who configured their
+    // own key still never falls back to the environment one — that
+    // rule lives in the resolver.
+    const classifyProvider = {
+      name: "ClassifyProvider",
       isConfigured: () => true,
       capabilities: { streaming: true, vision: true, tools: false, jsonMode: false },
       invoke,
     };
-    resolveProviderForUser.mockResolvedValue(providerInstance);
+    resolveProviderForPurpose.mockResolvedValue(classifyProvider);
 
     for await (const _ of runConversation({
       persona: persona(),
@@ -521,7 +528,10 @@ describe("runConversation", () => {
     }
 
     expect(inferEmotionalState).toHaveBeenCalled();
-    expect(inferEmotionalState.mock.calls[0][0].providerInstance).toBe(providerInstance);
+    expect(inferEmotionalState.mock.calls[0][0].providerInstance).toBe(classifyProvider);
+    expect(resolveProviderForPurpose).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 1, purpose: "classify" }),
+    );
   });
 
   it("measures the conversation length from the start of the session", async () => {

@@ -79,6 +79,15 @@ vi.mock("./llm/user-provider", () => ({
     isConfigured: () => true,
     invoke: (...a: unknown[]) => invoke(...a),
   }),
+  resolveProviderForPurpose: async () => ({
+    name: "test",
+    isConfigured: () => true,
+    invoke: (...a: unknown[]) => invoke(...a),
+  }),
+  resolveProviderForPurposeWithOwnership: async () => ({
+    provider: undefined,
+    owned: false,
+  }),
   /**
    * The ownership matters: the environment-configured provider is the
    * operator's account, and it may only be used when the user has no

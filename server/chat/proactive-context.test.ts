@@ -40,6 +40,11 @@ vi.mock("../llm/user-provider", () => ({
     provider: { name: "Test" },
     owned: true,
   }),
+  resolveProviderForPurpose: async () => ({ name: "Test" }),
+  resolveProviderForPurposeWithOwnership: async () => ({
+    provider: { name: "Test" },
+    owned: true,
+  }),
 }));
 
 import { collectProactiveContext, composeProactiveMessage } from "./proactive";

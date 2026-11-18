@@ -13,7 +13,13 @@
 import { decryptIfEncrypted } from "../_core/crypto";
 import * as db from "../db";
 import { registry } from "./index";
-import type { LLMProvider } from "./types";
+import type { LLMProvider, LlmPurpose } from "./types";
+import { LLM_ROLE_KEYS, sanitizeRoles, type LlmRoleKey } from "./roles";
+
+export { LLM_ROLE_KEYS, sanitizeRoles };
+export type { LlmRoleKey };
+
+const ROLE_PURPOSES = new Set<LlmPurpose>(LLM_ROLE_KEYS);
 
 interface CachedProvider {
   provider: LLMProvider;
@@ -217,4 +223,61 @@ export async function buildUserProvider(
 export async function hasUserLlmConfig(userId: number): Promise<boolean> {
   const configs = await db.getLlmConfigsByUserId(userId);
   return configs.some((c) => !!(c.apiKey || c.baseUrl || c.model));
+}
+
+async function rolesFromDefaultConfig(userId: number): Promise<Partial<Record<LlmRoleKey, string>>> {
+  const configs = await db.getLlmConfigsByUserId(userId);
+  const chosen = configs.find((row) => row.isDefault) ?? configs[0];
+  const extra =
+    chosen?.extraConfig && typeof chosen.extraConfig === "object" && !Array.isArray(chosen.extraConfig)
+      ? (chosen.extraConfig as Record<string, unknown>)
+      : {};
+  return sanitizeRoles(extra.roles) ?? {};
+}
+
+function providerNameForPurpose(params: {
+  purpose: LlmPurpose;
+  personaProvider?: string;
+  roles: Partial<Record<LlmRoleKey, string>>;
+}): string | undefined {
+  if (ROLE_PURPOSES.has(params.purpose)) {
+    return params.roles[params.purpose as LlmRoleKey];
+  }
+  return params.personaProvider;
+}
+
+/**
+ * Resolves the provider for a named kind of work.
+ *
+ * Replies, plans, reranks and letters use the persona's provider (or the
+ * user's default). Classify / extract / summarise look at `roles` on the
+ * default configuration row; an empty role uses the default. A user who
+ * has a provider of their own is never sent to the operator's.
+ */
+export async function resolveProviderForPurpose(params: {
+  userId: number;
+  purpose: LlmPurpose;
+  personaProvider?: string;
+}): Promise<LLMProvider | undefined> {
+  const { provider } = await resolveProviderForPurposeWithOwnership(params);
+  return provider;
+}
+
+export async function resolveProviderForPurposeWithOwnership(params: {
+  userId: number;
+  purpose: LlmPurpose;
+  personaProvider?: string;
+}): Promise<{ provider: LLMProvider | undefined; owned: boolean }> {
+  const roles = ROLE_PURPOSES.has(params.purpose)
+    ? await rolesFromDefaultConfig(params.userId)
+    : {};
+  const providerName = providerNameForPurpose({
+    purpose: params.purpose,
+    personaProvider: params.personaProvider,
+    roles,
+  });
+  return resolveProviderForUserWithOwnership({
+    userId: params.userId,
+    providerName,
+  });
 }

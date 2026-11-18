@@ -107,6 +107,11 @@ vi.mock("../llm", () => ({
 
 vi.mock("../llm/user-provider", () => ({
   resolveProviderForUser: (...a: unknown[]) => resolveProviderForUser(...a),
+  resolveProviderForPurpose: (...a: unknown[]) => resolveProviderForUser(...a),
+  resolveProviderForPurposeWithOwnership: async (params: unknown) => ({
+    provider: await resolveProviderForUser(params as any),
+    owned: false,
+  }),
 }));
 
 const inferEmotionalState = vi.fn();
@@ -263,6 +268,13 @@ describe("the provider settings, on the way out", () => {
     expect(out.retrievalK).toBe(12);
     expect(out.topP).toBe(0.9);
     expect(out.temperature).toBe(0.8);
+  });
+
+  it("keeps the three cheap-work roles", () => {
+    const out = sanitizeExtraConfig({
+      roles: { classify: "DeepSeek", extract: "Ollama", summarize: "Kimi", reply: "OpenAI" },
+    });
+    expect(out.roles).toEqual({ classify: "DeepSeek", extract: "Ollama", summarize: "Kimi" });
   });
 
   it("does not turn a setting that was never made into a number", () => {

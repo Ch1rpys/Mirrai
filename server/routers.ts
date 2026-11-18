@@ -17,6 +17,7 @@ import {
   invalidateUserProviderCache,
   resolveProviderForUser,
   resolveProviderForUserWithOwnership,
+  resolveProviderForPurposeWithOwnership,
 } from "./llm/user-provider";
 import { storagePut, storageDelete, storageDeleteTree } from "./storage";
 import {
@@ -684,6 +685,27 @@ async function evalCasesFromRewrites(personaId: number, userId: number): Promise
   });
   return buildFeedbackEvalCases(messages, pairs);
 }
+
+/**
+ * Extra configuration on an LLM row.
+ *
+ * Numbers and flags stay primitive. `roles` (and later `extraBody`)
+ * are nested objects, so the old "string | number | boolean only"
+ * record would have dropped them.
+ */
+const extraConfigInputSchema = z.record(
+  z.string(),
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.record(z.string(), z.unknown()),
+  ]),
+).refine(
+  (value) => Object.keys(value).length <= 50 &&
+    JSON.stringify(value).length <= 16_000,
+  "The extra configuration is too large",
+);
 
 export const appRouter = router({
   system: systemRouter,
@@ -4007,11 +4029,7 @@ export const appRouter = router({
          * and it is stored in a JSON column that every read of the
          * configuration brings back.
          */
-        extraConfig: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).refine(
-          (value) => Object.keys(value).length <= 50 &&
-            JSON.stringify(value).length <= 16_000,
-          "The extra configuration is too large",
-        ).optional(),
+        extraConfig: extraConfigInputSchema.optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         assertKnownProvider(input.providerName, ctx.locale);
@@ -4077,11 +4095,7 @@ export const appRouter = router({
          * user's own configuration, which every read of the settings
          * brought back and every chat turn read again.
          */
-        extraConfig: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).refine(
-          (value) => Object.keys(value).length <= 50 &&
-            JSON.stringify(value).length <= 16_000,
-          "The extra configuration is too large",
-        ),
+        extraConfig: extraConfigInputSchema,
       }))
       .mutation(async ({ ctx, input }) => {
         const config = await getDefaultLlmConfig(ctx.user.id);
@@ -4106,7 +4120,11 @@ export const appRouter = router({
           if (key in bounded) continue;
           mergedExtra[key] = incoming[key];
         }
-        const merged = { ...((config.extraConfig as any) || {}), ...mergedExtra, ...bounded };
+        const merged = sanitizeExtraConfig({
+          ...((config.extraConfig as any) || {}),
+          ...mergedExtra,
+          ...bounded,
+        });
         await upsertLlmConfig(ctx.user.id, { providerName: config.providerName, extraConfig: merged });
         invalidateUserProviderCache(ctx.user.id);
         return { success: true };
@@ -4434,9 +4452,9 @@ export const appRouter = router({
          * key of their own still had their private conversation sent to
          * the operator's account, and billed to the operator.
          */
-        const { provider, owned } = await resolveProviderForUserWithOwnership({
+        const { provider, owned } = await resolveProviderForPurposeWithOwnership({
           userId: ctx.user.id,
-          providerName: persona.llmProvider ?? undefined,
+          purpose: "summarize",
         });
         /**
          * The day is material.

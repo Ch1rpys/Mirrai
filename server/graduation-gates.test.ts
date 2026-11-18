@@ -63,6 +63,11 @@ vi.mock("./llm", () => ({
 const resolveProviderForUser = vi.fn();
 vi.mock("./llm/user-provider", () => ({
   resolveProviderForUser: (...a: unknown[]) => resolveProviderForUser(...a),
+  resolveProviderForPurpose: (...a: unknown[]) => resolveProviderForUser(...a),
+  resolveProviderForPurposeWithOwnership: async (params: unknown) => ({
+    provider: await resolveProviderForUser(params as any),
+    owned: false,
+  }),
   resolveProviderForUserWithOwnership: async (params: unknown) => {
     const provider = await resolveProviderForUser(params as any);
     return { provider, owned: Boolean(provider) };

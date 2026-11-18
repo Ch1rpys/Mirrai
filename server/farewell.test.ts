@@ -24,6 +24,11 @@ vi.mock("./chat/retrieval", () => ({
 
 vi.mock("./llm/user-provider", () => ({
   resolveProviderForUser: (...a: unknown[]) => resolveProviderForUser(...a),
+  resolveProviderForPurpose: (...a: unknown[]) => resolveProviderForUser(...a),
+  resolveProviderForPurposeWithOwnership: async (params: unknown) => ({
+    provider: await resolveProviderForUser(params as any),
+    owned: false,
+  }),
   /**
    * The ownership matters: the environment-configured provider is the
    * operator's account, and it may only be used when the user has no

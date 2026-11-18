@@ -6,7 +6,12 @@ vi.mock("../db", () => ({
   getLlmConfigsByUserId: (...a: unknown[]) => getLlmConfigsByUserId(...a),
 }));
 
-import { resolveProviderForUser, invalidateUserProviderCache } from "./user-provider";
+import {
+  resolveProviderForUser,
+  resolveProviderForPurpose,
+  invalidateUserProviderCache,
+  sanitizeRoles,
+} from "./user-provider";
 import { registry } from "./index";
 import { OpenAIProvider } from "./providers/openai";
 
@@ -186,5 +191,97 @@ describe("resolveProviderForUser", () => {
     // The environment has no DeepSeek key in the test environment, so the
     // resolver still resolves a provider object.
     expect(provider === undefined || provider.name === "DeepSeek").toBe(true);
+  });
+});
+
+function configRow(partial: Record<string, unknown> = {}) {
+  return {
+    id: 7,
+    userId: 1,
+    providerName: "OpenAI",
+    isDefault: true,
+    apiKey: null,
+    apiKeyHint: null,
+    baseUrl: null,
+    model: null,
+    systemMessage: null,
+    extraConfig: null,
+    createdAt: new Date(),
+    ...partial,
+  };
+}
+
+describe("resolveProviderForPurpose", () => {
+  beforeEach(() => {
+    getLlmConfigsByUserId.mockReset();
+    getLlmConfigsByUserId.mockResolvedValue([]);
+    invalidateUserProviderCache();
+  });
+
+  it("uses roles.classify when emotion work is asked for", async () => {
+    getLlmConfigsByUserId.mockResolvedValue([
+      configRow({
+        extraConfig: { roles: { classify: "DeepSeek" } },
+      }),
+      configRow({
+        id: 8,
+        providerName: "DeepSeek",
+        isDefault: false,
+      }),
+    ]);
+
+    const provider = await resolveProviderForPurpose({
+      userId: 1,
+      purpose: "classify",
+      personaProvider: "OpenAI",
+    });
+    expect(provider?.name).toBe("DeepSeek");
+  });
+
+  it("uses the default when classify has no role", async () => {
+    getLlmConfigsByUserId.mockResolvedValue([configRow()]);
+
+    const provider = await resolveProviderForPurpose({
+      userId: 1,
+      purpose: "classify",
+      personaProvider: "DeepSeek",
+    });
+    expect(provider?.name).toBe("OpenAI");
+  });
+
+  it("does not fall back to the environment's provider when the user has their own", async () => {
+    getLlmConfigsByUserId.mockResolvedValue([
+      configRow({
+        extraConfig: { roles: { classify: "DeepSeek" } },
+      }),
+    ]);
+
+    const original = registry.getBaseConfig("DeepSeek");
+    registry.registerFactory(
+      "DeepSeek",
+      (cfg) => new OpenAIProvider("DeepSeek", cfg.apiKey ?? "", cfg.baseUrl ?? "", cfg.model ?? ""),
+      { apiKey: "env-key", baseUrl: "https://env.example", model: "env-model" },
+    );
+
+    const provider = await resolveProviderForPurpose({
+      userId: 1,
+      purpose: "classify",
+    });
+    expect(provider?.name).toBe("OpenAI");
+
+    if (original) {
+      registry.registerFactory(
+        "DeepSeek",
+        (cfg) => new OpenAIProvider("DeepSeek", cfg.apiKey ?? "", cfg.baseUrl ?? "", cfg.model ?? ""),
+        original,
+      );
+    }
+  });
+
+  it("keeps only the three role names", () => {
+    expect(sanitizeRoles({ classify: "DeepSeek", reply: "OpenAI", extract: "  " })).toEqual({
+      classify: "DeepSeek",
+    });
+    expect(sanitizeRoles("nope")).toBeUndefined();
   });
 });

@@ -12,7 +12,7 @@
 import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { llmService } from "../llm";
-import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
+import { resolveProviderForPurposeWithOwnership } from "../llm/user-provider";
 import { copy } from "@shared/copy";
 import { asMaterial } from "../_core/material";
 
@@ -335,9 +335,9 @@ async function runExtraction(params: {
    */
   let mayUseServerProvider = true;
   try {
-    const resolved = await resolveProviderForUserWithOwnership({
+    const resolved = await resolveProviderForPurposeWithOwnership({
       userId,
-      providerName: (persona as any).llmProvider ?? undefined,
+      purpose: "extract",
     });
     mayUseServerProvider = !resolved.owned;
     if (resolved.provider) {

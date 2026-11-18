@@ -33,6 +33,11 @@ vi.mock("./db", () => ({
 vi.mock("./llm/user-provider", () => ({
   invalidateUserProviderCache: (...a: unknown[]) => invalidateUserProviderCache(...a),
   resolveProviderForUser: vi.fn(),
+  resolveProviderForPurpose: vi.fn(),
+  resolveProviderForPurposeWithOwnership: vi.fn(async () => ({
+    provider: undefined,
+    owned: false,
+  })),
 }));
 
 import { appRouter } from "./routers";

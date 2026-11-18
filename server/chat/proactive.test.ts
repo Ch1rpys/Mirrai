@@ -23,6 +23,11 @@ vi.mock("../llm", () => ({
 
 vi.mock("../llm/user-provider", () => ({
   resolveProviderForUser: async () => null,
+  resolveProviderForPurpose: async () => null,
+  resolveProviderForPurposeWithOwnership: async () => ({
+    provider: undefined,
+    owned: false,
+  }),
 }));
 
 import {

@@ -49,6 +49,11 @@ vi.mock("../llm", () => ({
 
 vi.mock("../llm/user-provider", () => ({
   resolveProviderForUser: async () => null,
+  resolveProviderForPurpose: async () => null,
+  resolveProviderForPurposeWithOwnership: async () => ({
+    provider: undefined,
+    owned: false,
+  }),
   /**
    * The ownership matters: the environment-configured provider is the
    * operator's account, and it may only be used when the user has no

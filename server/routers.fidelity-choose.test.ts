@@ -61,6 +61,11 @@ vi.mock("./llm/user-provider", () => ({
     provider: undefined,
     owned: false,
   }),
+  resolveProviderForPurpose: async () => undefined,
+  resolveProviderForPurposeWithOwnership: async () => ({
+    provider: undefined,
+    owned: false,
+  }),
 }));
 
 vi.mock("./_core/emotion", () => ({
