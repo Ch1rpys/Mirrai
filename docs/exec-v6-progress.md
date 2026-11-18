@@ -71,7 +71,7 @@
 | B4.5 | 🟡 | ee32c67 | `conflicts.test.ts` / `style-profile.test.ts`（server）：夹具 `triggers` 一组 `userAct: "acknowledge"`、`n === 6`，例子都是「嗯」。`generate.test.ts`：提示词有 `prompt.triggersHeading`、含「嗯」、只在围栏内。`prompt-fences.test.ts` 敌意雷区行只在围栏内。`prompt-golden.test.ts` 10 通过、快照未改。`TriggersView.test.tsx` 展开后显示「嗯」和日期。闸门 `388 passed \| 5 skipped (393)` 文件，`3412 passed \| 21 skipped (3433)` 用例。效果量见未验证清单。 |
 | B4.6 | 🟡 | 07019c3 (measure); 0daab58 (prompt) | `shared/session-profile.test.ts` 6 通过：夹具 closers 前三句 晚安/安/睡啦，`closeByThemRate > 0.9`，`bedtime.median` 在 22:21 ±15；`shouldClose` 已收尾/很少收尾/超过 p90/睡点窗口/仍短 各 1 条。`generate.test.ts`：70 分钟超过合成 p90=40 时围栏外有 `prompt.closingOverlay`、围栏内有 `prompt.closingHeading` 和「晚安」；同一会话已有 `metadata.closing` 不再出现；`--without closing` 两者都没有。`service.test.ts` `lets them close a long session themselves instead of appending the care note`：`careNote.kind === "long_session"` 且 `text === ""`，落库不含 `labels.care.longSession`，`createSafetyEvent` 仍被调用，`metadata.closing === true`。`prompt-fences.test.ts` 敌意收尾句只在围栏内。`prompt-golden.test.ts` 10 通过、快照未改。`PersonaSwitches.test.tsx` 渲染「小满 会自己说「我先睡了」」。闸门 `389 passed \| 5 skipped (394)` 文件，`3424 passed \| 21 skipped (3445)` 用例。效果量见未验证清单。 |
 | B4.7 | 🟡 | 62acc48 | `shared/multi-point.test.ts` 3 通过：`splitPoints("到家了。今天好累！你吃了吗")` 得到 3 段；夹具 `samples === 40`、`coverageMedian === 1/3`、`preferLast === 1`；`mineMultiPoint` 一条 `multi_point` 候选，`pattern`「通常接最后一件」，3 条证据、`verified: false`。`fidelity-prompt.test.ts`：未确认提示词没有「只接其中一件」；确认后有、在减法围栏内。`suppressions.test.ts`、`copy.test.ts` 通过。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `390 passed \| 5 skipped (395)` 文件，`3430 passed \| 21 skipped (3451)` 用例。效果量见未验证清单。 |
-| B4.8 | 🟡 | 4ad35f6 | `shared/in-session.test.ts`：构造 200 个场景中段轮次、30 个自起话头，`selfStartRate === 0.15`。`generate.test.ts`：`selfStartRate === 1` 且已确认生活事件时围栏外有 `prompt.inSessionShare` 和「下周要答辩」；无材料时不出现；同一种子两次提示词相同；`--without act` 不出现。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `391 passed \| 5 skipped (396)` 文件，`3437 passed \| 21 skipped (3458)` 用例。效果量见未验证清单。作息时段等 B6.3。 |
+| B4.8 | 🟡 | 4ad35f6; d29d4b2 (routine) | `shared/in-session.test.ts`：构造 200 个场景中段轮次、30 个自起话头，`selfStartRate === 0.15`。`generate.test.ts`：`selfStartRate === 1` 且已确认生活事件时围栏外有 `prompt.inSessionShare` 和「下周要答辩」；无材料时不出现；同一种子两次提示词相同；`--without act` 不出现。B6.3 补上作息：`can add the window as the one thing of their own mid-chat` 周三 15:00 已确认「周三下午上课」时围栏外有 `prompt.inSessionShare`。`prompt-golden.test.ts` 10 通过、快照未改。闸门见 B6.3。效果量见未验证清单。 |
 | B5.1 | ⬜ |  |  |
 | B5.2 | ⬜ |  |  |
 | B5.3 | ⬜ |  |  |
@@ -82,7 +82,7 @@
 | B5.8 | ⬜ |  |  |
 | B6.1 | 🟡 | 9e6dcc0 (count); d82a6ee (prompt/UI) | `shared/people.test.ts` 8 通过：夹具 mock 卡「琪琪/室友」「我妈/妈妈」得到两人，`mentions` 分别为 12 和 9；出现 2 次的「路过的人」不产出；「阿强」与「强」归并。`generate.test.ts`：用户消息含「琪琪」且已确认 → 提示词有 `prompt.peopleHeading` 和「琪琪：你的室友」、在围栏内、`layersUsed` 含 `people`；消息不含人名 → 无该段；未确认 → 无；`--without people` 无。`prompt-fences.test.ts` `a person's relation`：敌意 relation 只在围栏内。`pipeline-decisions.test.ts` `keeps a confirmed person and does not revive a rejected one`：重跑保住「琪琪」室友、`people:路过的人` 不再出现。`WorldEditors.test.tsx` 确认/拒绝/手写/合并各调 `people.save`。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `394 passed \| 5 skipped (399)` 文件，`3466 passed \| 21 skipped (3487)` 用例。效果量见未验证清单。 |
 | B6.2 | 🟡 | 7d942a8 | `shared/stances.test.ts` 5 通过：夹具「香菜 / dislike」3 条证据、「海 / like」4 条证据；只有 1 条证据的「咖啡」不产出；同一 topic 的 like 与 dislike 都留。`generate.test.ts`：用户消息含「香菜」且已确认 → 提示词有 `prompt.stancesHeading` 和「讨厌香菜」、在围栏内、`layersUsed` 含 `people`；消息不含 topic → 无该段；未确认 → 无；`--without people` 无。`prompt-fences.test.ts` `a stance they hold`：敌意 statement 只在围栏内。`pipeline-decisions.test.ts` `keeps a confirmed stance and does not revive a rejected one`：重跑保住「香菜」dislike、`stance:咖啡:like` 不再出现。`WorldEditors.test.tsx` 确认/手写各调 `stance.save`。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `395 passed \| 5 skipped (400)` 文件，`3481 passed \| 21 skipped (3502)` 用例。效果量见未验证清单。 |
-| B6.3 | ⬜ |  |  |
+| B6.3 | 🟡 | 46fc165 (mine); d29d4b2 (prompt/UI) | `server/skill-engine/routine.test.ts`：小满夹具产出周三 14–16、title「周三下午上课」、证据含「刚下课」；3 个不同周的「刚下课」不产出。`shared/life-events.test.ts`：老数据 `kind: "life"`/`open_loop` 无 schedule、`inProgressLife` 仍只有 life；无 schedule 的 routine 丢掉。`generate.test.ts`：已确认、`now` 周三 15:00 Asia/Shanghai → `prompt.timeRoutine`「这个钟点你通常在周三下午上课。」、`plan.routine === "r1"`；周四 15:00 无；未确认无。`proactive-context.test.ts`：此刻在窗内且 opening 全是 share → `opening === "share"`。`in-session.test.ts`：窗内拾到「周三下午上课」，窗外 null。`V5FidelityEditors.test.tsx` 显示 14/16 和 `v5.routineHint`。`MessageBubble.test.tsx` 渲染「按以前的作息推的」。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `397 passed \| 5 skipped (402)` 文件，`3494 passed \| 21 skipped (3515)` 用例。效果量见未验证清单。 |
 | B6.4 | ⬜ |  |  |
 | B6.5 | ⬜ |  |  |
 | B6.6 | ⬜ |  |  |
@@ -333,13 +333,15 @@
 | 129 | B4.7 | `preferLast` 在 0.8 ± 0.1 | 夹具量出来是 1 | 设计的 80% 只接最后一件、20% 全接，全接的不进入「只接了一个点」的分母，所以比例是 1。 |
 | 130 | B4.7 | `normalizeSuppressions` 丢掉空 `pattern` | `multi_point` 允许空 pattern（preferLast 在 0.35–0.65 时手册说留空） | 其它 kind 仍要求有 pattern。 |
 | 131 | B4.8 | 用这一轮的 `rng` 抽 `selfStartRate` | 另开 `seededRandom(seed + ":in-session")` | 主 rng 已经被动作抽样用过；再抽会改仪式/簇的结果，已有 generate 测试会红。同一种子两次仍相同。 |
-| 132 | B4.8 | 材料含此刻作息时段 | 只取已确认未关闭的未结事项、进行中生活事件 | B6.3 还没做，没有 routine。没有材料就不加指令。 |
+| 132 | B4.8 | 材料含此刻作息时段 | B6.3 之后：`inProgressLife(events, now, tz)` 把此刻所在的已确认作息也算进去；未传 `now` 时仍只有 `kind: "life"` | 没有 now 的旧调用点不能凭空假定钟点。 |
 | 133 | B6.9 | 应用内抽取提示词仍写「分身的话不是事实来源」 | `prompts.memoryExtractionInApp` 仍说是重建出来的，但允许提取，应用记成「分身说过的」 | A8 那句会让模型根本不抽分身说的话，账本填不满。存储路径仍强制 `subject: "said"`、`category: "memory"`。 |
 | 134 | B6.9 | A8 的 `listFromPersona` / `keepFromPersona` 并入记忆面板 | 面板改按 `memory.list` 的 `subject` 分成三组；「这是真的」走 `memory.update`。那两个 procedure 仍在 | 已有路由测试和 `db-behaviour` 还在用它们。分组后不再靠 `messageId` 指向 assistant 行来识别。 |
 | 135 | B6.1 | `people` 进 `LAYERS`，有数据就默认开 | 不进 `BUILT_LAYERS`；只在这一轮真的插入了「提到的人」段时写入 `layersUsed` | 没人被提到时这一层改不了回复。消融表对老分身仍是五层。 |
 | 136 | B6.1 | 归并后展示名取出现最多的写法 | 若一名是另一名去掉「我/阿/小」前缀后的结果，优先用带前缀的（「阿强」而不是「强」） | 「强」是「阿强」的子串，按出现次数会把展示名算成「强」。 |
 | 137 | B6.1 | 新路由组放 `routers-v6` | `people` 组和 `lexicon` 一样写在 `server/routers.ts` | 手册本条写照 lexicon；lexicon 已经在 `routers.ts`。 |
 | 138 | B6.2 | 新路由组放 `routers-v6` | `stance` 组和 `people` / `lexicon` 一样写在 `server/routers.ts` | 手册本条写照人物表；人物表已经在 `routers.ts`。 |
+| 139 | B6.3 | WP8 开头把 routine 放进 `WorldEditors` | 作息加在已有的 `LifeEventsEditor`（`V5FidelityEditors`） | 手册本条第 3 步写的是 LifeEventsEditor；`kind: "routine"` 和 open_loop 同在 `personaData.lifeEvents`，不另做一张表。 |
+| 140 | B6.3 | title 用 copy 模板拼「周三下午上课」 | `weekday`/`slot`/`activity` 各走 copy，中文直接拼接、英文加空格 | 整句模板 `{{weekday}}{{slot}}{{activity}}` 的 zh 没有汉字，过不了 copy 审计。 |
 
 ## 未验证清单
 
@@ -370,6 +372,7 @@
 | B4.8 | 会话内顺带起话头有没有让生成更像 TA。本机没有非 stub 的模型。属于 `act` 层 | `corepack pnpm eval -- --persona <id> --user <id> --compare act --k 3` | 配了真实模型、并且该分身已量出 inSession、已确认生活事件或未结事项、已有分层标答的人 |
 | B6.1 | 提到的人进提示词有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare people --k 3` | 配了真实模型、并且该分身已确认人物、已有分层标答的人 |
 | B6.2 | 提到的喜恶进提示词有没有让生成更像 TA。本机没有非 stub 的模型。喜恶属于 `people` 层 | `corepack pnpm eval -- --persona <id> --user <id> --compare people --k 3` | 配了真实模型、并且该分身已确认立场、已有分层标答的人 |
+| B6.3 | 作息进时间感知、主动开口和会话内起话头之后生成有没有更像 TA。本机没有非 stub 的模型。作息不是单独的层 | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身已确认作息、已有分层标答的人 |
 
 ## 待用户决定
 
@@ -1164,5 +1167,13 @@ B4.1、B4.2 维持 🟡。B4.3、B4.4、B4.5、B4.6、B4.7、B4.8 改回 ⬜。�
 - 闸门 `395 passed | 5 skipped (400)` 文件，`3481 passed | 21 skipped (3502)` 用例，`all six steps passed`。相对 B6.1（394/5 文件、3466/21 用例）：通过文件 +1、通过用例 +15；跳过数不变。
 - 偏差 138。未验证清单新增 B6.2。待用户决定无新增。
 - B6.2 标 🟡。接着做 B6.3。
+
+### WP8 · 实现会话 · 2026-11-18 · B6.3
+
+- `46fc165`：`LifeEventKind` 加 `routine` 和 `schedule`；`mineRoutines` 从 TA 的话按星期×钟点计数，开始词向后两小时、结束词向前两小时，不少于 4 个不同周才成立；蒸馏和 `lifeEvent.mine` 都跑它。老数据没有 routine 的不受影响。
+- `d29d4b2`：已确认且此刻落在窗内时，时间感知指令区加 `prompt.timeRoutine`；主动开口的 share 和 B4.8 的 `inProgressLife` 把这一窗算作进行中的事；回复 `metadata.routine` 记下事件 id，气泡下「按以前的作息推的」；`LifeEventsEditor` 显示并允许改时段。
+- 闸门 `397 passed | 5 skipped (402)` 文件，`3494 passed | 21 skipped (3515)` 用例，`all six steps passed`。相对 B6.2（395/5 文件、3481/21 用例）：通过文件 +2、通过用例 +13；跳过数不变。
+- 偏差 139、140；偏差 132 收口。未验证清单新增 B6.3。待用户决定无新增。B4.8 的作息依赖已补上。
+- B6.3 标 🟡。接着做 B6.4。
 
 
