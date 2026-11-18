@@ -44,6 +44,7 @@ import { defaultAddressForms, FINGERPRINT_STATES, type EmotionalState, type Styl
 import { projectStyle } from "@shared/style-projection";
 import { hasPromptLexicon } from "@shared/lexicon";
 import { pickActClusterLines } from "@shared/act-clusters";
+import { normalizeConflictProfile, shouldForceRepair } from "@shared/conflicts";
 import { normalizeEmotionDynamics } from "@shared/emotion-dynamics";
 import { filterHarm } from "@shared/harm";
 import { relationshipIsOver } from "@shared/relationship-ended";
@@ -166,7 +167,9 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
         { dropSilence, rng },
       )
     : null;
-  const sampledAct = sampled?.act === "silence" ? null : sampled?.act ?? null;
+  let sampledAct = sampled?.act === "silence" ? null : sampled?.act ?? null;
+  const conflictTurn = conflictMaterialForTurn(input, layers.emotionInertia);
+  if (conflictTurn.forceRepair) sampledAct = "repair";
   const actMeta = {
     userAct,
     ...(sampled?.via ? { actVia: sampled.via } : {}),
@@ -182,7 +185,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     layers.lexicon && hasPromptLexicon((input.persona.personaData as { lexicon?: unknown } | null)?.lexicon),
   );
 
-  if (sampled?.act === "silence" && timingEnabled && !input.exclude) {
+  if (sampled?.act === "silence" && timingEnabled && !input.exclude && !conflictTurn.forceRepair) {
     return {
       kind: "silence",
       sampledAct: "silence",
@@ -196,7 +199,9 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     };
   }
 
-  const ritual = await ritualPlanForTurn(input, layers.ritual, rng);
+  const ritual = conflictTurn.forceRepair
+    ? null
+    : await ritualPlanForTurn(input, layers.ritual, rng);
   if (ritual) {
     return {
       kind: "ritual",
@@ -229,7 +234,10 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   const clusterLines = actClusterLinesForTurn(layers.actClusters, sampledAct, input, rng);
   const clustersOn = clusterLines.length > 0;
   const emotionInertiaOn = Boolean(
-    layers.emotionInertia && normalizeEmotionDynamics(effectiveStyleProfile(input.persona).emotionDynamics),
+    layers.emotionInertia &&
+      (normalizeEmotionDynamics(effectiveStyleProfile(input.persona).emotionDynamics) ||
+        conflictTurn.coldLines.length > 0 ||
+        conflictTurn.forceRepair),
   );
 
   if (input.exclude) {
@@ -252,6 +260,8 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       skipExemplars: !layers.exemplars,
       restrictExemplarsToAct: clustersOn,
       actClusterLines: clusterLines,
+      coldLines: conflictTurn.coldLines,
+      repairLines: conflictTurn.repairLines,
       excludeExemplarIds: [...(input.exclude.recordIds ?? []), ...seeds.excludeIds],
       excludeExemplarTexts: [...(input.exclude.texts ?? []), ...seeds.excludeTexts],
       seedTurnsNote: seeds.note,
@@ -317,6 +327,8 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     skipExemplars: !layers.exemplars,
     restrictExemplarsToAct: clustersOn,
     actClusterLines: clusterLines,
+    coldLines: conflictTurn.coldLines,
+    repairLines: conflictTurn.repairLines,
     seedTurnsNote: seeds.note,
     styleReminderLines: reminder.lines,
     reanchorIssues: reminder.issues,
@@ -659,6 +671,42 @@ async function ritualPlanForTurn(
   });
   if (!picked) return null;
   return { trigger: entry.trigger, reply: picked.text, recordId: picked.recordId };
+}
+
+function conflictMaterialForTurn(
+  input: TurnInput,
+  enabled: boolean,
+): { coldLines: string[]; repairLines: string[]; forceRepair: boolean } {
+  const empty = { coldLines: [] as string[], repairLines: [] as string[], forceRepair: false };
+  if (!enabled) return empty;
+  const conflict = normalizeConflictProfile(effectiveStyleProfile(input.persona).conflict);
+  if (!conflict) return empty;
+  const state = String(input.actCondition?.emotion ?? input.persona.emotionalState ?? "");
+  const coldLines =
+    state === "distant" || state === "melancholy" ? conflict.coldLines.slice(0, 5) : [];
+  const since = sinceStamp(input.persona);
+  const forceRepair = since
+    ? shouldForceRepair({
+        state,
+        sinceMin: (input.now.getTime() - since.at) / 60_000,
+        profile: conflict,
+        random: seededRandom(`${input.persona.id}:${since.iso}`),
+      })
+    : false;
+  return {
+    coldLines,
+    repairLines: forceRepair ? conflict.repairLines.slice() : [],
+    forceRepair,
+  };
+}
+
+function sinceStamp(persona: { emotionalStateSince?: Date | string | null }): { at: number; iso: string } | null {
+  const raw = persona.emotionalStateSince;
+  if (!raw) return null;
+  const date = raw instanceof Date ? raw : new Date(raw);
+  const at = date.getTime();
+  if (!Number.isFinite(at)) return null;
+  return { at, iso: date.toISOString() };
 }
 
 function actClusterLinesForTurn(

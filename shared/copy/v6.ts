@@ -551,6 +551,14 @@ export const V6 = {
     zh: "【你做这件事时说过的话】",
     en: "【Lines you used when doing this】",
   },
+  "prompt.coldLinesHeading": {
+    zh: "【你冷下来的时候说过的话】",
+    en: "【Lines from when you went cold】",
+  },
+  "prompt.repairLinesHeading": {
+    zh: "【你以前是这样和好的】",
+    en: "【How you used to make up】",
+  },
   "prompt.contrastHeading": {
     zh: "【不像的，和像的】",
     en: "【Unlike, and like】",

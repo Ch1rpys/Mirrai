@@ -1567,6 +1567,157 @@ describe("persona sampling on the reply", () => {
     expect(options.temperature).toBe(0.8);
     expect(options.topP).toBe(0.95);
   });
+
+  /** i18n:allow-input — recorded cold and repair lines used only as material. */
+  function conflictProfile() {
+    return {
+      episodes: 6,
+      durationMin: { median: 300, p25: 240, p75: 360, all: [180, 240, 300, 300, 360, 480] },
+      repairBy: { them: 4, me: 2 },
+      repairAcceptRate: 1,
+      repairLines: ["好啦 不气了"],
+      coldLines: ["哦。", "随便。", "行。"],
+    };
+  }
+
+  function personaWithConflict(state: string, sinceMin: number | null) {
+    const row = persona();
+    row.emotionalState = state;
+    row.emotionalStateSince =
+      sinceMin == null ? null : new Date(NOW.getTime() - sinceMin * 60_000);
+    row.personaData = {
+      personality: "温柔",
+      actProfile: { samples: 80, unconditional: { tease: 80 }, buckets: [] },
+    };
+    row.styleProfile = {
+      version: 1,
+      measuredAt: NOW.toISOString(),
+      recordsVersion: "80:80",
+      conflict: conflictProfile(),
+    };
+    return row;
+  }
+
+  it("puts cold lines in the fence when the mood is still distant", async () => {
+    const plan = await planTurn({
+      persona: personaWithConflict("distant", 60),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "conflict:cold",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    const heading = copy("zh", "prompt.coldLinesHeading");
+    expect(prompt).toContain(heading);
+    expect(prompt).toContain("哦。");
+    const unfenced = prompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "");
+    expect(unfenced).not.toContain("哦。");
+    expect(plan.sampledAct).not.toBe("repair");
+    expect(prompt).not.toContain(copy("zh", "prompt.repairLinesHeading"));
+  });
+
+  it("omits the cold-line block when the mood is warm", async () => {
+    const plan = await planTurn({
+      persona: personaWithConflict("warm", 60),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "conflict:warm",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(prompt).not.toContain(copy("zh", "prompt.coldLinesHeading"));
+    expect(prompt).not.toContain("哦。");
+    expect(plan.sampledAct).not.toBe("repair");
+  });
+
+  it("forces a repair after nine hours of a freeze", async () => {
+    const plan = await planTurn({
+      persona: personaWithConflict("distant", 9 * 60),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "conflict:repair",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(plan.sampledAct).toBe("repair");
+    expect(prompt).toContain(copy("zh", "prompt.repairLinesHeading"));
+    expect(prompt).toContain("好啦 不气了");
+    const unfenced = prompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "");
+    expect(unfenced).not.toContain("好啦 不气了");
+  });
+
+  it("does not force a repair after one hour", async () => {
+    const plan = await planTurn({
+      persona: personaWithConflict("distant", 60),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "conflict:early",
+      exclude: { texts: [HELD_OUT] },
+    });
+    expect(plan.sampledAct).not.toBe("repair");
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(prompt).not.toContain(copy("zh", "prompt.repairLinesHeading"));
+  });
+
+  it("picks the same freeze length twice for the same emotionalStateSince", async () => {
+    const sinceMin = 250;
+    const first = await planTurn({
+      persona: personaWithConflict("distant", sinceMin),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "conflict:same-a",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const second = await planTurn({
+      persona: personaWithConflict("distant", sinceMin),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "conflict:same-b",
+      exclude: { texts: [HELD_OUT] },
+    });
+    expect(first.sampledAct).toBe(second.sampledAct);
+    const heading = copy("zh", "prompt.repairLinesHeading");
+    const firstPrompt = String(first.messages[0]?.content ?? "");
+    const secondPrompt = String(second.messages[0]?.content ?? "");
+    expect(firstPrompt.includes(heading)).toBe(secondPrompt.includes(heading));
+  });
+
+  it("omits conflict material with --without emotionInertia", async () => {
+    const plan = await planTurn({
+      persona: personaWithConflict("distant", 9 * 60),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "conflict:off",
+      exclude: { texts: [HELD_OUT] },
+      layerOverrides: layerOverridesForEval({ without: ["emotionInertia"] }),
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(plan.sampledAct).not.toBe("repair");
+    expect(plan.layersUsed).not.toContain("emotionInertia");
+    expect(prompt).not.toContain(copy("zh", "prompt.coldLinesHeading"));
+    expect(prompt).not.toContain(copy("zh", "prompt.repairLinesHeading"));
+  });
 });
 
 

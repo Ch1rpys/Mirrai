@@ -462,6 +462,8 @@ export async function composeMessages(params: {
   replyToId?: number | null;
   sampledAct?: import("@shared/speech-acts").SpeechAct | null;
   actClusterLines?: string[] | null;
+  coldLines?: string[] | null;
+  repairLines?: string[] | null;
   restrictExemplarsToAct?: boolean;
   periodId?: string | null;
   excludeExemplarIds?: number[];
@@ -557,6 +559,8 @@ export async function composeMessages(params: {
     quotedSection,
     sampledAct: params.sampledAct ?? null,
     actClusterLines: params.actClusterLines ?? null,
+    coldLines: params.coldLines ?? null,
+    repairLines: params.repairLines ?? null,
     restrictExemplarsToAct: params.restrictExemplarsToAct,
     periodId: params.periodId ?? null,
     excludeExemplarIds: params.excludeExemplarIds,

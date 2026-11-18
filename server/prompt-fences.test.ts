@@ -327,6 +327,26 @@ describe("an original line under this turn's action", () => {
   });
 });
 
+describe("a line from when they went cold", () => {
+  it("reaches the prompt only inside the fence", () => {
+    const prompt = buildSystemPrompt(persona(), {
+      coldLines: [HOSTILE_NOTE],
+    });
+    expect(prompt).toContain(HOSTILE_NOTE);
+    expect(unfenced(prompt)).not.toContain(HOSTILE_NOTE);
+  });
+});
+
+describe("a line from how they used to make up", () => {
+  it("reaches the prompt only inside the fence", () => {
+    const prompt = buildSystemPrompt(persona(), {
+      repairLines: [HOSTILE_NOTE],
+    });
+    expect(prompt).toContain(HOSTILE_NOTE);
+    expect(unfenced(prompt)).not.toContain(HOSTILE_NOTE);
+  });
+});
+
 describe("a style sample from the records", () => {
   it("reaches the prompt only inside the fence", () => {
     const prompt = buildSystemPrompt(persona(), {

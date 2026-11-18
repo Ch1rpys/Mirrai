@@ -269,6 +269,16 @@ export interface SystemPromptOptions {
    */
   actClusterLines?: string[] | null;
   /**
+   * Lines from when they went cold. Material: it is fenced, and it
+   * only appears while the current mood is still a negative one.
+   */
+  coldLines?: string[] | null;
+  /**
+   * How they used to make up. Material: it is fenced, and it only
+   * appears when this turn is forced to a repair.
+   */
+  repairLines?: string[] | null;
+  /**
    * Past replies of theirs, already formatted and fenced by the caller.
    */
   exemplarSection?: string | null;
@@ -706,6 +716,20 @@ export function buildSystemPromptParts(
       ]
         .filter(Boolean)
         .join("\n"),
+    },
+    {
+      kind: "volatile",
+      text:
+        options.coldLines && options.coldLines.length > 0
+          ? asMaterial(copy(locale, "prompt.coldLinesHeading"), options.coldLines.join("\n"))
+          : "",
+    },
+    {
+      kind: "volatile",
+      text:
+        options.repairLines && options.repairLines.length > 0
+          ? asMaterial(copy(locale, "prompt.repairLinesHeading"), options.repairLines.join("\n"))
+          : "",
     },
     {
       kind: "volatile",
