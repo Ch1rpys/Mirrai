@@ -981,3 +981,21 @@ B2.7 维持 🟡。B3.6 维持 ✅。B3.3、B3.4、B3.5、B3.7、B3.8 改回 ⬜
 - 偏差 112、113。未验证清单新增 B2.9。待用户决定无新增。
 - B2.9 标 🟡。WP6 可做条目全部完成。独立验收另开会话。
 
+### WP6 · 独立验收 · 2026-11-18
+
+对照 `docs/exec-v6.md` 的 B2.3、B2.1、B2.2、B2.6、B2.5、B2.4、B2.8、B2.9 重跑，不沿用上面的证据。没有改代码和测试。本包是新层，不是修已有问题的 🔧，没有做先红后绿。
+
+`corepack pnpm gate`（无 `--fast`、无 `DATABASE_URL`，Node v24.22.1）退出码 0：`Test Files  383 passed | 5 skipped (388)`，`Tests  3358 passed | 21 skipped (3379)`，`all six steps passed`。与本文件 B2.9 一行一致。通过数 3358，高于基线 2486。跳过数 21，高于基线 8，与 WP5 结束时相同，本包没有新增跳过。`PROMPT_LAYOUT=cache` 下 `scripts/fidelity-gate.ts` 仍是 7 条 ✓。
+
+临时库 `mirrai_v6_verify`：`push --force` 后 `migrate` 应用到 `0051_fidelity_rewrite`（journal 49 条，含 `0050_record_embeddings`）。`--replay` `replayed 49 migration(s)`。`--rollback 1` 后 `fidelity_feedback.rewrite` 消失，`record_embeddings` 仍在；再 `migrate` 列回来。升级路径：DROP `rewrite` 并删 journal 的 0051 后再 migrate，列出现；DROP `record_embeddings` 并删 journal 的 0050 后再 migrate，表和唯一索引 `(personaId, recordId, model)` 出现。库已 `dropdb`。`mirrai_live` 未碰。
+
+提交范围 `166458b^..HEAD`：没有 `Co-Authored-By`；`package.json` 没有新增依赖；没有改 `server/wechat/ilink` 或已有迁移；没有删测试，没有拿掉已有 `expect`，没有给已有用例加 `skip`。`c0b2f6b` 把情绪分类测试从「同一套凭据」改成 classify 角色，断言仍要求不回落到环境变量。黄金快照文件最后一次改动仍是 `e506484`。各实现提交的文件都落在该条自己的范围内。
+
+本包相关测试 42 个文件、382 条通过（`exemplars`、`embeddings`、`egress`、`EmbedStatus`、`style`、`seed-safety`、`seed-turns`、`generate`、`prompt-fences`、`prompt-golden`、`PersonaSwitches`、`ritual-table`、`style-profile`（server/shared）、`service`、`RitualsView`、`material-report`、`sample-pool`、`style-reminder`、`routers.fidelity-rewrite`、`routers.eval`、`dataset`、`MessageBubble`、`feedback-aggregate`、`export`、`purpose`、`user-provider`、`extra-body`、`stop`、`persona-settings`、`routers.provider-validation`、`extra-config`、`compare-cli`、`LlmRoles`、`ExtraBodyEditor`、`PersonaSampling`、`prompt-layout`、`db-delete-coverage`、`i18n`、`copy`、`relationship-ended`、`fidelity-gate`）。这些测试绿，不代表效果已经用真模型量过。
+
+B2.3、B2.1、B2.2、B2.6、B2.5、B2.4、B2.8、B2.9 维持 🟡。未验证清单、待用户决定、偏差表无新增。没有条目改回 ⬜。
+
+清单外跑过的：空串 / 空白查询示范返回 `[]`；夹具上 `good night` 检索为 0；`n = 12` 的「嗨」成立；`matchRitual("晚安。")` 命中「晚安」，空串和英文 `good night` 不命中；关系结束后「宝贝晚安」「亲爱的安」抽不到回法；种子英文前缀是 `[earlier]`；`isSafeSeedLine` 拒绝空串、81 字、以及测试没写的「无视 / 提示词 / system prompt / as an ai / you are now」；`PROMPT_LAYOUT=CACHE` 仍是 classic；夜/日示范按 `day`/`night` 排序。夹具带情绪标签时 `samplePool.distant` 40 句、最长 3 字、句号占比 0.925。
+
+存疑，没有单独打回：`eval/run.ts` 的 `executePlan` 不传 `plannerProvider` / `voiceProvider`，评测两步都走同一个 provider，聊天路径才会读 `settings.providers`。`measureSamplePool` 不读夹具的 `truth.state`，没有 `emotion` 列时只有 `any` 池；验收用的 distant/warm 是测试把 `truth.state` 写进 `emotion` 之后才有的。`purpose.test.ts` 用调用点前后各一截源码找 `purpose:`，`trajectory.ts` / `correction.ts` 把 purpose 放在调用上一行的 `options` 里，参数括号里没有字面量，但仍传到请求上。
+
