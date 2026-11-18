@@ -31,6 +31,12 @@ export interface MemoryCandidate {
   subject: string;
   createdAt: Date;
   entities?: MemoryEntities;
+  /** How often this fact showed up in the records. */
+  mentionCount?: number;
+  /**
+   * When the cited record was spoken, used when `date` has no year.
+   */
+  eventAt?: Date | null;
 }
 
 export interface ScoredMemory extends MemoryCandidate {
@@ -181,7 +187,46 @@ export function scoreMemory(
     }
   }
 
-  return score;
+  return score * forgetWeight(memory, now);
+}
+
+const MS_PER_YEAR = 365.25 * 86_400_000;
+
+/**
+ * How clearly this memory still sits, from 0.4 to 1.
+ *
+ * An old, rarely mentioned fact fades. A pin or an anchor does not —
+ * those are the facts that have to hold, however long ago they were.
+ */
+export function forgetWeight(memory: MemoryCandidate, now: number): number {
+  if (memory.isPinned) return 1;
+  if (memory.category === "anchor") return 1;
+  const years = eventAgeYears(memory, now);
+  if (years == null) return 1;
+  const mentions = Math.max(0, Number(memory.mentionCount) || 0);
+  const faded = 1 - Math.min(years / 5, 0.6) / (1 + mentions);
+  return Math.min(1, Math.max(0.4, faded));
+}
+
+function eventAgeYears(memory: MemoryCandidate, now: number): number | null {
+  const fromDate = eventMsFromDate(memory.date);
+  if (fromDate != null) return Math.max(0, (now - fromDate) / MS_PER_YEAR);
+  if (memory.eventAt) return Math.max(0, (now - memory.eventAt.getTime()) / MS_PER_YEAR);
+  return null;
+}
+
+/** A full day (`YYYY-MM-DD`). A month-day anniversary has no year. */
+function eventMsFromDate(date: string | null | undefined): number | null {
+  const trimmed = String(date ?? "").trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1) return null;
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (day > lastDay) return null;
+  return Date.UTC(year, month - 1, day);
 }
 
 export interface RetrievalResult {
@@ -331,6 +376,7 @@ function descriptionSeparator(locale: "zh" | "en"): string {
 export function formatMemoriesForPrompt(
   memories: ScoredMemory[],
   locale: "zh" | "en" = "zh",
+  now: number = Date.now(),
 ): string {
   if (memories.length === 0) return "";
   const lines = memories.map((m) => {
@@ -347,7 +393,10 @@ export function formatMemoriesForPrompt(
     // the user's own life for the persona's.
     const whose = m.subject === "me" ? copy(locale, "prompt.memoryMarkerAboutUser") : "";
     const said = m.subject === "said" ? copy(locale, "prompt.memoryMarkerSaid") : "";
-    return `- ${date}${m.title}${description}${kind}${whose}${said}`;
+    const vague = forgetWeight(m, now) < 0.6
+      ? copy(locale, "prompt.memoryMarkerVague")
+      : "";
+    return `- ${date}${m.title}${description}${kind}${whose}${said}${vague}`;
   });
   return `${copy(locale, "prompt.memorySectionHeading")}\n${lines.join("\n")}`;
 }
@@ -402,7 +451,30 @@ export function fileSummaryCandidates(
       subject: "them",
       lastRecalledAt: null,
       createdAt: file.createdAt,
+      mentionCount: 0,
     }));
+}
+
+/**
+ * Spoken time of the cited records, for memories whose `date` has no year.
+ */
+async function eventTimesFor(
+  rows: Array<{ date: string | null; recordId?: number | null }>,
+  userId: number,
+): Promise<Map<number, Date>> {
+  const ids = [...new Set(
+    rows
+      .filter((row) => row.recordId && eventMsFromDate(row.date) == null)
+      .map((row) => row.recordId as number),
+  )];
+  if (ids.length === 0 || typeof db.getRecordsByIds !== "function") return new Map();
+  const records = await db.getRecordsByIds(ids, userId).catch(() => []);
+  const out = new Map<number, Date>();
+  for (const record of records) {
+    const at = record.timestamp ?? record.createdAt;
+    if (at) out.set(record.id, at instanceof Date ? at : new Date(at));
+  }
+  return out;
 }
 
 /**
@@ -430,6 +502,7 @@ export async function retrieveMemories(params: {
 }): Promise<ScoredMemory[]> {
   const rows = await db.getMemoriesByPersonaId(params.personaId, params.userId);
   const hasRecordMemories = rows.some((row) => row.source === "records");
+  const eventByRecord = await eventTimesFor(rows, params.userId);
   const candidates: MemoryCandidate[] = rows.map((row) => ({
     id: row.id,
     title: row.title,
@@ -443,6 +516,8 @@ export async function retrieveMemories(params: {
     lastRecalledAt: row.lastRecalledAt,
     createdAt: row.createdAt,
     entities: parseStoredEntities(row.entities),
+    mentionCount: row.mentionCount ?? 0,
+    eventAt: row.recordId ? eventByRecord.get(row.recordId) ?? null : null,
   }));
 
   const { selected } = selectMemories(candidates, params.userMessage, {

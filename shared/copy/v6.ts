@@ -683,6 +683,10 @@ export const V6 = {
     zh: "（这是你在这里说过的话，不是记录里的事实）",
     en: " (this is something you said here, not a fact from the records)",
   },
+  "prompt.memoryMarkerVague": {
+    zh: "（这件事过去很久了，你记得不太清）",
+    en: " (this was a long time ago, and you do not remember it clearly)",
+  },
   "prompt.peopleHeading": {
     zh: "【提到的人】",
     en: "【People mentioned】",

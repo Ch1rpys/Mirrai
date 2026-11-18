@@ -16,6 +16,7 @@ import {
   tokenize,
   keywordCoverage,
   scoreMemory,
+  forgetWeight,
   selectMemories,
   formatMemoriesForPrompt,
   formatAnchorsForPrompt,
@@ -36,6 +37,7 @@ function candidate(overrides: Partial<MemoryCandidate> = {}): MemoryCandidate {
     importance: 1,
     lastRecalledAt: null,
     createdAt: new Date("2024-01-01T00:00:00Z"),
+    mentionCount: 0,
     ...overrides,
   };
 }
@@ -145,6 +147,52 @@ describe("scoreMemory", () => {
     const ordinary = scoreMemory(candidate({ category: "memory" }), tokens, now);
     const milestone = scoreMemory(candidate({ category: "milestone" }), tokens, now);
     expect(milestone).toBeGreaterThan(ordinary);
+  });
+});
+
+describe("forgetWeight", () => {
+  const now = new Date("2025-01-01T00:00:00Z").getTime();
+
+  it("is below 0.6 for a four-year-old memory mentioned once, and the prompt marks it", () => {
+    const memory = candidate({ date: "2021-01-01", mentionCount: 0 });
+    expect(forgetWeight(memory, now)).toBeLessThan(0.6);
+    const text = formatMemoriesForPrompt([{ ...memory, score: 1 }], "zh", now);
+    expect(text).toContain("这件事过去很久了，你记得不太清");
+  });
+
+  it("does not mark a four-year-old memory mentioned ten times", () => {
+    const memory = candidate({ date: "2021-01-01", mentionCount: 10 });
+    expect(forgetWeight(memory, now)).toBeGreaterThanOrEqual(0.6);
+    const text = formatMemoriesForPrompt([{ ...memory, score: 1 }], "zh", now);
+    expect(text).not.toContain("这件事过去很久了，你记得不太清");
+  });
+
+  it("is 1 for an anchor, even an old one", () => {
+    expect(forgetWeight(candidate({
+      category: "anchor",
+      date: "2021-01-01",
+      mentionCount: 0,
+    }), now)).toBe(1);
+  });
+
+  it("is 1 for a pinned memory", () => {
+    expect(forgetWeight(candidate({
+      isPinned: true,
+      date: "2021-01-01",
+      mentionCount: 0,
+    }), now)).toBe(1);
+  });
+
+  it("leaves a memory with no time unchanged", () => {
+    const memory = candidate({ date: null, mentionCount: 0 });
+    expect(forgetWeight(memory, now)).toBe(1);
+    const tokens = tokenize("图书馆");
+    const recency = 1 / (1 + (now - memory.createdAt.getTime()) / 86_400_000 / 30);
+    const expected = 0.45 * keywordCoverage(
+      [memory.title, memory.description, memory.date].filter(Boolean).join(" "),
+      tokens,
+    ) + 0.25 * recency + 0.2 * 0.5;
+    expect(scoreMemory(memory, tokens, now)).toBeCloseTo(expected, 10);
   });
 });
 
