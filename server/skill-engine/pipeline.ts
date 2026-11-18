@@ -70,6 +70,7 @@ import {
   mineMicroRules,
   parseTranscriptMessages,
 } from "./micro-rules";
+import { stateRulesFromTranscript } from "./state-rules";
 import { toMinerRows } from "./roles";
 import { isTextRecord, type RecordKind } from "@shared/records";
 import { parseExportTime } from "../importers/normalize";
@@ -1623,7 +1624,7 @@ async function runSkillPipelineOnce(
 
     const transcriptRows = transcriptRowsFrom(input, recordLines);
 
-    const microRules =
+    let microRules =
       input.mineRules === false
         ? []
         : await runMicroRuleStage({
@@ -1674,6 +1675,22 @@ async function runSkillPipelineOnce(
     }).catch((e) =>
       console.warn("[SkillEngine] The emotions could not be labelled:", e.message),
     );
+    if (input.mineRules !== false) {
+      microRules = [
+        ...microRules,
+        ...stateRulesFromTranscript(transcriptRows, {
+          locale,
+          name: input.name,
+          nickname: enrichedData.nickname,
+        }),
+      ];
+      await setPersonaProgress(
+        stageProgress.structuring,
+        microRules.length
+          ? copy(locale, "labels.microRules.mined", { count: microRules.length })
+          : copy(locale, "labels.microRules.minedNone"),
+      );
+    }
     const minedActProfile = await buildActProfile({
       messages: transcriptRows,
       userId,

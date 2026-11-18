@@ -130,6 +130,7 @@ import { personaVersionRouter } from "./routers-v6/persona-version";
 import { blindRouter } from "./routers-v6/blind";
 import { materialRouter } from "./routers-v6/material";
 import { mineMicroRules } from "./skill-engine/micro-rules";
+import { stateRulesFromTranscript } from "./skill-engine/state-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
 import { normalizeMicroRules } from "@shared/micro-rules";
 import {
@@ -5201,16 +5202,32 @@ export const appRouter = router({
           if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
 
           const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id, { newest: true });
-          const mined = await mineMicroRules({
+          const minedRows = rows.map((row) => ({
+            content: row.content,
+            timestamp: row.timestamp,
+            // In the collected records the other person is the assistant.
+            role: row.role,
+            kind: row.kind,
+            emotion: row.emotion,
+          }));
+          const minedContrast = await mineMicroRules({
             userId: ctx.user.id,
             locale: input.locale,
-            messages: rows.map((row) => ({
-              content: row.content,
-              timestamp: row.timestamp,
-              // In the collected records the other person is the assistant.
-              role: row.role,
-            })),
+            messages: minedRows,
           });
+          const data =
+            persona.personaData && typeof persona.personaData === "object" && !Array.isArray(persona.personaData)
+              ? (persona.personaData as Record<string, unknown>)
+              : {};
+          const nickname = typeof data.nickname === "string" ? data.nickname : "";
+          const mined = [
+            ...minedContrast,
+            ...stateRulesFromTranscript(minedRows, {
+              locale: input.locale,
+              name: persona.name,
+              nickname,
+            }),
+          ];
 
           const existing = normalizeMicroRules((persona.personaData as any)?.microRules);
           const known = new Set(existing.map((rule) => rule.trigger.join("|")));

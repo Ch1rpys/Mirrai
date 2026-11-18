@@ -447,4 +447,26 @@ export const V6 = {
     zh: "这两句已经选过了，或者不是这一轮给的。",
     en: "Those two lines have already been chosen, or they were not the pair for this turn.",
   },
+  "labels.emotion.warm": { zh: "温柔", en: "Warm" },
+  "labels.emotion.playful": { zh: "俏皮", en: "Playful" },
+  "labels.emotion.nostalgic": { zh: "思念", en: "Nostalgic" },
+  "labels.emotion.melancholy": { zh: "忧郁", en: "Melancholy" },
+  "labels.emotion.happy": { zh: "开心", en: "Happy" },
+  "labels.emotion.distant": { zh: "疏离", en: "Distant" },
+  "v6.stateRule.period": {
+    zh: "这种时候句末带句号，平时不带",
+    en: "In this mood they end on a period; they usually don't.",
+  },
+  "v6.stateRule.address": {
+    zh: "这种时候这样叫对方，平时不这样叫",
+    en: "In this mood they call the other person this; they usually don't.",
+  },
+  "v6.stateRule.particle": {
+    zh: "这种时候句末爱用这个字",
+    en: "In this mood they like this particle at the end of a line.",
+  },
+  "v6.stateRule.ellipsis": {
+    zh: "这种时候话常常不说完",
+    en: "In this mood they often trail off.",
+  },
 } as const satisfies CopyTable;
