@@ -71,7 +71,7 @@
 | B4.5 | 🟡 | ee32c67 | `conflicts.test.ts` / `style-profile.test.ts`（server）：夹具 `triggers` 一组 `userAct: "acknowledge"`、`n === 6`，例子都是「嗯」。`generate.test.ts`：提示词有 `prompt.triggersHeading`、含「嗯」、只在围栏内。`prompt-fences.test.ts` 敌意雷区行只在围栏内。`prompt-golden.test.ts` 10 通过、快照未改。`TriggersView.test.tsx` 展开后显示「嗯」和日期。闸门 `388 passed \| 5 skipped (393)` 文件，`3412 passed \| 21 skipped (3433)` 用例。效果量见未验证清单。 |
 | B4.6 | 🟡 | 07019c3 (measure); 0daab58 (prompt) | `shared/session-profile.test.ts` 6 通过：夹具 closers 前三句 晚安/安/睡啦，`closeByThemRate > 0.9`，`bedtime.median` 在 22:21 ±15；`shouldClose` 已收尾/很少收尾/超过 p90/睡点窗口/仍短 各 1 条。`generate.test.ts`：70 分钟超过合成 p90=40 时围栏外有 `prompt.closingOverlay`、围栏内有 `prompt.closingHeading` 和「晚安」；同一会话已有 `metadata.closing` 不再出现；`--without closing` 两者都没有。`service.test.ts` `lets them close a long session themselves instead of appending the care note`：`careNote.kind === "long_session"` 且 `text === ""`，落库不含 `labels.care.longSession`，`createSafetyEvent` 仍被调用，`metadata.closing === true`。`prompt-fences.test.ts` 敌意收尾句只在围栏内。`prompt-golden.test.ts` 10 通过、快照未改。`PersonaSwitches.test.tsx` 渲染「小满 会自己说「我先睡了」」。闸门 `389 passed \| 5 skipped (394)` 文件，`3424 passed \| 21 skipped (3445)` 用例。效果量见未验证清单。 |
 | B4.7 | 🟡 | 62acc48 | `shared/multi-point.test.ts` 3 通过：`splitPoints("到家了。今天好累！你吃了吗")` 得到 3 段；夹具 `samples === 40`、`coverageMedian === 1/3`、`preferLast === 1`；`mineMultiPoint` 一条 `multi_point` 候选，`pattern`「通常接最后一件」，3 条证据、`verified: false`。`fidelity-prompt.test.ts`：未确认提示词没有「只接其中一件」；确认后有、在减法围栏内。`suppressions.test.ts`、`copy.test.ts` 通过。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `390 passed \| 5 skipped (395)` 文件，`3430 passed \| 21 skipped (3451)` 用例。效果量见未验证清单。 |
-| B4.8 | ⬜ |  |  |
+| B4.8 | 🟡 | 4ad35f6 | `shared/in-session.test.ts`：构造 200 个场景中段轮次、30 个自起话头，`selfStartRate === 0.15`。`generate.test.ts`：`selfStartRate === 1` 且已确认生活事件时围栏外有 `prompt.inSessionShare` 和「下周要答辩」；无材料时不出现；同一种子两次提示词相同；`--without act` 不出现。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `391 passed \| 5 skipped (396)` 文件，`3437 passed \| 21 skipped (3458)` 用例。效果量见未验证清单。作息时段等 B6.3。 |
 | B5.1 | ⬜ |  |  |
 | B5.2 | ⬜ |  |  |
 | B5.3 | ⬜ |  |  |
@@ -332,6 +332,8 @@
 | 128 | B4.7 | 覆盖度只用字二元组 | 字和二元组并进集合再算覆盖 | 夹具最后一件「还有记得带伞」和回法「伞我帮你带」没有相同二元组；只算二元组则 40 条全是 0。 |
 | 129 | B4.7 | `preferLast` 在 0.8 ± 0.1 | 夹具量出来是 1 | 设计的 80% 只接最后一件、20% 全接，全接的不进入「只接了一个点」的分母，所以比例是 1。 |
 | 130 | B4.7 | `normalizeSuppressions` 丢掉空 `pattern` | `multi_point` 允许空 pattern（preferLast 在 0.35–0.65 时手册说留空） | 其它 kind 仍要求有 pattern。 |
+| 131 | B4.8 | 用这一轮的 `rng` 抽 `selfStartRate` | 另开 `seededRandom(seed + ":in-session")` | 主 rng 已经被动作抽样用过；再抽会改仪式/簇的结果，已有 generate 测试会红。同一种子两次仍相同。 |
+| 132 | B4.8 | 材料含此刻作息时段 | 只取已确认未关闭的未结事项、进行中生活事件 | B6.3 还没做，没有 routine。没有材料就不加指令。 |
 
 ## 未验证清单
 
@@ -359,6 +361,7 @@
 | B4.5 | 雷区表进提示词有没有让生成更像 TA。本机没有非 stub 的模型。和 B4.3、B4.4 同一层 | `corepack pnpm eval -- --persona <id> --user <id> --compare emotionInertia --k 3` | 配了真实模型、并且该分身已量出雷区、已有分层标答的人 |
 | B4.6 | 会收尾的 TA 有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare closing --k 3` | 配了真实模型、并且该分身已量出会话画像、已有分层标答的人 |
 | B4.7 | 只接半句的减法进提示词有没有让生成更像 TA。本机没有非 stub 的模型。属于 suppressions 层 | `corepack pnpm eval -- --persona <id> --user <id> --compare suppressions --k 3` | 配了真实模型、并且该分身已确认 multi_point、已有分层标答的人 |
+| B4.8 | 会话内顺带起话头有没有让生成更像 TA。本机没有非 stub 的模型。属于 `act` 层 | `corepack pnpm eval -- --persona <id> --user <id> --compare act --k 3` | 配了真实模型、并且该分身已量出 inSession、已确认生活事件或未结事项、已有分层标答的人 |
 
 ## 待用户决定
 
@@ -1082,4 +1085,11 @@ B2.3、B2.1、B2.2、B2.6、B2.5、B2.4、B2.8、B2.9 维持 🟡。未验证清
 - 闸门 `390 passed | 5 skipped (395)` 文件，`3430 passed | 21 skipped (3451)` 用例，`all six steps passed`。相对 B4.6（389/5 文件、3424/21 用例）：通过文件 +1、通过用例 +6；跳过数不变。
 - 偏差 127–130。未验证清单新增 B4.7。待用户决定无新增。
 - B4.7 标 🟡。接着做 B4.8。
+
+### WP7 · 实现会话 · 2026-11-18 · B4.8
+
+- `4ad35f6`：`measureInSession` 写入 `styleProfile.inSession`；`act` 层开着且抽中、并有已确认未结事项或进行中生活事件时，指令区加 `prompt.inSessionShare`。没有材料不加。作息时段等 B6.3。
+- 闸门 `391 passed | 5 skipped (396)` 文件，`3437 passed | 21 skipped (3458)` 用例，`all six steps passed`。相对 B4.7（390/5 文件、3430/21 用例）：通过文件 +1、通过用例 +7；跳过数不变。
+- 偏差 131–132。未验证清单新增 B4.8。待用户决定无新增。
+- B4.8 标 🟡。WP7 可做条目全部完成。独立验收另开会话。
 
