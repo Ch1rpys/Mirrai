@@ -161,4 +161,21 @@ describe("the style profile", () => {
     });
     expect(empty.multiPoint).toBeUndefined();
   });
+
+  it("keeps an in-session profile and drops a malformed one", () => {
+    const profile = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      inSession: { samples: 200, selfStartRate: 0.15 },
+    });
+    expect(profile.inSession?.selfStartRate).toBe(0.15);
+    const empty = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      inSession: { samples: 0 },
+    });
+    expect(empty.inSession).toBeUndefined();
+  });
 });

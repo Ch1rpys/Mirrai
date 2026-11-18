@@ -62,6 +62,8 @@ import {
   shouldClose,
 } from "@shared/session-profile";
 import { minuteOfDay } from "@shared/proactive-decision";
+import { normalizeInSession, pickInSessionFact } from "@shared/in-session";
+import { normalizeLifeEvents } from "@shared/life-events";
 import { filterHarm } from "@shared/harm";
 import { relationshipIsOver } from "@shared/relationship-ended";
 import {
@@ -189,6 +191,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   const conflictTurn = conflictMaterialForTurn(input, layers.emotionInertia);
   if (conflictTurn.forceRepair) sampledAct = "repair";
   const closingTurn = await closingForTurn(input, layers.closing);
+  const inSessionShare = inSessionShareForTurn(input, layers.act);
   const actMeta = {
     userAct,
     ...(sampled?.via ? { actVia: sampled.via } : {}),
@@ -299,6 +302,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       triggerLines: conflictTurn.triggerLines,
       closing: closingTurn.closing,
       closerLines: closingTurn.closerLines,
+      inSessionShare,
       excludeExemplarIds: [...(input.exclude.recordIds ?? []), ...seeds.excludeIds],
       excludeExemplarTexts: [...(input.exclude.texts ?? []), ...seeds.excludeTexts],
       seedTurnsNote: seeds.note,
@@ -316,7 +320,13 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       seedMsgs,
     );
     const plannerMessages = twoStageOn
-      ? await plannerMessagesForTurn(input, sampledAct, historyMessages, closingTurn.closing)
+      ? await plannerMessagesForTurn(
+        input,
+        sampledAct,
+        historyMessages,
+        closingTurn.closing,
+        inSessionShare,
+      )
       : undefined;
     return {
       kind: "model",
@@ -371,13 +381,20 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     triggerLines: conflictTurn.triggerLines,
     closing: closingTurn.closing,
     closerLines: closingTurn.closerLines,
+    inSessionShare,
     seedTurnsNote: seeds.note,
     styleReminderLines: reminder.lines,
     reanchorIssues: reminder.issues,
   });
   const historyMessages = composed.messages.filter((row) => row.role !== "system");
   const plannerMessages = twoStageOn
-    ? await plannerMessagesForTurn(input, sampledAct, historyMessages, closingTurn.closing)
+    ? await plannerMessagesForTurn(
+        input,
+        sampledAct,
+        historyMessages,
+        closingTurn.closing,
+        inSessionShare,
+      )
     : undefined;
   return {
     kind: "model",
@@ -528,6 +545,7 @@ async function plannerMessagesForTurn(
   sampledAct: SpeechAct | null,
   history: LLMMessage[],
   closing = false,
+  inSessionShare: string | null = null,
 ): Promise<LLMMessage[]> {
   const built = await buildPromptBundleForPersona({
     persona: input.persona,
@@ -550,6 +568,7 @@ async function plannerMessagesForTurn(
     suppressions: null,
     lexicon: null,
     closing,
+    inSessionShare,
   });
   return [asSystemMessage(built.prompt, built.cacheBreak), ...history];
 }
@@ -719,6 +738,19 @@ async function ritualPlanForTurn(
   });
   if (!picked) return null;
   return { trigger: entry.trigger, reply: picked.text, recordId: picked.recordId };
+}
+
+function inSessionShareForTurn(input: TurnInput, enabled: boolean): string | null {
+  if (!enabled) return null;
+  const profile = normalizeInSession(effectiveStyleProfile(input.persona).inSession);
+  if (!profile) return null;
+  const draw = seededRandom(`${input.seed}:in-session`)();
+  if (draw >= profile.selfStartRate) return null;
+  const fact = pickInSessionFact(
+    normalizeLifeEvents((input.persona.personaData as { lifeEvents?: unknown } | null)?.lifeEvents),
+  );
+  if (!fact || !isSafeSeedLine(fact)) return null;
+  return copy(input.locale, "prompt.inSessionShare", { fact });
 }
 
 async function closingForTurn(

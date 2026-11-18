@@ -467,6 +467,7 @@ export async function composeMessages(params: {
   triggerLines?: string[] | null;
   closing?: boolean;
   closerLines?: string[] | null;
+  inSessionShare?: string | null;
   restrictExemplarsToAct?: boolean;
   periodId?: string | null;
   excludeExemplarIds?: number[];
@@ -567,6 +568,7 @@ export async function composeMessages(params: {
     triggerLines: params.triggerLines ?? null,
     closing: Boolean(params.closing),
     closerLines: params.closerLines ?? null,
+    inSessionShare: params.inSessionShare ?? null,
     restrictExemplarsToAct: params.restrictExemplarsToAct,
     periodId: params.periodId ?? null,
     excludeExemplarIds: params.excludeExemplarIds,

@@ -117,6 +117,7 @@ export interface PromptContext {
   triggerLines?: string[] | null;
   closing?: boolean;
   closerLines?: string[] | null;
+  inSessionShare?: string | null;
   /** When the act-cluster layer is on, keep only matching-act exemplars. */
   restrictExemplarsToAct?: boolean;
   /**
@@ -238,6 +239,7 @@ export async function buildPromptBundleForPersona(
     triggerLines: context.promptMode === "planner" ? null : context.triggerLines ?? null,
     closing: Boolean(context.closing),
     closerLines: context.promptMode === "planner" ? null : context.closerLines ?? null,
+    inSessionShare: context.inSessionShare ?? null,
     promptMode: context.promptMode,
     exemplarSection:
       context.promptMode === "planner" || context.skipExemplars

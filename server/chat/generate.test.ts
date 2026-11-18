@@ -1837,6 +1837,102 @@ describe("persona sampling on the reply", () => {
     expect(prompt).not.toContain(copy("zh", "prompt.closingOverlay"));
     expect(prompt).not.toContain(copy("zh", "prompt.closingHeading"));
   });
+
+  function personaWithInSession(
+    rate: number,
+    events: Array<Record<string, unknown>> = [],
+  ) {
+    const row = persona();
+    row.styleProfile = {
+      version: 1,
+      measuredAt: NOW.toISOString(),
+      recordsVersion: "80:80",
+      inSession: { samples: 200, selfStartRate: rate },
+    };
+    row.personaData = {
+      personality: "温柔",
+      lifeEvents: events,
+    };
+    return row;
+  }
+
+  const lifeEvent = {
+    id: "life-1",
+    kind: "life",
+    title: "下周答辩",
+    detail: "下周要答辩",
+    source: "manual",
+    verified: true,
+    closed: false,
+  };
+
+  it("adds one thing of their own when the draw hits and a life event is confirmed", async () => {
+    const plan = await planTurn({
+      persona: personaWithInSession(1, [lifeEvent]),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "in-session:hit",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    const line = copy("zh", "prompt.inSessionShare", { fact: "下周要答辩" });
+    expect(prompt).toContain(line);
+    const unfenced = prompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "");
+    expect(unfenced).toContain(line);
+  });
+
+  it("omits the in-session share when there is no material", async () => {
+    const plan = await planTurn({
+      persona: personaWithInSession(1, []),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "in-session:empty",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(prompt).not.toContain(copy("zh", "prompt.inSessionShare", { fact: "下周要答辩" }));
+    expect(prompt).not.toContain("可以顺带说一句自己的事");
+  });
+
+  it("picks the same in-session share twice for the same seed", async () => {
+    const input = {
+      persona: personaWithInSession(0.5, [lifeEvent]),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "in-session:same",
+      exclude: { texts: [HELD_OUT] },
+    };
+    const first = String((await planTurn(input)).messages[0]?.content ?? "");
+    const second = String((await planTurn(input)).messages[0]?.content ?? "");
+    const line = copy("zh", "prompt.inSessionShare", { fact: "下周要答辩" });
+    expect(first.includes(line)).toBe(second.includes(line));
+    expect(first).toBe(second);
+  });
+
+  it("omits the in-session share with --without act", async () => {
+    const plan = await planTurn({
+      persona: personaWithInSession(1, [lifeEvent]),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "in-session:off",
+      exclude: { texts: [HELD_OUT] },
+      layerOverrides: layerOverridesForEval({ without: ["act"] }),
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(prompt).not.toContain("下周要答辩");
+  });
 });
 
 

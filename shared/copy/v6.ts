@@ -587,6 +587,10 @@ export const V6 = {
     zh: "对方：{{user}}\n你：{{reply}}",
     en: "Them: {{user}}\nYou: {{reply}}",
   },
+  "prompt.inSessionShare": {
+    zh: "这一轮回完之后，可以顺带说一句自己的事：{{fact}}",
+    en: "After you have answered this turn, you may add one thing of your own: {{fact}}",
+  },
   "prompt.contrastHeading": {
     zh: "【不像的，和像的】",
     en: "【Unlike, and like】",

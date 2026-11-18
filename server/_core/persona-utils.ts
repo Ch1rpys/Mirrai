@@ -292,6 +292,10 @@ export interface SystemPromptOptions {
    */
   closerLines?: string[] | null;
   /**
+   * They may add one thing of their own after answering. Instruction.
+   */
+  inSessionShare?: string | null;
+  /**
    * Past replies of theirs, already formatted and fenced by the caller.
    */
   exemplarSection?: string | null;
@@ -642,6 +646,7 @@ export function buildSystemPromptParts(
     { kind: "stable", text: suppressionsSection ? asMaterial(suppressionsSection) : "" },
     { kind: "volatile", text: actInstruction, id: "act" },
     { kind: "volatile", text: closingInstruction },
+    { kind: "volatile", text: options.inSessionShare || "" },
     {
       kind: "volatile",
       text:
