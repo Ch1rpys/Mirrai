@@ -53,7 +53,7 @@
 | B2.4 | ⬜ |  |  |
 | B2.5 | ⬜ |  |  |
 | B2.6 | ⬜ |  |  |
-| B2.7 | ⬜ |  |  |
+| B2.7 | 🟡 | 9147cf4 (stop); 89f29db (cap) | `shared/length-cap.test.ts` 7 通过：夹具 `maxChars === ceil(p95 × 1.5)`；无指纹 `null`；用户 `maxTokens` 更小则用用户的；`burstMax===1` 且 `newlineRate<0.02` 时 `stop: ["\\n"]`；200 字在 `maxChars=30` 截在句界；无句界恰好 30 字。`server/llm/providers/stop.test.ts` 4 通过：OpenAI 请求体 `stop`、Claude `stop_sequences`、Ollama `options.stop`。`generate.test.ts` 层开着 provider 收到 `maxTokens: 72`（p95=24）；`--without lengthCap` 收到 200；截断后 `projection` 含 `length_cap`。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `358 passed \| 5 skipped (363)` 文件，`3151 passed \| 21 skipped (3172)` 用例。效果量见未验证清单。 |
 | B2.8 | ⬜ |  |  |
 | B2.9 | ⬜ |  |  |
 | B3.1 | ✅ | 00d6e7a (measure); e774ee2 (UI) | `shared/style-fingerprint.test.ts` 24 通过：`endingClassOf` 每类至少两个用例（含「好的。。。」ellipsis、「好的。」period、「好的」other、「好呀~」tilde、「好呀」particle）；夹具 `endings.period` 在 distant 占比×0.9 的 ±0.02 内；`laugh.haRuns[4]` 最大；`ellipsisForms.unicode === 0`；`emoji.rate === 0`；39 行返回 `null`；`perState.distant.endings.period` 在 0.9±0.05，`warm.endings.period === 0`，distant 有「陈树」、warm 没有；`perPeriod` p1/p2 中位字数 10±1 与 6±1。`FingerprintView.test.tsx` 2 通过：夹具渲染「几乎不以句号结尾」；句号占多数时该项不出现。闸门 `341 passed \| 4 skipped (345)` 文件，`3037 passed \| 18 skipped (3055)` 用例。`particles["呢"]` 与 `haRuns` 仅长度 4 见偏差 70、71。 |
@@ -279,6 +279,9 @@
 | 75 | B8.8 | `chatCount % 8 === 0` 含 0 | `shouldOfferChoice` 要求 `chatCount > 0` | 第 0 轮还没有往来，不必付两倍费用。待选的两句存在用户消息 `metadata.pendingChoice`。 |
 | 76 | B8.8 | 特征含 B3.3 的 `ll` | 现码 `ll` 恒为 0 | B3.3 未做，没有 token log-likelihood。长度、surprise、residue、act、real 已按现有函数填。 |
 | 77 | B8.10 | 闸门跳过数不能增加 | 无 `DATABASE_URL` 时 `material.test.ts` 3 条 `skipIf`，跳过文件 5、跳过用例 21 | 手册 2.3 要求库测试 `skipIf(!DATABASE_URL)`。带临时库跑这 3 条全过。与偏差 20、47、49、51、69 同类。路由测试不走 `appRouter`，避免 `node:sqlite`。固定回法一层未列入 `layers`，等 B2.2。 |
+| 78 | B2.7 | `replyBudget(fp, burstMax)` 只有两个参数 | 第三个参数 `options?: { userMaxTokens?; newlineRate? }` | 用户 `maxTokens` 和换行率手册写在函数体内，签名里没有。 |
+| 79 | B2.7 | `lengthCap` 进 `BUILT_LAYERS`，开关开着就出现在 `layersUsed` | 只在 `replyBudget` 非空时写入 `layersUsed` | 没有指纹时这一层改不了回复。消融表对老分身仍是五层（WP4 B8.5）。 |
+| 80 | B2.7 | `executePlan` 把 `TurnPlan.maxTokens` 交给 provider | 与 `io.options.maxTokens` 取较小值 | 评测默认 200，指纹预算更大时不该把评测自己的上限撑开。 |
 
 ## 未验证清单
 
@@ -286,6 +289,7 @@
 |---|---|---|---|
 | C1.1 | `wechat-html` 没有稳定静态 schema，未实现 | 若之后有静态 HTML 样本：对照样本写 `formats/wechat-html.ts`，再进注册表 | 有真实 WeChat HTML 导出的人 |
 | B8.1 | 判别器在真实评测对子上的 AUC。本机没有非 stub 的模型，合成「句末加句号」测的是算法，不是这个分身 | `corepack pnpm eval -- --persona <id> --user <id> --discriminator --k 3` | 配了真实模型、并且该分身已有分层标答的人 |
+| B2.7 | 长度上限有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare lengthCap --k 3` | 配了真实模型、并且该分身已有指纹和分层标答的人 |
 
 ## 待用户决定
 
@@ -775,3 +779,12 @@ B3.1、B3.2、B8.3、B8.4、B8.9、B8.10 维持 ✅。B8.1 改 🟡。B8.2、B8.
 - B8.8：两句相同也发 `choice`，不落 assistant。`service.test.ts` 两次都回「好的呀」。
 - 闸门 `356 passed | 5 skipped (361)` 文件，`3137 passed | 21 skipped (3158)` 用例，`all six steps passed`。相对验收时的 3129/21：通过用例 +8，跳过数不变。
 - 偏差、未验证清单、待用户决定无新增。访客一次返回整场对子仍是存疑，没有改。
+
+### WP5 · 实现会话 · 2026-11-18 · B2.7
+
+- 分支 `exec/v6`。独立验收留下的 `- [ ]` 无。没有「等 xxx」的推后项。
+- `9147cf4`：`LLMOptions.stop` 透传到 OpenAI `stop`、Claude `stop_sequences`、Ollama `options.stop`；Dify / 讯飞忽略。
+- `89f29db`：`replyBudget` / `capReply`；`planTurn` 在指纹够时写入 `maxTokens`/`stop`/`maxChars`；`executePlan` 截在句界；`PersonaSwitches` 上半组加开关。
+- 闸门 `358 passed | 5 skipped (363)` 文件，`3151 passed | 21 skipped (3172)` 用例，`all six steps passed`。相对 WP4 收尾（356/5 文件、3137/21 用例）：通过文件 +2、通过用例 +14；跳过数不变。
+- 偏差 78–80。未验证清单新增 B2.7。待用户决定无新增。
+- B2.7 标 🟡。下一条 B3.4。
