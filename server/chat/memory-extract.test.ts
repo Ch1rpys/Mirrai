@@ -195,4 +195,27 @@ describe("the memory extraction", () => {
     // conversation has not been read.
     expect(markMemoryExtracted).not.toHaveBeenCalled();
   });
+
+  it("keeps entities that appear in the cited line, and drops the rest", async () => {
+    invoke.mockResolvedValue(JSON.stringify([{
+      title: "他喜欢蓝色",
+      category: "anchor",
+      subject: "them",
+      line: 1,
+      entities: { people: [], places: [], things: ["蓝色", "拾光咖啡"] },
+    }]));
+
+    await extractMemories({
+      persona,
+      userId: 1,
+      now: NOW,
+      history: [{ id: 1, role: "user", content: "我最喜欢的颜色是蓝色", createdAt: NOW }],
+    });
+
+    expect(createMemory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entities: { people: [], places: [], things: ["蓝色"] },
+      }),
+    );
+  });
 });

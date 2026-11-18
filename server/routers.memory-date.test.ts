@@ -89,4 +89,35 @@ describe("a memory's date", () => {
 
     expect(updateMemory).not.toHaveBeenCalled();
   });
+
+  it("fills confirmed people from the title", async () => {
+    getPersonaById.mockResolvedValue({
+      id: 1,
+      userId: 1,
+      name: "小A",
+      analysisStatus: "ready",
+      personaData: {
+        people: [{
+          id: "p1",
+          name: "琪琪",
+          aliases: [],
+          relation: "室友",
+          side: "them",
+          mentions: 12,
+          evidence: [],
+          source: "auto",
+          verified: true,
+        }],
+      },
+    });
+    await appRouter.createCaller(ctxFor()).memory.create({
+      personaId: 1,
+      title: "和琪琪去海边",
+    });
+    expect(createMemory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entities: { people: ["琪琪"], places: [], things: [] },
+      }),
+    );
+  });
 });

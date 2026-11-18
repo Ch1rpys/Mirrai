@@ -15,6 +15,7 @@ import { llmService } from "../llm";
 import { resolveProviderForPurposeWithOwnership } from "../llm/user-provider";
 import { copy } from "@shared/copy";
 import { asMaterial } from "../_core/material";
+import { sanitizeEntities } from "@shared/memory-entities";
 
 /**
  * How many messages back the extraction looks when there is no cut-off.
@@ -432,6 +433,7 @@ async function runExtraction(params: {
       date?: string;
       line?: number;
       sourceId?: number;
+      entities?: unknown;
     };
     const title = (item.title || "").trim();
     if (!title) continue;
@@ -491,6 +493,7 @@ async function runExtraction(params: {
       factKey,
       ...(fromPersonaLine ? { source: "chat" as const } : {}),
       status: "active",
+      entities: sanitizeEntities(item.entities, source.content ?? ""),
     } as any);
 
     added.push({ id, title: title.slice(0, 200), subject });

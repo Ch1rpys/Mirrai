@@ -38,10 +38,10 @@ describe("confirming a said memory", () => {
     });
 
     expect(result.success).toBe(true);
-    expect(updateMemory).toHaveBeenCalledWith(7, 1, {
+    expect(updateMemory).toHaveBeenCalledWith(7, 1, expect.objectContaining({
       subject: "them",
       source: "manual",
-    });
+    }));
   });
 
   it("does not rewrite the source of a memory that was already theirs", async () => {
@@ -53,6 +53,7 @@ describe("confirming a said memory", () => {
       subject: "them",
     });
 
-    expect(updateMemory).toHaveBeenCalledWith(7, 1, { subject: "them" });
+    expect(updateMemory).toHaveBeenCalledWith(7, 1, expect.objectContaining({ subject: "them" }));
+    expect(updateMemory.mock.calls[0][2]).not.toHaveProperty("source");
   });
 });

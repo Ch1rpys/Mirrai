@@ -299,7 +299,7 @@ export const V6 = {
       "date 只填 YYYY-MM-DD 或 MM-DD，不确定就填 null。",
       "只写这段里看得到的，不要概括整个人。没有可写的就返回空数组。",
       "只输出 JSON，不要解释：",
-      '{ "facts": [{ "title": "", "description": "", "category": "anchor|milestone|anniversary|memory", "subject": "them|me", "date": "YYYY-MM-DD 或 MM-DD 或 null", "quote": 123 }], "people": [{ "name": "", "relation": "", "side": "them|me|both", "quote": 123 }], "stances": [{ "topic": "", "polarity": "like|dislike|fear|care|opinion", "statement": "", "quote": 123 }] }',
+      '{ "facts": [{ "title": "", "description": "", "category": "anchor|milestone|anniversary|memory", "subject": "them|me", "date": "YYYY-MM-DD 或 MM-DD 或 null", "quote": 123, "entities": { "people": [], "places": [], "things": [] } }], "people": [{ "name": "", "relation": "", "side": "them|me|both", "quote": 123 }], "stances": [{ "topic": "", "polarity": "like|dislike|fear|care|opinion", "statement": "", "quote": 123 }] }',
     ].join("\n"),
     en: [
       "You are reading one stretch of {{name}}'s chat. Pull facts, people and stances from only this stretch.",
@@ -307,7 +307,7 @@ export const V6 = {
       "Dates are YYYY-MM-DD or MM-DD, or null when you are not sure.",
       "Stay inside this stretch. Do not summarise the whole person. If there is nothing to write, return empty arrays.",
       "Return JSON only, with no explanation:",
-      '{ "facts": [{ "title": "", "description": "", "category": "anchor|milestone|anniversary|memory", "subject": "them|me", "date": "YYYY-MM-DD or MM-DD or null", "quote": 123 }], "people": [{ "name": "", "relation": "", "side": "them|me|both", "quote": 123 }], "stances": [{ "topic": "", "polarity": "like|dislike|fear|care|opinion", "statement": "", "quote": 123 }] }',
+      '{ "facts": [{ "title": "", "description": "", "category": "anchor|milestone|anniversary|memory", "subject": "them|me", "date": "YYYY-MM-DD or MM-DD or null", "quote": 123, "entities": { "people": [], "places": [], "things": [] } }], "people": [{ "name": "", "relation": "", "side": "them|me|both", "quote": 123 }], "stances": [{ "topic": "", "polarity": "like|dislike|fear|care|opinion", "statement": "", "quote": 123 }] }',
     ].join("\n"),
   },
   "distill.readingFacts": {

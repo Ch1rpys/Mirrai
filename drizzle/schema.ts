@@ -560,6 +560,13 @@ export const memories = pgTable("memories", {
   source: varchar("source", { length: 16 }).default("chat").notNull(),
   /** How often the title's character bigrams appear in the records. */
   mentionCount: integer("mentionCount").default(0).notNull(),
+  /**
+   * People, places, and things named in this memory.
+   *
+   * Each string has to have appeared in the line the memory cites, so
+   * retrieval can hop to a related memory without inventing a link.
+   */
+  entities: jsonb("entities"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => ({
   /**

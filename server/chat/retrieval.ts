@@ -11,6 +11,11 @@
  */
 import * as db from "../db";
 import { copy } from "@shared/copy";
+import {
+  entityValues,
+  parseStoredEntities,
+  type MemoryEntities,
+} from "@shared/memory-entities";
 
 export interface MemoryCandidate {
   id: number;
@@ -25,6 +30,7 @@ export interface MemoryCandidate {
   /** Whose memory this is: "them", "me", or "said". */
   subject: string;
   createdAt: Date;
+  entities?: MemoryEntities;
 }
 
 export interface ScoredMemory extends MemoryCandidate {
@@ -262,7 +268,45 @@ export function selectMemories(
     ...otherOrdinary.slice(0, Math.max(0, topK - pinnedOrdinary.length)),
   ];
 
-  return { selected: [...anchors, ...ordinary], anchors };
+  const hop = hopMemories({
+    top: otherOrdinary[0] ?? ordinary[0],
+    pool: rest.filter((row) => !isAnchor(row)),
+    userMessage,
+    taken: new Set([...anchors, ...ordinary].map((row) => row.id)),
+    extra: 2,
+  });
+  return { selected: [...anchors, ...ordinary, ...hop], anchors };
+}
+
+function entityBag(memory: { entities?: MemoryEntities }): Set<string> {
+  return new Set(entityValues(memory.entities));
+}
+
+/**
+ * One hop from the top ordinary memory, and from names in the user's line.
+ *
+ * At most two extra memories, on top of the usual topK.
+ */
+function hopMemories(params: {
+  top: ScoredMemory | undefined;
+  pool: ScoredMemory[];
+  userMessage: string;
+  taken: Set<number>;
+  extra: number;
+}): ScoredMemory[] {
+  const seeds = new Set<string>();
+  if (params.top) for (const value of entityBag(params.top)) seeds.add(value);
+  for (const memory of params.pool) {
+    for (const value of entityBag(memory)) {
+      if (value && params.userMessage.includes(value)) seeds.add(value);
+    }
+  }
+  if (seeds.size === 0) return [];
+  return params.pool
+    .filter((row) => !params.taken.has(row.id))
+    .filter((row) => [...entityBag(row)].some((value) => seeds.has(value)))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, params.extra);
 }
 
 /**
@@ -398,6 +442,7 @@ export async function retrieveMemories(params: {
     importance: row.importance,
     lastRecalledAt: row.lastRecalledAt,
     createdAt: row.createdAt,
+    entities: parseStoredEntities(row.entities),
   }));
 
   const { selected } = selectMemories(candidates, params.userMessage, {

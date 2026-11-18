@@ -3070,6 +3070,7 @@ export async function updateMemory(
      * dropped so it is no longer on the review list.
      */
     messageId?: number | null;
+    entities?: { people: string[]; places: string[]; things: string[] };
   },
 ) {
   const db = await getDb();

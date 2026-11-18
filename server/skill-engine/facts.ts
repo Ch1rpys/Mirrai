@@ -12,6 +12,7 @@ import { getDistillationPreset, type DistillationMode } from "@shared/distillati
 import { chunkHasFactCue } from "@shared/fact-cues";
 import { isMemoryDate } from "@shared/memory-date";
 import { factKeyFromTitle, normalizeMemoryTitle } from "../chat/memory-extract";
+import { sanitizeEntities, type MemoryEntities } from "@shared/memory-entities";
 import { keywordCoverage, tokenize } from "../chat/retrieval";
 import type { LLMMessage } from "../llm/types";
 import { renderChunkForModel, type RecordChunk, type RecordLine } from "./chunks";
@@ -40,6 +41,7 @@ export interface ParsedFact {
   quote: number;
   chunkHash: string;
   periodId: string | null;
+  entities: MemoryEntities;
 }
 
 export interface ParsedPerson {
@@ -115,6 +117,7 @@ export function parseFactCards(
     const subject = inSet(record.subject, FACT_SUBJECTS);
     const quote = quoteId(record.quote, inChunk);
     if (!category || !subject || quote == null) continue;
+    const cited = chunk.rows.find((row) => row.id === quote);
     facts.push({
       title,
       description: String(record.description ?? "").trim(),
@@ -124,6 +127,7 @@ export function parseFactCards(
       quote,
       chunkHash: chunk.hash,
       periodId: chunk.periodId,
+      entities: sanitizeEntities(record.entities, cited?.content ?? ""),
     });
   }
 
@@ -362,6 +366,7 @@ export async function extractFactsFromRecords(
           mentionCount: mentionCountFor(fact.title, input.rows),
           factKey,
           status: "active",
+          entities: fact.entities,
         } as never);
         created += 1;
         seen.push({ title: fact.title, description: fact.description, factKey });

@@ -129,7 +129,7 @@ export const PROMPTS = {
    * memory about the persona are different kinds of thing.
    */
   "prompts.memoryExtraction": {
-    zh: `你是记忆提取助手。请从对话中提取重要的记忆节点。只返回JSON数组，每个元素包含 title, description, category(milestone/memory/anniversary/anchor), subject(them/me), date(如果能推断), line(它所依据的那一行的编号)。最多提取5条。对话已经是「[1] 说话人: 内容」的形式，line 必须是那个编号。
+    zh: `你是记忆提取助手。请从对话中提取重要的记忆节点。只返回JSON数组，每个元素包含 title, description, category(milestone/memory/anniversary/anchor), subject(them/me), date(如果能推断), line(它所依据的那一行的编号), entities({ people, places, things }，每个词必须是那一行原文里的子串)。最多提取5条。对话已经是「[1] 说话人: 内容」的形式，line 必须是那个编号。
 
 category 的含义：
 - milestone：重要时刻（第一次见面、分手那天）
@@ -142,7 +142,7 @@ subject 的含义：
 - me：关于用户自己的记忆（用户的工作、家人、正在经历的事）
 
 不要提取闲聊、寒暄、没有信息量的话。`,
-    en: `You are a memory extractor. Pull the important memory points out of the conversation. Return a JSON array only; each element has title, description, category(milestone/memory/anniversary/anchor), subject(them/me), date(if it can be inferred), line(the number of the line it is based on). At most 5. The conversation is already in the form "[1] speaker: text"; line must be that number.
+    en: `You are a memory extractor. Pull the important memory points out of the conversation. Return a JSON array only; each element has title, description, category(milestone/memory/anniversary/anchor), subject(them/me), date(if it can be inferred), line(the number of the line it is based on), entities({ people, places, things }, each word a substring of that line). At most 5. The conversation is already in the form "[1] speaker: text"; line must be that number.
 
 What the categories mean:
 - milestone: an important moment (the first meeting, the day of the breakup)

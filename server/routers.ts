@@ -162,6 +162,11 @@ import {
   type PersonRecordLine,
 } from "@shared/people";
 import {
+  emptyEntities,
+  parseStoredEntities,
+  peopleEntitiesFromPersonaData,
+} from "@shared/memory-entities";
+import {
   aggregateStances,
   mergeStances,
   normalizeStances,
@@ -4245,6 +4250,14 @@ export const appRouter = router({
           messageId: null,
           factKey: input.factKey,
           status: "active",
+          entities: {
+            people: peopleEntitiesFromPersonaData(
+              `${input.title} ${input.description ?? ""}`,
+              persona.personaData,
+            ),
+            places: [],
+            things: [],
+          },
         });
         return { id };
       }),
@@ -4273,9 +4286,23 @@ export const appRouter = router({
         const { id, ...data } = input;
         const current = await getMemoryById(id, ctx.user.id);
         if (!current) throw new TRPCError({ code: "NOT_FOUND" });
+        const stored = parseStoredEntities(current.entities) ?? emptyEntities();
+        const title = data.title ?? current.title;
+        const description = data.description === undefined ? current.description : data.description;
+        const withPeople = {
+          ...data,
+          entities: {
+            people: peopleEntitiesFromPersonaData(
+              `${title} ${description ?? ""}`,
+              (await getPersonaById(current.personaId, ctx.user.id))?.personaData,
+            ),
+            places: stored.places,
+            things: stored.things,
+          },
+        };
         const patch = current.subject === "said" && data.subject === "them"
-          ? { ...data, source: "manual" as const }
-          : data;
+          ? { ...withPeople, source: "manual" as const }
+          : withPeople;
         const row = await updateMemory(id, ctx.user.id, patch);
         if (!row) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true, memory: row };

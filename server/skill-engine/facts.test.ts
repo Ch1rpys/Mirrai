@@ -86,6 +86,28 @@ describe("parseFactCards", () => {
     expect(parsed.facts).toEqual([]);
   });
 
+  it("drops entities that are not in the cited line", () => {
+    const parsed = parseFactCards(
+      JSON.stringify({
+        facts: [{
+          title: "生日",
+          description: "5月21号",
+          category: "anchor",
+          subject: "me",
+          date: "05-21",
+          quote: 11,
+          entities: { people: ["蓝湖"], places: ["5月21号"], things: [] },
+        }],
+      }),
+      chunk,
+    );
+    expect(parsed.facts[0]?.entities).toEqual({
+      people: [],
+      places: ["5月21号"],
+      things: [],
+    });
+  });
+
   it("clears a date that is not a day", () => {
     const parsed = parseFactCards(
       JSON.stringify({

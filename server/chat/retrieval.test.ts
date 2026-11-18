@@ -223,6 +223,28 @@ describe("selectMemories", () => {
     const { selected } = selectMemories(memories, "图书馆", { topK: 3, now });
     expect(selected).toHaveLength(3);
   });
+
+  it("hops to a memory that shares a place with the top hit", () => {
+    const { selected } = selectMemories(
+      [
+        candidate({
+          id: 1,
+          title: "第一次约会在拾光咖啡",
+          description: null,
+          entities: { people: [], places: ["拾光咖啡"], things: [] },
+        }),
+        candidate({
+          id: 2,
+          title: "拾光咖啡的老板养了只橘猫",
+          description: null,
+          entities: { people: [], places: ["拾光咖啡"], things: [] },
+        }),
+      ],
+      "还记得我们第一次约会吗",
+      { now, topK: 1 },
+    );
+    expect(selected.map((row) => row.id)).toEqual([1, 2]);
+  });
 });
 
 describe("prompt rendering", () => {
