@@ -1332,6 +1332,8 @@ export const zh = {
     styleProjectionNote: "{{name}} 从不带句号，就把句号去掉；{{name}} 的「哈」通常打四个，就打四个。只动标点和重复字，不改意思。",
     abPairs: "偶尔让我二选一",
     abPairsNote: "每八轮左右，分身会给两句回复让你挑更像的那句。那一轮的费用是两倍。你的选择会用来调重排。",
+    twoStage: "先想好说什么，再用 {{name}} 的话说",
+    twoStageNote: "每一轮调用两次模型：第一次只决定内容，第二次只管语气。费用约两倍。两次可以用不同的模型。",
     dataTitle: "人设数据",
     dataNote: "AI 解析生成的人格画像，可以逐条修正。",
     preview: "预览",

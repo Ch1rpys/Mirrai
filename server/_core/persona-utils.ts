@@ -10,7 +10,7 @@ import {
   type ImperfectionEntry,
 } from "@shared/imperfection";
 import { renderSuppressions, type Suppression } from "@shared/suppressions";
-import { renderActInstruction, type SpeechAct } from "@shared/speech-acts";
+import { ACT_COPY_KEYS, renderActInstruction, type SpeechAct } from "@shared/speech-acts";
 import { normalizePersonaData } from "./persona-schema";
 import { shouldInstructHarm } from "@shared/harm";
 import { normalizeAddressHistory, pickThemToMeAddress } from "@shared/address-history";
@@ -299,6 +299,12 @@ export interface SystemPromptOptions {
    * Which drift tells fired. Instruction: it sits outside the fence.
    */
   reanchorIssues?: ReanchorIssue[] | null;
+  /**
+   * The two-stage planner prompt: hard rules, identity facts, anchors,
+   * recalled memories, relationship, and the user file. No speaking
+   * style, catchphrases, exemplars, seeds, or style samples.
+   */
+  promptMode?: "planner";
 }
 
 export function buildSystemPrompt(persona: any, sceneOverlay?: string | null): string;
@@ -472,6 +478,26 @@ export function buildSystemPrompt(
   const actInstruction = options.sampledAct
     ? renderActInstruction(options.sampledAct, locale)
     : "";
+
+  if (options.promptMode === "planner") {
+    const actLabel = options.sampledAct
+      ? copy(locale, ACT_COPY_KEYS[options.sampledAct])
+      : copy(locale, "prompts.twoStage.actNone");
+    return [
+      copy(locale, "prompts.twoStage.planner", { act: actLabel }),
+      identityRule,
+      hardRules,
+      harmInstruction,
+      copy(locale, "prompt.materialIsData"),
+      identitySection,
+      options.anchorSection ? asMaterial(options.anchorSection) : "",
+      options.memorySection ? asMaterial(options.memorySection) : "",
+      options.relationshipEvents ? asMaterial(options.relationshipEvents) : "",
+      options.userContext ? asMaterial(options.userContext) : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  }
 
   /**
    * How this persona is imperfect, right now.

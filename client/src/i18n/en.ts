@@ -1331,6 +1331,8 @@ export const en = {
     styleProjectionNote: "If {{name}} never uses a period, the period comes off. If {{name}} laughs in fours, it is four. Only marks and repeated characters move; the meaning does not.",
     abPairs: "Offer me a choice now and then",
     abPairsNote: "About every eight turns they give two unreplied lines and you pick the one that sounds more like them. That turn costs twice as much. The choice trains the rerank.",
+    twoStage: "Think of what to say first, then say it in {{name}}'s voice",
+    twoStageNote: "Each turn calls the model twice: first only for the content, then only for the tone. About twice the cost. The two calls can use different models.",
     dataTitle: "Persona data",
     dataNote: "The portrait the AI wrote — correct it line by line.",
     preview: "Preview",

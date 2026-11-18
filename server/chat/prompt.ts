@@ -126,6 +126,8 @@ export interface PromptContext {
   reanchorIssues?: ReanchorIssue[] | null;
   /** Unlike/like pairs. Empty when the exemplars layer is off. */
   contrastSection?: string | null;
+  /** Planner-only subset: no speaking style, exemplars, seeds, or samples. */
+  promptMode?: "planner";
 }
 
 /**
@@ -222,14 +224,17 @@ export async function buildPromptForPersona(
     ),
     lexicon: context.lexicon,
     sampledAct: context.sampledAct ?? null,
-    exemplarSection: context.skipExemplars
-      ? ""
-      : await exemplarSectionFor(context, locale),
-    contrastSection: context.skipExemplars
-      ? ""
-      : context.contrastSection !== undefined
-        ? context.contrastSection
-        : await contrastSectionFor(context, locale),
+    promptMode: context.promptMode,
+    exemplarSection:
+      context.promptMode === "planner" || context.skipExemplars
+        ? ""
+        : await exemplarSectionFor(context, locale),
+    contrastSection:
+      context.promptMode === "planner" || context.skipExemplars
+        ? ""
+        : context.contrastSection !== undefined
+          ? context.contrastSection
+          : await contrastSectionFor(context, locale),
     memoryConflictSection: memoryConflictSectionFor(
       await optionalCall(() => db.getMemoriesByPersonaId(persona.id, userId), []),
       locale,
@@ -237,9 +242,9 @@ export async function buildPromptForPersona(
     locale,
     now,
     periodId: context.periodId ?? null,
-    seedTurnsNote: context.seedTurnsNote ?? null,
-    styleReminderLines: context.styleReminderLines ?? null,
-    reanchorIssues: context.reanchorIssues ?? null,
+    seedTurnsNote: context.promptMode === "planner" ? null : context.seedTurnsNote ?? null,
+    styleReminderLines: context.promptMode === "planner" ? null : context.styleReminderLines ?? null,
+    reanchorIssues: context.promptMode === "planner" ? null : context.reanchorIssues ?? null,
   });
 }
 

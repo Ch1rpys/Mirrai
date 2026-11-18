@@ -102,6 +102,8 @@ export interface TurnPlan {
   sampledAct: SpeechAct | null;
   ritual?: { trigger: string; reply: string; recordId?: number };
   messages: LLMMessage[];
+  /** Planner-only messages. Set when the two-stage layer is on. */
+  plannerMessages?: LLMMessage[];
   maxTokens?: number;
   stop?: string[];
   /** Character budget from the length cap. Missing means do not cut. */
@@ -208,6 +210,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     ...seeds.excludeTexts,
   ]);
   const reminderOn = reminder.lines.length > 0 || reminder.issues.length > 0;
+  const twoStageOn = Boolean(layers.twoStage);
 
   if (input.exclude) {
     const systemPrompt = await buildPromptForPersona({
@@ -243,10 +246,14 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       [{ role: "system", content: systemPrompt }, ...historyMessages],
       seedMsgs,
     );
+    const plannerMessages = twoStageOn
+      ? await plannerMessagesForTurn(input, sampledAct, historyMessages)
+      : undefined;
     return {
       kind: "model",
       sampledAct,
       messages,
+      plannerMessages,
       ...length,
       layersUsed: withMeasuredLayers(
         layersUsed,
@@ -257,6 +264,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
         seededOn,
         false,
         reminderOn,
+        twoStageOn,
       ),
       exemplarIds: [],
       seedRecordIds: seeds.excludeIds,
@@ -286,10 +294,15 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     styleReminderLines: reminder.lines,
     reanchorIssues: reminder.issues,
   });
+  const historyMessages = composed.messages.filter((row) => row.role !== "system");
+  const plannerMessages = twoStageOn
+    ? await plannerMessagesForTurn(input, sampledAct, historyMessages)
+    : undefined;
   return {
     kind: "model",
     sampledAct,
     messages: spliceAfterSystem(composed.messages, seedMsgs),
+    plannerMessages,
     ...length,
     layersUsed: withMeasuredLayers(
       layersUsed,
@@ -300,6 +313,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       seededOn,
       false,
       reminderOn,
+      twoStageOn,
     ),
     exemplarIds: [],
     seedRecordIds: seeds.excludeIds,
@@ -401,6 +415,7 @@ function withMeasuredLayers(
   seededOn = false,
   ritualOn = false,
   styleReminderOn = false,
+  twoStageOn = false,
 ): LayerId[] {
   const extra: LayerId[] = [];
   if (length.maxChars != null) extra.push("lengthCap");
@@ -410,9 +425,70 @@ function withMeasuredLayers(
   if (seededOn) extra.push("seededTurns");
   if (ritualOn) extra.push("ritual");
   if (styleReminderOn) extra.push("styleReminder");
+  if (twoStageOn) extra.push("twoStage");
   if (extra.length === 0) return layersUsed;
   const used = new Set<LayerId>([...layersUsed, ...extra]);
   return LAYERS.filter((id) => used.has(id));
+}
+
+async function plannerMessagesForTurn(
+  input: TurnInput,
+  sampledAct: SpeechAct | null,
+  history: LLMMessage[],
+): Promise<LLMMessage[]> {
+  const prompt = await buildPromptForPersona({
+    persona: input.persona,
+    userId: input.userId,
+    locale: input.locale,
+    now: input.now,
+    userMessage: input.userMessage,
+    sampledAct,
+    periodId: input.periodId ?? null,
+    quotedSection: undefined,
+    sceneOverlay: null,
+    summarySection: "",
+    memories: input.memories as never,
+    promptMode: "planner",
+    skipExemplars: true,
+    markRecalled: false,
+    history: input.history,
+    microRules: null,
+    imperfectionProfile: null,
+    suppressions: null,
+    lexicon: null,
+  });
+  return [{ role: "system", content: prompt }, ...history];
+}
+
+function parsePlannerGist(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(trimmed);
+  const body = (fenced?.[1] ?? trimmed).trim();
+  const start = body.indexOf("{");
+  const end = body.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    const parsed = JSON.parse(body.slice(start, end + 1)) as { gist?: unknown };
+    if (typeof parsed.gist !== "string") return null;
+    const gist = parsed.gist.trim();
+    return gist || null;
+  } catch {
+    return null;
+  }
+}
+
+function appendVoiceInstruction(
+  messages: LLMMessage[],
+  gist: string,
+  locale: "zh" | "en",
+): LLMMessage[] {
+  const line = copy(locale, "prompts.twoStage.voice", { gist });
+  const first = messages[0];
+  if (!first || first.role !== "system" || typeof first.content !== "string") {
+    return [{ role: "system", content: line }, ...messages];
+  }
+  return [{ ...first, content: `${first.content}\n\n${line}` }, ...messages.slice(1)];
 }
 
 async function historyForReanchor(input: TurnInput): Promise<TurnInput["history"]> {
@@ -595,6 +671,8 @@ export async function* executePlan(
   input: TurnInput,
   io: {
     provider: LLMProvider;
+    plannerProvider?: LLMProvider;
+    voiceProvider?: LLMProvider;
     mode: "stream" | "once";
     rerank: boolean;
     signal?: AbortSignal;
@@ -607,7 +685,7 @@ export async function* executePlan(
 ): AsyncGenerator<
   | { type: "thinking" }
   | { type: "delta"; text: string }
-  | { type: "final"; text: string; projection: string[]; rerank?: RerankResult }
+  | { type: "final"; text: string; projection: string[]; rerank?: RerankResult; twoStage?: "ok" | "fallback" }
 > {
   if (plan.kind === "silence" || plan.kind === "ritual") {
     const text = plan.ritual?.reply ?? "";
@@ -624,6 +702,28 @@ export async function* executePlan(
     signal: io.signal,
   };
   const locale = input.locale;
+  const plannerProvider = io.plannerProvider ?? io.provider;
+  const voiceProvider = io.voiceProvider ?? io.provider;
+  let replyMessages = plan.messages;
+  let twoStage: "ok" | "fallback" | undefined;
+  if (plan.layersUsed.includes("twoStage") && plan.kind === "model") {
+    let gist: string | null = null;
+    try {
+      const raw = await llmService.invokeWithProvider(plannerProvider, {
+        messages: plan.plannerMessages ?? plan.messages,
+        options: invokeOptions,
+      });
+      gist = parsePlannerGist(typeof raw === "string" ? raw : "");
+    } catch {
+      gist = null;
+    }
+    if (!gist || !isSafeSeedLine(gist)) {
+      twoStage = "fallback";
+    } else {
+      twoStage = "ok";
+      replyMessages = appendVoiceInstruction(plan.messages, gist, locale);
+    }
+  }
   const useRerank = io.rerank && plan.layersUsed.includes("rerank");
   const rerankModel = useRerank
     ? io.trainingTexts
@@ -640,8 +740,8 @@ export async function* executePlan(
     const texts = await Promise.all(
       Array.from({ length: 4 }, async () => {
         try {
-          const answer = await llmService.invokeWithProvider(io.provider, {
-            messages: plan.messages,
+          const answer = await llmService.invokeWithProvider(voiceProvider, {
+            messages: replyMessages,
             options: invokeOptions,
           });
           return typeof answer === "string" ? answer : "";
@@ -701,14 +801,20 @@ export async function* executePlan(
     );
     const capped = finalizeGenerated(replyText, plan, input);
     if (io.emitDeltas) yield { type: "delta", text: capped.text };
-    yield { type: "final", text: capped.text, projection: capped.projection, rerank: picked ?? undefined };
+    yield {
+      type: "final",
+      text: capped.text,
+      projection: capped.projection,
+      rerank: picked ?? undefined,
+      ...(twoStage ? { twoStage } : {}),
+    };
     return;
   }
 
-  if (io.mode === "stream" && io.provider.stream && io.provider.capabilities.streaming) {
+  if (io.mode === "stream" && voiceProvider.stream && voiceProvider.capabilities.streaming) {
     let replyText = "";
-    for await (const chunk of llmService.streamWithProvider(io.provider, {
-      messages: plan.messages,
+    for await (const chunk of llmService.streamWithProvider(voiceProvider, {
+      messages: replyMessages,
       options: invokeOptions,
     })) {
       replyText += chunk.text;
@@ -718,12 +824,17 @@ export async function* executePlan(
       yield { type: "delta", text: chunk.text };
     }
     const streamed = finalizeGenerated(replyText, plan, input);
-    yield { type: "final", text: streamed.text, projection: streamed.projection };
+    yield {
+      type: "final",
+      text: streamed.text,
+      projection: streamed.projection,
+      ...(twoStage ? { twoStage } : {}),
+    };
     return;
   }
 
-  let replyText = await llmService.invokeWithProvider(io.provider, {
-    messages: plan.messages,
+  let replyText = await llmService.invokeWithProvider(voiceProvider, {
+    messages: replyMessages,
     options: invokeOptions,
   });
   if (io.emptyAsSilence === false) {
@@ -733,5 +844,10 @@ export async function* executePlan(
   }
   const once = finalizeGenerated(replyText, plan, input);
   if (io.emitDeltas) yield { type: "delta", text: once.text };
-  yield { type: "final", text: once.text, projection: once.projection };
+  yield {
+    type: "final",
+    text: once.text,
+    projection: once.projection,
+    ...(twoStage ? { twoStage } : {}),
+  };
 }

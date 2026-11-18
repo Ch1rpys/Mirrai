@@ -571,6 +571,18 @@ export const V6 = {
     zh: "开头在复述对方的感受",
     en: "opened by restating how they feel",
   },
+  "prompts.twoStage.planner": {
+    zh: '不要扮演。只决定这一轮 TA 会做什么、说哪件事。输出 JSON：{ "gist": "不超过 40 字的中性描述", "mentions": [用到的记忆 id], "length": "short|medium|long" }。动作已经定了：{{act}}。不要加入材料里没有的事实。',
+    en: 'Do not role-play. Only decide what they would do this turn, and which matter they would speak to. Return JSON: { "gist": "a neutral description of at most 40 characters", "mentions": [memory ids used], "length": "short|medium|long" }. The action is already chosen: {{act}}. Do not add facts that are not in the material.',
+  },
+  "prompts.twoStage.voice": {
+    zh: "这一轮要说的意思是：{{gist}}。用你自己的话说出来，不要加别的事。",
+    en: "What this turn is meant to say: {{gist}}. Say it in your own words, and do not add anything else.",
+  },
+  "prompts.twoStage.actNone": {
+    zh: "未指定",
+    en: "unspecified",
+  },
   "labels.lexicon.mine": {
     zh: "从记录里挖词",
     en: "Mine words from the records",

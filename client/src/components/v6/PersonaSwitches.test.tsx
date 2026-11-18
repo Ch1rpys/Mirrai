@@ -51,6 +51,7 @@ describe("the persona switches section", () => {
     expect(screen.getByText("不让它写得比 小满 长")).toBeInTheDocument();
     expect(screen.getByText("按 小满 的标点习惯收尾")).toBeInTheDocument();
     expect(screen.getByText("偶尔让我二选一")).toBeInTheDocument();
+    expect(screen.getByText("先想好说什么，再用 小满 的话说")).toBeInTheDocument();
   });
 
   it("turns the A/B pair on", async () => {
@@ -60,6 +61,16 @@ describe("the persona switches section", () => {
     expect(mutate).toHaveBeenCalledWith({
       id: 5,
       patch: { layers: { abPairs: true } },
+    });
+  });
+
+  it("turns two-stage generation on", async () => {
+    const user = userEvent.setup();
+    render(<PersonaSwitches personaId={5} name="小满" />);
+    await user.click(screen.getByRole("checkbox", { name: /先想好说什么，再用 小满 的话说/ }));
+    expect(mutate).toHaveBeenCalledWith({
+      id: 5,
+      patch: { layers: { twoStage: true } },
     });
   });
 });

@@ -25,6 +25,7 @@ import { checkGraduationEligibility } from "../_core/persona-utils";
 import { getEffectiveGraduationMode, canOfferGraduation, getEffectivePresence } from "../_core/graduation";
 import { mayReachOut } from "@shared/graduation-mode";
 import { copy, localizeScene } from "@shared/copy";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 import { asMaterial } from "../_core/material";
 import { buildPromptForPersona } from "./prompt";
 import { splitBurst } from "./burst";
@@ -669,6 +670,8 @@ async function collectPlanText(
   turnInput: Parameters<typeof executePlan>[1],
   io: {
     provider: LLMProvider;
+    plannerProvider?: LLMProvider;
+    voiceProvider?: LLMProvider;
     signal?: AbortSignal;
     options: { temperature?: number; maxTokens?: number; provider?: string };
   },
@@ -676,6 +679,8 @@ async function collectPlanText(
   let text = "";
   for await (const event of executePlan(plan, turnInput, {
     provider: io.provider,
+    plannerProvider: io.plannerProvider,
+    voiceProvider: io.voiceProvider,
     mode: "once",
     rerank: false,
     signal: io.signal,
@@ -685,6 +690,27 @@ async function collectPlanText(
     if (event.type === "final") text = event.text || text;
   }
   return text;
+}
+
+async function resolveStageProviders(params: {
+  userId: number;
+  fallback: LLMProvider;
+  personaProviderName?: string;
+  settings: ReturnType<typeof normalizePersonaSettings>;
+}): Promise<{ planner: LLMProvider; voice: LLMProvider }> {
+  const plannerName = params.settings.providers?.planner || params.personaProviderName;
+  const voiceName = params.settings.providers?.voice || params.personaProviderName;
+  const planner =
+    plannerName && plannerName !== params.personaProviderName
+      ? (await resolveProviderForUser({ userId: params.userId, providerName: plannerName })) ??
+        params.fallback
+      : params.fallback;
+  const voice =
+    voiceName && voiceName !== params.personaProviderName
+      ? (await resolveProviderForUser({ userId: params.userId, providerName: voiceName })) ??
+        params.fallback
+      : params.fallback;
+  return { planner, voice };
 }
 
 async function findPendingChoiceMessage(
@@ -1100,11 +1126,21 @@ async function* runConversationTurn(
       `No LLM provider available${options.providerName ? ` (requested: ${options.providerName})` : ""}. Configure at least one provider in .env`,
     );
   }
+  const stageProviders =
+    provider && plan.layersUsed.includes("twoStage")
+      ? await resolveStageProviders({
+          userId,
+          fallback: provider,
+          personaProviderName: options.providerName,
+          settings: normalizePersonaSettings(persona.settings),
+        })
+      : null;
 
   let replyText = "";
   let streamedText = "";
   let projection: string[] = [];
   let rerank: unknown;
+  let twoStage: "ok" | "fallback" | undefined;
   let failed = false;
   let failureMessage = "";
   const invokeOptions = {
@@ -1126,11 +1162,15 @@ async function* runConversationTurn(
     try {
       const first = (await collectPlanText(plan, turnInput, {
         provider: provider!,
+        plannerProvider: stageProviders?.planner,
+        voiceProvider: stageProviders?.voice,
         signal: options.signal,
         options: invokeOptions,
       })).trim();
       const second = (await collectPlanText(plan, turnInput, {
         provider: provider!,
+        plannerProvider: stageProviders?.planner,
+        voiceProvider: stageProviders?.voice,
         signal: options.signal,
         options: invokeOptions,
       })).trim();
@@ -1198,6 +1238,8 @@ async function* runConversationTurn(
       if (!timingEnabled) yield { type: "delta", text: replyText };
     } else for await (const event of executePlan(plan, turnInput, {
       provider: provider!,
+      plannerProvider: stageProviders?.planner,
+      voiceProvider: stageProviders?.voice,
       mode: options.mode,
       rerank: rerankEnabled,
       signal: options.signal,
@@ -1214,6 +1256,7 @@ async function* runConversationTurn(
         replyText = event.text || replyText;
         projection = event.projection;
         rerank = event.rerank;
+        twoStage = event.twoStage;
       }
     }
     if (!timingEnabled && streamedText && replyText && replyText !== streamedText) {
@@ -1511,6 +1554,7 @@ async function* runConversationTurn(
         }
       : {}),
     ...(plan.reanchor && plan.reanchor.length > 0 ? { reanchor: plan.reanchor } : {}),
+    ...(twoStage === "fallback" ? { twoStage: "fallback" as const } : {}),
   };
   let parts = [finalText];
   if (timingEnabled && behavior) {
