@@ -281,6 +281,43 @@ describe("the imperfection in the prompt", () => {
     expect(after.indexOf("【减法】")).toBeGreaterThan(-1);
   });
 
+  it("does not mention a knowledge boundary until the user confirms it", () => {
+    const candidate = {
+      id: "s-knowledge",
+      pattern: "股票基金理财",
+      kind: "knowledge_boundary",
+      confidence: 0.7,
+      source: "auto",
+      verified: false,
+      evidence: [{ snippet: "听不懂 说人话" }],
+    };
+    const before = buildSystemPrompt(
+      {
+        ...persona,
+        personaData: { ...persona.personaData, suppressions: [candidate] },
+      },
+      { locale: "zh" },
+    );
+    expect(before).not.toContain("你不懂这类话题");
+    expect(before).not.toContain("股票基金理财");
+    const after = buildSystemPrompt(
+      {
+        ...persona,
+        personaData: {
+          ...persona.personaData,
+          suppressions: [{ ...candidate, verified: true }],
+        },
+      },
+      { locale: "zh" },
+    );
+    expect(after).toContain("你不懂这类话题");
+    expect(after).toContain("股票基金理财");
+    const fenced = /<persona_data>[\s\S]*?<\/persona_data>/g;
+    const unfenced = after.replace(fenced, "");
+    expect(unfenced).not.toContain("股票基金理财");
+    expect(after.indexOf("【减法】")).toBeGreaterThan(-1);
+  });
+
   it("names one action in the instruction zone", () => {
     const prompt = buildSystemPrompt(persona, { locale: "zh", sampledAct: "tease" });
     expect(prompt).toContain("开玩笑、损一下");

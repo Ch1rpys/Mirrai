@@ -42,6 +42,25 @@ describe("subtraction rules", () => {
     expect(text).not.toContain("我理解你");
   });
 
+  it("renders a confirmed knowledge-boundary subtraction", () => {
+    const text = renderSuppressions(
+      [
+        {
+          id: "s4",
+          pattern: "股票基金理财",
+          kind: "knowledge_boundary",
+          confidence: 0.7,
+          source: "auto",
+          verified: true,
+          evidence: [],
+        },
+      ],
+      "zh",
+    );
+    expect(text).toContain("你不懂这类话题");
+    expect(text).toContain("股票基金理财");
+  });
+
   it("renders a confirmed multi-point subtraction", () => {
     const text = renderSuppressions(
       [

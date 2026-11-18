@@ -24,6 +24,7 @@ export const SUPPRESSION_KINDS = [
   "forget_wrong",
   "forget_deflect",
   "multi_point",
+  "knowledge_boundary",
 ] as const;
 
 export type SuppressionKind = (typeof SUPPRESSION_KINDS)[number];
@@ -119,6 +120,7 @@ const KIND_LINE: Record<SuppressionKind, `prompt.suppression.${SuppressionKind}`
   forget_wrong: "prompt.suppression.forget_wrong",
   forget_deflect: "prompt.suppression.forget_deflect",
   multi_point: "prompt.suppression.multi_point",
+  knowledge_boundary: "prompt.suppression.knowledge_boundary",
 };
 
 /**

@@ -45,6 +45,7 @@ import { aggregateStances, mergeStances, type Stance, type StanceCard } from "@s
 import { normalizePeriods, type PersonaPeriod } from "@shared/periods";
 import { mineForgetStyles, mineSuppressions } from "./suppressions";
 import { mineMultiPoint } from "@shared/multi-point";
+import { mineKnowledgeBoundary } from "./knowledge-boundary";
 import { mineOpenLoops } from "./open-loops";
 import { mineRoutines } from "./routine";
 import { minePeriods } from "./periods";
@@ -1684,6 +1685,7 @@ async function runSkillPipelineOnce(
       ...mineSuppressions({ messages: transcriptRows, locale }),
       ...mineForgetStyles({ messages: transcriptRows, locale }),
       ...mineMultiPoint({ messages: transcriptRows, locale }),
+      ...mineKnowledgeBoundary(recordLines.length ? recordLines : transcriptRows, { locale }),
     ];
     const minedLifeEvents = [
       ...mineOpenLoops({ messages: transcriptRows }),
