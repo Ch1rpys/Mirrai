@@ -210,6 +210,8 @@ export interface StyleFingerprintCore {
     exclaimRuns: number[];
     questionRuns: number[];
     halfWidthRate: number;
+    /** How many `？！，?!,` were counted. B3.4 needs a floor of 30. */
+    markCount: number;
   };
   laugh: { rate: number; forms: Record<string, number>; haRuns: number[] };
   reduplication: Record<string, number>;
@@ -598,6 +600,7 @@ function measureCore(
       exclaimRuns,
       questionRuns,
       halfWidthRate: markTotal === 0 ? 0 : halfMarks / markTotal,
+      markCount: markTotal,
     },
     laugh: { rate: asRate(laughLines), forms: laughFormRates, haRuns },
     reduplication: redupRates,
