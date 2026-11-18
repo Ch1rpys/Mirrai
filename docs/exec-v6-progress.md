@@ -88,7 +88,7 @@
 | B6.6 | ⬜ |  |  |
 | B6.7 | ⬜ |  |  |
 | B6.8 | ⬜ |  |  |
-| B6.9 | ⬜ |  |  |
+| B6.9 | ✅ | 881d917 | `memory-extract-source.test.ts` `stores a fact the persona said as a ledger entry, not an anchor`：`createMemory` 一次，`subject: "said"` `category: "memory"` `importance: 1` `source: "chat"`，不是锚点。`retrieval.test.ts` `marks a said memory, and never puts it among the anchors`：渲染含 `prompt.memoryMarkerSaid`「这是你在这里说过的话，不是记录里的事实」；`selectMemories` 里 `said` 即使 `category: "anchor"` 也不进 `anchors`，仍进 `selected`。`routers.memory-said.test.ts` 2 通过：`said`→`them` 时 `updateMemory` 收到 `source: "manual"`；已经是 `them` 的不改 source。`MemoryReview.test.tsx`：三个分组标题「关于 TA 的 / 关于我的 / 分身说过的」；点「这是真的」调用 `memory.update({ id: 3, subject: "them" })`。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `392 passed \| 5 skipped (397)` 文件，`3445 passed \| 21 skipped (3466)` 用例。 |
 | B7.1 | ⬜ |  |  |
 | B7.2 | ⬜ |  |  |
 | B7.3 | ⬜ |  |  |
@@ -334,6 +334,8 @@
 | 130 | B4.7 | `normalizeSuppressions` 丢掉空 `pattern` | `multi_point` 允许空 pattern（preferLast 在 0.35–0.65 时手册说留空） | 其它 kind 仍要求有 pattern。 |
 | 131 | B4.8 | 用这一轮的 `rng` 抽 `selfStartRate` | 另开 `seededRandom(seed + ":in-session")` | 主 rng 已经被动作抽样用过；再抽会改仪式/簇的结果，已有 generate 测试会红。同一种子两次仍相同。 |
 | 132 | B4.8 | 材料含此刻作息时段 | 只取已确认未关闭的未结事项、进行中生活事件 | B6.3 还没做，没有 routine。没有材料就不加指令。 |
+| 133 | B6.9 | 应用内抽取提示词仍写「分身的话不是事实来源」 | `prompts.memoryExtractionInApp` 仍说是重建出来的，但允许提取，应用记成「分身说过的」 | A8 那句会让模型根本不抽分身说的话，账本填不满。存储路径仍强制 `subject: "said"`、`category: "memory"`。 |
+| 134 | B6.9 | A8 的 `listFromPersona` / `keepFromPersona` 并入记忆面板 | 面板改按 `memory.list` 的 `subject` 分成三组；「这是真的」走 `memory.update`。那两个 procedure 仍在 | 已有路由测试和 `db-behaviour` 还在用它们。分组后不再靠 `messageId` 指向 assistant 行来识别。 |
 
 ## 未验证清单
 
@@ -1133,4 +1135,12 @@ B4.1、B4.2 维持 🟡。B4.3、B4.4、B4.5、B4.6、B4.7、B4.8 改回 ⬜。�
 - 停留同样丢掉 48 小时内没有转好的段。夹具中位落在 300±30，测试下界改回 270。
 - 闸门仍是 `391 passed | 5 skipped (396)` 文件，`3443 passed | 21 skipped (3464)` 用例，`all six steps passed`。
 - B4.3、B4.4 改回 🟡。偏差表、未验证清单、待用户决定无新增。
+
+### WP8 · 实现会话 · 2026-11-18 · B6.9
+
+- 分支 `exec/v6`。独立验收留下的 `- [ ]` 无。没有「等 xxx」且依赖已完成的推后项（B4.8 的作息仍等 B6.3）。
+- `881d917`：应用内抽取把分身说的话存成 `subject: "said"`、`category: "memory"`、`importance: 1`；召回照常打分，渲染带标记，永不进锚点；「这是真的」把 `subject` 改成 `them`、`source` 改成 `manual`。记忆面板三个分组。
+- 闸门 `392 passed | 5 skipped (397)` 文件，`3445 passed | 21 skipped (3466)` 用例，`all six steps passed`。相对 WP7 收尾（391/5 文件、3443/21 用例）：通过文件 +1、通过用例 +2；跳过数不变。
+- 偏差 133、134。未验证清单、待用户决定无新增。
+- B6.9 标 ✅。接着做 B6.1。
 
