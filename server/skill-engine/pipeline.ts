@@ -41,7 +41,8 @@ import { normalizeLifeEvents, type LifeEvent } from "@shared/life-events";
 import { normalizeOpeningProfile, type OpeningProfile } from "@shared/opening-profile";
 import { mergeLexicon, type LexiconEntry } from "@shared/lexicon";
 import { normalizePeriods, type PersonaPeriod } from "@shared/periods";
-import { mineSuppressions, mineForgetStyles } from "./suppressions";
+import { mineForgetStyles, mineSuppressions } from "./suppressions";
+import { mineMultiPoint } from "@shared/multi-point";
 import { mineOpenLoops } from "./open-loops";
 import { minePeriods } from "./periods";
 import { buildActProfile } from "./acts";
@@ -1663,6 +1664,7 @@ async function runSkillPipelineOnce(
     const minedSuppressions = [
       ...mineSuppressions({ messages: transcriptRows, locale }),
       ...mineForgetStyles({ messages: transcriptRows, locale }),
+      ...mineMultiPoint({ messages: transcriptRows, locale }),
     ];
     const minedLifeEvents = mineOpenLoops({ messages: transcriptRows });
     await labelActsForRecords({

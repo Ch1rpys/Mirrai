@@ -264,6 +264,9 @@ describe("measureStyleProfile", () => {
       "安",
       "睡啦",
     ]);
+    expect(measured.multiPoint?.samples).toBeGreaterThanOrEqual(30);
+    expect(measured.multiPoint?.coverageMedian).toBeGreaterThan(0.25);
+    expect(measured.multiPoint?.coverageMedian).toBeLessThan(0.42);
   });
 
   it("remakes the sample pool from labelled rows even when the records version is unchanged", async () => {

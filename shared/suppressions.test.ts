@@ -42,6 +42,25 @@ describe("subtraction rules", () => {
     expect(text).not.toContain("我理解你");
   });
 
+  it("renders a confirmed multi-point subtraction", () => {
+    const text = renderSuppressions(
+      [
+        {
+          id: "s3",
+          pattern: "通常接最后一件",
+          kind: "multi_point",
+          confidence: 0.7,
+          source: "auto",
+          verified: true,
+          evidence: [],
+        },
+      ],
+      "zh",
+    );
+    expect(text).toContain("只接其中一件");
+    expect(text).toContain("通常接最后一件");
+  });
+
   it("drops a row with no pattern and a row of an unknown kind", () => {
     expect(normalizeSuppressions([{ kind: "no_advice" }, { pattern: "x", kind: "yell" }])).toEqual([]);
   });

@@ -244,6 +244,43 @@ describe("the imperfection in the prompt", () => {
     expect(subtraction).toBeGreaterThan(rules);
   });
 
+  it("does not mention a multi-point habit until the user confirms it", () => {
+    const candidate = {
+      id: "s-multi",
+      pattern: "通常接最后一件",
+      kind: "multi_point",
+      confidence: 0.7,
+      source: "auto",
+      verified: false,
+      evidence: [{ snippet: "到家了。今天好累" }],
+    };
+    const before = buildSystemPrompt(
+      {
+        ...persona,
+        personaData: { ...persona.personaData, suppressions: [candidate] },
+      },
+      { locale: "zh" },
+    );
+    expect(before).not.toContain("只接其中一件");
+    expect(before).not.toContain("通常接最后一件");
+    const after = buildSystemPrompt(
+      {
+        ...persona,
+        personaData: {
+          ...persona.personaData,
+          suppressions: [{ ...candidate, verified: true }],
+        },
+      },
+      { locale: "zh" },
+    );
+    expect(after).toContain("只接其中一件");
+    expect(after).toContain("通常接最后一件");
+    const fenced = /<persona_data>[\s\S]*?<\/persona_data>/g;
+    const unfenced = after.replace(fenced, "");
+    expect(unfenced).not.toContain("通常接最后一件");
+    expect(after.indexOf("【减法】")).toBeGreaterThan(-1);
+  });
+
   it("names one action in the instruction zone", () => {
     const prompt = buildSystemPrompt(persona, { locale: "zh", sampledAct: "tease" });
     expect(prompt).toContain("开玩笑、损一下");

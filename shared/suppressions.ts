@@ -23,6 +23,7 @@ export const SUPPRESSION_KINDS = [
   "forget_admit",
   "forget_wrong",
   "forget_deflect",
+  "multi_point",
 ] as const;
 
 export type SuppressionKind = (typeof SUPPRESSION_KINDS)[number];
@@ -84,7 +85,8 @@ export function normalizeSuppressions(value: unknown): Suppression[] {
     const record = item as Record<string, unknown>;
     const pattern = toText(record.pattern);
     const kind = record.kind;
-    if (!pattern || !isSuppressionKind(kind)) return;
+    if (!isSuppressionKind(kind)) return;
+    if (!pattern && kind !== "multi_point") return;
     const source = record.source === "manual" ? "manual" : "auto";
     out.push({
       id: toText(record.id) || `suppression-${index + 1}`,
@@ -116,6 +118,7 @@ const KIND_LINE: Record<SuppressionKind, `prompt.suppression.${SuppressionKind}`
   forget_admit: "prompt.suppression.forget_admit",
   forget_wrong: "prompt.suppression.forget_wrong",
   forget_deflect: "prompt.suppression.forget_deflect",
+  multi_point: "prompt.suppression.multi_point",
 };
 
 /**

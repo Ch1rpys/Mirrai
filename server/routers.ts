@@ -150,6 +150,7 @@ import { normalizeSuppressions } from "@shared/suppressions";
 import { correctActCount, normalizeActProfile } from "@shared/act-profile";
 import { normalizeLifeEvents } from "@shared/life-events";
 import { mineForgetStyles, mineSuppressions } from "./skill-engine/suppressions";
+import { mineMultiPoint } from "@shared/multi-point";
 import { mineLexicon } from "./skill-engine/lexicon";
 import { lexiconRejectedKey, normalizeLexicon } from "@shared/lexicon";
 import { mineOpenLoops } from "./skill-engine/open-loops";
@@ -5687,6 +5688,7 @@ export const appRouter = router({
           const mined = [
             ...mineSuppressions({ messages: rows, locale: input.locale }),
             ...mineForgetStyles({ messages: rows, locale: input.locale }),
+            ...mineMultiPoint({ messages: rows, locale: input.locale }),
           ];
           if (!mined.length) {
             return { rules: [], hint: copy(input.locale, "prompt.samplesTooThin") };
@@ -5710,6 +5712,7 @@ export const appRouter = router({
           kind: z.enum([
             "no_question_ending", "no_phrase", "no_advice", "no_subclause",
             "no_word_class", "avoid_topic", "forget_admit", "forget_wrong", "forget_deflect",
+            "multi_point",
           ]),
           confidence: z.number().min(0).max(1).default(0.5),
           source: z.enum(["auto", "manual"]).default("manual"),

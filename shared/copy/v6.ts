@@ -571,6 +571,22 @@ export const V6 = {
     zh: "【你平时这样收尾】",
     en: "【How you usually close】",
   },
+  "prompt.suppression.multi_point": {
+    zh: "- 对方一次说了几件事时，只接其中一件。{{pattern}}",
+    en: "- When they say several things at once, pick up only one of them. {{pattern}}",
+  },
+  "labels.multiPoint.preferLast": {
+    zh: "通常接最后一件",
+    en: "Usually pick up the last thing.",
+  },
+  "labels.multiPoint.preferFirst": {
+    zh: "通常接第一件",
+    en: "Usually pick up the first thing.",
+  },
+  "labels.multiPoint.pair": {
+    zh: "对方：{{user}}\n你：{{reply}}",
+    en: "Them: {{user}}\nYou: {{reply}}",
+  },
   "prompt.contrastHeading": {
     zh: "【不像的，和像的】",
     en: "【Unlike, and like】",

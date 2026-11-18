@@ -15,6 +15,7 @@ import {
   type TriggerEntry,
 } from "./conflicts";
 import { normalizeSessionProfile, type SessionProfile } from "./session-profile";
+import { normalizeMultiPoint, type MultiPointProfile } from "./multi-point";
 import { normalizeEmotionDynamics, type EmotionDynamics } from "./emotion-dynamics";
 import { normalizeSamplePool, type SamplePool } from "./sample-pool";
 import type { StyleFingerprint } from "./style-fingerprint";
@@ -73,7 +74,7 @@ export interface StyleProfile {
   doubleText?: unknown; // 由 B5.7 填
   sessions?: SessionProfile;
   inSession?: unknown; // 由 B4.8 填
-  multiPoint?: unknown; // 由 B4.7 填
+  multiPoint?: MultiPointProfile;
   emotionDynamics?: EmotionDynamics;
   conflict?: ConflictProfile;
   triggers?: TriggerEntry[];
@@ -141,6 +142,11 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
       if (key === "sessions") {
         const sessions = normalizeSessionProfile(source.sessions);
         if (sessions) profile.sessions = sessions;
+        continue;
+      }
+      if (key === "multiPoint") {
+        const multiPoint = normalizeMultiPoint(source.multiPoint);
+        if (multiPoint) profile.multiPoint = multiPoint;
         continue;
       }
       (profile as unknown as Record<string, unknown>)[key] = source[key];

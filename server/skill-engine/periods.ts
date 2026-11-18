@@ -18,6 +18,7 @@ import {
 import type { Suppression } from "@shared/suppressions";
 import { labelSpeechActByRule } from "@shared/speech-acts";
 import { mineForgetStyles, mineSuppressions } from "./suppressions";
+import { mineMultiPoint } from "@shared/multi-point";
 
 export function minePeriods(params: {
   messages: Array<{ role: string; content: string; timestamp: Date | null }>;
@@ -35,6 +36,7 @@ export function minePeriods(params: {
       suppressionsDelta: params.suppressions?.[index] ?? [
         ...mineSuppressions({ messages: slice, locale: params.locale }),
         ...mineForgetStyles({ messages: slice, locale: params.locale }),
+        ...mineMultiPoint({ messages: slice, locale: params.locale }),
       ],
     };
   });

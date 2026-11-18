@@ -139,4 +139,26 @@ describe("the style profile", () => {
     });
     expect(empty.sessions).toBeUndefined();
   });
+
+  it("keeps a multi-point profile and drops a malformed one", () => {
+    const profile = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      multiPoint: {
+        samples: 40,
+        coverageMedian: 1 / 3,
+        preferLast: 0.8,
+        examples: [{ user: "到家了。今天好累", reply: "先歇歇" }],
+      },
+    });
+    expect(profile.multiPoint?.preferLast).toBe(0.8);
+    const empty = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      multiPoint: { samples: 0 },
+    });
+    expect(empty.multiPoint).toBeUndefined();
+  });
 });
