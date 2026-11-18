@@ -501,4 +501,26 @@ export const V6 = {
     zh: "句末带句号",
     en: "They end on a period.",
   },
+  "prompts.distill.lexiconFilter": {
+    zh: [
+      "你在看这两个人聊天里反复出现、又不是日常用词的说法。",
+      "材料是候选词和原话。只从清单里勾出只在这两个人之间才有的说法、外号、梗。",
+      "每个给一句不超过 20 字的解释。",
+      "清单里没有的词不要写。",
+      "只输出 JSON 数组，不要解释：",
+      '[{ "term": "", "gloss": "" }]',
+    ].join("\n"),
+    en: [
+      "You are looking at phrases that keep turning up in these two people's chat and are not everyday language.",
+      "The material is candidate terms and quoted lines. From that list only, pick the nicknames, in-jokes, and private phrases that belong to these two people.",
+      "Give each one a gloss of at most 20 characters.",
+      "Do not write a term that is not on the list.",
+      "Return a JSON array only, with no explanation:",
+      '[{ "term": "", "gloss": "" }]',
+    ].join("\n"),
+  },
+  "prompt.lexiconLine": {
+    zh: "你们之间的说法：{{term}}——{{gloss}}",
+    en: "A phrase between you: {{term}} — {{gloss}}",
+  },
 } as const satisfies CopyTable;
