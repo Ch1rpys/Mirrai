@@ -41,6 +41,7 @@ import { DEFAULT_SCENE_BREAK_HOURS } from "@shared/scenes";
 import { PERIOD_SILENCE_DAYS } from "@shared/periods";
 import type { MaterialCounts } from "@shared/material-report";
 import { RITUAL_MAX_REPLY_CHARS, RITUAL_MAX_TRIGGER_CHARS } from "@shared/ritual-table";
+import { charBigrams } from "@shared/act-clusters";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -4743,6 +4744,91 @@ export async function getCollectedMessagesForPersona(
   return query
     .orderBy(asc(sql`COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt})`))
     .limit(options.limit ?? MAX_COLLECTED_MESSAGES);
+}
+
+/**
+ * A lexical hit in the collected records.
+ *
+ * Named so the isolation scan does not treat a return-type `{` as the
+ * start of the function body.
+ */
+export interface SearchRecordsLexicalHit {
+  id: number;
+  content: string;
+  timestamp: Date | null;
+  coverage: number;
+}
+
+export interface SearchRecordsLexicalParams {
+  q: string;
+  role?: "assistant" | "user" | "all";
+  from?: Date;
+  to?: Date;
+  limit?: number;
+  offset?: number;
+}
+
+function lexicalCoverage(query: string, haystack: string): number {
+  const left = charBigrams(query);
+  if (left.size === 0) return 0;
+  const right = charBigrams(haystack);
+  let hits = 0;
+  for (const gram of left) if (right.has(gram)) hits += 1;
+  return hits / left.size;
+}
+
+/**
+ * Newest twenty thousand records scored by character-bigram overlap.
+ *
+ * Full-text `searchTokens` arrives with C8.6. Until then the scan is
+ * in memory, with the same owner filter as every other helper.
+ */
+export async function searchRecordsLexical(
+  personaId: number,
+  userId: number,
+  params: SearchRecordsLexicalParams,
+): Promise<SearchRecordsLexicalHit[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const q = String(params.q ?? "").trim();
+  if (!q) return [];
+  const role = params.role && params.role !== "all" ? params.role : undefined;
+  const rows = await db
+    .select({
+      id: collectedMessages.id,
+      content: collectedMessages.content,
+      timestamp: collectedMessages.timestamp,
+    })
+    .from(collectedMessages)
+    .where(and(
+      eq(collectedMessages.personaId, personaId),
+      eq(collectedMessages.userId, userId),
+      ...(role ? [eq(collectedMessages.role, role)] : []),
+      ...(params.from ? [gte(collectedMessages.timestamp, params.from)] : []),
+      ...(params.to ? [lte(collectedMessages.timestamp, params.to)] : []),
+    ))
+    .orderBy(desc(sql`COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt})`))
+    .limit(MAX_COLLECTED_MESSAGES);
+  const scored: SearchRecordsLexicalHit[] = [];
+  for (const row of rows) {
+    const text = String(row.content ?? "");
+    if (!text) continue;
+    const coverage = lexicalCoverage(q, text);
+    if (coverage < 0.5 && !text.includes(q)) continue;
+    scored.push({
+      id: row.id,
+      content: text,
+      timestamp: row.timestamp ?? null,
+      coverage: Math.max(coverage, text.includes(q) ? 1 : coverage),
+    });
+  }
+  scored.sort((a, b) => {
+    if (b.coverage !== a.coverage) return b.coverage - a.coverage;
+    return (b.timestamp?.getTime() ?? 0) - (a.timestamp?.getTime() ?? 0);
+  });
+  const offset = Math.max(0, params.offset ?? 0);
+  const limit = Math.max(1, params.limit ?? 20);
+  return scored.slice(offset, offset + limit);
 }
 
 /**
