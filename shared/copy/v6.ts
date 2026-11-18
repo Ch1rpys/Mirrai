@@ -555,6 +555,10 @@ export const V6 = {
     zh: "【你冷下来的时候说过的话】",
     en: "【Lines from when you went cold】",
   },
+  "prompt.triggersHeading": {
+    zh: "【这些话之后你通常会不高兴】",
+    en: "【After these, you usually went cold】",
+  },
   "prompt.repairLinesHeading": {
     zh: "【你以前是这样和好的】",
     en: "【How you used to make up】",

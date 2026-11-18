@@ -1700,6 +1700,34 @@ describe("persona sampling on the reply", () => {
     expect(firstPrompt.includes(heading)).toBe(secondPrompt.includes(heading));
   });
 
+  it("puts trigger lines in the fence when the table exists", async () => {
+    const withTriggers = personaWithConflict("warm", 60);
+    withTriggers.styleProfile.triggers = [
+      {
+        userAct: "acknowledge",
+        to: "distant",
+        n: 6,
+        examples: [{ recordId: 11, text: "嗯" }],
+      },
+    ];
+    const plan = await planTurn({
+      persona: withTriggers,
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "conflict:triggers",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    const heading = copy("zh", "prompt.triggersHeading");
+    expect(prompt).toContain(heading);
+    expect(prompt).toContain("嗯");
+    const unfenced = prompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "");
+    expect(unfenced).not.toContain("嗯");
+  });
+
   it("omits conflict material with --without emotionInertia", async () => {
     const plan = await planTurn({
       persona: personaWithConflict("distant", 9 * 60),

@@ -464,6 +464,7 @@ export async function composeMessages(params: {
   actClusterLines?: string[] | null;
   coldLines?: string[] | null;
   repairLines?: string[] | null;
+  triggerLines?: string[] | null;
   restrictExemplarsToAct?: boolean;
   periodId?: string | null;
   excludeExemplarIds?: number[];
@@ -561,6 +562,7 @@ export async function composeMessages(params: {
     actClusterLines: params.actClusterLines ?? null,
     coldLines: params.coldLines ?? null,
     repairLines: params.repairLines ?? null,
+    triggerLines: params.triggerLines ?? null,
     restrictExemplarsToAct: params.restrictExemplarsToAct,
     periodId: params.periodId ?? null,
     excludeExemplarIds: params.excludeExemplarIds,

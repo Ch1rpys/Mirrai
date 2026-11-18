@@ -17,6 +17,7 @@ import { normalizeMicroRules } from "@shared/micro-rules";
 import { normalizeAddressHistory } from "@shared/address-history";
 import { normalizeStyleProfile } from "@shared/style-profile";
 import AddressHistoryView from "@/components/v6/AddressHistoryView";
+import TriggersView from "@/components/v6/TriggersView";
 import { Button } from "@/components/ui/button";
 import { resolveRelationshipPhase } from "@shared/user-side";
 
@@ -136,9 +137,9 @@ export default function PersonaProfile() {
    * present a guess as a decision.
    */
   const confirmedRules = normalizeMicroRules(data.microRules).filter((rule) => rule.verified);
-  const addressHistory = normalizeAddressHistory(
-    normalizeStyleProfile(persona.styleProfile).addressHistory,
-  );
+  const styleProfile = normalizeStyleProfile(persona.styleProfile);
+  const addressHistory = normalizeAddressHistory(styleProfile.addressHistory);
+  const triggers = styleProfile.triggers ?? [];
 
   const portrait: Array<{ field?: EvidenceField; label: string; value: string }> = [];
   if (data.personality) portrait.push({ field: "personality", label: t("profile.personality"), value: data.personality });
@@ -276,6 +277,15 @@ export default function PersonaProfile() {
             className="surface p-5 sm:p-6"
           >
             <AddressHistoryView history={addressHistory} />
+          </motion.section>
+        )}
+
+        {triggers.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.115 }}
+            className="surface p-5 sm:p-6"
+          >
+            <TriggersView name={persona.name} triggers={triggers} />
           </motion.section>
         )}
 

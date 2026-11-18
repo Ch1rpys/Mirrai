@@ -8,7 +8,12 @@
  */
 import type { AddressEntry } from "./address-history";
 import { normalizeActClusters, type ActClusters } from "./act-clusters";
-import { normalizeConflictProfile, type ConflictProfile } from "./conflicts";
+import {
+  normalizeConflictProfile,
+  normalizeTriggers,
+  type ConflictProfile,
+  type TriggerEntry,
+} from "./conflicts";
 import { normalizeEmotionDynamics, type EmotionDynamics } from "./emotion-dynamics";
 import { normalizeSamplePool, type SamplePool } from "./sample-pool";
 import type { StyleFingerprint } from "./style-fingerprint";
@@ -70,7 +75,7 @@ export interface StyleProfile {
   multiPoint?: unknown; // 由 B4.7 填
   emotionDynamics?: EmotionDynamics;
   conflict?: ConflictProfile;
-  triggers?: unknown; // 由 B4.5 填
+  triggers?: TriggerEntry[];
   actClusters?: ActClusters;
   addressHistory?: AddressEntry[];
   stickers?: unknown; // 由 B7.1 填
@@ -125,6 +130,11 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
       if (key === "conflict") {
         const conflict = normalizeConflictProfile(source.conflict);
         if (conflict) profile.conflict = conflict;
+        continue;
+      }
+      if (key === "triggers") {
+        const triggers = normalizeTriggers(source.triggers);
+        if (triggers) profile.triggers = triggers;
         continue;
       }
       (profile as unknown as Record<string, unknown>)[key] = source[key];

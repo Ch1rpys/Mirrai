@@ -102,4 +102,19 @@ describe("the style profile", () => {
     });
     expect(empty.conflict).toBeUndefined();
   });
+
+  it("keeps a trigger table and drops a group that is too small", () => {
+    const profile = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      triggers: [
+        { userAct: "acknowledge", to: "distant", n: 6, examples: [{ text: "嗯" }] },
+        { userAct: "ask", to: "distant", n: 2, examples: [{ text: "在吗" }] },
+      ],
+    });
+    expect(profile.triggers).toEqual([
+      { userAct: "acknowledge", to: "distant", n: 6, examples: [{ text: "嗯" }] },
+    ]);
+  });
 });

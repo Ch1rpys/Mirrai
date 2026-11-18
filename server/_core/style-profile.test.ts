@@ -256,6 +256,9 @@ describe("measureStyleProfile", () => {
     expect(measured.conflict?.episodes).toBe(6);
     expect(measured.conflict?.repairBy).toEqual({ them: 4, me: 2 });
     expect(measured.conflict?.repairLines).toContain("好啦 不气了");
+    const ack = measured.triggers?.find((row) => row.userAct === "acknowledge");
+    expect(ack?.n).toBe(6);
+    expect(ack?.examples.every((example) => example.text === "嗯")).toBe(true);
   });
 
   it("remakes the sample pool from labelled rows even when the records version is unchanged", async () => {

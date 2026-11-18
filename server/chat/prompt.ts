@@ -114,6 +114,7 @@ export interface PromptContext {
   actClusterLines?: string[] | null;
   coldLines?: string[] | null;
   repairLines?: string[] | null;
+  triggerLines?: string[] | null;
   /** When the act-cluster layer is on, keep only matching-act exemplars. */
   restrictExemplarsToAct?: boolean;
   /**
@@ -232,6 +233,7 @@ export async function buildPromptBundleForPersona(
     actClusterLines: context.promptMode === "planner" ? null : context.actClusterLines ?? null,
     coldLines: context.promptMode === "planner" ? null : context.coldLines ?? null,
     repairLines: context.promptMode === "planner" ? null : context.repairLines ?? null,
+    triggerLines: context.promptMode === "planner" ? null : context.triggerLines ?? null,
     promptMode: context.promptMode,
     exemplarSection:
       context.promptMode === "planner" || context.skipExemplars

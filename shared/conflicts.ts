@@ -41,18 +41,37 @@ export interface ConflictTrigger {
   text: string;
   userAct: UserAct;
   recordId?: number;
+  at?: string;
 }
 
 export interface ConflictEpisode {
   startAt: number;
   durationMin: number;
   trigger: ConflictTrigger;
+  /** The negative state this freeze entered. */
+  to: "distant" | "melancholy";
   repairBy: "them" | "me";
   repairLine?: string;
   coldLines: string[];
   /** When I spoke first, they came back to a non-negative state in the same scene. */
   repairAccepted: boolean;
 }
+
+export interface TriggerExample {
+  recordId?: number;
+  text: string;
+  at?: string;
+}
+
+export interface TriggerEntry {
+  userAct: UserAct;
+  to: "distant" | "melancholy";
+  n: number;
+  examples: TriggerExample[];
+}
+
+export const TRIGGER_MIN_N = 3;
+export const TRIGGER_EXAMPLES_MAX = 3;
 
 export interface ConflictProfile {
   episodes: number;
@@ -226,6 +245,7 @@ export function mineConflictEpisodes(scenes: ConflictScene[]): ConflictEpisode[]
     const recovered = lines[recovery]!;
     const triggerLine = lastUserBefore(lines, freezeFrom);
     const durationMin = Math.round((recovered.at - opener.at) / 60_000);
+    const to = opener.emotion === "melancholy" ? "melancholy" : "distant";
     if (durationMin < 1) {
       i = recovery;
       continue;
@@ -238,7 +258,9 @@ export function mineConflictEpisodes(scenes: ConflictScene[]): ConflictEpisode[]
         text: triggerLine?.content ?? "",
         userAct: triggerAct(triggerLine),
         ...(triggerLine?.id != null ? { recordId: triggerLine.id } : {}),
+        ...(triggerLine ? { at: new Date(triggerLine.at).toISOString() } : {}),
       },
+      to,
       repairBy,
       ...(repairBy === "them" ? { repairLine: afterLine.content } : {}),
       coldLines: coldFromStretch(lines, stretchStart, recovery),
@@ -305,6 +327,62 @@ export function mineConflicts(
   personaData?: { harmReport?: unknown } | null,
 ): ConflictProfile | null {
   return summarizeConflicts(mineConflictEpisodes(scenes), personaData);
+}
+
+export function groupConflictTriggers(episodes: ConflictEpisode[]): TriggerEntry[] {
+  const groups = new Map<string, TriggerEntry>();
+  for (const episode of episodes) {
+    const key = `${episode.trigger.userAct}:${episode.to}`;
+    const existing = groups.get(key) ?? {
+      userAct: episode.trigger.userAct,
+      to: episode.to,
+      n: 0,
+      examples: [],
+    };
+    existing.n += 1;
+    if (episode.trigger.text && existing.examples.length < TRIGGER_EXAMPLES_MAX) {
+      const example: TriggerExample = { text: episode.trigger.text };
+      if (episode.trigger.recordId != null) example.recordId = episode.trigger.recordId;
+      if (episode.trigger.at) example.at = episode.trigger.at;
+      const seen = existing.examples.some((row) => row.text === example.text && row.recordId === example.recordId);
+      if (!seen) existing.examples.push(example);
+    }
+    groups.set(key, existing);
+  }
+  return [...groups.values()]
+    .filter((entry) => entry.n >= TRIGGER_MIN_N)
+    .sort((a, b) => b.n - a.n || a.userAct.localeCompare(b.userAct));
+}
+
+export function normalizeTriggers(value: unknown): TriggerEntry[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: TriggerEntry[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    if (!isUserAct(row.userAct)) continue;
+    const to = row.to === "melancholy" ? "melancholy" : row.to === "distant" ? "distant" : null;
+    if (!to) continue;
+    const n = Math.max(0, Math.round(Number(row.n) || 0));
+    if (n < TRIGGER_MIN_N) continue;
+    const examples: TriggerExample[] = [];
+    if (Array.isArray(row.examples)) {
+      for (const example of row.examples) {
+        if (!example || typeof example !== "object") continue;
+        const ex = example as Record<string, unknown>;
+        const text = String(ex.text ?? "").trim();
+        if (!text) continue;
+        const next: TriggerExample = { text };
+        const recordId = Math.round(Number(ex.recordId));
+        if (Number.isFinite(recordId) && recordId > 0) next.recordId = recordId;
+        if (typeof ex.at === "string" && ex.at) next.at = ex.at;
+        examples.push(next);
+        if (examples.length >= TRIGGER_EXAMPLES_MAX) break;
+      }
+    }
+    out.push({ userAct: row.userAct, to, n, examples });
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 export function pickConflictDuration(all: number[], random: () => number): number | null {

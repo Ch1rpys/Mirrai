@@ -279,6 +279,10 @@ export interface SystemPromptOptions {
    */
   repairLines?: string[] | null;
   /**
+   * User-acts that used to precede a freeze. Material: it is fenced.
+   */
+  triggerLines?: string[] | null;
+  /**
    * Past replies of theirs, already formatted and fenced by the caller.
    */
   exemplarSection?: string | null;
@@ -716,6 +720,13 @@ export function buildSystemPromptParts(
       ]
         .filter(Boolean)
         .join("\n"),
+    },
+    {
+      kind: "volatile",
+      text:
+        options.triggerLines && options.triggerLines.length > 0
+          ? asMaterial(copy(locale, "prompt.triggersHeading"), options.triggerLines.join("\n"))
+          : "",
     },
     {
       kind: "volatile",

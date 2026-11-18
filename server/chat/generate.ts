@@ -14,7 +14,13 @@ import type { LLMMessage, LLMOptions, LLMProvider } from "../llm/types";
 import { llmService } from "../llm";
 import { copy } from "@shared/copy";
 import { dayPartFromHour, normalizeActProfile, sampleAct, type ActDayPart, type ActVia } from "@shared/act-profile";
-import { isUserAsking, labelUserActByRule, type SpeechAct, type UserAct } from "@shared/speech-acts";
+import {
+  isUserAsking,
+  labelUserActByRule,
+  USER_ACT_COPY_KEYS,
+  type SpeechAct,
+  type UserAct,
+} from "@shared/speech-acts";
 import { loadBehaviorProfile, seededRandom } from "../_core/behavior-profile";
 import { zonedHour } from "@shared/timezone";
 import { pickRerankWinner, type RerankResult } from "./rerank";
@@ -44,7 +50,11 @@ import { defaultAddressForms, FINGERPRINT_STATES, type EmotionalState, type Styl
 import { projectStyle } from "@shared/style-projection";
 import { hasPromptLexicon } from "@shared/lexicon";
 import { pickActClusterLines } from "@shared/act-clusters";
-import { normalizeConflictProfile, shouldForceRepair } from "@shared/conflicts";
+import {
+  normalizeConflictProfile,
+  normalizeTriggers,
+  shouldForceRepair,
+} from "@shared/conflicts";
 import { normalizeEmotionDynamics } from "@shared/emotion-dynamics";
 import { filterHarm } from "@shared/harm";
 import { relationshipIsOver } from "@shared/relationship-ended";
@@ -237,6 +247,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     layers.emotionInertia &&
       (normalizeEmotionDynamics(effectiveStyleProfile(input.persona).emotionDynamics) ||
         conflictTurn.coldLines.length > 0 ||
+        conflictTurn.triggerLines.length > 0 ||
         conflictTurn.forceRepair),
   );
 
@@ -262,6 +273,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       actClusterLines: clusterLines,
       coldLines: conflictTurn.coldLines,
       repairLines: conflictTurn.repairLines,
+      triggerLines: conflictTurn.triggerLines,
       excludeExemplarIds: [...(input.exclude.recordIds ?? []), ...seeds.excludeIds],
       excludeExemplarTexts: [...(input.exclude.texts ?? []), ...seeds.excludeTexts],
       seedTurnsNote: seeds.note,
@@ -329,6 +341,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     actClusterLines: clusterLines,
     coldLines: conflictTurn.coldLines,
     repairLines: conflictTurn.repairLines,
+    triggerLines: conflictTurn.triggerLines,
     seedTurnsNote: seeds.note,
     styleReminderLines: reminder.lines,
     reanchorIssues: reminder.issues,
@@ -676,26 +689,39 @@ async function ritualPlanForTurn(
 function conflictMaterialForTurn(
   input: TurnInput,
   enabled: boolean,
-): { coldLines: string[]; repairLines: string[]; forceRepair: boolean } {
-  const empty = { coldLines: [] as string[], repairLines: [] as string[], forceRepair: false };
+): { coldLines: string[]; repairLines: string[]; triggerLines: string[]; forceRepair: boolean } {
+  const empty = {
+    coldLines: [] as string[],
+    repairLines: [] as string[],
+    triggerLines: [] as string[],
+    forceRepair: false,
+  };
   if (!enabled) return empty;
-  const conflict = normalizeConflictProfile(effectiveStyleProfile(input.persona).conflict);
-  if (!conflict) return empty;
+  const profile = effectiveStyleProfile(input.persona);
+  const conflict = normalizeConflictProfile(profile.conflict);
+  const triggers = normalizeTriggers(profile.triggers) ?? [];
   const state = String(input.actCondition?.emotion ?? input.persona.emotionalState ?? "");
   const coldLines =
-    state === "distant" || state === "melancholy" ? conflict.coldLines.slice(0, 5) : [];
+    conflict && (state === "distant" || state === "melancholy") ? conflict.coldLines.slice(0, 5) : [];
   const since = sinceStamp(input.persona);
-  const forceRepair = since
-    ? shouldForceRepair({
-        state,
-        sinceMin: (input.now.getTime() - since.at) / 60_000,
-        profile: conflict,
-        random: seededRandom(`${input.persona.id}:${since.iso}`),
-      })
-    : false;
+  const forceRepair =
+    Boolean(conflict) &&
+    Boolean(since) &&
+    shouldForceRepair({
+      state,
+      sinceMin: (input.now.getTime() - since!.at) / 60_000,
+      profile: conflict!,
+      random: seededRandom(`${input.persona.id}:${since!.iso}`),
+    });
+  const triggerLines = triggers.slice(0, 5).map((entry) => {
+    const label = copy(input.locale, USER_ACT_COPY_KEYS[entry.userAct]);
+    const example = entry.examples[0]?.text ?? "";
+    return example ? `${label} ${example}` : label;
+  });
   return {
     coldLines,
-    repairLines: forceRepair ? conflict.repairLines.slice() : [],
+    repairLines: forceRepair && conflict ? conflict.repairLines.slice() : [],
+    triggerLines,
     forceRepair,
   };
 }

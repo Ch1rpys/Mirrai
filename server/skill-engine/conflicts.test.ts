@@ -3,6 +3,8 @@ import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
 import { isTextRecord } from "@shared/records";
 import { splitScenes } from "@shared/scenes";
 import {
+  groupConflictTriggers,
+  mineConflictEpisodes,
   mineConflicts,
   pickConflictDuration,
   shouldForceRepair,
@@ -76,6 +78,17 @@ describe("mining the fights that used to go quiet", () => {
     expect(profile!.repairLines).toContain("好啦 不气了");
     expect(profile!.coldLines.length).toBeGreaterThan(0);
     expect(profile!.coldLines.every((line) => /。$/.test(line))).toBe(true);
+    const triggers = groupConflictTriggers(mineConflictEpisodes(fixtureScenes()));
+    expect(triggers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          userAct: "acknowledge",
+          n: 6,
+        }),
+      ]),
+    );
+    const ack = triggers.find((row) => row.userAct === "acknowledge");
+    expect(ack?.examples.every((example) => example.text === "嗯")).toBe(true);
   });
 
   it("returns nothing when there are only two fights", () => {

@@ -40,7 +40,7 @@ import {
 import { measureSamplePool } from "@shared/sample-pool";
 import { measureActClusters } from "@shared/act-clusters";
 import { measureEmotionDynamics } from "@shared/emotion-dynamics";
-import { mineConflicts } from "@shared/conflicts";
+import { groupConflictTriggers, mineConflictEpisodes, summarizeConflicts } from "@shared/conflicts";
 import { splitScenes } from "@shared/scenes";
 import { schedulePersonaEmbeddings } from "../chat/embeddings";
 
@@ -123,7 +123,9 @@ export async function measureStyleProfile(params: {
     })),
   );
   const emotionDynamics = measureEmotionDynamics(labelledScenes);
-  const conflict = mineConflicts(labelledScenes, rawData);
+  const conflictEpisodes = mineConflictEpisodes(labelledScenes);
+  const conflict = summarizeConflicts(conflictEpisodes, rawData);
+  const triggers = groupConflictTriggers(conflictEpisodes);
   const next = normalizeStyleProfile({
     ...(current ?? {}),
     version: 1,
@@ -138,6 +140,7 @@ export async function measureStyleProfile(params: {
     ...(actClusters ? { actClusters } : { actClusters: undefined }),
     ...(emotionDynamics ? { emotionDynamics } : { emotionDynamics: undefined }),
     ...(conflict ? { conflict } : { conflict: undefined }),
+    ...(triggers && triggers.length > 0 ? { triggers } : { triggers: undefined }),
   });
   return applyRerankWeightsFromPairs(personaId, userId, next, { persistAlways: true });
 }
