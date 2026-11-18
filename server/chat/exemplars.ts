@@ -35,9 +35,16 @@ export interface Exemplar {
   content: string;
   /** Their bubbles in this turn, each already cut to the median ceiling. */
   turn: string[];
+  /** Their bubbles before the median ceiling. Seed turns use this. */
+  rawTurn: string[];
+  turnIds: number[];
   score: number;
   previousUser: string;
+  previousUserTurn: string[];
+  previousUserIds: number[];
   at: Date | string | null;
+  /** Which scene this exchange sat in, so two seeds are not from one stretch. */
+  sceneKey: number;
 }
 
 export interface ExemplarPeriod {
@@ -246,7 +253,9 @@ export function retrieveExemplars(params: {
   );
 
   const scored: Exemplar[] = [];
+  let sceneKey = 0;
   for (const scene of splitScenes(params.records)) {
+    sceneKey += 1;
     const turns = toTurns(scene);
     for (let i = 0; i < turns.length; i++) {
       const turn = turns[i];
@@ -286,10 +295,16 @@ export function retrieveExemplars(params: {
       const periodMatch = hasPeriod ? (inPeriod(atDate, period) ? 1 : 0) : 1;
 
       const truncated = raw.map((text) => truncateExemplar(text, median));
+      const previousUserTurn = textLines(turns[userIndex]);
+      const previousUserIds = turns[userIndex]
+        .filter((row) => isTextRecord(row) && row.content.trim())
+        .map((row) => row.id);
       scored.push({
         id: head.id,
         content: truncated.join(" "),
         turn: truncated,
+        rawTurn: raw,
+        turnIds: lines.map((row) => row.id),
         score: scoreExemplar({
           firstTerm,
           contextCoverage,
@@ -299,7 +314,10 @@ export function retrieveExemplars(params: {
           periodMatch,
         }),
         previousUser,
+        previousUserTurn,
+        previousUserIds,
         at,
+        sceneKey,
       });
     }
   }

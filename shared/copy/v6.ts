@@ -523,6 +523,14 @@ export const V6 = {
     zh: "你们之间的说法：{{term}}——{{gloss}}",
     en: "A phrase between you: {{term}} — {{gloss}}",
   },
+  "prompt.seedTurnsPrefix": {
+    zh: "〔旧记录〕",
+    en: "[earlier]",
+  },
+  "prompt.seedTurnsNote": {
+    zh: "对话开头有几组带〔旧记录〕标记的往来，那是你和对方以前真实说过的话，放在这里只是让你记起自己说话的样子。里面提到的事不是刚发生的，不要当成现在的话题接着说，也不要提起「刚才」说过它们。",
+    en: "A few exchanges at the start of this conversation are marked [earlier]. Those are things you and they actually said, placed here only so you remember how you talk. What they mention did not just happen. Do not continue them as the present topic, and do not mention having just said them.",
+  },
   "labels.lexicon.mine": {
     zh: "从记录里挖词",
     en: "Mine words from the records",
