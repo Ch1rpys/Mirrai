@@ -15,6 +15,7 @@ import { normalizePersonaData } from "./persona-schema";
 import { shouldInstructHarm } from "@shared/harm";
 import { normalizeAddressHistory, pickThemToMeAddress } from "@shared/address-history";
 import { normalizeLexicon, renderLexicon, type LexiconEntry } from "@shared/lexicon";
+import { relationshipIsOver } from "@shared/relationship-ended";
 
 export { INTIMACY_LEVELS, normalizeIntimacyLevel };
 
@@ -338,8 +339,6 @@ export function buildSystemPrompt(
    * left, that is the most hurtful kind of bug, because it comes from the
    * one voice they still turn to.
    */
-  const relationshipEnded = Boolean(to.trim());
-
   /**
    * Whether the relationship has ended, as the events record it.
    *
@@ -347,8 +346,7 @@ export function buildSystemPrompt(
    * it reaches the persona even when the end date was never filled in.
    */
   const phase = options.relationshipPhase ?? null;
-  const endedByEvent = phase === "breakup" || phase === "apart";
-  const isOver = relationshipEnded || endedByEvent;
+  const isOver = relationshipIsOver(to, phase);
 
   /**
    * The persona's own rules about what it is.

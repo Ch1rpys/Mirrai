@@ -1048,6 +1048,7 @@ async function* runConversationTurn(
     providerName: options.providerName,
     extraConfig,
     replyToId: options.replyToId,
+    mediaType: options.media?.type ?? null,
   };
   const plan = await planTurn(turnInput);
   const rng = plan.rng;
@@ -1082,11 +1083,14 @@ async function* runConversationTurn(
     return;
   }
 
-  const provider = await resolveProviderForUser({
-    userId,
-    providerName: options.providerName,
-  });
-  if (!provider) {
+  const provider =
+    plan.kind === "ritual"
+      ? null
+      : await resolveProviderForUser({
+          userId,
+          providerName: options.providerName,
+        });
+  if (plan.kind !== "ritual" && !provider) {
     throw new Error(
       `No LLM provider available${options.providerName ? ` (requested: ${options.providerName})` : ""}. Configure at least one provider in .env`,
     );
@@ -1110,15 +1114,18 @@ async function* runConversationTurn(
    * Crisis, silence and a ritual reply never reach here. Channels never
    * offer a pair either: `shouldOfferChoice` looks at the channel.
    */
-  if (shouldOfferChoice(persona, options.channel ?? "web") && plan.kind !== "ritual") {
+  if (plan.kind === "ritual") {
+    replyText = plan.ritual?.reply ?? "";
+    if (!timingEnabled && replyText) yield { type: "delta", text: replyText };
+  } else if (shouldOfferChoice(persona, options.channel ?? "web")) {
     try {
       const first = (await collectPlanText(plan, turnInput, {
-        provider,
+        provider: provider!,
         signal: options.signal,
         options: invokeOptions,
       })).trim();
       const second = (await collectPlanText(plan, turnInput, {
-        provider,
+        provider: provider!,
         signal: options.signal,
         options: invokeOptions,
       })).trim();
@@ -1180,10 +1187,12 @@ async function* runConversationTurn(
   }
 
   try {
-    if (replyText) {
+    if (plan.kind === "ritual") {
+      // The reply was already taken from the table. The model is not called.
+    } else if (replyText) {
       if (!timingEnabled) yield { type: "delta", text: replyText };
     } else for await (const event of executePlan(plan, turnInput, {
-      provider,
+      provider: provider!,
       mode: options.mode,
       rerank: rerankEnabled,
       signal: options.signal,
@@ -1407,7 +1416,7 @@ async function* runConversationTurn(
     personaId: persona.id,
     userId,
     providerName: options.providerName,
-    providerInstance: provider,
+    providerInstance: provider ?? undefined,
     locale,
     now,
   });
@@ -1458,7 +1467,10 @@ async function* runConversationTurn(
   // to be stored with the persona's previous state and inferred
   // afterwards, so the message showed the new mood live and the old one
   // after a reload — the same conversation, two different emotions.
-  const emotion = await inferEmotionalState({
+  const emotion =
+    plan.kind === "ritual"
+      ? { state: persona.emotionalState, reason: "ritual" }
+      : await inferEmotionalState({
     userMessage: message,
     /**
      * The persona's own words.
@@ -1476,7 +1488,7 @@ async function* runConversationTurn(
     // The classifier has to run on the same credentials as the reply —
     // otherwise a user who configured their own key silently falls back to
     // the environment one.
-    providerInstance: provider,
+    providerInstance: provider ?? undefined,
     locale,
   });
   const newEmotionalState = emotion.state;
@@ -1487,6 +1499,12 @@ async function* runConversationTurn(
     ...(projection.length > 0 ? { projection } : {}),
     ...(rerank ? { rerank } : {}),
     ...(plan.seedRecordIds.length > 0 ? { seedRecordIds: plan.seedRecordIds } : {}),
+    ...(plan.kind === "ritual" && plan.ritual
+      ? {
+          ritual: plan.ritual.trigger,
+          verbatim: { type: "ritual" as const, recordId: plan.ritual.recordId },
+        }
+      : {}),
   };
   let parts = [finalText];
   if (timingEnabled && behavior) {

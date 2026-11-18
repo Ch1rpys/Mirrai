@@ -5385,6 +5385,7 @@ export async function getMessagesSince(
     role: messages.role,
     content: messages.content,
     createdAt: messages.createdAt,
+    metadata: messages.metadata,
   }).from(messages)
     .where(and(
       eq(messages.personaId, personaId),

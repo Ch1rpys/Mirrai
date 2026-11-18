@@ -813,3 +813,179 @@ describe("the lexicon layer", () => {
   });
 });
 
+const GOODNIGHT_RITUALS = [
+  {
+    trigger: "晚安",
+    variants: ["晚安"],
+    n: 100,
+    coverage: 1,
+    replies: [
+      { text: "晚安", n: 60, recordId: 11 },
+      { text: "安", n: 25, recordId: 12 },
+      { text: "睡啦", n: 15, recordId: 13 },
+    ],
+  },
+];
+
+const ZAIME_RITUALS = [
+  {
+    trigger: "在吗",
+    variants: ["在吗"],
+    n: 30,
+    coverage: 1,
+    replies: [
+      { text: "在", n: 24, recordId: 21 },
+      { text: "咋啦", n: 6, recordId: 22 },
+    ],
+  },
+];
+
+function personaWithRituals(rituals: typeof GOODNIGHT_RITUALS, extra: Record<string, unknown> = {}) {
+  const next = persona();
+  next.styleProfile = {
+    version: 1,
+    measuredAt: NOW.toISOString(),
+    recordsVersion: "100:100",
+    rituals,
+  };
+  return Object.assign(next, extra);
+}
+
+describe("the ritual reply table", () => {
+  it("answers 晚安 from the table without calling the provider, and the same seed repeats", async () => {
+    const input = {
+      persona: personaWithRituals(GOODNIGHT_RITUALS),
+      userId: 1,
+      userMessage: "晚安~",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "ritual:same",
+      exclude: { texts: [HELD_OUT] },
+    };
+    const first = await planTurn(input);
+    const second = await planTurn(input);
+    expect(first.kind).toBe("ritual");
+    expect(first.messages).toEqual([]);
+    expect(first.layersUsed).toContain("ritual");
+    expect(["晚安", "安", "睡啦"]).toContain(first.ritual?.reply);
+    expect(second.ritual?.reply).toBe(first.ritual?.reply);
+    invokeWithProvider.mockClear();
+    const final = await lastFinal(first, input);
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+    expect(final?.text).toBe(first.ritual?.reply);
+    expect(final?.projection).toEqual([]);
+  });
+
+  it("drops a pet-name reply when the relationship has ended, and falls back when every reply has one", async () => {
+    const mixed = [
+      {
+        trigger: "晚安",
+        variants: ["晚安"],
+        n: 20,
+        coverage: 1,
+        replies: [
+          { text: "树树晚安", n: 10, recordId: 31 },
+          { text: "安", n: 10, recordId: 32 },
+        ],
+      },
+    ];
+    const mixedPlan = await planTurn({
+      persona: personaWithRituals(mixed, {
+        togetherTo: "2024-01-01",
+        styleProfile: {
+          version: 1,
+          measuredAt: NOW.toISOString(),
+          recordsVersion: "20:20",
+          rituals: mixed,
+          addressHistory: [{ form: "树树", direction: "them_to_me", total: 20, byQuarter: {}, byState: {} }],
+        },
+      }),
+      userId: 1,
+      userMessage: "晚安",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "ritual:ended",
+      exclude: { texts: [HELD_OUT] },
+    });
+    expect(mixedPlan.kind).toBe("ritual");
+    expect(mixedPlan.ritual?.reply).toBe("安");
+
+    const allNamed = [
+      {
+        trigger: "晚安",
+        variants: ["晚安"],
+        n: 12,
+        coverage: 1,
+        replies: [
+          { text: "树树晚安", n: 8, recordId: 41 },
+          { text: "树树安", n: 4, recordId: 42 },
+        ],
+      },
+    ];
+    const fallback = await planTurn({
+      persona: personaWithRituals(allNamed, {
+        togetherTo: "2024-01-01",
+        styleProfile: {
+          version: 1,
+          measuredAt: NOW.toISOString(),
+          recordsVersion: "12:12",
+          rituals: allNamed,
+          addressHistory: [{ form: "树树", direction: "them_to_me", total: 12, byQuarter: {}, byState: {} }],
+        },
+      }),
+      userId: 1,
+      userMessage: "晚安",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "ritual:ended-all",
+      exclude: { texts: [HELD_OUT] },
+    });
+    expect(fallback.kind).toBe("model");
+    expect(fallback.layersUsed).not.toContain("ritual");
+  });
+
+  it("lets the model answer the second 在吗 inside ten minutes", async () => {
+    getMessagesSince.mockResolvedValue([
+      {
+        id: 9,
+        role: "assistant",
+        content: "在",
+        createdAt: new Date(NOW.getTime() - 2 * 60 * 1000),
+        metadata: { ritual: "在吗" },
+      },
+    ]);
+    const plan = await planTurn({
+      persona: personaWithRituals(ZAIME_RITUALS),
+      userId: 1,
+      userMessage: "在吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "ritual:cooldown",
+      exclude: { texts: [HELD_OUT] },
+    });
+    expect(plan.kind).toBe("model");
+    expect(plan.layersUsed).not.toContain("ritual");
+  });
+
+  it("goes through the model with --without ritual", async () => {
+    const plan = await planTurn({
+      persona: personaWithRituals(GOODNIGHT_RITUALS),
+      userId: 1,
+      userMessage: "晚安",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "ritual:off",
+      exclude: { texts: [HELD_OUT] },
+      layerOverrides: layerOverridesForEval({ without: ["ritual"] }),
+    });
+    expect(plan.kind).toBe("model");
+    expect(plan.layersUsed).not.toContain("ritual");
+    expect(plan.messages.length).toBeGreaterThan(0);
+  });
+});
+

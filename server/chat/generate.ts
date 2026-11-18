@@ -39,9 +39,18 @@ import {
 } from "@shared/layers";
 import { capReply, replyBudget } from "@shared/length-cap";
 import { effectiveStyleProfile } from "@shared/style-profile";
-import { FINGERPRINT_STATES, type EmotionalState, type StyleFingerprintCore } from "@shared/style-fingerprint";
+import { defaultAddressForms, FINGERPRINT_STATES, type EmotionalState, type StyleFingerprintCore } from "@shared/style-fingerprint";
 import { projectStyle } from "@shared/style-projection";
 import { hasPromptLexicon } from "@shared/lexicon";
+import { filterHarm } from "@shared/harm";
+import { relationshipIsOver } from "@shared/relationship-ended";
+import {
+  matchRitual,
+  normalizeRituals,
+  sampleRitualReply,
+  RITUAL_COOLDOWN_MS,
+} from "@shared/ritual-table";
+import { normalizeAddressHistory } from "@shared/address-history";
 import type { ScoredMemory } from "./retrieval";
 
 export interface TurnInput {
@@ -53,6 +62,8 @@ export interface TurnInput {
     content: string;
     messageType?: string;
     mediaUrl?: string | null;
+    timestamp?: Date | string | null;
+    metadata?: unknown;
   }>;
   now: Date;
   locale: "zh" | "en";
@@ -76,6 +87,8 @@ export interface TurnInput {
   providerName?: string;
   extraConfig?: Record<string, any>;
   replyToId?: number | null;
+  /** The current turn's attachment, when the user sent a picture or a voice note. */
+  mediaType?: string | null;
 }
 
 export interface TurnPlan {
@@ -146,9 +159,6 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   const lexiconOn = Boolean(
     layers.lexicon && hasPromptLexicon((input.persona.personaData as { lexicon?: unknown } | null)?.lexicon),
   );
-  const seeds = await seedPlanForTurn(input, layers.seededTurns, sampledAct);
-  const seedMsgs = seedMessagesFor(seeds.exchanges, input.locale);
-  const seededOn = seeds.exchanges.length > 0;
 
   if (sampled?.act === "silence" && timingEnabled && !input.exclude) {
     return {
@@ -162,6 +172,25 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       rng,
     };
   }
+
+  const ritual = await ritualPlanForTurn(input, layers.ritual, rng);
+  if (ritual) {
+    return {
+      kind: "ritual",
+      sampledAct,
+      ritual,
+      messages: [],
+      layersUsed: withMeasuredLayers(layersUsed, {}, false, false, false, false, true),
+      exemplarIds: [],
+      seedRecordIds: [],
+      recalled: [],
+      rng,
+    };
+  }
+
+  const seeds = await seedPlanForTurn(input, layers.seededTurns, sampledAct);
+  const seedMsgs = seedMessagesFor(seeds.exchanges, input.locale);
+  const seededOn = seeds.exchanges.length > 0;
 
   if (input.exclude) {
     const systemPrompt = await buildPromptForPersona({
@@ -200,7 +229,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       sampledAct,
       messages,
       ...length,
-      layersUsed: withMeasuredLayers(layersUsed, length, projectionOn, fingerprintRerankOn, lexiconOn, seededOn),
+      layersUsed: withMeasuredLayers(layersUsed, length, projectionOn, fingerprintRerankOn, lexiconOn, seededOn, false),
       exemplarIds: [],
       seedRecordIds: seeds.excludeIds,
       recalled: [],
@@ -231,7 +260,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     sampledAct,
     messages: spliceAfterSystem(composed.messages, seedMsgs),
     ...length,
-    layersUsed: withMeasuredLayers(layersUsed, length, projectionOn, fingerprintRerankOn, lexiconOn, seededOn),
+    layersUsed: withMeasuredLayers(layersUsed, length, projectionOn, fingerprintRerankOn, lexiconOn, seededOn, false),
     exemplarIds: [],
     seedRecordIds: seeds.excludeIds,
     recalled: composed.recalled,
@@ -318,6 +347,7 @@ function withMeasuredLayers(
   fingerprintRerankOn: boolean,
   lexiconOn: boolean,
   seededOn = false,
+  ritualOn = false,
 ): LayerId[] {
   const extra: LayerId[] = [];
   if (length.maxChars != null) extra.push("lengthCap");
@@ -325,9 +355,100 @@ function withMeasuredLayers(
   if (fingerprintRerankOn) extra.push("fingerprintRerank");
   if (lexiconOn) extra.push("lexicon");
   if (seededOn) extra.push("seededTurns");
+  if (ritualOn) extra.push("ritual");
   if (extra.length === 0) return layersUsed;
   const used = new Set<LayerId>([...layersUsed, ...extra]);
   return LAYERS.filter((id) => used.has(id));
+}
+
+function ritualTriggerOf(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const ritual = (metadata as { ritual?: unknown }).ritual;
+  return typeof ritual === "string" && ritual.trim() ? ritual : null;
+}
+
+function spokenMillis(value: Date | string | null | undefined): number | null {
+  if (!value) return null;
+  const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function addressFormsForRitual(input: TurnInput): string[] {
+  const history = normalizeAddressHistory(effectiveStyleProfile(input.persona).addressHistory);
+  const them = history.filter((entry) => entry.direction === "them_to_me").map((entry) => entry.form);
+  return [...new Set([...them, ...defaultAddressForms()].filter(Boolean))];
+}
+
+function ritualTurnBlocked(input: TurnInput): boolean {
+  if (input.replyToId) return true;
+  if (input.quotedSection) return true;
+  if (input.sceneOverlay) return true;
+  if ((input.persona as { activeSceneId?: number | null }).activeSceneId) return true;
+  if (input.mediaType && input.mediaType !== "text") return true;
+  return false;
+}
+
+function ritualReplyAllowed(
+  reply: { text: string; recordId: number },
+  input: TurnInput,
+  isOver: boolean,
+  forms: string[],
+): boolean {
+  if (input.exclude?.recordIds?.includes(reply.recordId)) return false;
+  if (input.exclude?.texts?.includes(reply.text)) return false;
+  const kept = filterHarm(
+    [{ content: reply.text, role: "assistant" }],
+    input.persona.personaData as { harmReport?: never } | null,
+  );
+  if (kept.length === 0) return false;
+  if (isOver && forms.some((form) => form && reply.text.includes(form))) return false;
+  return true;
+}
+
+async function ritualUsedRecently(input: TurnInput, trigger: string): Promise<boolean> {
+  const since = input.now.getTime() - RITUAL_COOLDOWN_MS;
+  for (const row of input.history) {
+    if (row.role !== "assistant") continue;
+    if (ritualTriggerOf(row.metadata) !== trigger) continue;
+    const at = spokenMillis(row.timestamp);
+    if (at == null || at >= since) return true;
+  }
+  try {
+    const rows = await db.getMessagesSince(
+      input.persona.id,
+      input.userId,
+      new Date(since),
+      50,
+      "assistant",
+    );
+    return rows.some((row) => ritualTriggerOf((row as { metadata?: unknown }).metadata) === trigger);
+  } catch {
+    return false;
+  }
+}
+
+async function ritualPlanForTurn(
+  input: TurnInput,
+  enabled: boolean,
+  rng: () => number,
+): Promise<{ trigger: string; reply: string; recordId?: number } | null> {
+  if (!enabled) return null;
+  if (ritualTurnBlocked(input)) return null;
+  const rituals = normalizeRituals(effectiveStyleProfile(input.persona).rituals);
+  if (rituals.length === 0) return null;
+  const entry = matchRitual(input.userMessage, rituals);
+  if (!entry) return null;
+  if (await ritualUsedRecently(input, entry.trigger)) return null;
+  const phase = (input.persona.personaData as { relationshipPhase?: string } | null)?.relationshipPhase ?? null;
+  const isOver = relationshipIsOver(input.persona.togetherTo, phase);
+  const forms = addressFormsForRitual(input);
+  const picked = sampleRitualReply(entry, rng, (text) => {
+    const row = entry.replies.find((item) => item.text === text);
+    if (!row) return false;
+    return ritualReplyAllowed(row, input, isOver, forms);
+  });
+  if (!picked) return null;
+  return { trigger: entry.trigger, reply: picked.text, recordId: picked.recordId };
 }
 
 function fingerprintCoreForTurn(input: TurnInput): StyleFingerprintCore | null {

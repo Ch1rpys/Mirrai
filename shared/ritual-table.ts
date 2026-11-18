@@ -14,6 +14,7 @@ export const RITUAL_MIN_COVERAGE = 0.7;
 export const RITUAL_MAX_TRIGGER_CHARS = 6;
 export const RITUAL_MAX_REPLY_CHARS = 12;
 export const RITUAL_MAX_REPLIES = 6;
+export const RITUAL_COOLDOWN_MS = 10 * 60 * 1000;
 
 export interface RitualReply {
   text: string;

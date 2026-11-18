@@ -366,6 +366,84 @@ describe("runConversation", () => {
     expect(createSafetyEvent).toHaveBeenCalled();
   });
 
+  it("answers a ritual without judging emotion, and counts the turn", async () => {
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona({
+        styleProfile: {
+          version: 1,
+          measuredAt: "2026-01-15T12:00:00.000Z",
+          recordsVersion: "100:100",
+          rituals: [
+            {
+              trigger: "晚安",
+              variants: ["晚安"],
+              n: 100,
+              coverage: 1,
+              replies: [
+                { text: "晚安", n: 60, recordId: 11 },
+                { text: "安", n: 25, recordId: 12 },
+                { text: "睡啦", n: 15, recordId: 13 },
+              ],
+            },
+          ],
+        },
+      }),
+      userId: 1,
+      message: "晚安",
+      mode: "once",
+    })) {
+      events.push(event);
+    }
+
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+    expect(inferEmotionalState).not.toHaveBeenCalled();
+    expect(incrementChatCount).toHaveBeenCalled();
+    const assistant = createMessage.mock.calls.find(
+      (call: unknown[]) => (call[0] as { role?: string }).role === "assistant",
+    )?.[0] as { content: string; metadata?: { ritual?: string; verbatim?: unknown } };
+    expect(["晚安", "安", "睡啦"]).toContain(assistant.content);
+    expect(assistant.metadata?.ritual).toBe("晚安");
+    expect(assistant.metadata?.verbatim).toEqual({
+      type: "ritual",
+      recordId: expect.any(Number),
+    });
+    expect(events.some((event) => event.type === "emotion" && event.state === "warm")).toBe(true);
+  });
+
+  it("keeps the crisis path even when a ritual table is present", async () => {
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona({
+        styleProfile: {
+          version: 1,
+          measuredAt: "2026-01-15T12:00:00.000Z",
+          recordsVersion: "100:100",
+          rituals: [
+            {
+              trigger: "晚安",
+              variants: ["晚安"],
+              n: 100,
+              coverage: 1,
+              replies: [{ text: "晚安", n: 100, recordId: 11 }],
+            },
+          ],
+        },
+      }),
+      userId: 1,
+      message: "我不想活了",
+      mode: "once",
+    })) {
+      events.push(event);
+    }
+
+    expect(events.find((event) => event.type === "done")?.crisis).toBe(true);
+    const assistant = createMessage.mock.calls.find(
+      (call: unknown[]) => (call[0] as { role?: string }).role === "assistant",
+    )?.[0] as { metadata?: { ritual?: string } };
+    expect(assistant.metadata?.ritual).toBeUndefined();
+  });
+
   it("streams the reply in pieces", async () => {
     streamWithProvider.mockImplementation(async function* () {
       yield { text: "在" };
