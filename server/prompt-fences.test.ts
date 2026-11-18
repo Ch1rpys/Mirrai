@@ -223,6 +223,29 @@ describe("the simulated user in a drift run", () => {
   });
 });
 
+describe("a stance they hold", () => {
+  it("reaches the prompt only inside the fence", async () => {
+    const { renderStancesSection } = await import("@shared/stances");
+    const stancesSection = renderStancesSection(
+      [
+        {
+          id: "s1",
+          topic: "香菜",
+          polarity: "dislike",
+          statement: HOSTILE_NOTE,
+          evidence: [],
+          source: "auto",
+          verified: true,
+        },
+      ],
+      "zh",
+    );
+    const prompt = buildSystemPrompt(persona(), { stancesSection });
+    expect(prompt).toContain(HOSTILE_NOTE);
+    expect(unfenced(prompt)).not.toContain(HOSTILE_NOTE);
+  });
+});
+
 describe("a person's relation", () => {
   it("reaches the prompt only inside the fence", async () => {
     const { renderPeopleSection } = await import("@shared/people");

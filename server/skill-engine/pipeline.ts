@@ -41,6 +41,7 @@ import { normalizeLifeEvents, type LifeEvent } from "@shared/life-events";
 import { normalizeOpeningProfile, type OpeningProfile } from "@shared/opening-profile";
 import { mergeLexicon, type LexiconEntry } from "@shared/lexicon";
 import { aggregatePeople, mergePeople, type Person, type PersonCard } from "@shared/people";
+import { aggregateStances, mergeStances, type Stance, type StanceCard } from "@shared/stances";
 import { normalizePeriods, type PersonaPeriod } from "@shared/periods";
 import { mineForgetStyles, mineSuppressions } from "./suppressions";
 import { mineMultiPoint } from "@shared/multi-point";
@@ -282,6 +283,7 @@ export interface MinedV5 {
   periods?: PersonaPeriod[];
   lexicon?: LexiconEntry[];
   people?: Person[];
+  stances?: Stance[];
 }
 
 export function mergeUserDecisions(
@@ -353,6 +355,13 @@ export function mergeUserDecisions(
     people: mergePeople(
       previous.people,
       mined.people,
+      Array.isArray(previous.rejectedFeedbackKeys)
+        ? previous.rejectedFeedbackKeys.filter((key): key is string => typeof key === "string")
+        : fresh.rejectedFeedbackKeys ?? [],
+    ),
+    stances: mergeStances(
+      previous.stances,
+      mined.stances,
       Array.isArray(previous.rejectedFeedbackKeys)
         ? previous.rejectedFeedbackKeys.filter((key): key is string => typeof key === "string")
         : fresh.rejectedFeedbackKeys ?? [],
@@ -1856,6 +1865,22 @@ async function runSkillPipelineOnce(
         return [];
       }
     })();
+    const minedStances = await (async (): Promise<Stance[]> => {
+      const listCards = dbFn("listDistillationCards") as
+        | ((personaId: number, userId: number, options?: { kind?: string }) => Promise<StanceCard[]>)
+        | undefined;
+      if (!listCards) return [];
+      try {
+        const cards = await listCards(personaId, userId, { kind: "stance" });
+        return aggregateStances(cards ?? []);
+      } catch (e) {
+        console.warn(
+          "[SkillEngine] The stances could not be aggregated:",
+          e instanceof Error ? e.message : e,
+        );
+        return [];
+      }
+    })();
 
     /**
      * The read and the write are under the persona's lock.
@@ -1928,6 +1953,7 @@ async function runSkillPipelineOnce(
             periods: minedPeriods,
             lexicon: minedLexicon,
             people: minedPeople,
+            stances: minedStances,
           })) as PersonaData;
 
       if (changedWhileRunning) {

@@ -919,6 +919,88 @@ describe("the people layer", () => {
   });
 });
 
+describe("the stances layer", () => {
+  function cilantro(verified: boolean) {
+    return {
+      id: "s1",
+      topic: "香菜",
+      polarity: "dislike" as const,
+      statement: "讨厌香菜",
+      evidence: [{ snippet: "讨厌香菜" }, { snippet: "讨厌香菜" }, { snippet: "讨厌香菜" }],
+      source: "auto" as const,
+      verified,
+    };
+  }
+
+  function personaWithStance(verified: boolean) {
+    const row = persona();
+    row.personaData = {
+      personality: "温柔",
+      stances: [cilantro(verified)],
+    };
+    return row;
+  }
+
+  it("puts a confirmed stance in the prompt when this turn names the topic", async () => {
+    const plan = await planTurn({
+      persona: personaWithStance(true),
+      userId: 1,
+      userMessage: "今晚放香菜吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "stances:on",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(plan.layersUsed).toContain("people");
+    expect(prompt).toContain(copy("zh", "prompt.stancesHeading"));
+    expect(prompt).toContain("讨厌香菜");
+    expect(prompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "")).not.toContain("讨厌香菜");
+  });
+
+  it("omits the section when the topic is not named, and when it is not confirmed", async () => {
+    const unnamed = await planTurn({
+      persona: personaWithStance(true),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "stances:none",
+      exclude: { texts: [HELD_OUT] },
+    });
+    expect(String(unnamed.messages[0]?.content ?? "")).not.toContain(copy("zh", "prompt.stancesHeading"));
+    const unverified = await planTurn({
+      persona: personaWithStance(false),
+      userId: 1,
+      userMessage: "今晚放香菜吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "stances:unverified",
+      exclude: { texts: [HELD_OUT] },
+    });
+    expect(String(unverified.messages[0]?.content ?? "")).not.toContain(copy("zh", "prompt.stancesHeading"));
+  });
+
+  it("omits them with --without people", async () => {
+    const plan = await planTurn({
+      persona: personaWithStance(true),
+      userId: 1,
+      userMessage: "今晚放香菜吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "stances:off",
+      exclude: { texts: [HELD_OUT] },
+      layerOverrides: layerOverridesForEval({ without: ["people"] }),
+    });
+    expect(plan.layersUsed).not.toContain("people");
+    expect(String(plan.messages[0]?.content ?? "")).not.toContain(copy("zh", "prompt.stancesHeading"));
+  });
+});
+
 describe("seeded record exchanges", () => {
   it("puts retrieved record exchanges after the system prompt and before the live history", async () => {
     const day = (n: number) => new Date(Date.UTC(2022, 2, n, 12, 0, 0));

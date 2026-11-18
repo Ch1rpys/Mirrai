@@ -17,6 +17,7 @@ import type { ImperfectionEntry } from "@shared/imperfection";
 import type { Suppression } from "@shared/suppressions";
 import type { LexiconEntry } from "@shared/lexicon";
 import { mentionedPeople, normalizePeople, renderPeopleSection } from "@shared/people";
+import { mentionedStances, normalizeStances, renderStancesSection } from "@shared/stances";
 import type { SpeechAct } from "@shared/speech-acts";
 import { renderExemplars } from "./exemplars";
 import { retrieveExemplarsWithEmbed } from "./embeddings";
@@ -118,6 +119,13 @@ export interface PromptContext {
    * and the current words.
    */
   peopleSection?: string | null;
+  /**
+   * Stances mentioned this turn.
+   *
+   * `null` turns the layer off. Omit to compute from the persona
+   * and the current words.
+   */
+  stancesSection?: string | null;
   sampledAct?: SpeechAct | null;
   actClusterLines?: string[] | null;
   coldLines?: string[] | null;
@@ -203,6 +211,7 @@ export async function buildPromptBundleForPersona(
     anchorSection: formatAnchorsForPrompt(anchors, locale),
     memorySection: formatMemoriesForPrompt(ordinary, locale),
     peopleSection: peopleSectionFor(context, locale),
+    stancesSection: stancesSectionFor(context, locale),
     summarySection:
       context.summarySection ??
       (summary?.summary ? `${copy(locale, "prompt.summarySectionHeading")}\n${summary.summary}` : ""),
@@ -280,17 +289,29 @@ export async function buildPromptForPersona(
   return (await buildPromptBundleForPersona(context)).prompt;
 }
 
+function mentionTexts(context: PromptContext): string[] {
+  return [
+    context.userMessage ?? "",
+    ...(context.history ?? []).slice(-6).map((row) => row.content),
+  ];
+}
+
 function peopleSectionFor(context: PromptContext, locale: "zh" | "en"): string {
   if (context.peopleSection === null) return "";
   if (typeof context.peopleSection === "string") return context.peopleSection;
   const people = normalizePeople(
     (context.persona.personaData as { people?: unknown } | null)?.people,
   );
-  const texts = [
-    context.userMessage ?? "",
-    ...(context.history ?? []).slice(-6).map((row) => row.content),
-  ];
-  return renderPeopleSection(mentionedPeople(people, texts), locale);
+  return renderPeopleSection(mentionedPeople(people, mentionTexts(context)), locale);
+}
+
+function stancesSectionFor(context: PromptContext, locale: "zh" | "en"): string {
+  if (context.stancesSection === null) return "";
+  if (typeof context.stancesSection === "string") return context.stancesSection;
+  const stances = normalizeStances(
+    (context.persona.personaData as { stances?: unknown } | null)?.stances,
+  );
+  return renderStancesSection(mentionedStances(stances, mentionTexts(context)), locale);
 }
 
 function applyPeriod<T>(

@@ -295,6 +295,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       suppressions: layers.suppressions ? undefined : null,
       lexicon: layers.lexicon ? undefined : null,
       peopleSection: layers.people ? undefined : null,
+      stancesSection: layers.people ? undefined : null,
       skipExemplars: !layers.exemplars,
       restrictExemplarsToAct: clustersOn,
       actClusterLines: clusterLines,
@@ -389,6 +390,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     styleReminderLines: reminder.lines,
     reanchorIssues: reminder.issues,
     peopleSection: layers.people ? undefined : null,
+    stancesSection: layers.people ? undefined : null,
   });
   const historyMessages = composed.messages.filter((row) => row.role !== "system");
   const plannerMessages = twoStageOn
@@ -521,7 +523,11 @@ function peopleLayerOn(
   locale: "zh" | "en",
 ): boolean {
   if (!enabled) return false;
-  return String(messages[0]?.content ?? "").includes(copy(locale, "prompt.peopleHeading"));
+  const prompt = String(messages[0]?.content ?? "");
+  return (
+    prompt.includes(copy(locale, "prompt.peopleHeading")) ||
+    prompt.includes(copy(locale, "prompt.stancesHeading"))
+  );
 }
 
 function withMeasuredLayers(
@@ -586,6 +592,7 @@ async function plannerMessagesForTurn(
     suppressions: null,
     lexicon: null,
     peopleSection: peopleEnabled ? undefined : null,
+    stancesSection: peopleEnabled ? undefined : null,
     closing,
     inSessionShare,
   });

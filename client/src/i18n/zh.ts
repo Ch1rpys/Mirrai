@@ -1457,6 +1457,24 @@ export const zh = {
     aliases: "也叫 {{names}}",
   },
 
+  stances: {
+    title: "喜恶与立场",
+    hint: "记录里反复出现的喜欢、讨厌、在意。确认之后，聊到这件事时才会进提示词。",
+    empty: "还没有喜恶。从聊天记录里挖一批，或者自己写一条。",
+    add: "加一条",
+    topic: "这件事",
+    statement: "TA 的说法",
+    confirm: "确认",
+    reject: "不是",
+    mine: "从记录里挖",
+    verified: "已确认，提到时会生效",
+    like: "喜欢",
+    dislike: "讨厌",
+    fear: "怕",
+    care: "在意",
+    opinion: "看法",
+  },
+
   /**
    * Imperfection, per state.
    *

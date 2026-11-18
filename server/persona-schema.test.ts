@@ -31,6 +31,7 @@ describe("normalizePersonaData", () => {
       imperfectionDefaultsReviewed: false,
       lexicon: [],
       people: [],
+      stances: [],
     });
   });
 
@@ -107,6 +108,7 @@ describe("normalizePersonaData", () => {
       "rejectedFeedbackKeys",
       "relationshipPhase",
       "speakingStyle",
+      "stances",
       "summary",
       "suppressions",
       "touchingMoments",

@@ -6,8 +6,11 @@ import { translate } from "@/i18n";
 
 const save = vi.fn();
 const mine = vi.fn();
+const saveStance = vi.fn();
+const mineStance = vi.fn();
 
 let people: any[] = [];
+let stances: any[] = [];
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -15,6 +18,11 @@ vi.mock("@/lib/trpc", () => ({
       list: { useQuery: () => ({ data: { people }, refetch: vi.fn() }) },
       save: { useMutation: () => ({ mutate: save, isPending: false }) },
       mine: { useMutation: () => ({ mutate: mine, isPending: false }) },
+    },
+    stance: {
+      list: { useQuery: () => ({ data: { stances }, refetch: vi.fn() }) },
+      save: { useMutation: () => ({ mutate: saveStance, isPending: false }) },
+      mine: { useMutation: () => ({ mutate: mineStance, isPending: false }) },
     },
   },
 }));
@@ -34,11 +42,13 @@ vi.mock("@/contexts/LocaleContext", () => ({
 
 import WorldEditors from "./WorldEditors";
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  people = [];
+  stances = [];
+});
+
 describe("the people editor", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    people = [];
-  });
 
   it("lets the user confirm a mined person", async () => {
     people = [
@@ -126,5 +136,39 @@ describe("the people editor", () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]?.name).toBe("琪琪");
     expect(sent[0]?.aliases).toContain("小琪");
+  });
+});
+
+describe("the stances editor", () => {
+  it("lets the user confirm a mined stance", async () => {
+    stances = [
+      {
+        id: "s1",
+        topic: "香菜",
+        polarity: "dislike",
+        statement: "讨厌香菜",
+        evidence: [],
+        source: "auto",
+        verified: false,
+      },
+    ];
+    render(<WorldEditors personaId={1} />);
+    await userEvent.click(screen.getByText(translate("zh", "stances.confirm")));
+    await waitFor(() => expect(saveStance).toHaveBeenCalled());
+    expect(saveStance.mock.calls[0][0].stances[0].verified).toBe(true);
+  });
+
+  it("lets the user add a stance by hand", async () => {
+    render(<WorldEditors personaId={1} />);
+    await userEvent.type(screen.getByPlaceholderText(translate("zh", "stances.topic")), "香菜");
+    await userEvent.type(screen.getByPlaceholderText(translate("zh", "stances.statement")), "讨厌香菜");
+    await userEvent.click(screen.getByText(translate("zh", "stances.add")));
+    await waitFor(() => expect(saveStance).toHaveBeenCalled());
+    const sent = saveStance.mock.calls[0][0].stances[0];
+    expect(sent.topic).toBe("香菜");
+    expect(sent.statement).toBe("讨厌香菜");
+    expect(sent.polarity).toBe("dislike");
+    expect(sent.source).toBe("manual");
+    expect(sent.verified).toBe(true);
   });
 });

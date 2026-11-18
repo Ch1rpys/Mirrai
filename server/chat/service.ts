@@ -477,6 +477,7 @@ export async function composeMessages(params: {
   styleReminderLines?: string[] | null;
   reanchorIssues?: ReanchorIssue[] | null;
   peopleSection?: string | null;
+  stancesSection?: string | null;
 }): Promise<{
   messages: LLMMessage[];
   recalled: Array<{ id: number; title: string; subject: string }>;
@@ -583,6 +584,7 @@ export async function composeMessages(params: {
       content: row.content,
     })),
     peopleSection: params.peopleSection,
+    stancesSection: params.stancesSection,
   });
 
   const recent = await Promise.all(

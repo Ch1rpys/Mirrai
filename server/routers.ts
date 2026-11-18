@@ -160,6 +160,12 @@ import {
   peopleRejectedKey,
   type PersonRecordLine,
 } from "@shared/people";
+import {
+  aggregateStances,
+  mergeStances,
+  normalizeStances,
+  stanceRejectedKey,
+} from "@shared/stances";
 import { mineOpenLoops } from "./skill-engine/open-loops";
 import { feedbackRowsFromBlindSessions } from "./eval/blind";
 import {
@@ -5919,6 +5925,80 @@ export const appRouter = router({
             personaData: { ...data, people, rejectedFeedbackKeys: rejected },
           });
           return { people };
+        });
+      }),
+  }),
+
+  stance: router({
+    list: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const stances = normalizeStances((persona.personaData as { stances?: unknown } | null)?.stances);
+        return {
+          stances,
+          hint: stances.length ? undefined : copy(ctx.locale, "labels.stance.minedNone"),
+        };
+      }),
+    mine: protectedProcedure
+      .input(z.object({ personaId: z.number(), locale: z.enum(["zh", "en"]).default("zh") }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const cards = await listDistillationCards(input.personaId, ctx.user.id, { kind: "stance" });
+          const mined = aggregateStances(cards);
+          const data = (persona.personaData as Record<string, unknown>) || {};
+          const rejected = Array.isArray(data.rejectedFeedbackKeys)
+            ? data.rejectedFeedbackKeys.filter((key: unknown): key is string => typeof key === "string")
+            : [];
+          const stances = mergeStances(data.stances, mined, rejected);
+          if (!mined.length) {
+            return { stances, hint: copy(input.locale, "labels.stance.minedNone") };
+          }
+          await updatePersona(input.personaId, ctx.user.id, {
+            personaData: { ...data, stances },
+          });
+          return { stances, hint: copy(input.locale, "labels.stance.mine") };
+        });
+      }),
+    save: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        stances: z.array(z.object({
+          id: z.string().max(64).optional(),
+          topic: z.string().min(1).max(80),
+          polarity: z.enum(["like", "dislike", "fear", "care", "opinion"]),
+          statement: z.string().min(1).max(240),
+          evidence: z.array(z.object({
+            at: z.string().max(40).optional(),
+            snippet: z.string().max(1000),
+          })).max(20).default([]),
+          source: z.enum(["auto", "manual"]).default("manual"),
+          verified: z.boolean().default(true),
+        })).max(200),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const data = (persona.personaData as Record<string, unknown>) || {};
+          const previous = normalizeStances(data.stances);
+          const stances = normalizeStances(input.stances);
+          const nextKeys = new Set(stances.map((row) => `${row.topic}:${row.polarity}`));
+          const rejected = Array.isArray(data.rejectedFeedbackKeys)
+            ? data.rejectedFeedbackKeys.filter((key: unknown): key is string => typeof key === "string")
+            : [];
+          for (const row of previous) {
+            if (nextKeys.has(`${row.topic}:${row.polarity}`)) continue;
+            const key = stanceRejectedKey(row.topic, row.polarity);
+            if (!rejected.includes(key)) rejected.push(key);
+          }
+          await updatePersona(input.personaId, ctx.user.id, {
+            personaData: { ...data, stances, rejectedFeedbackKeys: rejected },
+          });
+          return { stances };
         });
       }),
   }),

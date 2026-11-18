@@ -49,6 +49,7 @@ import {
 import { normalizeHarmReport, type HarmReport } from "@shared/harm";
 import { normalizeLexicon, type LexiconEntry } from "@shared/lexicon";
 import { normalizePeople, type Person } from "@shared/people";
+import { normalizeStances, type Stance } from "@shared/stances";
 
 export interface PersonaData {
   personality: string;
@@ -119,6 +120,11 @@ export interface PersonaData {
    * stay out of the prompt; confirmed ones only appear when mentioned.
    */
   people?: Person[];
+  /**
+   * Likes and dislikes. Unconfirmed rows stay out of the prompt;
+   * confirmed ones only appear when the topic is mentioned.
+   */
+  stances?: Stance[];
 }
 
 /** The stages a relationship can be in. */
@@ -156,6 +162,7 @@ export const PERSONA_DATA_FIELDS: Array<keyof PersonaData> = [
   "clarified",
   "lexicon",
   "people",
+  "stances",
 ];
 
 /**
@@ -204,6 +211,7 @@ export const PERSONA_DOCUMENT_EXCLUDED_FIELDS: Array<keyof PersonaData> = [
   "clarified",
   "lexicon",
   "people",
+  "stances",
 ];
 
 /** The default realism level: noticeably imperfect, but not a mess. */
@@ -352,6 +360,7 @@ export function normalizePersonaData(
   const clarified = toStringList(source.clarified ?? fallback.clarified);
   const lexicon = normalizeLexicon(source.lexicon ?? fallback.lexicon);
   const people = normalizePeople(source.people ?? fallback.people);
+  const stances = normalizeStances(source.stances ?? fallback.stances);
 
   return {
     personality,
@@ -379,5 +388,6 @@ export function normalizePersonaData(
     ...(clarified.length ? { clarified } : {}),
     lexicon,
     people,
+    stances,
   };
 }

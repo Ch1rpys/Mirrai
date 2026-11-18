@@ -667,4 +667,16 @@ export const V6 = {
     zh: "记录里没有挖到常出现的人。",
     en: "The records did not yield a recurring person.",
   },
+  "prompt.stancesHeading": {
+    zh: "【你对这些事的态度】",
+    en: "【How you feel about these】",
+  },
+  "labels.stance.mine": {
+    zh: "从记录里挖喜恶",
+    en: "Mine likes and dislikes from the records",
+  },
+  "labels.stance.minedNone": {
+    zh: "记录里没有挖到反复出现的喜恶。",
+    en: "The records did not yield a recurring like or dislike.",
+  },
 } as const satisfies CopyTable;

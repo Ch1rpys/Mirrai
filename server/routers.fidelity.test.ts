@@ -661,3 +661,57 @@ describe("the people around them", () => {
     expect(written.rejectedFeedbackKeys).toContain("people:琪琪");
   });
 });
+
+describe("the stances they hold", () => {
+  it("refuses a persona the user does not own", async () => {
+    getPersonaById.mockResolvedValue(null);
+    const caller = appRouter.createCaller(makeCtx());
+    await expect(caller.stance.list({ personaId: 1 })).rejects.toThrow();
+  });
+
+  it("writes confirmed stances into the persona's own data", async () => {
+    const caller = appRouter.createCaller(makeCtx());
+    await caller.stance.save({
+      personaId: 1,
+      stances: [
+        {
+          topic: "香菜",
+          polarity: "dislike",
+          statement: "讨厌香菜",
+          source: "manual",
+          verified: true,
+          evidence: [{ snippet: "讨厌香菜" }],
+        },
+      ],
+    });
+    expect(updatePersona).toHaveBeenCalled();
+    const written = (updatePersona.mock.calls[0][2] as { personaData: { stances: Array<{ topic: string }> } }).personaData;
+    expect(written.stances).toHaveLength(1);
+    expect(written.stances[0].topic).toBe("香菜");
+  });
+
+  it("remembers a rejected stance so a later mine does not bring it back", async () => {
+    getPersonaById.mockResolvedValue(persona({
+      personaData: {
+        personality: "温柔",
+        speakingStyle: "短句",
+        stances: [
+          {
+            id: "s1",
+            topic: "香菜",
+            polarity: "dislike",
+            statement: "讨厌香菜",
+            evidence: [],
+            source: "auto",
+            verified: false,
+          },
+        ],
+      },
+    }));
+    const caller = appRouter.createCaller(makeCtx());
+    await caller.stance.save({ personaId: 1, stances: [] });
+    const written = (updatePersona.mock.calls[0][2] as { personaData: { stances: unknown; rejectedFeedbackKeys: string[] } }).personaData;
+    expect(written.stances).toEqual([]);
+    expect(written.rejectedFeedbackKeys).toContain("stance:香菜:dislike");
+  });
+});

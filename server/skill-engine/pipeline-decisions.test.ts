@@ -353,6 +353,53 @@ describe("a re-run of the distillation", () => {
     expect(merged.people?.[0].verified).toBe(true);
   });
 
+  it("keeps a confirmed stance and does not revive a rejected one", () => {
+    const merged = mergeUserDecisions(
+      fresh,
+      {
+        stances: [
+          {
+            id: "keep",
+            topic: "香菜",
+            polarity: "dislike",
+            statement: "讨厌香菜",
+            evidence: [{ snippet: "讨厌香菜" }, { snippet: "香菜不行" }],
+            source: "auto",
+            verified: true,
+          },
+        ],
+        rejectedFeedbackKeys: ["stance:咖啡:like"],
+      },
+      [],
+      "zh",
+      {
+        stances: [
+          {
+            id: "auto-cilantro",
+            topic: "香菜",
+            polarity: "dislike",
+            statement: "香菜真难吃",
+            evidence: [{ snippet: "讨厌香菜" }, { snippet: "香菜不行" }],
+            source: "auto",
+            verified: false,
+          },
+          {
+            id: "auto-coffee",
+            topic: "咖啡",
+            polarity: "like",
+            statement: "这家咖啡还行",
+            evidence: [{ snippet: "这家咖啡还行" }, { snippet: "再来一杯" }],
+            source: "auto",
+            verified: false,
+          },
+        ],
+      },
+    );
+    expect(merged.stances?.map((row) => row.topic)).toEqual(["香菜"]);
+    expect(merged.stances?.[0].statement).toBe("讨厌香菜");
+    expect(merged.stances?.[0].verified).toBe(true);
+  });
+
   it("keeps the questions the user already answered", () => {
     const merged = mergeUserDecisions(
       fresh,

@@ -1456,6 +1456,24 @@ export const en = {
     aliases: "also {{names}}",
   },
 
+  stances: {
+    title: "Likes and stances",
+    hint: "Likes, dislikes, and cares that keep turning up in the records. Once confirmed, they reach the prompt only when this turn mentions the topic.",
+    empty: "No stances yet. Mine some from the records, or write one yourself.",
+    add: "Add one",
+    topic: "Topic",
+    statement: "How they put it",
+    confirm: "Confirm",
+    reject: "Not them",
+    mine: "Mine from the records",
+    verified: "Confirmed — in effect when mentioned",
+    like: "likes",
+    dislike: "dislikes",
+    fear: "fears",
+    care: "cares about",
+    opinion: "thinks",
+  },
+
   /**
    * Imperfection, per state.
    *
