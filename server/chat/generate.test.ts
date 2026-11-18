@@ -119,8 +119,9 @@ vi.mock("../_core/emotion", () => ({
 
 import { copy } from "@shared/copy";
 import { runConversation } from "./service";
-import { planTurn } from "./generate";
+import { executePlan, planTurn } from "./generate";
 import { layerOverridesForEval, runEval } from "../eval/run";
+import type { LLMProvider } from "../llm/types";
 
 const NOW = new Date("2026-01-15T12:00:00Z");
 
@@ -354,3 +355,114 @@ describe("pnpm eval --without", () => {
     expect(src).toContain("without,");
   });
 });
+
+const stubProvider: LLMProvider = {
+  name: "stub",
+  capabilities: { streaming: false, vision: false, tools: false, jsonMode: false },
+  isConfigured: () => true,
+  invoke: async () => "",
+};
+
+function personaWithFingerprint() {
+  const next = persona();
+  next.styleProfile = {
+    version: 1,
+    measuredAt: NOW.toISOString(),
+    recordsVersion: "100:100",
+    fingerprint: { samples: 100, turnChars: { median: 10, p95: 24 } },
+  };
+  return next;
+}
+
+async function lastFinal(
+  plan: Awaited<ReturnType<typeof planTurn>>,
+  input: Parameters<typeof executePlan>[1],
+  options: { maxTokens?: number } = {},
+) {
+  let final: { text: string; projection: string[] } | null = null;
+  for await (const event of executePlan(plan, input, {
+    provider: stubProvider,
+    mode: "once",
+    rerank: false,
+    options: { maxTokens: options.maxTokens },
+  })) {
+    if (event.type === "final") final = { text: event.text, projection: event.projection };
+  }
+  return final;
+}
+
+describe("the length cap layer", () => {
+  it("sends the computed maxTokens when the layer is on", async () => {
+    const input = {
+      persona: personaWithFingerprint(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "length-cap:on",
+      extraConfig: { maxTokens: 200 },
+      exclude: { texts: [HELD_OUT] },
+    };
+    const plan = await planTurn(input);
+    expect(plan.maxChars).toBe(36);
+    expect(plan.maxTokens).toBe(72);
+    expect(plan.layersUsed).toContain("lengthCap");
+    invokeWithProvider.mockResolvedValue("好");
+    await lastFinal(plan, input, { maxTokens: 200 });
+    expect(invokeWithProvider.mock.calls[0][1]).toMatchObject({
+      options: expect.objectContaining({ maxTokens: 72 }),
+    });
+  });
+
+  it("keeps the user's maxTokens when --without lengthCap", async () => {
+    const input = {
+      persona: personaWithFingerprint(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "length-cap:off",
+      extraConfig: { maxTokens: 200 },
+      exclude: { texts: [HELD_OUT] },
+      layerOverrides: layerOverridesForEval({ without: ["lengthCap"] }),
+    };
+    const plan = await planTurn(input);
+    expect(plan.maxTokens).toBeUndefined();
+    expect(plan.layersUsed).not.toContain("lengthCap");
+    invokeWithProvider.mockResolvedValue("好");
+    await lastFinal(plan, input, { maxTokens: 200 });
+    expect(invokeWithProvider.mock.calls[0][1]).toMatchObject({
+      options: expect.objectContaining({ maxTokens: 200 }),
+    });
+  });
+
+  it("cuts a long reply on a sentence boundary and records length_cap", async () => {
+    const head = "第一句在这里。";
+    invokeWithProvider.mockResolvedValue(head + "啊".repeat(193));
+    const plan = await planTurn({
+      persona: personaWithFingerprint(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "length-cap:cut",
+      exclude: { texts: [HELD_OUT] },
+    });
+    plan.maxChars = 30;
+    const final = await lastFinal(plan, {
+      persona: personaWithFingerprint(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "length-cap:cut",
+    });
+    expect(final?.text).toBe(head);
+    expect(final?.projection).toContain("length_cap");
+  });
+});
+

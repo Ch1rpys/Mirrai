@@ -25,10 +25,13 @@ import { buildPromptForPersona } from "./prompt";
 import * as db from "../db";
 import {
   applyLayerOverrides,
+  LAYERS,
   layersFromSettings,
   layersInEffect,
   type LayerId,
 } from "@shared/layers";
+import { capReply, replyBudget } from "@shared/length-cap";
+import { effectiveStyleProfile } from "@shared/style-profile";
 import type { ScoredMemory } from "./retrieval";
 
 export interface TurnInput {
@@ -72,6 +75,8 @@ export interface TurnPlan {
   messages: LLMMessage[];
   maxTokens?: number;
   stop?: string[];
+  /** Character budget from the length cap. Missing means do not cut. */
+  maxChars?: number;
   layersUsed: LayerId[];
   exemplarIds: number[];
   seedRecordIds: number[];
@@ -117,6 +122,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       )
     : null;
   const sampledAct = sampled?.act === "silence" ? null : sampled?.act ?? null;
+  const length = lengthCapForTurn(layers.lengthCap, input);
 
   if (sampled?.act === "silence" && timingEnabled && !input.exclude) {
     return {
@@ -163,7 +169,8 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       kind: "model",
       sampledAct,
       messages,
-      layersUsed,
+      ...length,
+      layersUsed: withLengthCapLayer(layersUsed, length),
       exemplarIds: [],
       seedRecordIds: [],
       recalled: [],
@@ -189,12 +196,60 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     kind: "model",
     sampledAct,
     messages: composed.messages,
-    layersUsed,
+    ...length,
+    layersUsed: withLengthCapLayer(layersUsed, length),
     exemplarIds: [],
     seedRecordIds: [],
     recalled: composed.recalled,
     rng,
   };
+}
+
+function lengthCapForTurn(
+  enabled: boolean,
+  input: TurnInput,
+): { maxTokens?: number; stop?: string[]; maxChars?: number } {
+  if (!enabled) return {};
+  const fingerprint = effectiveStyleProfile(input.persona).fingerprint ?? null;
+  const behavior = loadBehaviorProfile(input.persona);
+  const burstMax = behavior ? Math.max(0, ...behavior.burstSizes) : 0;
+  const userMaxTokens =
+    typeof input.extraConfig?.maxTokens === "number" ? input.extraConfig.maxTokens : undefined;
+  const budget = replyBudget(fingerprint, burstMax, {
+    userMaxTokens,
+    newlineRate: behavior?.newlineRate ?? null,
+  });
+  if (!budget) return {};
+  return {
+    maxTokens: budget.maxTokens,
+    stop: budget.stop,
+    maxChars: budget.maxChars,
+  };
+}
+
+function withLengthCapLayer(
+  layersUsed: LayerId[],
+  length: { maxChars?: number },
+): LayerId[] {
+  if (length.maxChars == null) return layersUsed;
+  const used = new Set<LayerId>([...layersUsed, "lengthCap"]);
+  return LAYERS.filter((id) => used.has(id));
+}
+
+function tighterTokenBudget(plan: number | undefined, requested: number | undefined): number | undefined {
+  if (plan == null) return requested;
+  if (requested == null) return plan;
+  return Math.min(plan, requested);
+}
+
+function applyLengthCap(text: string, plan: TurnPlan, projection: string[]): {
+  text: string;
+  projection: string[];
+} {
+  if (plan.maxChars == null) return { text, projection };
+  const capped = capReply(text, plan.maxChars);
+  if (!capped.capped) return { text, projection };
+  return { text: capped.text, projection: [...projection, "length_cap"] };
 }
 
 export async function* executePlan(
@@ -226,7 +281,8 @@ export async function* executePlan(
   const invokeOptions = {
     provider: io.options.provider,
     temperature: io.options.temperature,
-    maxTokens: io.options.maxTokens,
+    maxTokens: tighterTokenBudget(plan.maxTokens, io.options.maxTokens),
+    stop: plan.stop,
     signal: io.signal,
   };
   const locale = input.locale;
@@ -289,8 +345,9 @@ export async function* executePlan(
         picked: picked?.index ?? null,
       }),
     );
-    if (io.emitDeltas) yield { type: "delta", text: replyText };
-    yield { type: "final", text: replyText, projection: [], rerank: picked ?? undefined };
+    const capped = applyLengthCap(replyText, plan, []);
+    if (io.emitDeltas) yield { type: "delta", text: capped.text };
+    yield { type: "final", text: capped.text, projection: capped.projection, rerank: picked ?? undefined };
     return;
   }
 
@@ -306,7 +363,8 @@ export async function* executePlan(
       // the user sees it live.
       yield { type: "delta", text: chunk.text };
     }
-    yield { type: "final", text: replyText, projection: [] };
+    const streamed = applyLengthCap(replyText, plan, []);
+    yield { type: "final", text: streamed.text, projection: streamed.projection };
     return;
   }
 
@@ -319,6 +377,7 @@ export async function* executePlan(
   } else {
     replyText = replyText || copy(locale, "prompt.silence");
   }
-  if (io.emitDeltas) yield { type: "delta", text: replyText };
-  yield { type: "final", text: replyText, projection: [] };
+  const once = applyLengthCap(replyText, plan, []);
+  if (io.emitDeltas) yield { type: "delta", text: once.text };
+  yield { type: "final", text: once.text, projection: once.projection };
 }

@@ -554,7 +554,7 @@ export default function PersonaEdit() {
                 </span>
               </span>
             </label>
-            <PersonaSwitches personaId={personaId} />
+            <PersonaSwitches personaId={personaId} name={name} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="persona-reachability" className="text-xs text-muted-foreground">{t("reachability.label")}</Label>

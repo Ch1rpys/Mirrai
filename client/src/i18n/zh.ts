@@ -1309,6 +1309,8 @@ export const zh = {
     timingNote: "回复前的等待、连发、以及这一轮可以不回。没有画像时开不了。默认关。",
     switchesTitle: "这个分身的开关",
     switchesHint: "上面一组不多花钱，有记录就会生效。下面一组会多花钱、多等一会儿，或者需要联网，所以默认关着。",
+    lengthCap: "不让它写得比 {{name}} 长",
+    lengthCapNote: "按记录里 {{name}} 一次最多说多少来设上限。记录不够时不生效。",
     abPairs: "偶尔让我二选一",
     abPairsNote: "每八轮左右，分身会给两句回复让你挑更像的那句。那一轮的费用是两倍。你的选择会用来调重排。",
     dataTitle: "人设数据",

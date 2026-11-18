@@ -9,7 +9,7 @@ import { toast } from "sonner";
  * two model calls, a wait, or the network — so it stays off until the
  * user turns it on.
  */
-export default function PersonaSwitches(props: { personaId: number }) {
+export default function PersonaSwitches(props: { personaId: number; name: string }) {
   const { t } = useLocale();
   const settings = trpc.persona.getSettings.useQuery(
     { id: props.personaId },
@@ -19,7 +19,9 @@ export default function PersonaSwitches(props: { personaId: number }) {
     onSuccess: () => settings.refetch(),
     onError: (error) => toast.error(error.message),
   });
+  const lengthCap = settings.data?.layers?.lengthCap !== false;
   const abPairs = Boolean(settings.data?.layers?.abPairs);
+  const busy = settings.isLoading || update.isPending;
 
   return (
     <div className="space-y-1.5">
@@ -30,8 +32,28 @@ export default function PersonaSwitches(props: { personaId: number }) {
       <label className="flex items-start gap-2 text-sm">
         <input
           type="checkbox"
+          checked={lengthCap}
+          disabled={busy}
+          onChange={(event) =>
+            update.mutate({
+              id: props.personaId,
+              patch: { layers: { lengthCap: event.target.checked } },
+            })
+          }
+          className="mt-0.5"
+        />
+        <span>
+          <span className="block">{t("personaEdit.lengthCap", { name: props.name })}</span>
+          <span className="block text-xs text-muted-foreground leading-relaxed">
+            {t("personaEdit.lengthCapNote", { name: props.name })}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
           checked={abPairs}
-          disabled={settings.isLoading || update.isPending}
+          disabled={busy}
           onChange={(event) =>
             update.mutate({
               id: props.personaId,
