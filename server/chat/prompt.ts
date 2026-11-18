@@ -18,6 +18,12 @@ import type { Suppression } from "@shared/suppressions";
 import type { LexiconEntry } from "@shared/lexicon";
 import { mentionedPeople, normalizePeople, renderPeopleSection } from "@shared/people";
 import { mentionedStances, normalizeStances, renderStancesSection } from "@shared/stances";
+import {
+  eventKnownBy,
+  memoryKnownBy,
+  personaAsOfPeriod,
+  periodToInstant,
+} from "@shared/period-boundary";
 import type { SpeechAct } from "@shared/speech-acts";
 import { renderExemplars } from "./exemplars";
 import { retrieveExemplarsWithEmbed } from "./embeddings";
@@ -52,6 +58,32 @@ async function optionalCall<T>(load: () => Promise<T>, fallback: T): Promise<T> 
   } catch {
     return fallback;
   }
+}
+
+async function recordTimesFor(
+  memories: Array<{ recordId?: number | null }>,
+  userId: number,
+): Promise<Map<number, Date>> {
+  const ids = [...new Set(
+    memories
+      .map((row) => row.recordId)
+      .filter((id): id is number => typeof id === "number" && id > 0),
+  )];
+  if (!ids.length) return new Map();
+  const rows = await optionalCall(
+    () => db.getRecordsByIds(ids, userId),
+    [] as Array<{ id: number; timestamp?: Date | string | null }>,
+  );
+  const out = new Map<number, Date>();
+  for (const row of rows) {
+    const at = row.timestamp instanceof Date
+      ? row.timestamp
+      : row.timestamp
+        ? new Date(row.timestamp)
+        : null;
+    if (at && !Number.isNaN(at.getTime())) out.set(row.id, at);
+  }
+  return out;
 }
 
 export async function userTimeZone(_persona: unknown, userId: number): Promise<string | null> {
@@ -161,9 +193,12 @@ export interface PromptContext {
 export async function buildPromptBundleForPersona(
   context: PromptContext,
 ): Promise<{ prompt: string; cacheBreak?: number }> {
-  const { persona, userId } = context;
   const locale = context.locale ?? "zh";
   const now = context.now ?? new Date();
+  const period = periodOf(context.persona, context.periodId);
+  const periodEnd = periodToInstant(period?.to);
+  const persona = personaAsOfPeriod(context.persona, period);
+  const { userId } = context;
 
   const memories = context.memories ?? await retrieveMemories({
     personaId: persona.id,
@@ -180,15 +215,24 @@ export async function buildPromptBundleForPersona(
      */
     markRecalled: context.markRecalled,
   }).catch(() => []);
-  const anchors = memories.filter((m) => m.category === "anchor");
-  const ordinary = memories.filter((m) => m.category !== "anchor");
+  const recordTimes = await recordTimesFor(memories, userId);
+  const knownMemories = memories.filter((row) => memoryKnownBy(row, periodEnd, recordTimes));
+  const anchors = knownMemories.filter((m) => m.category === "anchor");
+  const ordinary = knownMemories.filter((m) => m.category !== "anchor");
 
-  const summary = context.summarySection !== undefined
+  const summary = periodEnd
+    ? null
+    : context.summarySection !== undefined
     ? null
     : await db.getLatestChatSummary(persona.id, userId).catch(() => null);
   const user = await db.getUserById(userId).catch(() => null);
   const recentMood = await db.getRecentUserMood(userId).catch(() => null);
-  const events = await db.getRelationshipEvents(persona.id, userId, 20).catch(() => []);
+  const events = ((await db.getRelationshipEvents(persona.id, userId, 20).catch(() => [])) as Array<{
+    kind: string;
+    title: string;
+    detail?: string | null;
+    happenedAt?: Date | string | null;
+  }>).filter((event) => eventKnownBy(event.happenedAt, periodEnd));
   const phase = resolveRelationshipPhase(events as any);
 
   const userContext = buildUserContextBlock(
@@ -210,11 +254,12 @@ export async function buildPromptBundleForPersona(
     emotionalState: context.emotionalState ?? null,
     anchorSection: formatAnchorsForPrompt(anchors, locale),
     memorySection: formatMemoriesForPrompt(ordinary, locale),
-    peopleSection: peopleSectionFor(context, locale),
-    stancesSection: stancesSectionFor(context, locale),
-    summarySection:
-      context.summarySection ??
-      (summary?.summary ? `${copy(locale, "prompt.summarySectionHeading")}\n${summary.summary}` : ""),
+    peopleSection: peopleSectionFor({ ...context, persona }, locale),
+    stancesSection: stancesSectionFor({ ...context, persona }, locale),
+    summarySection: periodEnd
+      ? ""
+      : context.summarySection ??
+        (summary?.summary ? `${copy(locale, "prompt.summarySectionHeading")}\n${summary.summary}` : ""),
     realismLevel: (persona.personaData as any)?.realismLevel,
     timeZone: (persona as any).timezone ?? (await db.getUserTimezone(userId)),
     userContext,
@@ -258,6 +303,10 @@ export async function buildPromptBundleForPersona(
     closing: Boolean(context.closing),
     closerLines: context.promptMode === "planner" ? null : context.closerLines ?? null,
     inSessionShare: context.inSessionShare ?? null,
+    periodBoundary:
+      period?.from && period?.to
+        ? copy(locale, "prompt.periodBoundary", { from: period.from, to: period.to })
+        : "",
     promptMode: context.promptMode,
     exemplarSection:
       context.promptMode === "planner" || context.skipExemplars
@@ -270,7 +319,9 @@ export async function buildPromptBundleForPersona(
           ? context.contrastSection
           : await contrastSectionFor(context, locale),
     memoryConflictSection: memoryConflictSectionFor(
-      await optionalCall(() => db.getMemoriesByPersonaId(persona.id, userId), []),
+      (await optionalCall(() => db.getMemoriesByPersonaId(persona.id, userId), [])).filter((row) =>
+        memoryKnownBy(row, periodEnd, recordTimes),
+      ),
       locale,
     ),
     locale,

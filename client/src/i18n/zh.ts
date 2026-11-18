@@ -256,6 +256,7 @@ export const zh = {
     unlike: "这句不像",
     period: "按某段时期",
     periodCurrent: "现在",
+    periodBoundary: "正在和 {{from}}–{{to}} 那段时间的 {{name}} 说话。那之后的事，这个 {{name}} 不知道。",
     unlikeMarked: "已记下",
     unlikeRewriteLabel: "{{name}} 会怎么说？（可以不填）",
     unlikeRewritePlaceholder: "照你记得的写。这句会被拿来对照。",

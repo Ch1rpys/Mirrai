@@ -28,6 +28,7 @@ import { buildRerankModel, getRerankModel } from "./rerank-model";
 import { sparseModelFromUnknown } from "../eval/ab-pairs";
 import { retrieveExemplarsWithEmbed } from "./embeddings";
 import { buildPromptBundleForPersona } from "./prompt";
+import { personaAsOfPeriod } from "@shared/period-boundary";
 import { clipPromptFact, isSafeSeedLine } from "@shared/seed-safety";
 import {
   selectSeedExchanges,
@@ -146,19 +147,29 @@ export interface TurnPlan {
   routine?: string;
 }
 
+function periodForTurn(
+  persona: Persona,
+  periodId: string | null | undefined,
+) {
+  if (!periodId) return undefined;
+  const periods = ((persona.personaData as { periods?: Array<{ id?: string; from?: string; to?: string; actProfileDelta?: unknown }> } | null)?.periods) ?? [];
+  return periods.find((item) => item.id === periodId);
+}
+
 function actProfileForTurn(
   persona: Persona,
   periodId: string | null | undefined,
 ) {
-  if (periodId) {
-    const periods = ((persona.personaData as { periods?: Array<{ id?: string; actProfileDelta?: unknown }> } | null)?.periods) ?? [];
-    const period = periods.find((item) => item.id === periodId);
-    if (period?.actProfileDelta) return period.actProfileDelta;
-  }
+  const period = periodForTurn(persona, periodId);
+  if (period?.actProfileDelta) return period.actProfileDelta;
   return (persona.personaData as { actProfile?: unknown } | null)?.actProfile ?? null;
 }
 
 export async function planTurn(input: TurnInput): Promise<TurnPlan> {
+  input = {
+    ...input,
+    persona: personaAsOfPeriod(input.persona, periodForTurn(input.persona, input.periodId ?? null)),
+  };
   const layers = applyLayerOverrides(layersFromSettings(input.persona), input.layerOverrides);
   let layersUsed = layersInEffect(layers, input.persona);
   if (layersUsed.includes("rerank") && !input.exclude) {

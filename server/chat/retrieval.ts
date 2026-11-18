@@ -18,6 +18,7 @@ export interface MemoryCandidate {
   description: string | null;
   category: string;
   date: string | null;
+  recordId?: number | null;
   isPinned: boolean;
   importance: number;
   lastRecalledAt: Date | null;
@@ -351,6 +352,7 @@ export function fileSummaryCandidates(
       description: (file.extractedMemory ?? "").trim().slice(0, FILE_SUMMARY_MAX_LENGTH),
       category: "file_summary",
       date: null,
+      recordId: null,
       isPinned: false,
       importance: 0,
       subject: "them",
@@ -390,6 +392,7 @@ export async function retrieveMemories(params: {
     description: row.description,
     category: row.category,
     date: row.date,
+    recordId: row.recordId ?? null,
     subject: (row as any).subject ?? "them",
     isPinned: row.isPinned,
     importance: row.importance,

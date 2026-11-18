@@ -64,6 +64,23 @@ export function failedSendKeepsTheMessage(result: unknown): boolean {
   return Boolean((result as { failed?: boolean } | null | undefined)?.failed);
 }
 
+export function ChatPeriodHint({
+  from,
+  to,
+  name,
+}: {
+  from: string;
+  to: string;
+  name: string;
+}) {
+  const { t } = useLocale();
+  return (
+    <p className="text-[0.625rem] text-muted-subtle leading-snug">
+      {t("chat.periodBoundary", { from, to, name })}
+    </p>
+  );
+}
+
 function routineFromMetadata(metadata: unknown): string | null {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
   const value = (metadata as { routine?: unknown }).routine;
@@ -292,6 +309,10 @@ export default function Chat() {
   const periods = useMemo(
     () => normalizePeriods((persona as { personaData?: { periods?: unknown } } | undefined)?.personaData?.periods),
     [persona],
+  );
+  const selectedPeriod = useMemo(
+    () => periods.find((period) => period.id === periodId) ?? null,
+    [periods, periodId],
   );
 
   /**
@@ -1572,6 +1593,13 @@ export default function Chat() {
               {/* "TA" is a Chinese internet abbreviation. The dictionary
                   already has the right word for it. */}
               <p className="app-nav-subtitle truncate">{persona?.relationshipDesc || t("common.them")}</p>
+              {selectedPeriod ? (
+                <ChatPeriodHint
+                  from={selectedPeriod.from}
+                  to={selectedPeriod.to}
+                  name={persona?.name || ""}
+                />
+              ) : null}
             </div>
           </div>
 

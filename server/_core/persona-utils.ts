@@ -305,6 +305,10 @@ export interface SystemPromptOptions {
    */
   inSessionShare?: string | null;
   /**
+   * This stretch of them does not know what came after. Instruction.
+   */
+  periodBoundary?: string | null;
+  /**
    * Past replies of theirs, already formatted and fenced by the caller.
    */
   exemplarSection?: string | null;
@@ -658,6 +662,7 @@ export function buildSystemPromptParts(
     { kind: "volatile", text: actInstruction, id: "act" },
     { kind: "volatile", text: closingInstruction },
     { kind: "volatile", text: options.inSessionShare || "" },
+    { kind: "volatile", text: options.periodBoundary || "" },
     {
       kind: "volatile",
       text:

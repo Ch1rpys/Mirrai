@@ -15,6 +15,7 @@ const getRecentUserMood = vi.fn();
 const getRelationshipEvents = vi.fn();
 const getMemoriesByPersonaId = vi.fn();
 const getCollectedMessagesForPersona = vi.fn();
+const getRecordsByIds = vi.fn();
 
 vi.mock("../db", () => ({
   getLatestChatSummary: (...a: unknown[]) => getLatestChatSummary(...a),
@@ -23,6 +24,7 @@ vi.mock("../db", () => ({
   getRelationshipEvents: (...a: unknown[]) => getRelationshipEvents(...a),
   getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
   getCollectedMessagesForPersona: (...a: unknown[]) => getCollectedMessagesForPersona(...a),
+  getRecordsByIds: (...a: unknown[]) => getRecordsByIds(...a),
 }));
 
 // The retrieval is the part that reaches into the database; the
@@ -61,6 +63,7 @@ describe("the prompt the persona is given", () => {
     getRelationshipEvents.mockResolvedValue([]);
     getMemoriesByPersonaId.mockResolvedValue([]);
     getCollectedMessagesForPersona.mockResolvedValue([]);
+    getRecordsByIds.mockResolvedValue([]);
   });
 
   it("is the same prompt the preview shows", async () => {
@@ -210,5 +213,85 @@ describe("a stretch of the same person", () => {
     expect(actProfileForTurn(withPeriods, "period-1")).toEqual(early);
     expect(actProfileForTurn(withPeriods, "period-2")).toEqual(late);
     expect(actProfileForTurn(withPeriods, null)).toEqual(late);
+  });
+
+  it("does not tell the earlier stretch that they have already parted", async () => {
+    const withPeriods = {
+      ...persona,
+      togetherTo: "2022-08-01",
+      personaData: {
+        ...persona.personaData,
+        periods: [
+          { id: "period-1", from: "2022-01-01", to: "2022-06-01" },
+          { id: "period-2", from: "2022-07-01", to: "2023-01-01" },
+        ],
+      },
+    };
+    getRelationshipEvents.mockResolvedValue([
+      { kind: "together", title: "在一起", happenedAt: new Date("2022-02-01T00:00:00Z") },
+      { kind: "breakup", title: "分手了", happenedAt: new Date("2022-08-01T00:00:00Z") },
+    ]);
+    const current = await buildPromptForPersona({ persona: withPeriods, userId: 1, locale: "zh" });
+    expect(current).toContain("你们已经分开了");
+    expect(current).not.toContain("你现在是 2022-01-01 到 2022-06-01 那段时间的自己");
+
+    const earlier = await buildPromptForPersona({
+      persona: withPeriods,
+      userId: 1,
+      locale: "zh",
+      periodId: "period-1",
+    });
+    expect(earlier).not.toContain("你们已经分开了");
+    expect(earlier).toContain("你现在是 2022-01-01 到 2022-06-01 那段时间的自己");
+    const fenced = /<persona_data>[\s\S]*?<\/persona_data>/g;
+    expect(earlier.replace(fenced, "")).toContain("那之后发生的任何事你都不知道");
+  });
+
+  it("keeps memories from inside the stretch, drops later ones, and keeps a pin", async () => {
+    retrieveMemories.mockResolvedValue([
+      {
+        id: 1,
+        title: "时期内的事",
+        description: "春天",
+        category: "memory",
+        date: "2022-03-01",
+        isPinned: false,
+        subject: "them",
+      },
+      {
+        id: 2,
+        title: "时期之后的事",
+        description: "秋天",
+        category: "memory",
+        date: "2022-08-15",
+        isPinned: false,
+        subject: "them",
+      },
+      {
+        id: 3,
+        title: "置顶",
+        description: "一直记得",
+        category: "memory",
+        date: "2022-09-01",
+        isPinned: true,
+        subject: "them",
+      },
+    ]);
+    const withPeriods = {
+      ...persona,
+      personaData: {
+        ...persona.personaData,
+        periods: [{ id: "period-1", from: "2022-01-01", to: "2022-06-01" }],
+      },
+    };
+    const built = await buildPromptForPersona({
+      persona: withPeriods,
+      userId: 1,
+      locale: "zh",
+      periodId: "period-1",
+    });
+    expect(built).toContain("时期内的事");
+    expect(built).toContain("置顶");
+    expect(built).not.toContain("时期之后的事");
   });
 });

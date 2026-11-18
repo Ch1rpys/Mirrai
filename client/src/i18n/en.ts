@@ -257,6 +257,7 @@ export const en = {
     unlike: "This doesn't sound like them",
     period: "From a stretch of time",
     periodCurrent: "Now",
+    periodBoundary: "You are talking to {{name}} from {{from}}–{{to}}. This {{name}} does not know what happened after that.",
     unlikeMarked: "Noted",
     unlikeRewriteLabel: "What would {{name}} have said? (optional)",
     unlikeRewritePlaceholder: "Write it as you remember. This line is used as a contrast.",
