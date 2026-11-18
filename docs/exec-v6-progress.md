@@ -65,7 +65,7 @@
 | B3.7 | 🟡 | d2397b8 (count); 7e4a4ff (prompt/UI) | `lexicon.test.ts` 5 通过：夹具候选有「咕咕」、`count` 在 14–16、`evidence[0]` 是第一次出现的那句；「今天」不在送给模型的清单；模型自造的词被丢掉；重跑保住已确认的「咕咕」，`lexicon:专属黑话` 不再出现。`fidelity-prompt.test.ts`：未确认没有「咕咕」；确认后「你们之间的说法：咕咕——放鸽子」在围栏内；`lexicon: null` 不出现。`generate.test.ts`：层开着 `layersUsed` 含 `lexicon`；`--without lexicon` 不含，提示词没有「咕咕」。`prompt-fences.test.ts` 敌意 gloss 只在围栏内。`LexiconEditor.test.tsx` 确认/拒绝/手写各调 `lexicon.save`。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `367 passed \| 5 skipped (372)` 文件，`3231 passed \| 21 skipped (3252)` 用例。效果量见未验证清单。 |
 | B3.8 | 🟡 | 03c7200 | `address-history.test.ts`：夹具 `them_to_me` 有「树树」「陈树」；陈树 `byState` 只有 distant；中间词「图书馆」即使列入 known 也不产出。提示词：最近季度最常用是「陈树」；`periodId: p1` 是「树树」；无称呼史仍是「宝贝」。`prompt-fences.test.ts` 敌意称呼只在围栏内。`prompt-golden.test.ts` 10 通过、快照未改。`AddressHistoryView.test.tsx` / `PersonaProfile.test.tsx` 渲染「树树」。闸门 `365 passed \| 5 skipped (370)` 文件，`3213 passed \| 21 skipped (3234)` 用例。 |
 | B4.1 | 🟡 | 4febb6c | `shared/act-profile.test.ts` 9 通过（原 5 + 邻接 4）：`byUserAct.ask` 20 样本 `via === "userAct"`；5 样本回退 `via === "bucket"`；`userAct+emotion` 优先；无邻接表的老画像 50 次抽样与改前逐一相同（`b41-old:0..49`）。夹具真值写回后 `ask→answer`、`acknowledge→tease` 占比在设计值 ±0.08 / ±0.1。`generate.test.ts` `samples against userAct ask when the message is 在吗`：`planned.userAct === "ask"`。`V5FidelityEditors.test.tsx` 渲染「我做了什么，TA 怎么接」和「回答被问到的事 90%」。闸门 `384 passed \| 5 skipped (389)` 文件，`3371 passed \| 21 skipped (3392)` 用例。效果量见未验证清单。 |
-| B4.2 | ⬜ |  |  |
+| B4.2 | 🟡 | 9de5c63 | `shared/act-clusters.test.ts` 4 通过：10+10 变体两簇；11 句 `null`；夹具 `acknowledge` 簇每句都是真值 acknowledge。`style-profile.test.ts`（server）`writes acknowledge clusters…` 通过。`generate.test.ts`：抽到 tease 时提示词有 `prompt.actClustersHeading`、句子来自 tease 簇且只在围栏内、排在 `prompt.actHeading` 之后，`layersUsed` 含 `actClusters`；`--without actClusters` 无该段；没有动作分布时无该段。`prompt-fences.test.ts` 敌意簇句只在围栏内。`exemplars.test.ts`：`restrictToSampledAct` 且 ≥2 条匹配动作时只留这些；不足 2 条不收窄。`prompt-golden.test.ts` 10 通过、快照未改。`PersonaSwitches.test.tsx` 渲染「做同一件事时，照 小满 做过的样子」。闸门 `385 passed \| 5 skipped (390)` 文件，`3383 passed \| 21 skipped (3404)` 用例。效果量见未验证清单。 |
 | B4.3 | ⬜ |  |  |
 | B4.4 | ⬜ |  |  |
 | B4.5 | ⬜ |  |  |
@@ -319,6 +319,7 @@
 | 115 | B2.6 | 导入时量一次样本池 | 蒸馏标完情绪后 `force` 再量 | `recordsVersion` 是条数:maxId，标标签不会变；不标就只有 `any`。生产不读夹具 `truth`。 |
 | 116 | B2.8 | 扫描调用点前后各一截源码 | 只看这一次调用的参数括号 | 上一行的 `options` 变量不算。 |
 | 117 | B4.1 | 夹具邻接占比写进 `XIAOMAN_TRUTH.derived` | 测试里从真值 `act` / `userAct`（没有则 `labelUserActByRule`）现算，再对 `buildActProfile` | 第 3.5 节：表里没有的量从真值标注直接数，不经过被测代码。夹具测试没有改 `xiaoman.ts`。 |
+| 118 | B4.2 | `actClusters` 进 `BUILT_LAYERS` | 不进；只在抽到动作、该动作有簇、且这一轮真的插入了原话时写入 `layersUsed` | 没有簇或没抽到动作时这一层改不了回复。消融表对老分身仍是五层。 |
 
 ## 未验证清单
 
@@ -340,6 +341,7 @@
 | B2.8 | 按调用点分工、分身采样、extraBody、`--tune` 有没有让生成更像 TA。本机没有非 stub 的模型。`--tune` 只打印最好的一组和应用命令，不写入 | `corepack pnpm eval -- --persona <id> --user <id> --tune --yes` ；`corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身已有分层标答的人 |
 | B2.9 | 换成 cache 布局之后生成有没有更像 TA。本机没有非 stub 的模型。默认仍是 classic | 先 `PROMPT_LAYOUT=classic corepack pnpm eval -- --persona <id> --user <id> --save`，再 `PROMPT_LAYOUT=cache corepack pnpm eval -- --persona <id> --user <id> --gate`（或 `--compare`） | 配了真实模型、并且该分身已有分层标答的人 |
 | B4.1 | 按「我做了什么」抽动作之后生成有没有更像 TA。本机没有非 stub 的模型。邻接对没有单独的层，走 `act` | `corepack pnpm eval -- --persona <id> --user <id> --compare act --k 3` | 配了真实模型、并且该分身已标过用户动作、已有分层标答的人 |
+| B4.2 | 动作下面挂原话簇之后生成有没有更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare actClusters --k 3` | 配了真实模型、并且该分身已量出动作簇、已有分层标答的人 |
 
 ## 待用户决定
 
@@ -1018,4 +1020,11 @@ B2.3、B2.1、B2.2、B2.6、B2.5、B2.4、B2.8、B2.9 维持 🟡。未验证清
 - 闸门 `384 passed | 5 skipped (389)` 文件，`3371 passed | 21 skipped (3392)` 用例，`all six steps passed`。相对 WP6 收尾（384/5 文件、3364/21 用例）：通过用例 +7；跳过数不变。
 - 偏差 117。未验证清单新增 B4.1。待用户决定无新增。
 - B4.1 标 🟡。接着做 B4.2。
+
+### WP7 · 实现会话 · 2026-11-18 · B4.2
+
+- `9de5c63`：字二元组 Jaccard 聚类写进 `styleProfile.actClusters`；抽到动作且该动作有簇时，动作指令后挂围栏原话（至多 3 簇各一句）；示范在 ≥2 条同动作命中时收窄到这些。开关默认开。
+- 闸门 `385 passed | 5 skipped (390)` 文件，`3383 passed | 21 skipped (3404)` 用例，`all six steps passed`。相对 B4.1（384/5 文件、3371/21 用例）：通过文件 +1、通过用例 +12；跳过数不变。
+- 偏差 118。未验证清单新增 B4.2。待用户决定无新增。
+- B4.2 标 🟡。接着做 B4.3。
 
