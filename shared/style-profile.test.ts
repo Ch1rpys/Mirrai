@@ -77,4 +77,29 @@ describe("the style profile", () => {
     });
     expect(empty.emotionDynamics).toBeUndefined();
   });
+
+  it("keeps a conflict profile and drops a malformed one", () => {
+    const profile = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      conflict: {
+        episodes: 6,
+        durationMin: { median: 300, p25: 240, p75: 360, all: [180, 240, 300, 300, 360, 480] },
+        repairBy: { them: 4, me: 2 },
+        repairAcceptRate: 1,
+        repairLines: ["好啦 不气了"],
+        coldLines: ["哦。"],
+      },
+    });
+    expect(profile.conflict?.episodes).toBe(6);
+    expect(profile.conflict?.repairLines).toEqual(["好啦 不气了"]);
+    const empty = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      conflict: { episodes: 0 },
+    });
+    expect(empty.conflict).toBeUndefined();
+  });
 });

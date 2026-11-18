@@ -253,6 +253,9 @@ describe("measureStyleProfile", () => {
     expect(measured.emotionDynamics?.samples).toBeGreaterThanOrEqual(30);
     expect(measured.emotionDynamics?.dwell.distant?.medianMin).toBeGreaterThanOrEqual(240);
     expect(measured.emotionDynamics?.dwell.distant?.medianMin).toBeLessThanOrEqual(330);
+    expect(measured.conflict?.episodes).toBe(6);
+    expect(measured.conflict?.repairBy).toEqual({ them: 4, me: 2 });
+    expect(measured.conflict?.repairLines).toContain("好啦 不气了");
   });
 
   it("remakes the sample pool from labelled rows even when the records version is unchanged", async () => {

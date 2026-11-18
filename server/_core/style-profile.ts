@@ -40,6 +40,7 @@ import {
 import { measureSamplePool } from "@shared/sample-pool";
 import { measureActClusters } from "@shared/act-clusters";
 import { measureEmotionDynamics } from "@shared/emotion-dynamics";
+import { mineConflicts } from "@shared/conflicts";
 import { splitScenes } from "@shared/scenes";
 import { schedulePersonaEmbeddings } from "../chat/embeddings";
 
@@ -110,16 +111,19 @@ export async function measureStyleProfile(params: {
   const rituals = mergeManualRituals(minedRituals, normalizeRituals(current?.rituals));
   const samplePool = measureSamplePool(rows, rawData);
   const actClusters = measureActClusters(rows, rawData);
-  const emotionDynamics = measureEmotionDynamics(
-    splitScenes(
-      rows.map((row) => ({
-        role: row.role,
-        emotion: row.emotion,
-        timestamp: row.timestamp,
-        kind: row.kind,
-      })),
-    ),
+  const labelledScenes = splitScenes(
+    rows.map((row) => ({
+      role: row.role,
+      content: row.content,
+      emotion: row.emotion,
+      timestamp: row.timestamp,
+      kind: row.kind,
+      act: row.act,
+      id: row.id,
+    })),
   );
+  const emotionDynamics = measureEmotionDynamics(labelledScenes);
+  const conflict = mineConflicts(labelledScenes, rawData);
   const next = normalizeStyleProfile({
     ...(current ?? {}),
     version: 1,
@@ -133,6 +137,7 @@ export async function measureStyleProfile(params: {
     ...(samplePool ? { samplePool } : { samplePool: undefined }),
     ...(actClusters ? { actClusters } : { actClusters: undefined }),
     ...(emotionDynamics ? { emotionDynamics } : { emotionDynamics: undefined }),
+    ...(conflict ? { conflict } : { conflict: undefined }),
   });
   return applyRerankWeightsFromPairs(personaId, userId, next, { persistAlways: true });
 }
