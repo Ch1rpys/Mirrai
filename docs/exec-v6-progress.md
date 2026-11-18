@@ -69,7 +69,7 @@
 | B4.3 | 🟡 | 554c965 (schema/measure); b032823 (runtime) | 临时库 `mirrai_v6_scratch` 0052 四步+升级路径：push 后 migrate 应用到 `0052_emotional_state_since`（journal 50 条）；`--replay` `replayed 50 migration(s)`；`--rollback 1` 后 `personas.emotionalStateSince` 消失；再 migrate 回来。升级路径 DROP 该列并删 journal 的 0052 后再 migrate，列出现。库已 `dropdb`。`shared/emotion-dynamics.test.ts` 5 通过：夹具 `modal === "warm"`、`dwell.distant.medianMin` 在 240–330；29 次转移 `null`；distant 30 分钟提议 happy/`other` 保持 distant `kept: true`；`repair` 且 `repairAcceptRate >= 0.3` 放行 happy；`decayState` 400 分钟 → warm、100 分钟不变。`service.test.ts` `keeps a distant stretch that has only lasted 30 minutes`：落库 `emotionalState === "distant"`，`metadata.emotion === { proposed: "happy", kept: true, reason: "inertia" }`。`routers.persona-update.test.ts` `writes a mood the user picked by hand`：`updatePersona` 写入 `emotionalState: "happy"`。`PersonaSwitches.test.tsx` 渲染「小满 的情绪按 小满 的节奏变」。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `386 passed \| 5 skipped (391)` 文件，`3394 passed \| 21 skipped (3415)` 用例。效果量见未验证清单。 |
 | B4.4 | 🟡 | 4d42d07 (mine); 297ce15 (prompt) | `server/skill-engine/conflicts.test.ts` 4 通过：夹具 `episodes === 6`，`durationMin.all` 相对 `[180, 240, 300, 300, 360, 480]` 各 ±10；`repairBy === { them: 4, me: 2 }`；`repairLines` 含「好啦 不气了」；`coldLines` 都以句号结尾。2 次冲突 `null`。同一 seed 两次 `pickConflictDuration` 相同。`generate.test.ts`：`distant` 有冷话段、在围栏内；`warm` 无；`emotionalStateSince` 9 小时前 `sampledAct === "repair"` 且有和好段；1 小时前不强制；同一 since 两次结果相同；`--without emotionInertia` 两者都没有。`prompt-fences.test.ts` 敌意冷话/和好句只在围栏内。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `387 passed \| 5 skipped (392)` 文件，`3407 passed \| 21 skipped (3428)` 用例。效果量见未验证清单。 |
 | B4.5 | 🟡 | ee32c67 | `conflicts.test.ts` / `style-profile.test.ts`（server）：夹具 `triggers` 一组 `userAct: "acknowledge"`、`n === 6`，例子都是「嗯」。`generate.test.ts`：提示词有 `prompt.triggersHeading`、含「嗯」、只在围栏内。`prompt-fences.test.ts` 敌意雷区行只在围栏内。`prompt-golden.test.ts` 10 通过、快照未改。`TriggersView.test.tsx` 展开后显示「嗯」和日期。闸门 `388 passed \| 5 skipped (393)` 文件，`3412 passed \| 21 skipped (3433)` 用例。效果量见未验证清单。 |
-| B4.6 | ⬜ |  |  |
+| B4.6 | 🟡 | 07019c3 (measure); 0daab58 (prompt) | `shared/session-profile.test.ts` 6 通过：夹具 closers 前三句 晚安/安/睡啦，`closeByThemRate > 0.9`，`bedtime.median` 在 22:21 ±15；`shouldClose` 已收尾/很少收尾/超过 p90/睡点窗口/仍短 各 1 条。`generate.test.ts`：70 分钟超过合成 p90=40 时围栏外有 `prompt.closingOverlay`、围栏内有 `prompt.closingHeading` 和「晚安」；同一会话已有 `metadata.closing` 不再出现；`--without closing` 两者都没有。`service.test.ts` `lets them close a long session themselves instead of appending the care note`：`careNote.kind === "long_session"` 且 `text === ""`，落库不含 `labels.care.longSession`，`createSafetyEvent` 仍被调用，`metadata.closing === true`。`prompt-fences.test.ts` 敌意收尾句只在围栏内。`prompt-golden.test.ts` 10 通过、快照未改。`PersonaSwitches.test.tsx` 渲染「小满 会自己说「我先睡了」」。闸门 `389 passed \| 5 skipped (394)` 文件，`3424 passed \| 21 skipped (3445)` 用例。效果量见未验证清单。 |
 | B4.7 | ⬜ |  |  |
 | B4.8 | ⬜ |  |  |
 | B5.1 | ⬜ |  |  |
@@ -327,6 +327,7 @@
 | 123 | B4.4 | 一次冲突 = 任意一段连续的 distant/melancholy | 只收「短爆发 + 2–9 小时冻结、冻结前 TA 行 ≤ 8」的冷战 | 夹具按手册定义会挖出 19 段（含普通 distant 聊天和隔夜）。6 次设计冷战是「就嗯？」之后静默数小时。 |
 | 124 | B4.4 | `coldLines` 取期间 TA 的话至多 3 句 | 只收以句号结尾的 | 设计冷战里锁住的「就嗯？」没有句号；验收要求句句带句号。句号句来自进入冻结前已经 distant 的那几句。 |
 | 125 | B4.5 | `TriggerEntry.examples` 只有 `recordId, text` | 另有 `at`（ISO） | 分区展开要显示日期。 |
+| 126 | B4.6 | 场景时长按 `splitScenes` 的 6 小时静默切 | 夹具 `lengthMin.p90` 约 249 分钟；生成测试用合成 `p90: 40` | 夹具 3–5 小时冷战被并进同一个场景。按 `sceneId` 切的话 p90 约 28 分钟。不改切场景函数。 |
 
 ## 未验证清单
 
@@ -352,6 +353,7 @@
 | B4.3 | 情绪惯性有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare emotionInertia --k 3` | 配了真实模型、并且该分身已量出情绪动力学、已有分层标答的人 |
 | B4.4 | 冲突剧本（冷话、到点强制和好）有没有让生成更像 TA。本机没有非 stub 的模型。和 B4.3、B4.5 同一层 | `corepack pnpm eval -- --persona <id> --user <id> --compare emotionInertia --k 3` | 配了真实模型、并且该分身已量出冲突画像、已有分层标答的人 |
 | B4.5 | 雷区表进提示词有没有让生成更像 TA。本机没有非 stub 的模型。和 B4.3、B4.4 同一层 | `corepack pnpm eval -- --persona <id> --user <id> --compare emotionInertia --k 3` | 配了真实模型、并且该分身已量出雷区、已有分层标答的人 |
+| B4.6 | 会收尾的 TA 有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare closing --k 3` | 配了真实模型、并且该分身已量出会话画像、已有分层标答的人 |
 
 ## 待用户决定
 
@@ -1060,4 +1062,12 @@ B2.3、B2.1、B2.2、B2.6、B2.5、B2.4、B2.8、B2.9 维持 🟡。未验证清
 - 闸门 `388 passed | 5 skipped (393)` 文件，`3412 passed | 21 skipped (3433)` 用例，`all six steps passed`。相对 B4.4（387/5 文件、3407/21 用例）：通过文件 +1、通过用例 +5；跳过数不变。
 - 偏差 125。未验证清单新增 B4.5。待用户决定无新增。
 - B4.5 标 🟡。接着做 B4.6。
+
+### WP7 · 实现会话 · 2026-11-18 · B4.6
+
+- `07019c3`：`measureSessions` 写入 `styleProfile.sessions`（合格场景 ≥20、每场 ≥6 条）。夹具 closers 前三句 晚安/安/睡啦，`closeByThemRate` 0.99，`bedtime.median` 1341。
+- `0daab58`：`shouldClose` 为真时指令区挂 `prompt.closingOverlay`、围栏内至多 4 句收尾原话；`TurnPlan.closing` / `metadata.closing`；同一会话不收第二次。`long_session` 关心的话不附加，安全事件照记。开关默认开。
+- 闸门 `389 passed | 5 skipped (394)` 文件，`3424 passed | 21 skipped (3445)` 用例，`all six steps passed`。相对 B4.5（388/5 文件、3412/21 用例）：通过文件 +1、通过用例 +12；跳过数不变。
+- 偏差 126。未验证清单新增 B4.6。待用户决定无新增。
+- B4.6 标 🟡。接着做 B4.7。
 
