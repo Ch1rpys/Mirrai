@@ -63,7 +63,7 @@
 | B3.5 | ✅ | 6dbb539 | `state-rules.test.ts` 3 通过：夹具产出 `["。"]`/`["陈树"]` 两条，meaning 都是「疏离」，各 3 条证据且含 trigger；distant 删到 15 行无候选；`mergeUserDecisions` 已确认的 `["。"]` 只留一条。`fidelity-prompt.test.ts` `says nothing about a rule the user has not confirmed` 通过。`micro-rules.test.ts` `does not mine at all when the caller does not want it` 通过。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `362 passed \| 5 skipped (367)` 文件，`3201 passed \| 21 skipped (3222)` 用例。 |
 | B3.6 | ✅ | b15124e | `shared/imperfection-draft.test.ts`：夹具 distant 草稿含「话很短」「句末带句号」，warm 无草稿。`ImperfectionEditor.test.tsx`：点「用这句」后输入框是那句话、`save` 未调用；已有用户内容的状态不显示草稿。`fidelity-prompt.test.ts` `does not put a counted draft into the prompt until the user takes it` 通过。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `363 passed \| 5 skipped (368)` 文件，`3205 passed \| 21 skipped (3226)` 用例。 |
 | B3.7 | ⬜ |  |  |
-| B3.8 | ⬜ |  |  |
+| B3.8 | ✅ | 03c7200 | `address-history.test.ts`：夹具 `them_to_me` 有「树树」「陈树」；陈树 `byState` 只有 distant；中间词「图书馆」即使列入 known 也不产出。提示词：最近季度最常用是「陈树」；`periodId: p1` 是「树树」；无称呼史仍是「宝贝」。`prompt-fences.test.ts` 敌意称呼只在围栏内。`prompt-golden.test.ts` 10 通过、快照未改。`AddressHistoryView.test.tsx` / `PersonaProfile.test.tsx` 渲染「树树」。闸门 `365 passed \| 5 skipped (370)` 文件，`3213 passed \| 21 skipped (3234)` 用例。 |
 | B4.1 | ⬜ |  |  |
 | B4.2 | ⬜ |  |  |
 | B4.3 | ⬜ |  |  |
@@ -293,6 +293,8 @@
 | 89 | B3.5 | 管线称呼表可用 nickname + name + `defaultAddressForms`（陈树要等 B3.8） | 单元测试显式传入 `["陈树","树树"]`；管线和 `microRule.mine` 用 nickname + 分身名 + 默认表 | 默认表没有人名。夹具里的「陈树」在重挖时要等 B3.8 或用户名写进称呼表。 |
 | 90 | B3.6 | 「其余状态」从记录再量一次 | 用其余 `perState` 核心按样本加权 | `draftImperfection` 只拿 `styleProfile`，没有行。 |
 | 91 | B3.6 | 未写跳过 warm | 不给 warm 起草 | 验收写 warm 没有草稿（它就是基准）。其余状态相对 warm 的笑率会让 warm 命中「不笑」。 |
+| 92 | B3.8 | 行首呼语后面只跟逗号、感叹号、波浪号、空格或行尾 | 句号、问号、省略号也算断开 | 夹具「陈树。」47 条，句号不在手册那张表里。 |
+| 93 | B3.8 | 呼语只按行首/行末形态挖 | 已知称呼贴在行首、中间没有逗号时也算 | 夹具把「树树」直接接在下一句前面，595 条没有分隔符。 |
 
 ## 未验证清单
 
@@ -832,3 +834,10 @@ B3.1、B3.2、B8.3、B8.4、B8.9、B8.10 维持 ✅。B8.1 改 🟡。B8.2、B8.
 - 闸门 `363 passed | 5 skipped (368)` 文件，`3205 passed | 21 skipped (3226)` 用例，`all six steps passed`。相对 B3.5（362/5 文件、3201/21 用例）：通过文件 +1、通过用例 +4；跳过数不变。
 - 偏差 90–91。未验证清单、待用户决定无新增。
 - B3.6 标 ✅。下一条 B3.8。
+
+### WP5 · 实现会话 · 2026-11-18 · B3.8
+
+- `03c7200`：`mineAddressForms` 挖呼语；指纹的 `address` 改用挖到的 them_to_me 集合；提示词称呼行用最近一季（或所选时期）最常用的；资料页两张按季度的表。
+- 闸门 `365 passed | 5 skipped (370)` 文件，`3213 passed | 21 skipped (3234)` 用例，`all six steps passed`。相对 B3.6（363/5 文件、3205/21 用例）：通过文件 +2、通过用例 +8；跳过数不变。
+- 偏差 92–93。未验证清单、待用户决定无新增。
+- B3.8 标 ✅。下一条 B3.7。
