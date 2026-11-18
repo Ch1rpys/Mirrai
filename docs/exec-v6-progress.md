@@ -54,7 +54,7 @@
 | B2.5 | 🟡 | 9d1bea6 (schema/routes); 2b834b7 (prompt/UI) | 临时库 `mirrai_v6_scratch` 0051 四步+升级路径：push 后 migrate 应用到 `0051_fidelity_rewrite`（journal 49 条）；`--replay` `replayed 49 migration(s)`；`--rollback 1` 后 `fidelity_feedback.rewrite` 消失；再 migrate 回来。升级路径 DROP 该列并删 journal 的 0051 后再 migrate，列出现。库已 `dropdb`。`routers.fidelity-rewrite.test.ts` 3 通过：`rewrite` 201 字被拒；别人的反馈 `NOT_FOUND`；自己的 `mark`/`setRewrite` 写入。`generate.test.ts`：两条改写时提示词含 `prompt.contrastHeading` 和两行对照，原文只在围栏内；`--without exemplars` 无对照段。`prompt-fences.test.ts` `an unlike rewrite from the reader`：敌意改写只在围栏内。`routers.eval.test.ts`：带改写的反馈生成 `source: "feedback"` 标答；`trainingTexts` 不含「那才像」。`dataset.test.ts` `does not train on a rewrite the person never said` 通过。`MessageBubble.test.tsx`：选原因后出现输入框、不填直接关只提交原因；填了则 `rewrite` 随请求发出。`feedback-aggregate.test.ts` 改写进证据。`export.test.ts` JSON/Markdown 带对子。`prompt-golden.test.ts` 10 通过、快照未改。`schema-coverage`/`schema-parity`/`db-isolation` 通过。闸门 `377 passed \| 5 skipped (382)` 文件，`3317 passed \| 21 skipped (3338)` 用例。效果量见未验证清单。 |
 | B2.6 | 🟡 | 51fccde (pool); 035613c (prompt/UI) | `shared/sample-pool.test.ts` 4 通过：夹具 `samplePool.distant` 每句 ≤4 字、句号占比 ≥0.7，`warm` 无句号结尾；`harmReport.remove` 时「废物」不进池。`style-profile.test.ts`：按状态池写入；裸数组收成 `{ any }`。`style-profile.test.ts`（server）夹具写入 distant/warm。`style-reminder.test.ts` 4 通过：`chatCount` 0 与 5 同一批 6 句、到 6 换一批、distant 只取 distant 池；种子句被跳过；8 条长问句触发 `long`+`question`，8 条「在的呀」不触发。`generate.test.ts` 同上，且 `layersUsed` 含 `styleReminder`；漂移句 `prompt.reanchor` 在围栏外；`--without styleReminder` 两者都没有。`prompt-fences.test.ts` 敌意样本只在围栏内。`prompt-golden.test.ts` 10 通过、快照未改。`PersonaSwitches.test.tsx` 渲染「聊久了也别跑偏」。闸门 `376 passed \| 5 skipped (381)` 文件，`3304 passed \| 21 skipped (3325)` 用例。效果量见未验证清单。 |
 | B2.7 | 🟡 | 9147cf4 (stop); 89f29db (cap) | `shared/length-cap.test.ts` 7 通过：夹具 `maxChars === ceil(p95 × 1.5)`；无指纹 `null`；用户 `maxTokens` 更小则用用户的；`burstMax===1` 且 `newlineRate<0.02` 时 `stop: ["\\n"]`；200 字在 `maxChars=30` 截在句界；无句界恰好 30 字。`server/llm/providers/stop.test.ts` 4 通过：OpenAI 请求体 `stop`、Claude `stop_sequences`、Ollama `options.stop`。`generate.test.ts` 层开着 provider 收到 `maxTokens: 72`（p95=24）；`--without lengthCap` 收到 200；截断后 `projection` 含 `length_cap`。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `358 passed \| 5 skipped (363)` 文件，`3151 passed \| 21 skipped (3172)` 用例。效果量见未验证清单。 |
-| B2.8 | ⬜ |  |  |
+| B2.8 | 🟡 | 903a94f (purpose); c0b2f6b (roles); f88cab5 (sampling/extraBody/tune/UI) | `server/llm/purpose.test.ts`：扫描 `server/` 下 `invokeWithProvider(` / `streamWithProvider(` / `llmService.invoke(` / `invokeForUser` 调用点，每一处参数里都有 `purpose`。`user-provider.test.ts`：配了 `roles.classify` 时情绪判定用它；没配用默认；用户有自己的 provider 时不回落到环境变量。`extra-body.test.ts`：对象通过、>2KB `too_large`、含 `model` `forbidden`、数组 `not_object`。`stop.test.ts`：OpenAI `top_p`/`presence_penalty`/`frequency_penalty`、`extraBody` 合并、`model`/`messages`/`stream`/`tools` 被剥掉；Claude `top_p`；Ollama `top_p` + `repeat_penalty = 1 + frequencyPenalty` 上限 2。`persona-settings.test.ts`：`sampling.temperature: 5` 钳到 2；`sampling: null` 清掉。`generate.test.ts`：分身有 sampling 时 reply 收到 0.4/0.5；没有时用全局 0.8/0.95。`routers.provider-validation.test.ts`：`extraBody` >2KB 与含 `model` 被拒。`extra-config.test.ts`：合法 extraBody 保留、含 `model` 丢掉。`compare-cli.test.ts`：`--tune`、网格、不写入。`LlmRoles.test.tsx` 三个下拉并保存 classify；`ExtraBodyEditor.test.tsx` 非 JSON 对象提示「这不是一个 JSON 对象。」且不 mutate；`PersonaSampling.test.tsx` 保存四个数、清空发 `sampling: null`。闸门 `382 passed \| 5 skipped (387)` 文件，`3351 passed \| 21 skipped (3372)` 用例。效果量见未验证清单。 |
 | B2.9 | ⬜ |  |  |
 | B3.1 | ✅ | 00d6e7a (measure); e774ee2 (UI) | `shared/style-fingerprint.test.ts` 24 通过：`endingClassOf` 每类至少两个用例（含「好的。。。」ellipsis、「好的。」period、「好的」other、「好呀~」tilde、「好呀」particle）；夹具 `endings.period` 在 distant 占比×0.9 的 ±0.02 内；`laugh.haRuns[4]` 最大；`ellipsisForms.unicode === 0`；`emoji.rate === 0`；39 行返回 `null`；`perState.distant.endings.period` 在 0.9±0.05，`warm.endings.period === 0`，distant 有「陈树」、warm 没有；`perPeriod` p1/p2 中位字数 10±1 与 6±1。`FingerprintView.test.tsx` 2 通过：夹具渲染「几乎不以句号结尾」；句号占多数时该项不出现。闸门 `341 passed \| 4 skipped (345)` 文件，`3037 passed \| 18 skipped (3055)` 用例。`particles["呢"]` 与 `haRuns` 仅长度 4 见偏差 70、71。 |
 | B3.2 | ✅ | 2e05643 | `shared/style-fingerprint.test.ts`：`is small when the generated lines are the person's own` 通过（夹具 200 句 `total < 0.1`；末尾加「。」后 `endings > 0.5` 且 `total` 变大；80 字长句 `length === 1`）；`treats a period line as more surprising in warm than in distant` 通过。「哦。」对 warm 的 `lineSurprise` 大于 distant。`metrics.test.ts`：`fills styleDistance when a fingerprint is given` 通过；`leaves styleDistance null when there is no fingerprint` 通过，且 overlap / likelihoodGap / emotionAccuracy / cases / lengthDistance 与有指纹时相同。`compare-cli.test.ts`：`includes style in the comparison` 通过（源码含 `row("style"`、`[eval] style`、`tolerance-style`）。闸门 `341 passed \| 4 skipped (345)` 文件，`3042 passed \| 18 skipped (3060)` 用例，`all six steps passed`。 |
@@ -312,6 +312,7 @@
 | 108 | B2.6 | `styleReminder` 进 `BUILT_LAYERS` | 不进；只在写出了 6 句或漂移提醒时写入 `layersUsed` | 没有样本池、最近也不像跑偏时这一层改不了回复。消融表对老分身仍是五层。 |
 | 109 | B2.5 | 只写 `eval.buildCases` 增加 `source: "feedback"` 标答 | `eval.run` / `eval.audition` 在没有已存标答时也会把改写标答拼进去 | 第一次评测若只走 run、没先 buildCases，手册里的对照标答会缺席。已存标答仍以库里的为准。 |
 | 110 | B2.4 | `twoStage` 进 `BUILT_LAYERS`，开关开着就出现在 `layersUsed` | 不进；只在开关开着且 `kind === "model"` 时写入 `layersUsed` | 仪式回和沉默不走两步。消融表对老分身仍是五层。 |
+| 111 | B2.8 | 额外请求参数文本框组件名未点名 | `ExtraBodyEditor` | 同目录其它 v6 组件都是具名文件。清空文本框写入 `extraBody: {}`，sanitize 保留空对象（zod 不能传 `null`）。 |
 
 ## 未验证清单
 
@@ -330,6 +331,7 @@
 | B2.6 | 风格样本和漂移提醒有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare styleReminder --k 3` | 配了真实模型、并且该分身已量出样本池和指纹、已有分层标答的人 |
 | B2.5 | 不像/像对照段有没有让生成更像 TA。本机没有非 stub 的模型。对照属于 exemplars 层 | `corepack pnpm eval -- --persona <id> --user <id> --compare exemplars --k 3` | 配了真实模型、并且该分身已有带改写的不像标记和分层标答的人 |
 | B2.4 | 先定内容再换嗓子有没有让生成更像 TA。本机没有非 stub 的模型。`--compare` 仍是原来的四路对比（偏差 13），要量这一层需把 `layers.twoStage` 打开再 `--without twoStage` | `corepack pnpm eval -- --persona <id> --user <id> --compare twoStage --k 3` | 配了真实模型、并且该分身已打开两步生成、已有分层标答的人 |
+| B2.8 | 按调用点分工、分身采样、extraBody、`--tune` 有没有让生成更像 TA。本机没有非 stub 的模型。`--tune` 只打印最好的一组和应用命令，不写入 | `corepack pnpm eval -- --persona <id> --user <id> --tune --yes` ；`corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身已有分层标答的人 |
 
 ## 待用户决定
 
@@ -959,4 +961,13 @@ B2.7 维持 🟡。B3.6 维持 ✅。B3.3、B3.4、B3.5、B3.7、B3.8 改回 ⬜
 - 闸门 `377 passed | 5 skipped (382)` 文件，`3323 passed | 21 skipped (3344)` 用例，`all six steps passed`。相对 B2.5（377/5 文件、3317/21 用例）：通过用例 +6；跳过数不变。
 - 偏差 110。未验证清单新增 B2.4。待用户决定无新增。
 - B2.4 标 🟡。接着做 B2.8。
+
+### WP6 · 实现会话 · 2026-11-18 · B2.8
+
+- `903a94f`：`LLMOptions.purpose` 闭集；扫描测试守住 `server/` 下每一处模型调用都点名。
+- `c0b2f6b`：默认配置 `extraConfig.roles`；`resolveProviderForPurpose` 给 classify/extract/summarize 用便宜的，没配用默认；用户有自己的 provider 时不回落到运营方。
+- `f88cab5`：`topP`/`presencePenalty`/`frequencyPenalty` 进各家请求体；`extraBody` 只合并进 OpenAI 协议（≤2KB，不许 `model`/`messages`/`stream`/`tools`）；分身 `settings.sampling` 只覆盖 reply；`--tune` 打温度×topP 网格、按综合分排序、不写入；设置页分工和下拉、额外参数文本框；PersonaEdit 四个采样滑块可清空。
+- 闸门 `382 passed | 5 skipped (387)` 文件，`3351 passed | 21 skipped (3372)` 用例，`all six steps passed`。相对 B2.4（377/5 文件、3323/21 用例）：通过文件 +5、通过用例 +28；跳过数不变。
+- 偏差 111。未验证清单新增 B2.8。待用户决定无新增。
+- B2.8 标 🟡。接着做 B2.9。
 
