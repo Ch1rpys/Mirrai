@@ -19,6 +19,7 @@ export default function PersonaSwitches(props: { personaId: number; name: string
     onSuccess: () => settings.refetch(),
     onError: (error) => toast.error(error.message),
   });
+  const seededTurns = settings.data?.layers?.seededTurns !== false;
   const lengthCap = settings.data?.layers?.lengthCap !== false;
   const styleProjection = settings.data?.layers?.styleProjection !== false;
   const abPairs = Boolean(settings.data?.layers?.abPairs);
@@ -30,6 +31,26 @@ export default function PersonaSwitches(props: { personaId: number; name: string
       <p className="text-xs text-muted-foreground leading-relaxed">
         {t("personaEdit.switchesHint")}
       </p>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={seededTurns}
+          disabled={busy}
+          onChange={(event) =>
+            update.mutate({
+              id: props.personaId,
+              patch: { layers: { seededTurns: event.target.checked } },
+            })
+          }
+          className="mt-0.5"
+        />
+        <span>
+          <span className="block">{t("personaEdit.seededTurns", { name: props.name })}</span>
+          <span className="block text-xs text-muted-foreground leading-relaxed">
+            {t("personaEdit.seededTurnsNote", { name: props.name })}
+          </span>
+        </span>
+      </label>
       <label className="flex items-start gap-2 text-sm">
         <input
           type="checkbox"

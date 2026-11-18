@@ -447,6 +447,10 @@ export async function composeMessages(params: {
   replyToId?: number | null;
   sampledAct?: import("@shared/speech-acts").SpeechAct | null;
   periodId?: string | null;
+  excludeExemplarIds?: number[];
+  excludeExemplarTexts?: string[];
+  skipExemplars?: boolean;
+  seedTurnsNote?: string | null;
 }): Promise<{
   messages: LLMMessage[];
   recalled: Array<{ id: number; title: string; subject: string }>;
@@ -534,6 +538,10 @@ export async function composeMessages(params: {
     quotedSection,
     sampledAct: params.sampledAct ?? null,
     periodId: params.periodId ?? null,
+    excludeExemplarIds: params.excludeExemplarIds,
+    excludeExemplarTexts: params.excludeExemplarTexts,
+    skipExemplars: params.skipExemplars,
+    seedTurnsNote: params.seedTurnsNote ?? null,
     history: history.slice(-(contextLimit - 1)).map((row) => ({
       role: row.role === "user" ? "user" : "assistant",
       content: row.content,
@@ -1478,6 +1486,7 @@ async function* runConversationTurn(
     periodId: options.periodId ?? null,
     ...(projection.length > 0 ? { projection } : {}),
     ...(rerank ? { rerank } : {}),
+    ...(plan.seedRecordIds.length > 0 ? { seedRecordIds: plan.seedRecordIds } : {}),
   };
   let parts = [finalText];
   if (timingEnabled && behavior) {

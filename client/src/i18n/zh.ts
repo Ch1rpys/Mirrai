@@ -1318,6 +1318,8 @@ export const zh = {
     timingNote: "回复前的等待、连发、以及这一轮可以不回。没有画像时开不了。默认关。",
     switchesTitle: "这个分身的开关",
     switchesHint: "上面一组不多花钱，有记录就会生效。下面一组会多花钱、多等一会儿，或者需要联网，所以默认关着。",
+    seededTurns: "开口前先看几句 {{name}} 的原话",
+    seededTurnsNote: "每一轮会从记录里找几段和眼前这句相近的真实往来，放在对话前面。不多花钱。",
     lengthCap: "不让它写得比 {{name}} 长",
     lengthCapNote: "按记录里 {{name}} 一次最多说多少来设上限。记录不够时不生效。",
     styleProjection: "按 {{name}} 的标点习惯收尾",

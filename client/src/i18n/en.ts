@@ -1317,6 +1317,8 @@ export const en = {
     timingNote: "The wait before a reply, bursts, and a turn with no reply. It cannot be turned on without a behaviour profile. Off by default.",
     switchesTitle: "Switches for this persona",
     switchesHint: "The first group costs nothing extra and takes effect once there are records. The second group costs more, waits longer, or needs the network, so it stays off.",
+    seededTurns: "Look at a few of {{name}}'s real lines before speaking",
+    seededTurnsNote: "Each turn finds a few real exchanges close to this one and puts them in front of the conversation. It does not cost extra.",
     lengthCap: "Don't let them write longer than {{name}}",
     lengthCapNote: "The cap is how long {{name}} went in one turn in the record. It stays off until there are enough lines.",
     styleProjection: "End the way {{name}} punctuates",

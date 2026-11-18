@@ -276,6 +276,33 @@ describe("a counted address from the records", () => {
   });
 });
 
+describe("a jailbreak line in the record", () => {
+  it("does not appear in any seed message", async () => {
+    const { isSafeSeedLine } = await import("@shared/seed-safety");
+    const { selectSeedExchanges, seedMessagesFor } = await import("./chat/seed-turns");
+    expect(isSafeSeedLine(HOSTILE_NOTE)).toBe(false);
+    const seeds = selectSeedExchanges({
+      exemplars: [
+        {
+          id: 2,
+          content: HOSTILE_NOTE,
+          turn: [HOSTILE_NOTE],
+          rawTurn: [HOSTILE_NOTE],
+          turnIds: [2],
+          score: 0.9,
+          previousUser: "在吗",
+          previousUserTurn: ["在吗"],
+          previousUserIds: [1],
+          at: null,
+          sceneKey: 1,
+        },
+      ],
+    });
+    expect(seeds).toEqual([]);
+    expect(JSON.stringify(seedMessagesFor(seeds, "zh"))).not.toContain(HOSTILE_NOTE);
+  });
+});
+
 describe("a line they would never say", () => {
   it("reaches the prompt only inside the fence", async () => {
     const { applyClarification } = await import("@shared/clarify");

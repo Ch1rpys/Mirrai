@@ -22,6 +22,13 @@ import { buildRerankModel, getRerankModel } from "./rerank-model";
 import { sparseModelFromUnknown } from "../eval/ab-pairs";
 import { retrieveExemplarsWithEmbed } from "./embeddings";
 import { buildPromptForPersona } from "./prompt";
+import { isSafeSeedLine } from "@shared/seed-safety";
+import {
+  selectSeedExchanges,
+  seedMessagesFor,
+  spliceAfterSystem,
+  type SeedExchange,
+} from "./seed-turns";
 import * as db from "../db";
 import {
   applyLayerOverrides,
@@ -139,6 +146,9 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   const lexiconOn = Boolean(
     layers.lexicon && hasPromptLexicon((input.persona.personaData as { lexicon?: unknown } | null)?.lexicon),
   );
+  const seeds = await seedPlanForTurn(input, layers.seededTurns, sampledAct);
+  const seedMsgs = seedMessagesFor(seeds.exchanges, input.locale);
+  const seededOn = seeds.exchanges.length > 0;
 
   if (sampled?.act === "silence" && timingEnabled && !input.exclude) {
     return {
@@ -171,26 +181,28 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       suppressions: layers.suppressions ? undefined : null,
       lexicon: layers.lexicon ? undefined : null,
       skipExemplars: !layers.exemplars,
-      excludeExemplarIds: input.exclude.recordIds,
-      excludeExemplarTexts: input.exclude.texts,
+      excludeExemplarIds: [...(input.exclude.recordIds ?? []), ...seeds.excludeIds],
+      excludeExemplarTexts: [...(input.exclude.texts ?? []), ...seeds.excludeTexts],
+      seedTurnsNote: seeds.note,
       markRecalled: false,
       history: input.history,
     });
-    const messages: LLMMessage[] = [{ role: "system", content: systemPrompt }];
-    for (const row of input.history) {
-      messages.push({
-        role: row.role === "user" ? "user" : "assistant",
-        content: row.content,
-      });
-    }
+    const historyMessages: LLMMessage[] = input.history.map((row) => ({
+      role: row.role === "user" ? "user" : "assistant",
+      content: row.content,
+    }));
+    const messages = spliceAfterSystem(
+      [{ role: "system", content: systemPrompt }, ...historyMessages],
+      seedMsgs,
+    );
     return {
       kind: "model",
       sampledAct,
       messages,
       ...length,
-      layersUsed: withMeasuredLayers(layersUsed, length, projectionOn, fingerprintRerankOn, lexiconOn),
+      layersUsed: withMeasuredLayers(layersUsed, length, projectionOn, fingerprintRerankOn, lexiconOn, seededOn),
       exemplarIds: [],
-      seedRecordIds: [],
+      seedRecordIds: seeds.excludeIds,
       recalled: [],
       rng,
     };
@@ -209,17 +221,71 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     replyToId: input.replyToId,
     sampledAct,
     periodId: input.periodId ?? null,
+    excludeExemplarIds: seeds.excludeIds,
+    excludeExemplarTexts: seeds.excludeTexts,
+    skipExemplars: !layers.exemplars,
+    seedTurnsNote: seeds.note,
   });
   return {
     kind: "model",
     sampledAct,
-    messages: composed.messages,
+    messages: spliceAfterSystem(composed.messages, seedMsgs),
     ...length,
-    layersUsed: withMeasuredLayers(layersUsed, length, projectionOn, fingerprintRerankOn, lexiconOn),
+    layersUsed: withMeasuredLayers(layersUsed, length, projectionOn, fingerprintRerankOn, lexiconOn, seededOn),
     exemplarIds: [],
-    seedRecordIds: [],
+    seedRecordIds: seeds.excludeIds,
     recalled: composed.recalled,
     rng,
+  };
+}
+
+async function seedPlanForTurn(
+  input: TurnInput,
+  enabled: boolean,
+  sampledAct: SpeechAct | null,
+): Promise<{
+  exchanges: SeedExchange[];
+  excludeIds: number[];
+  excludeTexts: string[];
+  note: string | null;
+}> {
+  const empty = { exchanges: [] as SeedExchange[], excludeIds: [] as number[], excludeTexts: [] as string[], note: null as string | null };
+  if (!enabled) return empty;
+  let records: Array<{ role: string; content: string; id?: number; kind?: string | null }> = [];
+  try {
+    records = await db.getCollectedMessagesForPersona(input.persona.id, input.userId, { newest: true });
+  } catch {
+    records = [];
+  }
+  if (!records.length) return empty;
+  const period = ((input.persona.personaData as { periods?: Array<{ id?: string; from?: string; to?: string }> } | null)?.periods ?? [])
+    .find((item) => item.id === input.periodId);
+  const found = await retrieveExemplarsWithEmbed({
+    userMessage: input.userMessage,
+    records: records as never,
+    excludeIds: input.exclude?.recordIds,
+    excludeTexts: input.exclude?.texts,
+    personaData: input.persona.personaData as never,
+    sampledAct,
+    emotion: input.actCondition?.emotion ?? input.persona.emotionalState ?? null,
+    now: input.now,
+    timeZone: (input.persona as { timezone?: string | null }).timezone ?? null,
+    period: period?.from && period?.to ? { from: period.from, to: period.to } : null,
+    history: input.history,
+    personaId: input.persona.id,
+    userId: input.userId,
+  });
+  const exchanges = selectSeedExchanges({ exemplars: found });
+  return {
+    exchanges,
+    excludeIds: exchanges.flatMap((item) => item.recordIds),
+    excludeTexts: [
+      ...exchanges.flatMap((item) => [...item.user, ...item.them]),
+      ...found.flatMap((item) =>
+        [...(item.rawTurn ?? item.turn), ...item.previousUserTurn].filter((line) => !isSafeSeedLine(line)),
+      ),
+    ],
+    note: exchanges.length > 0 ? copy(input.locale, "prompt.seedTurnsNote") : null,
   };
 }
 
@@ -251,12 +317,14 @@ function withMeasuredLayers(
   projectionOn: boolean,
   fingerprintRerankOn: boolean,
   lexiconOn: boolean,
+  seededOn = false,
 ): LayerId[] {
   const extra: LayerId[] = [];
   if (length.maxChars != null) extra.push("lengthCap");
   if (projectionOn) extra.push("projection");
   if (fingerprintRerankOn) extra.push("fingerprintRerank");
   if (lexiconOn) extra.push("lexicon");
+  if (seededOn) extra.push("seededTurns");
   if (extra.length === 0) return layersUsed;
   const used = new Set<LayerId>([...layersUsed, ...extra]);
   return LAYERS.filter((id) => used.has(id));

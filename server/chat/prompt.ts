@@ -119,6 +119,8 @@ export interface PromptContext {
   skipExemplars?: boolean;
   /** Recent in-app turns, used to score the second exemplar term. */
   history?: Array<{ role: "user" | "assistant"; content: string }>;
+  /** Instruction that the opening exchanges are old record lines. */
+  seedTurnsNote?: string | null;
 }
 
 /**
@@ -225,6 +227,7 @@ export async function buildPromptForPersona(
     locale,
     now,
     periodId: context.periodId ?? null,
+    seedTurnsNote: context.seedTurnsNote ?? null,
   });
 }
 

@@ -275,6 +275,13 @@ export interface SystemPromptOptions {
    * Private words. `null` turns them off without touching the persona.
    */
   lexicon?: LexiconEntry[] | null;
+  /**
+   * Why the message list starts with a few real exchanges.
+   *
+   * Instruction, not material: the exchanges themselves sit in the
+   * message list, outside the fence.
+   */
+  seedTurnsNote?: string | null;
 }
 
 export function buildSystemPrompt(persona: any, sceneOverlay?: string | null): string;
@@ -501,6 +508,7 @@ export function buildSystemPrompt(
     identityRule,
     hardRules,
     harmInstruction,
+    options.seedTurnsNote || "",
     // Everything below is material, and the material says so.
     copy(locale, "prompt.materialIsData"),
     identitySection,
