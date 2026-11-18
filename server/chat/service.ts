@@ -457,6 +457,8 @@ export async function composeMessages(params: {
   /** The message this turn replies to. */
   replyToId?: number | null;
   sampledAct?: import("@shared/speech-acts").SpeechAct | null;
+  actClusterLines?: string[] | null;
+  restrictExemplarsToAct?: boolean;
   periodId?: string | null;
   excludeExemplarIds?: number[];
   excludeExemplarTexts?: string[];
@@ -550,6 +552,8 @@ export async function composeMessages(params: {
     memories: retrieved as any,
     quotedSection,
     sampledAct: params.sampledAct ?? null,
+    actClusterLines: params.actClusterLines ?? null,
+    restrictExemplarsToAct: params.restrictExemplarsToAct,
     periodId: params.periodId ?? null,
     excludeExemplarIds: params.excludeExemplarIds,
     excludeExemplarTexts: params.excludeExemplarTexts,

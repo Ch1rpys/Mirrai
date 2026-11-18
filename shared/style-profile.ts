@@ -7,6 +7,7 @@
  * simply absent — there is no default to fill it with.
  */
 import type { AddressEntry } from "./address-history";
+import { normalizeActClusters, type ActClusters } from "./act-clusters";
 import { normalizeSamplePool, type SamplePool } from "./sample-pool";
 import type { StyleFingerprint } from "./style-fingerprint";
 import type { ImperfectionDrafts } from "./imperfection-draft";
@@ -68,7 +69,7 @@ export interface StyleProfile {
   emotionDynamics?: unknown; // 由 B4.3 填
   conflict?: unknown; // 由 B4.4 填
   triggers?: unknown; // 由 B4.5 填
-  actClusters?: unknown; // 由 B4.2 填
+  actClusters?: ActClusters;
   addressHistory?: AddressEntry[];
   stickers?: unknown; // 由 B7.1 填
   voice?: unknown; // 由 B7.4 填
@@ -107,6 +108,11 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
       if (key === "samplePool") {
         const samplePool = normalizeSamplePool(source.samplePool);
         if (samplePool) profile.samplePool = samplePool;
+        continue;
+      }
+      if (key === "actClusters") {
+        const actClusters = normalizeActClusters(source.actClusters);
+        if (actClusters) profile.actClusters = actClusters;
         continue;
       }
       (profile as unknown as Record<string, unknown>)[key] = source[key];

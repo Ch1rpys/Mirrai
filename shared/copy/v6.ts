@@ -547,6 +547,10 @@ export const V6 = {
     zh: "【你平时的几句话】",
     en: "【A few of your usual lines】",
   },
+  "prompt.actClustersHeading": {
+    zh: "【你做这件事时说过的话】",
+    en: "【Lines you used when doing this】",
+  },
   "prompt.contrastHeading": {
     zh: "【不像的，和像的】",
     en: "【Unlike, and like】",

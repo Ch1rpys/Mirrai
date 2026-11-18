@@ -264,6 +264,11 @@ export interface SystemPromptOptions {
    */
   sampledAct?: SpeechAct | null;
   /**
+   * Original lines from under that action. Material: it is fenced,
+   * and it only appears when an action was sampled.
+   */
+  actClusterLines?: string[] | null;
+  /**
    * Past replies of theirs, already formatted and fenced by the caller.
    */
   exemplarSection?: string | null;
@@ -612,6 +617,16 @@ export function buildSystemPromptParts(
     { kind: "stable", text: microRulesSection ? asMaterial(microRulesSection) : "" },
     { kind: "stable", text: suppressionsSection ? asMaterial(suppressionsSection) : "" },
     { kind: "volatile", text: actInstruction, id: "act" },
+    {
+      kind: "volatile",
+      text:
+        options.sampledAct && options.actClusterLines && options.actClusterLines.length > 0
+          ? asMaterial(
+              copy(locale, "prompt.actClustersHeading"),
+              options.actClusterLines.join("\n"),
+            )
+          : "",
+    },
     {
       kind: "volatile",
       text:

@@ -161,6 +161,40 @@ describe("retrieving past replies", () => {
     expect(found.map((item) => item.id)).toEqual([2, 4]);
   });
 
+  it("keeps only matching-act turns when restrictToSampledAct and at least two match", () => {
+    const found = retrieveExemplars({
+      userMessage: "你好吗",
+      sampledAct: "tease",
+      restrictToSampledAct: true,
+      records: [
+        { id: 1, role: "user", content: "你好吗" },
+        { id: 2, role: "assistant", content: "还行", act: "acknowledge" },
+        { id: 3, role: "user", content: "你好吗" },
+        { id: 4, role: "assistant", content: "你真行", act: "tease" },
+        { id: 5, role: "user", content: "你好吗" },
+        { id: 6, role: "assistant", content: "行啊你", act: "tease" },
+      ],
+      minScore: 0.05,
+    });
+    expect(found.map((item) => item.content).sort()).toEqual(["你真行", "行啊你"].sort());
+  });
+
+  it("does not restrict when fewer than two matching-act turns pass the floor", () => {
+    const found = retrieveExemplars({
+      userMessage: "你好吗",
+      sampledAct: "tease",
+      restrictToSampledAct: true,
+      records: [
+        { id: 1, role: "user", content: "你好吗" },
+        { id: 2, role: "assistant", content: "还行", act: "acknowledge" },
+        { id: 3, role: "user", content: "你好吗" },
+        { id: 4, role: "assistant", content: "你真行", act: "tease" },
+      ],
+      minScore: 0.05,
+    });
+    expect(found.map((item) => item.content)).toEqual(["你真行", "还行"]);
+  });
+
   it("does not return a held-out line, a harm line, or a non-text row", () => {
     const found = retrieveExemplars({
       userMessage: "今晚吃什么",

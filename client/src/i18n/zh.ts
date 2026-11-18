@@ -1345,6 +1345,8 @@ export const zh = {
     lengthCapNote: "按记录里 {{name}} 一次最多说多少来设上限。记录不够时不生效。",
     styleProjection: "按 {{name}} 的标点习惯收尾",
     styleProjectionNote: "{{name}} 从不带句号，就把句号去掉；{{name}} 的「哈」通常打四个，就打四个。只动标点和重复字，不改意思。",
+    actClusters: "做同一件事时，照 {{name}} 做过的样子",
+    actClustersNote: "比如这一轮是「开玩笑」，就带上几句 {{name}} 以前开玩笑的原话。",
     abPairs: "偶尔让我二选一",
     abPairsNote: "每八轮左右，分身会给两句回复让你挑更像的那句。那一轮的费用是两倍。你的选择会用来调重排。",
     twoStage: "先想好说什么，再用 {{name}} 的话说",

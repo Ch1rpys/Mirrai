@@ -38,6 +38,7 @@ import {
   turnsFromRecords,
 } from "@shared/ritual-table";
 import { measureSamplePool } from "@shared/sample-pool";
+import { measureActClusters } from "@shared/act-clusters";
 import { schedulePersonaEmbeddings } from "../chat/embeddings";
 
 export async function measureStyleProfile(params: {
@@ -106,6 +107,7 @@ export async function measureStyleProfile(params: {
   const minedRituals = mineRituals(turnsFromRecords(rows));
   const rituals = mergeManualRituals(minedRituals, normalizeRituals(current?.rituals));
   const samplePool = measureSamplePool(rows, rawData);
+  const actClusters = measureActClusters(rows, rawData);
   const next = normalizeStyleProfile({
     ...(current ?? {}),
     version: 1,
@@ -117,6 +119,7 @@ export async function measureStyleProfile(params: {
     addressHistory,
     ...(rituals.length > 0 ? { rituals } : { rituals: undefined }),
     ...(samplePool ? { samplePool } : { samplePool: undefined }),
+    ...(actClusters ? { actClusters } : { actClusters: undefined }),
   });
   return applyRerankWeightsFromPairs(personaId, userId, next, { persistAlways: true });
 }

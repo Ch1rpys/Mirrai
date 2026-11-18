@@ -219,6 +219,11 @@ export function retrieveExemplars(params: {
   limit?: number;
   personaData?: { harmReport?: HarmReport | null } | null;
   sampledAct?: string | null;
+  /**
+   * When at least two first-term hits have this turn's action, keep
+   * only those. The act-cluster layer turns this on.
+   */
+  restrictToSampledAct?: boolean;
   emotion?: string | null;
   now?: Date | null;
   timeZone?: string | null;
@@ -252,7 +257,7 @@ export function retrieveExemplars(params: {
       .map((row) => row.content),
   );
 
-  const scored: Exemplar[] = [];
+  const scored: Array<Exemplar & { actMatch: number }> = [];
   let sceneKey = 0;
   for (const scene of splitScenes(params.records)) {
     sceneKey += 1;
@@ -313,6 +318,7 @@ export function retrieveExemplars(params: {
           dayMatch,
           periodMatch,
         }),
+        actMatch,
         previousUser,
         previousUserTurn,
         previousUserIds,
@@ -322,10 +328,13 @@ export function retrieveExemplars(params: {
     }
   }
 
-  scored.sort((a, b) => b.score - a.score || a.id - b.id);
+  const matchingAct = scored.filter((item) => item.actMatch === 1);
+  const pool =
+    params.restrictToSampledAct && hasAct && matchingAct.length >= 2 ? matchingAct : scored;
+  pool.sort((a, b) => b.score - a.score || a.id - b.id);
   const unique: Exemplar[] = [];
   const seen = new Set<string>();
-  for (const item of scored) {
+  for (const item of pool) {
     if (seen.has(item.content)) continue;
     seen.add(item.content);
     unique.push(item);

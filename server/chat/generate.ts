@@ -43,6 +43,7 @@ import { effectiveStyleProfile } from "@shared/style-profile";
 import { defaultAddressForms, FINGERPRINT_STATES, type EmotionalState, type StyleFingerprintCore } from "@shared/style-fingerprint";
 import { projectStyle } from "@shared/style-projection";
 import { hasPromptLexicon } from "@shared/lexicon";
+import { pickActClusterLines } from "@shared/act-clusters";
 import { filterHarm } from "@shared/harm";
 import { relationshipIsOver } from "@shared/relationship-ended";
 import {
@@ -224,6 +225,8 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   ]);
   const reminderOn = reminder.lines.length > 0 || reminder.issues.length > 0;
   const twoStageOn = Boolean(layers.twoStage);
+  const clusterLines = actClusterLinesForTurn(layers.actClusters, sampledAct, input, rng);
+  const clustersOn = clusterLines.length > 0;
 
   if (input.exclude) {
     const built = await buildPromptBundleForPersona({
@@ -243,6 +246,8 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       suppressions: layers.suppressions ? undefined : null,
       lexicon: layers.lexicon ? undefined : null,
       skipExemplars: !layers.exemplars,
+      restrictExemplarsToAct: clustersOn,
+      actClusterLines: clusterLines,
       excludeExemplarIds: [...(input.exclude.recordIds ?? []), ...seeds.excludeIds],
       excludeExemplarTexts: [...(input.exclude.texts ?? []), ...seeds.excludeTexts],
       seedTurnsNote: seeds.note,
@@ -279,6 +284,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
         false,
         reminderOn,
         twoStageOn,
+        clustersOn,
       ),
       exemplarIds: [],
       seedRecordIds: seeds.excludeIds,
@@ -304,6 +310,8 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     excludeExemplarIds: seeds.excludeIds,
     excludeExemplarTexts: seeds.excludeTexts,
     skipExemplars: !layers.exemplars,
+    restrictExemplarsToAct: clustersOn,
+    actClusterLines: clusterLines,
     seedTurnsNote: seeds.note,
     styleReminderLines: reminder.lines,
     reanchorIssues: reminder.issues,
@@ -329,6 +337,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       false,
       reminderOn,
       twoStageOn,
+      clustersOn,
     ),
     exemplarIds: [],
     seedRecordIds: seeds.excludeIds,
@@ -431,6 +440,7 @@ function withMeasuredLayers(
   ritualOn = false,
   styleReminderOn = false,
   twoStageOn = false,
+  actClustersOn = false,
 ): LayerId[] {
   const extra: LayerId[] = [];
   if (length.maxChars != null) extra.push("lengthCap");
@@ -441,6 +451,7 @@ function withMeasuredLayers(
   if (ritualOn) extra.push("ritual");
   if (styleReminderOn) extra.push("styleReminder");
   if (twoStageOn) extra.push("twoStage");
+  if (actClustersOn) extra.push("actClusters");
   if (extra.length === 0) return layersUsed;
   const used = new Set<LayerId>([...layersUsed, ...extra]);
   return LAYERS.filter((id) => used.has(id));
@@ -642,6 +653,18 @@ async function ritualPlanForTurn(
   return { trigger: entry.trigger, reply: picked.text, recordId: picked.recordId };
 }
 
+function actClusterLinesForTurn(
+  enabled: boolean,
+  sampledAct: SpeechAct | null,
+  input: TurnInput,
+  rng: () => number,
+): string[] {
+  if (!enabled || !sampledAct) return [];
+  const clusters = effectiveStyleProfile(input.persona).actClusters?.[sampledAct];
+  if (!clusters || clusters.length === 0) return [];
+  return pickActClusterLines(clusters, rng);
+}
+
 function fingerprintCoreForTurn(input: TurnInput): StyleFingerprintCore | null {
   const fp = effectiveStyleProfile(input.persona).fingerprint ?? null;
   if (!fp || fp.samples < 1 || !fp.endings) return null;
@@ -810,6 +833,7 @@ export async function* executePlan(
       excludeIds: input.exclude?.recordIds,
       personaData: personaData as never,
       sampledAct: plan.sampledAct,
+      restrictToSampledAct: plan.layersUsed.includes("actClusters"),
       emotion: input.actCondition?.emotion ?? input.persona.emotionalState ?? null,
       now: input.now,
       timeZone: (input.persona as { timezone?: string | null }).timezone ?? null,

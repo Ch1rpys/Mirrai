@@ -39,4 +39,19 @@ describe("the style profile", () => {
     });
     expect(any.samplePool).toEqual({ any: ["嗯"] });
   });
+
+  it("keeps act clusters and drops a malformed one", () => {
+    const profile = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      actClusters: {
+        tease: [{ size: 12, lines: ["你真行", "行啊你"] }],
+        unknown: [{ size: 12, lines: ["x"] }],
+      },
+    });
+    expect(profile.actClusters).toEqual({
+      tease: [{ size: 12, lines: ["你真行", "行啊你"] }],
+    });
+  });
 });

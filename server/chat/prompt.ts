@@ -111,6 +111,9 @@ export interface PromptContext {
   suppressions?: Suppression[] | null;
   lexicon?: LexiconEntry[] | null;
   sampledAct?: SpeechAct | null;
+  actClusterLines?: string[] | null;
+  /** When the act-cluster layer is on, keep only matching-act exemplars. */
+  restrictExemplarsToAct?: boolean;
   /**
    * Held-out reply ids/texts that must not appear as exemplars.
    */
@@ -224,6 +227,7 @@ export async function buildPromptBundleForPersona(
     ),
     lexicon: context.lexicon,
     sampledAct: context.sampledAct ?? null,
+    actClusterLines: context.promptMode === "planner" ? null : context.actClusterLines ?? null,
     promptMode: context.promptMode,
     exemplarSection:
       context.promptMode === "planner" || context.skipExemplars
@@ -343,6 +347,7 @@ async function exemplarSectionFor(
     excludeTexts: context.excludeExemplarTexts,
     personaData: context.persona.personaData as never,
     sampledAct: context.sampledAct ?? null,
+    restrictToSampledAct: Boolean(context.restrictExemplarsToAct && context.sampledAct),
     emotion: context.emotionalState ?? context.persona.emotionalState ?? null,
     now: context.now ?? null,
     timeZone: (context.persona as { timezone?: string | null }).timezone ?? null,

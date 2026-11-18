@@ -166,6 +166,33 @@ const CONTEXT = [
   { role: "user" as const, content: "吃饭了吗", timestamp: null },
 ];
 
+/** i18n:allow-input — recorded tease lines used only as cluster material. */
+function teaseClusterLines() {
+  return ["你又来啊", "又来了你", "你可真来", "就嗯？", "嗯？", "哦？", "哈哈哈哈", "哈哈哈", "哈哈"];
+}
+
+function personaWithTeaseClusters() {
+  const row = persona();
+  row.personaData = {
+    personality: "温柔",
+    actProfile: { samples: 80, unconditional: { tease: 80 }, buckets: [] },
+  };
+  row.styleProfile = {
+    version: 1,
+    measuredAt: NOW.toISOString(),
+    recordsVersion: "80:80",
+    actClusters: {
+      tease: [
+        { size: 20, lines: ["你又来啊", "又来了你", "你可真来"] },
+        { size: 15, lines: ["就嗯？", "嗯？", "哦？"] },
+        { size: 12, lines: ["哈哈哈哈", "哈哈哈", "哈哈"] },
+      ],
+      acknowledge: [{ size: 20, lines: ["哦行吧那就算了嗯"] }],
+    },
+  };
+  return row;
+}
+
 beforeEach(() => {
   for (const fn of [
     createMessage, getDefaultLlmConfig, getTodaySnapshot, createEmotionSnapshot,
@@ -366,6 +393,76 @@ describe("the shared generation path", () => {
       exclude: { texts: [HELD_OUT] },
     });
     expect(planned.userAct).toBe("ask");
+  });
+
+  it("puts tease cluster lines in the fence after the act instruction", async () => {
+    const withClusters = personaWithTeaseClusters();
+    const plan = await planTurn({
+      persona: withClusters,
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "clusters:tease",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    const heading = copy("zh", "prompt.actClustersHeading");
+    const teaseLines = teaseClusterLines();
+    const picked = teaseLines.filter((line) => prompt.includes(line));
+    expect(plan.sampledAct).toBe("tease");
+    expect(plan.layersUsed).toContain("actClusters");
+    expect(prompt).toContain(heading);
+    expect(picked.length).toBeGreaterThan(0);
+    expect(picked.every((line) => teaseLines.includes(line))).toBe(true);
+    expect(prompt).not.toContain("哦行吧那就算了嗯");
+    const unfenced = prompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "");
+    for (const line of picked) {
+      expect(unfenced).not.toContain(line);
+    }
+    const actAt = prompt.indexOf(copy("zh", "prompt.actHeading"));
+    const headingAt = prompt.indexOf(heading);
+    expect(actAt).toBeGreaterThanOrEqual(0);
+    expect(headingAt).toBeGreaterThan(actAt);
+  });
+
+  it("omits the cluster block with --without actClusters", async () => {
+    const plan = await planTurn({
+      persona: personaWithTeaseClusters(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "clusters:off",
+      exclude: { texts: [HELD_OUT] },
+      layerOverrides: layerOverridesForEval({ without: ["actClusters"] }),
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(plan.sampledAct).toBe("tease");
+    expect(plan.layersUsed).not.toContain("actClusters");
+    expect(prompt).not.toContain(copy("zh", "prompt.actClustersHeading"));
+    expect(prompt).not.toContain("你可真来");
+  });
+
+  it("omits the cluster block when no act was sampled", async () => {
+    const withoutActs = personaWithTeaseClusters();
+    withoutActs.personaData = { personality: "温柔" };
+    const plan = await planTurn({
+      persona: withoutActs,
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "clusters:no-act",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(plan.sampledAct).toBeNull();
+    expect(plan.layersUsed).not.toContain("actClusters");
+    expect(prompt).not.toContain(copy("zh", "prompt.actClustersHeading"));
   });
 
   it("does not put the user's sample lines into the prompt", async () => {

@@ -178,6 +178,49 @@ describe("measureStyleProfile", () => {
     expect(warm.some((line) => /[。.．]$/.test(line))).toBe(false);
   });
 
+  it("writes acknowledge clusters whose every line is a true acknowledge", async () => {
+    getRecordsVersion.mockResolvedValue("3200:3200");
+    getPersonaStyleProfile.mockResolvedValue(null);
+    getPersonaById.mockResolvedValue({
+      id: 5,
+      userId: 1,
+      name: "小满",
+      personaData: { nickname: "树树" },
+    });
+    getUserById.mockResolvedValue({ id: 1, name: "阿树" });
+    const fixture = buildXiaomanRecords();
+    iterateRecords.mockImplementation(async function* () {
+      for (const row of fixture) {
+        yield {
+          id: row.id,
+          role: row.role,
+          content: row.content,
+          timestamp: row.timestamp,
+          kind: row.kind,
+          speaker: row.speaker,
+          act: row.truth.act ?? null,
+        };
+      }
+    });
+    const measured = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    expect(measured.actClusters?.acknowledge).toBeTruthy();
+    expect(measured.actClusters!.acknowledge!.length).toBeGreaterThan(0);
+    const allowed = new Set(
+      fixture
+        .filter((row) => row.role === "assistant" && row.kind === "text" && row.truth.act === "acknowledge")
+        .map((row) => row.content),
+    );
+    for (const cluster of measured.actClusters!.acknowledge!) {
+      for (const line of cluster.lines) {
+        expect(allowed.has(line)).toBe(true);
+      }
+    }
+  });
+
   it("remakes the sample pool from labelled rows even when the records version is unchanged", async () => {
     getRecordsVersion.mockResolvedValue("10:40");
     getPersonaStyleProfile.mockResolvedValue({

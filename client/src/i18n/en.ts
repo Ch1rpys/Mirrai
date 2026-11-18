@@ -1344,6 +1344,8 @@ export const en = {
     lengthCapNote: "The cap is how long {{name}} went in one turn in the record. It stays off until there are enough lines.",
     styleProjection: "End the way {{name}} punctuates",
     styleProjectionNote: "If {{name}} never uses a period, the period comes off. If {{name}} laughs in fours, it is four. Only marks and repeated characters move; the meaning does not.",
+    actClusters: "When doing the same thing, do it the way {{name}} did",
+    actClustersNote: "If this turn is a tease, a few of the lines {{name}} used to tease with come along.",
     abPairs: "Offer me a choice now and then",
     abPairsNote: "About every eight turns they give two unreplied lines and you pick the one that sounds more like them. That turn costs twice as much. The choice trains the rerank.",
     twoStage: "Think of what to say first, then say it in {{name}}'s voice",
