@@ -111,7 +111,7 @@
 | B8.5 | ✅ | 23bd6fc | `compare-cli.test.ts`：`calls a layer that hurts when off a contribution, and an unchanged one noise` 通过，关 `rules` 后 overlap 0.55→0.20 为「有贡献」，关 `exemplars` 不变为「在噪声之内」；只有老五层时表 5 行。`does not call the model without --yes`：源码含 `if (!yes)`、`ablation would make`、`pass --yes to run`。闸门 `350 passed \| 4 skipped (354)` 文件，`3103 passed \| 18 skipped (3121)` 用例。 |
 | B8.6 | ✅ | 9c13769 | `metrics.test.ts`：`gives the same interval when the same scores are aggregated twice` 通过；`collapses the interval to a point when there is only one case` 通过。`compare-cli.test.ts`：`calls overlapping intervals within noise` 通过；`calls a separated improvement better` 通过。`run.test.ts`：`generates k lines for each case when asked` 通过，`samplesPerCase: 3` 时 2 个标答 `invokeWithProvider` 6 次。`uses saved tolerances rather than the defaults`：默认容差下 overlap 0.5→0.35 记退步，保存容差 0.2 后不记。闸门 `341 passed \| 4 skipped (345)` 文件，`3054 passed \| 18 skipped (3072)` 用例。 |
 | B8.7 | ✅ | dc2e6da | `dataset.test.ts`：`covers both periods, a distant line, and day and night on the fixture` 通过（夹具切出的标答含 p1/p2、`distant`、day 与 night；同一输入两次 `toEqual`）。原有「留出句不出现在上下文里」「不超过四分之一」等断言全部通过。`metrics.test.ts`：`breaks the run down by period, and the bucket counts add up` 通过，`perPeriod` 键为 `p1`/`p2`，桶 `count` 之和等于 `cases`。`run.test.ts`：`samples the act against the held-out line's own state` 通过，`planTurn` 收到 `actCondition.emotion === "distant"`。临时库 `mirrai_v6_scratch` 0047 四步+升级路径：push 后 migrate 应用到 `0047_eval_cases_period`；`--replay` `replayed 45 migration(s)`；`--rollback 1` 后 `eval_cases` 无 `periodId`；再 migrate 回来；DROP 列并删 journal 后再 migrate，`periodId` 出现。库已 `dropdb`。闸门 `341 passed \| 4 skipped (345)` 文件，`3047 passed \| 18 skipped (3065)` 用例。层数多于名额时见偏差 72。 |
-| B8.8 | ⬜ |  |  |
+| B8.8 | ✅ | 26e83a6 (server); ef5bead (UI) | `service.test.ts`：开关开、`chatCount` 8 时 `invokeWithProvider` 2 次，事件有 `choice`（`好的呀`/`好的。`）、无 assistant 落库、无 `done`。通道 `wechat` 同开关只调用 1 次且落一句 assistant。`commitPendingChoice` / `fidelity.choose`：选中句落库、`createFidelityPair` 一行。`ab-pairs.test.ts`：30 行总选短句，`length` 权重为负。`db-delete-coverage` 通过。临时库 `mirrai_v6_scratch` 0049 四步+升级路径：push 后 migrate 到 `0049_fidelity_pairs`；`--replay` `replayed 47 migration(s)`；`--rollback 1` 后无 `fidelity_pairs`；再 migrate 回来；DROP 表并删 journal 后再 migrate，表出现。库已 `dropdb`。`ChoiceBubble.test.tsx`：标题「哪句更像 小A」，点「好的呀」调 `fidelity.choose`。`PersonaSwitches.test.tsx`：开关「偶尔让我二选一」，勾上走 `updateSettings` `patch.layers.abPairs: true`。闸门 `353 passed \| 4 skipped (357)` 文件，`3120 passed \| 18 skipped (3138)` 用例。`chatCount === 0` 与 `ll` 占位见偏差 75、76。 |
 | B8.9 | ⬜ |  |  |
 | B8.10 | ⬜ |  |  |
 | B9.1 | 🔒 |  |  |
@@ -276,6 +276,8 @@
 | 72 | B8.7 | 每个非空的层至少 1 条 | 层数多于名额时，改回在全部候选上等距取 | 两句对话只留 1 条时无法每层一条；否则会丢掉「我也想你」那条原有测试。名额够覆盖每一层时仍按层分配。 |
 | 73 | B8.1 | 前三个特征里有「以句号结尾」 | 报告里的 `feature` 是 `ending.period`；界面再译成「以句号结尾」 | 生产代码不能写没对照的中文。单字「。」的 n-gram 并进同一个特征，避免句号独热和哈希抢权重。 |
 | 74 | B8.4 | 只写 `eval.audition({ personaId })` | 另加只读 `eval.auditionInfo`，返回模型数、标答数和预估调用数 | 按钮旁要在开跑前写出「一共约 N 次调用」；mutation 本身会调模型，不能拿它当预览。 |
+| 75 | B8.8 | `chatCount % 8 === 0` 含 0 | `shouldOfferChoice` 要求 `chatCount > 0` | 第 0 轮还没有往来，不必付两倍费用。待选的两句存在用户消息 `metadata.pendingChoice`。 |
+| 76 | B8.8 | 特征含 B3.3 的 `ll` | 现码 `ll` 恒为 0 | B3.3 未做，没有 token log-likelihood。长度、surprise、residue、act、real 已按现有函数填。 |
 
 ## 未验证清单
 
@@ -710,3 +712,12 @@ B1.1、B1.3、B1.4、B1.5、C10.1、B1.6、B1.7、B1.8、B1.10 维持 ✅。B1.2
 - 闸门 `350 passed | 4 skipped (354)` 文件，`3103 passed | 18 skipped (3121)` 用例，`all six steps passed`。相对 B8.4（350/4 文件、3101/18 用例）：通过用例 +2；跳过数不变。
 - 偏差、未验证清单、待用户决定无新增。
 - B8.5 标 ✅。下一条 B8.8。
+
+### WP4 · 实现会话 · 2026-11-18 · B8.8
+
+- 分支 `exec/v6`。独立验收留下的 `- [ ]` 无。没有「等 xxx」的推后项。
+- `26e83a6`：表 `fidelity_pairs`、生成路径在网页每 8 轮出 `choice`、通道只一句、`fidelity.choose` 落库并写对、30 对训 `rerankWeights`。
+- `ef5bead`：`ChoiceBubble`、开关「偶尔让我二选一」、流式 `choice` 事件。
+- 闸门 `353 passed | 4 skipped (357)` 文件，`3120 passed | 18 skipped (3138)` 用例，`all six steps passed`。相对 B8.5（350/4 文件、3103/18 用例）：通过文件 +3、通过用例 +17；跳过数不变。
+- 偏差 75、76。未验证清单、待用户决定无新增。
+- B8.8 标 ✅。下一条 B8.9。
