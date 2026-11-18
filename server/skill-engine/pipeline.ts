@@ -87,6 +87,7 @@ import { extractFactsFromRecords } from "./facts";
 import { commitDistilledPersona } from "./commit-distillation";
 import { labelActsForRecords } from "./label-acts";
 import { labelEmotionsForRecords } from "./label-emotions";
+import { measureStyleProfile } from "../_core/style-profile";
 import { reduceObservationCards } from "./reduce";
 import { registerSkillPrompts } from "@shared/copy/skill-prompts";
 
@@ -1687,6 +1688,14 @@ async function runSkillPipelineOnce(
       invoke: invokeForDistill,
     }).catch((e) =>
       console.warn("[SkillEngine] The emotions could not be labelled:", e.message),
+    );
+    /**
+     * Per-state pools read the emotion column. Labelling does not
+     * change the records-version string, so a profile measured at
+     * import would otherwise keep only `any`.
+     */
+    await measureStyleProfile({ personaId, userId, force: true }).catch((e) =>
+      console.warn("[SkillEngine] The style profile could not be remade after labelling:", e.message),
     );
     if (input.mineRules !== false) {
       microRules = [

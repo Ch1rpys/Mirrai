@@ -36,8 +36,60 @@ function isDefinition(source: string, index: number): boolean {
   return false;
 }
 
-function aroundCall(source: string, index: number): string {
-  return source.slice(Math.max(0, index - 800), index + 2000);
+function skipString(source: string, i: number): number {
+  const quote = source[i];
+  if (quote !== '"' && quote !== "'" && quote !== "`") return i;
+  i += 1;
+  while (i < source.length) {
+    if (source[i] === "\\") {
+      i += 2;
+      continue;
+    }
+    if (quote === "`" && source[i] === "$" && source[i + 1] === "{") {
+      i = skipBalanced(source, i + 1);
+      continue;
+    }
+    if (source[i] === quote) return i + 1;
+    i += 1;
+  }
+  return i;
+}
+
+function skipBalanced(source: string, openIndex: number): number {
+  const open = source[openIndex];
+  const close = open === "(" ? ")" : open === "{" ? "}" : open === "[" ? "]" : "";
+  if (!close) return openIndex + 1;
+  let depth = 0;
+  let i = openIndex;
+  while (i < source.length) {
+    const char = source[i];
+    if (char === '"' || char === "'" || char === "`") {
+      i = skipString(source, i);
+      continue;
+    }
+    if (char === "/" && source[i + 1] === "/") {
+      const newline = source.indexOf("\n", i + 2);
+      i = newline === -1 ? source.length : newline + 1;
+      continue;
+    }
+    if (char === "/" && source[i + 1] === "*") {
+      const end = source.indexOf("*/", i + 2);
+      i = end === -1 ? source.length : end + 2;
+      continue;
+    }
+    if (char === open) depth += 1;
+    else if (char === close) {
+      depth -= 1;
+      if (depth === 0) return i + 1;
+    }
+    i += 1;
+  }
+  return i;
+}
+
+/** The argument list of this call, not a window of nearby source. */
+function callArgs(source: string, parenIndex: number): string {
+  return source.slice(parenIndex, skipBalanced(source, parenIndex));
 }
 
 describe("every model call names its purpose", () => {
@@ -51,8 +103,8 @@ describe("every model call names its purpose", () => {
       while ((match = CALL_RE.exec(source))) {
         const name = match[0].replace(/\s*\($/, "");
         if (isDefinition(source, match.index)) continue;
-        const window = aroundCall(source, match.index);
-        if (!/\bpurpose\s*:/.test(window)) {
+        const args = callArgs(source, match.index + match[0].length - 1);
+        if (!/\bpurpose\s*:/.test(args)) {
           const line = source.slice(0, match.index).split("\n").length;
           missing.push(`${file}:${line} ${name}`);
         }

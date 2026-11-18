@@ -154,16 +154,20 @@ export async function assessTrajectory(params: {
   let note: string | undefined;
 
   try {
-    const request = {
-      messages: [
-        { role: "system" as const, content: copy(locale, "prompts.trajectoryAnalysis") },
-        { role: "user" as const, content: transcript },
-      ],
-      options: { provider: params.provider, temperature: 0, maxTokens: 300, purpose: "classify" as const },
-    };
+    const messages = [
+      { role: "system" as const, content: copy(locale, "prompts.trajectoryAnalysis") },
+      { role: "user" as const, content: transcript },
+    ];
+    const options = { provider: params.provider, temperature: 0, maxTokens: 300, purpose: "classify" as const };
     const response = params.providerInstance
-      ? await llmService.invokeWithProvider(params.providerInstance, request)
-      : await llmService.invoke(request);
+      ? await llmService.invokeWithProvider(params.providerInstance, {
+          messages,
+          options: { ...options, purpose: "classify" },
+        })
+      : await llmService.invoke({
+          messages,
+          options: { ...options, purpose: "classify" },
+        });
     const parsed = extractJsonObject(response);
     const parsedTrajectory = parsed?.trajectory;
     if (parsedTrajectory === "improving" || parsedTrajectory === "stable" || parsedTrajectory === "worsening") {

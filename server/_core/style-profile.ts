@@ -44,11 +44,17 @@ export async function measureStyleProfile(params: {
   personaId: number;
   userId: number;
   now?: Date;
+  /**
+   * Labelling does not change the records-version string, so a pool
+   * measured before the emotions were written would stay `{ any }`.
+   * Distillation passes true after it has labelled.
+   */
+  force?: boolean;
 }): Promise<StyleProfile> {
-  const { personaId, userId, now = new Date() } = params;
+  const { personaId, userId, now = new Date(), force = false } = params;
   const recordsVersion = await getRecordsVersion(personaId, userId);
   const current = await getPersonaStyleProfile(personaId, userId);
-  if (current && current.recordsVersion === recordsVersion && current.measuredAt) {
+  if (!force && current && current.recordsVersion === recordsVersion && current.measuredAt) {
     return applyRerankWeightsFromPairs(personaId, userId, current, { persistAlways: false });
   }
   const rows: FingerprintRow[] = [];

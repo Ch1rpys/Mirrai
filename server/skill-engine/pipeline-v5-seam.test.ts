@@ -10,6 +10,7 @@ const invoke = vi.fn();
 const invokeForUser = vi.fn();
 const invokeForUserWithReason = vi.fn();
 const resolveProviderForUser = vi.fn();
+const measureStyleProfile = vi.fn();
 const updateSkillJob = vi.fn();
 const updatePersona = vi.fn();
 const createSkillJob = vi.fn();
@@ -61,6 +62,10 @@ vi.mock("./runner", () => ({
 
 vi.mock("./prompts", () => ({
   loadPrompt: (...a: unknown[]) => loadPrompt(...a),
+}));
+
+vi.mock("../_core/style-profile", () => ({
+  measureStyleProfile: (...a: unknown[]) => measureStyleProfile(...a),
 }));
 
 import { runSkillPipeline } from "./pipeline";
@@ -179,6 +184,7 @@ beforeEach(() => {
     loadPrompt,
     createChatSummary,
     claimMemoryExtraction,
+    measureStyleProfile,
   ]) {
     fn.mockReset();
   }
@@ -203,6 +209,7 @@ beforeEach(() => {
   getFilesByPersonaId.mockResolvedValue([]);
   getPersonaById.mockResolvedValue({ id: 1, userId: 1, name: XIAOMAN_NAME, personaData: {} });
   claimMemoryExtraction.mockResolvedValue(false);
+  measureStyleProfile.mockResolvedValue({});
   loadPrompt.mockReturnValue("prompt");
   runPythonTool.mockResolvedValue({ stdout: "", stderr: "" });
 });
@@ -211,6 +218,9 @@ describe("the v5 seam on a named transcript", () => {
   it("mines acts, periods, openings and open loops from generic-line text", async () => {
     await runSkillPipeline(baseInput);
     expectMinedV5(writtenPersona());
+    expect(measureStyleProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ personaId: 1, userId: 1, force: true }),
+    );
   }, 60_000);
 
   it("mines the same layers from structured records, with the fixture's own times", async () => {

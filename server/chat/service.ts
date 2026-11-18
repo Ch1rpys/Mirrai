@@ -13,6 +13,7 @@
 import type { LLMMessage, LLMProvider } from "../llm/types";
 import { llmService } from "../llm";
 import { resolveProviderForUser, resolveProviderForPurpose } from "../llm/user-provider";
+import { resolveStageProviders } from "../llm/stage-providers";
 import { sanitizeRoles } from "../llm/roles";
 import { inspectExtraBody } from "../llm/extra-body";
 import type { Persona } from "../../drizzle/schema";
@@ -703,27 +704,6 @@ async function collectPlanText(
     if (event.type === "final") text = event.text || text;
   }
   return text;
-}
-
-async function resolveStageProviders(params: {
-  userId: number;
-  fallback: LLMProvider;
-  personaProviderName?: string;
-  settings: ReturnType<typeof normalizePersonaSettings>;
-}): Promise<{ planner: LLMProvider; voice: LLMProvider }> {
-  const plannerName = params.settings.providers?.planner || params.personaProviderName;
-  const voiceName = params.settings.providers?.voice || params.personaProviderName;
-  const planner =
-    plannerName && plannerName !== params.personaProviderName
-      ? (await resolveProviderForUser({ userId: params.userId, providerName: plannerName })) ??
-        params.fallback
-      : params.fallback;
-  const voice =
-    voiceName && voiceName !== params.personaProviderName
-      ? (await resolveProviderForUser({ userId: params.userId, providerName: voiceName })) ??
-        params.fallback
-      : params.fallback;
-  return { planner, voice };
 }
 
 async function findPendingChoiceMessage(

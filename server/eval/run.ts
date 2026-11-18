@@ -12,7 +12,9 @@
 import type { Persona } from "../../drizzle/schema";
 import type { LLMProvider } from "../llm/types";
 import { resolveProviderForUser } from "../llm/user-provider";
+import { resolveStageProviders } from "../llm/stage-providers";
 import { executePlan, planTurn } from "../chat/generate";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 import {
   aggregateScores,
   buildCharNgramModel,
@@ -178,6 +180,21 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
     sampleAct: options.sampleAct ?? (switches.act === "on"),
   });
   if (useRerank === false) layerOverrides.rerank = false;
+  const settings = normalizePersonaSettings(options.persona.settings);
+  /**
+   * An audition passes one provider so that provider is the one timed.
+   * The CLI and the chat leave it unset and honour the persona's
+   * planner / voice names, the same way the conversation does.
+   */
+  const stageProviders =
+    !options.provider && settings.layers.twoStage && layerOverrides.twoStage !== false
+      ? await resolveStageProviders({
+          userId: options.userId,
+          fallback: provider,
+          personaProviderName: (options.persona as { llmProvider?: string | null }).llmProvider ?? undefined,
+          settings,
+        })
+      : null;
   const model = buildCharNgramModel(options.trainingTexts);
   const scores = [];
   const whyWon: string[] = [];
@@ -236,6 +253,8 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
         for (const id of plan.layersUsed) usedLayers.add(id);
         for await (const event of executePlan(plan, turnInput, {
           provider,
+          plannerProvider: stageProviders?.planner,
+          voiceProvider: stageProviders?.voice,
           mode: "once",
           rerank: useRerank && layerOverrides.rerank !== false,
           options: {

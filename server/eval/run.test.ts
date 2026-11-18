@@ -18,23 +18,21 @@ vi.mock("../llm", () => ({
   },
 }));
 
+function stubProvider(name: string) {
+  return {
+    name,
+    isConfigured: () => true,
+    invoke: (...a: unknown[]) => invokeWithProvider(...a),
+  };
+}
+
 vi.mock("../llm/user-provider", () => ({
-  resolveProviderForUser: async () => ({
-    name: "test",
-    isConfigured: () => true,
-    invoke: (...a: unknown[]) => invokeWithProvider(...a),
-  }),
-  resolveProviderForPurpose: async () => ({
-    name: "test",
-    isConfigured: () => true,
-    invoke: (...a: unknown[]) => invokeWithProvider(...a),
-  }),
-  resolveProviderForPurposeWithOwnership: async () => ({
-    provider: {
-      name: "test",
-      isConfigured: () => true,
-      invoke: (...a: unknown[]) => invokeWithProvider(...a),
-    },
+  resolveProviderForUser: async (params?: { providerName?: string }) =>
+    stubProvider(params?.providerName ?? "test"),
+  resolveProviderForPurpose: async (params?: { providerName?: string }) =>
+    stubProvider(params?.providerName ?? "test"),
+  resolveProviderForPurposeWithOwnership: async (params?: { providerName?: string }) => ({
+    provider: stubProvider(params?.providerName ?? "test"),
     owned: false,
   }),
 }));
@@ -345,5 +343,25 @@ describe("running the cases", () => {
     // measure the same persona twice and call it a comparison.
     expect(context.microRules).toBeUndefined();
     expect(context.imperfectionProfile).toBeNull();
+  });
+
+  it("sends two-stage eval calls to the persona's planner and voice providers", async () => {
+    invokeWithProvider
+      .mockResolvedValueOnce('{"gist":"吃饭","mentions":[],"length":"short"}')
+      .mockResolvedValue("嗯嗯");
+    await runEval({
+      persona: {
+        ...persona,
+        settings: {
+          layers: { twoStage: true },
+          providers: { planner: "planner-llm", voice: "voice-llm" },
+        },
+      },
+      userId: 1,
+      cases: [cases()[0]!],
+      trainingTexts: ["嗯嗯"],
+    });
+    expect(invokeWithProvider.mock.calls[0][0]).toMatchObject({ name: "planner-llm" });
+    expect(invokeWithProvider.mock.calls[1][0]).toMatchObject({ name: "voice-llm" });
   });
 });

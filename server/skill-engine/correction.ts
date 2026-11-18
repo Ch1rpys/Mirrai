@@ -87,13 +87,16 @@ export async function applyPersonaCorrection(
     if (request.userProvider) {
       response = await llmService.invokeWithProvider(request.userProvider, {
         messages,
-        options,
+        options: { ...options, purpose: "distill" },
       });
     }
     if (!response.trim() && !request.providerOwned) {
       // The operator's provider may only be used when the user has no
       // provider of their own.
-      response = await llmService.invoke({ messages, options });
+      response = await llmService.invoke({
+        messages,
+        options: { ...options, purpose: "distill" },
+      });
     }
 
     const parsed = extractJsonObject(response);

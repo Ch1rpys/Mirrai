@@ -161,7 +161,7 @@ describe("measureStyleProfile", () => {
           timestamp: row.timestamp,
           kind: row.kind,
           speaker: row.speaker,
-          emotion: row.truth.state,
+          emotion: row.truth.state, // as B1.5 would have labelled it
         };
       }
     });
@@ -176,6 +176,38 @@ describe("measureStyleProfile", () => {
     expect(warm.length).toBeGreaterThan(0);
     expect(distant.every((line) => Array.from(line).length <= 4)).toBe(true);
     expect(warm.some((line) => /[。.．]$/.test(line))).toBe(false);
+  });
+
+  it("remakes the sample pool from labelled rows even when the records version is unchanged", async () => {
+    getRecordsVersion.mockResolvedValue("10:40");
+    getPersonaStyleProfile.mockResolvedValue({
+      version: 1,
+      measuredAt: "2026-01-01T00:00:00.000Z",
+      recordsVersion: "10:40",
+      samplePool: { any: ["嗯"] },
+    });
+    getPersonaById.mockResolvedValue({ id: 5, userId: 1, name: "小满", personaData: {} });
+    getUserById.mockResolvedValue({ id: 1, name: "阿树" });
+    iterateRecords.mockImplementation(async function* () {
+      for (let i = 0; i < 12; i++) {
+        yield {
+          role: "assistant",
+          content: "哦。",
+          timestamp: new Date("2022-03-01T12:00:00.000Z"),
+          kind: "text",
+          emotion: "distant",
+        };
+      }
+    });
+    const measured = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      force: true,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    expect(measured.samplePool?.distant).toEqual(Array.from({ length: 12 }, () => "哦。"));
+    expect(measured.samplePool?.any).toEqual(Array.from({ length: 12 }, () => "哦。"));
+    expect(setPersonaStyleProfile).toHaveBeenCalled();
   });
 
   it("trains a negative length weight from thirty short-line picks even when the records have not moved", async () => {

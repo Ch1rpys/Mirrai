@@ -7,6 +7,7 @@ import {
 } from "./sample-pool";
 import type { FingerprintRow } from "./style-fingerprint";
 
+/** Labels as B1.5 writes them. Production never reads `truth`. */
 function fixtureRows(): FingerprintRow[] {
   return buildXiaomanRecords().map((row) => ({
     id: row.id,
@@ -20,6 +21,21 @@ function fixtureRows(): FingerprintRow[] {
 }
 
 describe("measureSamplePool", () => {
+  it("keeps only the any pool when the rows have no emotion labels", () => {
+    const rows: FingerprintRow[] = buildXiaomanRecords().map((row) => ({
+      id: row.id,
+      role: row.role,
+      content: row.content,
+      timestamp: row.timestamp,
+      kind: row.kind,
+      speaker: row.speaker,
+    }));
+    const pool = measureSamplePool(rows);
+    expect(pool?.distant).toBeUndefined();
+    expect(pool?.warm).toBeUndefined();
+    expect(pool?.any?.length).toBeGreaterThan(0);
+  });
+
   it("keeps the fixture's distant lines short and the warm ones off a period", () => {
     const pool = measureSamplePool(fixtureRows());
     expect(pool?.distant?.length).toBeGreaterThan(0);

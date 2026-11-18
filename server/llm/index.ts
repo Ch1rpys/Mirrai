@@ -468,7 +468,10 @@ export async function invokeForUser(params: {
   messages: LLMMessage[];
   options?: LLMOptions;
 }): Promise<string | null> {
-  const outcome = await invokeForUserWithReason(params);
+  const outcome = await invokeForUserWithReason({
+    ...params,
+    options: { ...params.options, purpose: params.options?.purpose ?? "other" },
+  });
   return outcome.text;
 }
 
