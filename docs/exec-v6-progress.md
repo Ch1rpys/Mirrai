@@ -61,7 +61,7 @@
 | B3.3 | 🟡 | 020c183 (score); 78f2500 (skip) | 先红后绿：`rerank-empty-corpus.test.ts` 旧码 `expected 1, got 4`；改后 1 通过。`rerank.test.ts` 6 通过：夹具四候选不选「好的。」和长问句；acknowledge 时选「嗯」且陈述 `act === 1`；句号=假的判别器下 `real` 更高的候选胜出；原有三条未改仍过。`rerank-model.test.ts` 4 通过：39 行 `null`；同版本第二次不读库；版本变了重建；只留最近 5000 行。`generate.test.ts`：层开着 `layersUsed` 含 `fingerprintRerank`；`--without fingerprintRerank` 不含；`final.rerank.scores` 长度 4。`routers.persona-update.test.ts`：语料不够 `BAD_REQUEST`、不写库。`PersonaEdit.test.tsx` 开关置灰并出现「记录不够，重排选不出来」。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `361 passed \| 5 skipped (366)` 文件，`3198 passed \| 21 skipped (3219)` 用例。效果量见未验证清单。 |
 | B3.4 | 🟡 | 16c888f (rules); 498033c (wire) | `shared/style-projection.test.ts` 27 通过：每条规则生效/不够/不该动；夹具 happy 把「知道了。哈哈」投成 `/^知道了哈{2,}$/`；distant「随便。」仍带句号；50 句同种子两次等于一次。`generate.test.ts`：层开着「好的。」→「好的」且 `projection` 含 `strip_period`；`--without projection` 原文不动、`layersUsed` 不含该层。`service.test.ts`：事件 `delta`→`replace`（「好的」）→`done`，落库「好的」；无指纹无 `replace`、落库「好的。」。`stream.test.ts` SSE 同序。`chat-stream-e2e.test.ts` `onReplace` 收到「好的」。`PersonaSwitches.test.tsx` 文案「按 小满 的标点习惯收尾」。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `359 passed \| 5 skipped (364)` 文件，`3185 passed \| 21 skipped (3206)` 用例。效果量见未验证清单。 |
 | B3.5 | ✅ | 6dbb539 | `state-rules.test.ts` 3 通过：夹具产出 `["。"]`/`["陈树"]` 两条，meaning 都是「疏离」，各 3 条证据且含 trigger；distant 删到 15 行无候选；`mergeUserDecisions` 已确认的 `["。"]` 只留一条。`fidelity-prompt.test.ts` `says nothing about a rule the user has not confirmed` 通过。`micro-rules.test.ts` `does not mine at all when the caller does not want it` 通过。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `362 passed \| 5 skipped (367)` 文件，`3201 passed \| 21 skipped (3222)` 用例。 |
-| B3.6 | ⬜ |  |  |
+| B3.6 | ✅ | b15124e | `shared/imperfection-draft.test.ts`：夹具 distant 草稿含「话很短」「句末带句号」，warm 无草稿。`ImperfectionEditor.test.tsx`：点「用这句」后输入框是那句话、`save` 未调用；已有用户内容的状态不显示草稿。`fidelity-prompt.test.ts` `does not put a counted draft into the prompt until the user takes it` 通过。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `363 passed \| 5 skipped (368)` 文件，`3205 passed \| 21 skipped (3226)` 用例。 |
 | B3.7 | ⬜ |  |  |
 | B3.8 | ⬜ |  |  |
 | B4.1 | ⬜ |  |  |
@@ -291,6 +291,8 @@
 | 87 | B3.3 | 语料条数用 `getRerankModel` / `iterateRecords` | 编辑页置灰读 `material.report` 里 fingerprint 层的 `have`（即 TA 文本行） | 和「按 TA 的时间」读 `behavior.get` 一样用已有聚合，不在保存前再扫一遍记录。 |
 | 88 | B3.5 | 蒸馏管线在 `transcriptRowsFrom` 之后立刻挖状态规则 | 对比对仍在那里挖；状态规则在 `labelEmotionsForRecords` 之后 | `perState` 要情绪标签。第一次蒸馏在标完情绪之前没有分态。 |
 | 89 | B3.5 | 管线称呼表可用 nickname + name + `defaultAddressForms`（陈树要等 B3.8） | 单元测试显式传入 `["陈树","树树"]`；管线和 `microRule.mine` 用 nickname + 分身名 + 默认表 | 默认表没有人名。夹具里的「陈树」在重挖时要等 B3.8 或用户名写进称呼表。 |
+| 90 | B3.6 | 「其余状态」从记录再量一次 | 用其余 `perState` 核心按样本加权 | `draftImperfection` 只拿 `styleProfile`，没有行。 |
+| 91 | B3.6 | 未写跳过 warm | 不给 warm 起草 | 验收写 warm 没有草稿（它就是基准）。其余状态相对 warm 的笑率会让 warm 命中「不笑」。 |
 
 ## 未验证清单
 
@@ -823,3 +825,10 @@ B3.1、B3.2、B8.3、B8.4、B8.9、B8.10 维持 ✅。B8.1 改 🟡。B8.2、B8.
 - 闸门 `362 passed | 5 skipped (367)` 文件，`3201 passed | 21 skipped (3222)` 用例，`all six steps passed`。相对 B3.3（361/5 文件、3198/21 用例）：通过文件 +1、通过用例 +3；跳过数不变。
 - 偏差 88–89。未验证清单、待用户决定无新增。
 - B3.5 标 ✅。下一条 B3.6。
+
+### WP5 · 实现会话 · 2026-11-18 · B3.6
+
+- `b15124e`：`draftImperfection` 按分态指纹起草；连发/表情包/回复间隔在 B5.3、B7.1 落地前不产出。草稿写入 `styleProfile.imperfectionDrafts`，不进提示词。编辑器在用户还没写过的状态下列出「用这句」。
+- 闸门 `363 passed | 5 skipped (368)` 文件，`3205 passed | 21 skipped (3226)` 用例，`all six steps passed`。相对 B3.5（362/5 文件、3201/21 用例）：通过文件 +1、通过用例 +4；跳过数不变。
+- 偏差 90–91。未验证清单、待用户决定无新增。
+- B3.6 标 ✅。下一条 B3.8。
