@@ -13,6 +13,7 @@ const fixtures = vi.hoisted(() => ({
     snippet?: string;
     sampledAct?: string | null;
   }>,
+  profile: null as Record<string, unknown> | null,
   confirm: vi.fn(),
   reject: vi.fn(),
   invalidate: vi.fn(),
@@ -35,7 +36,7 @@ vi.mock("@/lib/trpc", () => ({
       mine: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     actProfile: {
-      get: { useQuery: () => ({ data: { profile: null } }) },
+      get: { useQuery: () => ({ data: { profile: fixtures.profile } }) },
       save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     fidelity: {
@@ -65,6 +66,7 @@ describe("the fifth-stage editors", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     fixtures.items = [];
+    fixtures.profile = null;
   });
 
   it("shows the four editors", () => {
@@ -107,5 +109,20 @@ describe("the fifth-stage editors", () => {
       { personaId: 1, key: "act:4", act: "advise" },
       expect.anything(),
     );
+  });
+
+  it("lists the three most common replies next to each of the user's acts", () => {
+    fixtures.profile = {
+      samples: 40,
+      unconditional: { answer: 40 },
+      buckets: [],
+      byUserAct: { ask: { answer: 18, tease: 2 } },
+      measuredAt: "2026-01-01T00:00:00.000Z",
+    };
+    render(<V5FidelityEditors personaId={1} />);
+    expect(screen.getByText(translate("zh", "v5.actAdjacencyTitle"))).toBeInTheDocument();
+    expect(screen.getByText("在问一件事")).toBeInTheDocument();
+    expect(screen.getByText(/回答被问到的事 90%/)).toBeInTheDocument();
+    expect(screen.getByText(/开玩笑、损一下 10%/)).toBeInTheDocument();
   });
 });

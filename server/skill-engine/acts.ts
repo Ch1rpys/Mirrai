@@ -11,8 +11,10 @@ import { extractJsonArray } from "../_core/json";
 import {
   SPEECH_ACTS,
   isSpeechAct,
+  isUserAct,
   labelSpeechActByRule,
   type SpeechAct,
+  type UserAct,
 } from "@shared/speech-acts";
 import { isTextRecord } from "@shared/records";
 import {
@@ -116,14 +118,17 @@ export async function buildActProfile(params: {
     act: SpeechAct;
     timestamp?: Date | string | null;
     previousUser: string | null;
+    previousUserAct: UserAct | null;
     emotion?: string;
     relationshipPhase?: string | null;
   }> = [];
   let previousUser: string | null = null;
+  let previousUserAct: UserAct | null = null;
   for (const row of params.messages) {
     if (!isTextRecord(row)) continue;
     if (row.role === "user") {
       previousUser = row.content;
+      previousUserAct = isUserAct(row.act) ? row.act : null;
       continue;
     }
     if (row.role !== "assistant") continue;
@@ -132,6 +137,7 @@ export async function buildActProfile(params: {
       act: row.act,
       timestamp: row.timestamp,
       previousUser,
+      previousUserAct,
       emotion: row.emotion?.trim() || undefined,
       relationshipPhase: params.relationshipPhase ?? "initial",
     });
@@ -140,9 +146,32 @@ export async function buildActProfile(params: {
 
   const unconditional: ActCounts = emptyCounts();
   const bucketMap = new Map<string, ActBucket>();
+  const byUserActMap = new Map<UserAct, ActCounts>();
+  const byUserActEmotionMap = new Map<string, {
+    userAct: UserAct;
+    emotion: string;
+    counts: ActCounts;
+    samples: number;
+  }>();
 
   for (const row of theirs) {
     Object.assign(unconditional, incrementCount(unconditional, row.act));
+    if (row.previousUserAct) {
+      const current = byUserActMap.get(row.previousUserAct) ?? {};
+      byUserActMap.set(row.previousUserAct, incrementCount(current, row.act));
+      if (row.emotion) {
+        const key = `${row.previousUserAct}|${row.emotion}`;
+        const existing = byUserActEmotionMap.get(key) ?? {
+          userAct: row.previousUserAct,
+          emotion: row.emotion,
+          counts: {},
+          samples: 0,
+        };
+        existing.counts = incrementCount(existing.counts, row.act);
+        existing.samples += 1;
+        byUserActEmotionMap.set(key, existing);
+      }
+    }
     const at = row.timestamp ? new Date(row.timestamp) : null;
     const hour = at && !Number.isNaN(at.getTime()) ? zonedHour(at, params.timezone) : 12;
     const asking = Boolean(row.previousUser && /[?？]$/.test(row.previousUser));
@@ -173,10 +202,14 @@ export async function buildActProfile(params: {
     bucket.samples >= 8 ? bucket : { ...bucket, fallback: true as const }
   ));
 
+  const byUserAct = Object.fromEntries(byUserActMap) as Partial<Record<UserAct, ActCounts>>;
+  const byUserActEmotion = [...byUserActEmotionMap.values()];
   return {
     samples,
     unconditional,
     buckets,
+    ...(byUserActMap.size > 0 ? { byUserAct } : {}),
+    ...(byUserActEmotion.length > 0 ? { byUserActEmotion } : {}),
     measuredAt: new Date().toISOString(),
   };
 }

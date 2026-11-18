@@ -13,8 +13,8 @@ import type { Persona } from "../../drizzle/schema";
 import type { LLMMessage, LLMOptions, LLMProvider } from "../llm/types";
 import { llmService } from "../llm";
 import { copy } from "@shared/copy";
-import { dayPartFromHour, normalizeActProfile, sampleAct, type ActDayPart } from "@shared/act-profile";
-import { isUserAsking, type SpeechAct } from "@shared/speech-acts";
+import { dayPartFromHour, normalizeActProfile, sampleAct, type ActDayPart, type ActVia } from "@shared/act-profile";
+import { isUserAsking, labelUserActByRule, type SpeechAct, type UserAct } from "@shared/speech-acts";
 import { loadBehaviorProfile, seededRandom } from "../_core/behavior-profile";
 import { zonedHour } from "@shared/timezone";
 import { pickRerankWinner, type RerankResult } from "./rerank";
@@ -101,6 +101,10 @@ export interface TurnInput {
 export interface TurnPlan {
   kind: "silence" | "ritual" | "model";
   sampledAct: SpeechAct | null;
+  /** How the act bucket was chosen. Missing when no act was sampled. */
+  actVia?: ActVia;
+  /** What the other person just did, from the words alone. */
+  userAct?: UserAct;
   ritual?: { trigger: string; reply: string; recordId?: number };
   messages: LLMMessage[];
   /** Planner-only messages. Set when the two-stage layer is on. */
@@ -141,6 +145,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     Boolean((input.persona as { timingEnabled?: boolean }).timingEnabled) &&
     Boolean(loadBehaviorProfile(input.persona));
   const dropSilence = Boolean(input.exclude) || !timingEnabled;
+  const userAct = labelUserActByRule(input.userMessage) ?? "other";
   const actProfile = layers.act
     ? normalizeActProfile(actProfileForTurn(input.persona, input.periodId ?? null))
     : null;
@@ -154,11 +159,16 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
             input.actCondition?.dayPart ??
             dayPartFromHour(zonedHour(input.now, (input.persona as { timezone?: string }).timezone)),
           relationshipPhase: (input.persona.personaData as { relationshipPhase?: string } | null)?.relationshipPhase ?? "initial",
+          userAct,
         },
         { dropSilence, rng },
       )
     : null;
   const sampledAct = sampled?.act === "silence" ? null : sampled?.act ?? null;
+  const actMeta = {
+    userAct,
+    ...(sampled?.via ? { actVia: sampled.via } : {}),
+  };
   const length = lengthCapForTurn(layers.lengthCap, input);
   const projectionOn = Boolean(layers.projection && fingerprintCoreForTurn(input));
   const fingerprintRerankOn = Boolean(
@@ -174,6 +184,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     return {
       kind: "silence",
       sampledAct: "silence",
+      ...actMeta,
       messages: [],
       layersUsed,
       exemplarIds: [],
@@ -188,6 +199,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     return {
       kind: "ritual",
       sampledAct,
+      ...actMeta,
       ritual,
       messages: [],
       layersUsed: withMeasuredLayers(layersUsed, {}, false, false, false, false, true),
@@ -253,6 +265,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     return {
       kind: "model",
       sampledAct,
+      ...actMeta,
       messages,
       plannerMessages,
       ...length,
@@ -302,6 +315,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   return {
     kind: "model",
     sampledAct,
+    ...actMeta,
     messages: spliceAfterSystem(composed.messages, seedMsgs),
     plannerMessages,
     ...length,

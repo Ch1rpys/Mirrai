@@ -1093,7 +1093,11 @@ async function* runConversationTurn(
       emotionalState: persona.emotionalState,
       channel: options.channel ?? "web",
       origin: "system-notice",
-      metadata: { sampledAct: "silence", periodId: options.periodId ?? null },
+      metadata: {
+        sampledAct: "silence",
+        periodId: options.periodId ?? null,
+        ...(plan.actVia ? { actVia: plan.actVia } : {}),
+      },
     });
     yield { type: "silence", notice };
     yield {
@@ -1546,6 +1550,7 @@ async function* runConversationTurn(
   const turnMeta = {
     sampledAct: sampled?.act ?? null,
     periodId: options.periodId ?? null,
+    ...(plan.actVia ? { actVia: plan.actVia } : {}),
     ...(projection.length > 0 ? { projection } : {}),
     ...(rerank ? { rerank } : {}),
     ...(plan.seedRecordIds.length > 0 ? { seedRecordIds: plan.seedRecordIds } : {}),

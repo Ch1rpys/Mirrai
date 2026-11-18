@@ -6,13 +6,13 @@
  * names one action is an instruction; a prompt that describes eleven
  * of them is a personality paragraph the model will ignore.
  *
- * Four conditions are enough: whether the other person asked, the
- * current mood, day or night in their timezone, and the stage of the
- * relationship. A bucket with too few samples falls back to the
- * unconditional counts, and that fallback is stored so it is visible.
+ * Conditions used to include what the other person just did. A bucket
+ * with too few samples falls back: first the adjacency pair, then the
+ * older asking/mood/hour buckets, then the unconditional counts. The
+ * path taken is stored so it is visible.
  */
-import type { SpeechAct } from "./speech-acts";
-import { SPEECH_ACTS, isSpeechAct } from "./speech-acts";
+import type { SpeechAct, UserAct } from "./speech-acts";
+import { SPEECH_ACTS, USER_ACTS, isSpeechAct, isUserAct } from "./speech-acts";
 
 /** Fewer than this and there is no distribution — the prompt stays as it is today. */
 export const ACT_MIN_SAMPLES = 40;
@@ -27,7 +27,11 @@ export interface ActCondition {
   emotion: string;
   dayPart: ActDayPart;
   relationshipPhase: string;
+  /** What the other person just did. Missing on old callers. */
+  userAct?: UserAct;
 }
+
+export type ActVia = "userAct+emotion" | "userAct" | "bucket" | "unconditional";
 
 export type ActCounts = Partial<Record<SpeechAct, number>>;
 
@@ -46,6 +50,15 @@ export interface ActProfile {
   samples: number;
   unconditional: ActCounts;
   buckets: ActBucket[];
+  /** What I did → what they answered with. */
+  byUserAct?: Partial<Record<UserAct, ActCounts>>;
+  /** The same, split by their mood at the time. */
+  byUserActEmotion?: Array<{
+    userAct: UserAct;
+    emotion: string;
+    counts: ActCounts;
+    samples: number;
+  }>;
   /** True when the user edited a count by hand. */
   edited?: boolean;
   measuredAt?: string;
@@ -132,13 +145,66 @@ export function normalizeActProfile(value: unknown): ActProfile | null {
     }
   }
   const measuredAt = typeof record.measuredAt === "string" ? record.measuredAt : undefined;
+  const byUserAct = toByUserAct(record.byUserAct);
+  const byUserActEmotion = toByUserActEmotion(record.byUserActEmotion);
   return {
     samples,
     unconditional,
     buckets,
+    ...(byUserAct ? { byUserAct } : {}),
+    ...(byUserActEmotion ? { byUserActEmotion } : {}),
     ...(record.edited === true ? { edited: true } : {}),
     ...(measuredAt ? { measuredAt } : {}),
   };
+}
+
+function toByUserAct(value: unknown): Partial<Record<UserAct, ActCounts>> | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const out: Partial<Record<UserAct, ActCounts>> = {};
+  for (const act of USER_ACTS) {
+    if (record[act] === undefined) continue;
+    const counts = toCounts(record[act]);
+    if (total(counts) > 0) out[act] = counts;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function toByUserActEmotion(
+  value: unknown,
+): ActProfile["byUserActEmotion"] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: NonNullable<ActProfile["byUserActEmotion"]> = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    if (!isUserAct(row.userAct)) continue;
+    if (typeof row.emotion !== "string" || !row.emotion.trim()) continue;
+    const counts = toCounts(row.counts);
+    const samples = Math.max(total(counts), toCount(row.samples));
+    if (samples <= 0 || total(counts) <= 0) continue;
+    out.push({
+      userAct: row.userAct,
+      emotion: row.emotion.trim(),
+      counts,
+      samples,
+    });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+/** The three most common replies to one of the other person's acts. */
+export function topRepliesForUserAct(
+  counts: ActCounts,
+  n = 3,
+): Array<{ act: SpeechAct; count: number; share: number }> {
+  const sum = total(counts);
+  if (!sum) return [];
+  return SPEECH_ACTS
+    .map((act) => ({ act, count: counts[act] ?? 0, share: (counts[act] ?? 0) / sum }))
+    .filter((row) => row.count > 0)
+    .sort((a, b) => b.count - a.count || a.act.localeCompare(b.act))
+    .slice(0, n);
 }
 
 /**
@@ -181,18 +247,44 @@ function specificity(bucket: ActBucket): number {
 export function countsForCondition(
   profile: ActProfile,
   condition: ActCondition,
-): { counts: ActCounts; bucket: ActBucket | null; fallback: boolean } {
+): { counts: ActCounts; bucket: ActBucket | null; fallback: boolean; via: ActVia } {
+  const userAct = condition.userAct;
+  if (userAct) {
+    if (condition.emotion && profile.byUserActEmotion) {
+      const matches = profile.byUserActEmotion
+        .filter((row) => row.userAct === userAct && row.emotion === condition.emotion)
+        .sort((a, b) => b.samples - a.samples);
+      const bestPair = matches[0];
+      if (
+        bestPair &&
+        bestPair.samples >= ACT_BUCKET_MIN_SAMPLES &&
+        total(bestPair.counts) > 0
+      ) {
+        return {
+          counts: bestPair.counts,
+          bucket: null,
+          fallback: false,
+          via: "userAct+emotion",
+        };
+      }
+    }
+    const userCounts = profile.byUserAct?.[userAct];
+    if (userCounts && total(userCounts) >= ACT_BUCKET_MIN_SAMPLES) {
+      return { counts: userCounts, bucket: null, fallback: false, via: "userAct" };
+    }
+  }
   const matches = profile.buckets
     .filter((bucket) => bucketMatches(bucket, condition))
     .sort((a, b) => specificity(b) - specificity(a) || b.samples - a.samples);
   const best = matches[0];
   if (best && best.samples >= ACT_BUCKET_MIN_SAMPLES && total(best.counts) > 0) {
-    return { counts: best.counts, bucket: best, fallback: false };
+    return { counts: best.counts, bucket: best, fallback: false, via: "bucket" };
   }
   return {
     counts: profile.unconditional,
     bucket: best ?? null,
     fallback: true,
+    via: "unconditional",
   };
 }
 
@@ -208,6 +300,7 @@ export interface SampledAct {
   drawn: SpeechAct;
   resampled: boolean;
   fallback: boolean;
+  via: ActVia;
 }
 
 function drawFrom(counts: ActCounts, rng: () => number): SpeechAct | null {
@@ -239,20 +332,20 @@ export function sampleAct(
 ): SampledAct | null {
   if (!hasActDistribution(profile)) return null;
   const rng = options.rng ?? Math.random;
-  const { counts, fallback } = countsForCondition(profile, condition);
+  const { counts, fallback, via } = countsForCondition(profile, condition);
   const usable = options.dropSilence ? { ...counts, silence: 0 } : counts;
   const first = drawFrom(counts, rng);
   if (!first) return null;
   if (first !== "silence" || !options.dropSilence) {
-    return { act: first, drawn: first, resampled: false, fallback };
+    return { act: first, drawn: first, resampled: false, fallback, via };
   }
   const second = drawFrom(usable, rng) ?? drawFrom({ ...counts, silence: 0 }, rng);
   if (!second || second === "silence") {
     // A distribution that is only silence still has to say something
     // when silence is not allowed. Answering is the least invented verb.
-    return { act: "answer", drawn: first, resampled: true, fallback };
+    return { act: "answer", drawn: first, resampled: true, fallback, via };
   }
-  return { act: second, drawn: first, resampled: true, fallback };
+  return { act: second, drawn: first, resampled: true, fallback, via };
 }
 
 export function isActCounts(value: unknown): value is ActCounts {

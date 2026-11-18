@@ -349,6 +349,25 @@ describe("the shared generation path", () => {
     ]);
   });
 
+  it("samples against userAct ask when the message is 在吗", async () => {
+    const withActs = persona();
+    withActs.personaData = {
+      personality: "温柔",
+      actProfile: { samples: 80, unconditional: { tease: 80 }, buckets: [] },
+    };
+    const planned = await planTurn({
+      persona: withActs,
+      userId: 1,
+      userMessage: "在吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "adj:zaime",
+      exclude: { texts: [HELD_OUT] },
+    });
+    expect(planned.userAct).toBe("ask");
+  });
+
   it("does not put the user's sample lines into the prompt", async () => {
     /**
      * i18n:allow-input — a distinctive quote used only to prove it

@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { copy } from "@shared/copy";
-import { SPEECH_ACTS, FEEDBACK_REASONS, type SpeechAct } from "@shared/speech-acts";
+import { SPEECH_ACTS, USER_ACTS, USER_ACT_COPY_KEYS, FEEDBACK_REASONS, type SpeechAct } from "@shared/speech-acts";
 import { SUPPRESSION_KINDS, normalizeSuppressions, type Suppression, type SuppressionKind } from "@shared/suppressions";
 import { normalizeLifeEvents, type LifeEvent } from "@shared/life-events";
-import { ACT_MIN_SAMPLES, emptyCounts, normalizeActProfile, type ActCounts } from "@shared/act-profile";
+import { ACT_MIN_SAMPLES, emptyCounts, normalizeActProfile, topRepliesForUserAct, type ActCounts } from "@shared/act-profile";
 
 /**
  * The fifth-stage editors: subtractions, life events, action counts,
@@ -252,7 +252,58 @@ function ActProfileEditor({ personaId }: { personaId: number }) {
       })}>
         {t("common.save")}
       </Button>
+      <AdjacencyTable
+        byUserAct={profile.byUserAct}
+        locale={lang}
+        title={t("v5.actAdjacencyTitle")}
+        hint={t("v5.actAdjacencyHint")}
+        share={(act, pct) => t("v5.actAdjacencyShare", { act, pct })}
+      />
     </section>
+  );
+}
+
+function AdjacencyTable({
+  byUserAct,
+  locale,
+  title,
+  hint,
+  share,
+}: {
+  byUserAct: Partial<Record<(typeof USER_ACTS)[number], ActCounts>> | undefined;
+  locale: "zh" | "en";
+  title: string;
+  hint: string;
+  share: (act: string, pct: number) => string;
+}) {
+  if (!byUserAct) return null;
+  const rows = USER_ACTS.map((userAct) => {
+    const counts = byUserAct[userAct];
+    if (!counts) return null;
+    const top = topRepliesForUserAct(counts, 3);
+    if (top.length === 0) return null;
+    return { userAct, top };
+  }).filter((row): row is { userAct: (typeof USER_ACTS)[number]; top: ReturnType<typeof topRepliesForUserAct> } => Boolean(row));
+  if (rows.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-medium">{title}</h4>
+      <p className="text-xs text-muted-foreground">{hint}</p>
+      <dl className="space-y-1.5">
+        {rows.map((row) => (
+          <div key={row.userAct} className="flex flex-wrap items-baseline justify-between gap-2 text-xs">
+            <dt>{copy(locale, USER_ACT_COPY_KEYS[row.userAct])}</dt>
+            <dd className="text-muted-foreground">
+              {row.top
+                .map((item) =>
+                  share(copy(locale, `prompt.act.${item.act}` as "prompt.act.answer"), Math.round(item.share * 100)),
+                )
+                .join(" · ")}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
 
