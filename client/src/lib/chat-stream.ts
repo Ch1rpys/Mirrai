@@ -51,6 +51,7 @@ export interface StreamChatCallbacks {
   onEmotion?: (state: string, reason?: string) => void;
   onDone?: (info: StreamDoneInfo) => void;
   onChoice?: (info: { options: [string, string]; replyToMessageId: number }) => void;
+  onReplace?: (text: string) => void;
   onError?: (message: string, partial: boolean) => void;
 }
 
@@ -284,6 +285,9 @@ async function handleEvent(
       break;
     case "done":
       callbacks.onDone?.(data as StreamDoneInfo);
+      break;
+    case "replace":
+      if (typeof data?.text === "string") callbacks.onReplace?.(data.text);
       break;
     case "choice": {
       const options = Array.isArray(data?.options)

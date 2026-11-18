@@ -34,7 +34,9 @@ export interface ProjectionResult {
 
 const HAN_COMMA_RE = /(\p{Script=Han})，(\p{Script=Han})/gu;
 const EMOJI_RE = /\p{Extended_Pictographic}/gu;
-const HA_RUN_RE = /哈{2,}/g;
+// i18n:allow-input — the laugh character counted in the records, not copy.
+const LAUGH_CHAR = "哈";
+const HA_RUN_RE = new RegExp(`${LAUGH_CHAR}{2,}`, "g");
 const EXCLAIM_RUN_RE = /[！!]+/g;
 const ELLIPSIS_PROTECT_RE = /。{2,}|\.{3,}|…+|⋯+/g;
 
@@ -103,7 +105,9 @@ function applyRule(
     case "strip_tilde":
       return text.replace(/[～~]+$/u, "");
     case "laugh_runs":
-      return text.replace(HA_RUN_RE, () => "哈".repeat(sampleRunLength(fp.laugh.haRuns, rng, 2)));
+      return text.replace(HA_RUN_RE, () =>
+        LAUGH_CHAR.repeat(sampleRunLength(fp.laugh.haRuns, rng, 2)),
+      );
     case "ellipsis_form": {
       const form = dominantEllipsis(fp);
       return form ? rewriteEllipsis(text, form) : text;
@@ -153,13 +157,13 @@ function dominantEllipsis(
   const forms = fp.punctuation.ellipsisForms;
   const total = forms.unicode + forms.dots + forms.cjkDots;
   if (total < 10) return null;
-  const winner = (
-    [
-      ["unicode", forms.unicode],
-      ["dots", forms.dots],
-      ["cjkDots", forms.cjkDots],
-    ] as const
-  ).sort((a, b) => b[1] - a[1])[0];
+  const ranked: Array<["unicode" | "dots" | "cjkDots", number]> = [
+    ["unicode", forms.unicode],
+    ["dots", forms.dots],
+    ["cjkDots", forms.cjkDots],
+  ];
+  ranked.sort((a, b) => b[1] - a[1]);
+  const winner = ranked[0];
   if (!winner || winner[1] / total < 0.8) return null;
   return winner[0];
 }

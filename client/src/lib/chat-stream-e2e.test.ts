@@ -149,6 +149,27 @@ describe("streamChat", () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).periodId).toBe("period-1");
   });
 
+  it("hands a replace event to the caller", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      mockSseResponse([
+        'event: delta\ndata: {"text":"好的。"}\n\n',
+        'event: replace\ndata: {"text":"好的"}\n\n',
+        'event: done\ndata: {"messageId":9,"emotionalState":"warm","graduationSuggested":false,"careNote":null,"crisis":false}\n\n',
+      ]),
+    );
+    globalThis.fetch = fetchMock as any;
+    const replaced: string[] = [];
+    await streamChat({
+      personaId: 1,
+      message: "在吗",
+      callbacks: {
+        onDelta: () => {},
+        onReplace: (text) => replaced.push(text),
+      },
+    });
+    expect(replaced).toEqual(["好的"]);
+  });
+
   it("reassembles a frame that arrives split across chunks", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       mockSseResponse([

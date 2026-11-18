@@ -1310,6 +1310,8 @@ export const en = {
     switchesHint: "The first group costs nothing extra and takes effect once there are records. The second group costs more, waits longer, or needs the network, so it stays off.",
     lengthCap: "Don't let them write longer than {{name}}",
     lengthCapNote: "The cap is how long {{name}} went in one turn in the record. It stays off until there are enough lines.",
+    styleProjection: "End the way {{name}} punctuates",
+    styleProjectionNote: "If {{name}} never uses a period, the period comes off. If {{name}} laughs in fours, it is four. Only marks and repeated characters move; the meaning does not.",
     abPairs: "Offer me a choice now and then",
     abPairsNote: "About every eight turns they give two unreplied lines and you pick the one that sounds more like them. That turn costs twice as much. The choice trains the rerank.",
     dataTitle: "Persona data",

@@ -59,6 +59,7 @@ export type ChatEvent =
   | { type: "delay"; ms: number }
   | { type: "silence"; notice: string }
   | { type: "burst"; texts: string[] }
+  | { type: "replace"; text: string }
   | { type: "emotion"; state: string; reason?: string }
   | {
       type: "done";
@@ -1080,6 +1081,8 @@ async function* runConversationTurn(
   }
 
   let replyText = "";
+  let streamedText = "";
+  let projection: string[] = [];
   let failed = false;
   let failureMessage = "";
   const invokeOptions = {
@@ -1176,10 +1179,17 @@ async function* runConversationTurn(
     })) {
       if (event.type === "thinking") yield { type: "thinking" };
       if (event.type === "delta") {
+        streamedText += event.text;
         replyText += event.text;
         if (!timingEnabled) yield { type: "delta", text: event.text };
       }
-      if (event.type === "final") replyText = event.text || replyText;
+      if (event.type === "final") {
+        replyText = event.text || replyText;
+        projection = event.projection;
+      }
+    }
+    if (!timingEnabled && streamedText && replyText && replyText !== streamedText) {
+      yield { type: "replace", text: replyText };
     }
   } catch (e) {
     failed = true;
@@ -1460,6 +1470,7 @@ async function* runConversationTurn(
   const turnMeta = {
     sampledAct: sampled?.act ?? null,
     periodId: options.periodId ?? null,
+    ...(projection.length > 0 ? { projection } : {}),
   };
   let parts = [finalText];
   if (timingEnabled && behavior) {

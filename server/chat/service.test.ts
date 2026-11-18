@@ -1118,3 +1118,88 @@ describe("the settings that are read as numbers", () => {
     expect(clampMaxTokens(999999)).toBe(128_000);
   });
 });
+
+function stripPeriodProfile() {
+  return {
+    version: 1,
+    measuredAt: "2026-01-01T00:00:00.000Z",
+    recordsVersion: "100:100",
+    fingerprint: {
+      samples: 100,
+      length: { median: 10, p90: 12, p95: 24, histogram: [] },
+      turnChars: { median: 10, p95: 24 },
+      endings: {
+        period: 0,
+        ellipsis: 0,
+        question: 0,
+        exclaim: 0,
+        tilde: 0.5,
+        emoji: 0,
+        particle: 0,
+        other: 1,
+      },
+      particles: {},
+      punctuation: {
+        commaPerChar: 0.01,
+        spaceAsComma: 0,
+        ellipsisForms: { unicode: 0, dots: 0, cjkDots: 0 },
+        exclaimRuns: [],
+        questionRuns: [],
+        halfWidthRate: 0.5,
+        markCount: 0,
+      },
+      laugh: { rate: 0, forms: {}, haRuns: [] },
+      reduplication: {},
+      emoji: { rate: 0.2, perLine: 0, top: [] },
+      kaomoji: { rate: 0 },
+      latin: { rate: 0, abbreviations: {} },
+      typoFix: { starRate: 0 },
+      script: { traditionalRate: 0 },
+      address: {},
+    },
+  };
+}
+
+describe("style projection on the stream", () => {
+  it("streams the raw text, then replaces it with the projected line, and stores that", async () => {
+    streamWithProvider.mockImplementation(async function* () {
+      yield { text: "好的。" };
+    });
+    const events: Array<{ type: string; text?: string }> = [];
+    for await (const event of runConversation({
+      persona: persona({ styleProfile: stripPeriodProfile() }),
+      userId: 1,
+      message: "在吗",
+      mode: "stream",
+    })) {
+      events.push(event);
+    }
+    const types = events.map((event) => event.type);
+    expect(types).toContain("delta");
+    expect(types).toContain("replace");
+    expect(types.indexOf("delta")).toBeLessThan(types.indexOf("replace"));
+    expect(types.indexOf("replace")).toBeLessThan(types.indexOf("done"));
+    expect(events.find((event) => event.type === "replace")?.text).toBe("好的");
+    const stored = createMessage.mock.calls.find((call) => call[0].role === "assistant");
+    expect(stored?.[0].content).toBe("好的");
+    expect(stored?.[0].metadata.projection).toContain("strip_period");
+  });
+
+  it("does not replace or rewrite when there is no fingerprint", async () => {
+    streamWithProvider.mockImplementation(async function* () {
+      yield { text: "好的。" };
+    });
+    const events: Array<{ type: string }> = [];
+    for await (const event of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "在吗",
+      mode: "stream",
+    })) {
+      events.push(event);
+    }
+    expect(events.some((event) => event.type === "replace")).toBe(false);
+    const stored = createMessage.mock.calls.find((call) => call[0].role === "assistant");
+    expect(stored?.[0].content).toBe("好的。");
+  });
+});

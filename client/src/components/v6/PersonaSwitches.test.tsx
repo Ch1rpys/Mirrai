@@ -46,6 +46,7 @@ describe("the persona switches section", () => {
       screen.getByText("上面一组不多花钱，有记录就会生效。下面一组会多花钱、多等一会儿，或者需要联网，所以默认关着。"),
     ).toBeInTheDocument();
     expect(screen.getByText("不让它写得比 小满 长")).toBeInTheDocument();
+    expect(screen.getByText("按 小满 的标点习惯收尾")).toBeInTheDocument();
     expect(screen.getByText("偶尔让我二选一")).toBeInTheDocument();
   });
 

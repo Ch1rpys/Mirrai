@@ -1311,6 +1311,8 @@ export const zh = {
     switchesHint: "上面一组不多花钱，有记录就会生效。下面一组会多花钱、多等一会儿，或者需要联网，所以默认关着。",
     lengthCap: "不让它写得比 {{name}} 长",
     lengthCapNote: "按记录里 {{name}} 一次最多说多少来设上限。记录不够时不生效。",
+    styleProjection: "按 {{name}} 的标点习惯收尾",
+    styleProjectionNote: "{{name}} 从不带句号，就把句号去掉；{{name}} 的「哈」通常打四个，就打四个。只动标点和重复字，不改意思。",
     abPairs: "偶尔让我二选一",
     abPairsNote: "每八轮左右，分身会给两句回复让你挑更像的那句。那一轮的费用是两倍。你的选择会用来调重排。",
     dataTitle: "人设数据",

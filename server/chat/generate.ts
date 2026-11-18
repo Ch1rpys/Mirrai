@@ -32,6 +32,8 @@ import {
 } from "@shared/layers";
 import { capReply, replyBudget } from "@shared/length-cap";
 import { effectiveStyleProfile } from "@shared/style-profile";
+import { FINGERPRINT_STATES, type EmotionalState, type StyleFingerprintCore } from "@shared/style-fingerprint";
+import { projectStyle } from "@shared/style-projection";
 import type { ScoredMemory } from "./retrieval";
 
 export interface TurnInput {
@@ -123,6 +125,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     : null;
   const sampledAct = sampled?.act === "silence" ? null : sampled?.act ?? null;
   const length = lengthCapForTurn(layers.lengthCap, input);
+  const projectionOn = Boolean(layers.projection && fingerprintCoreForTurn(input));
 
   if (sampled?.act === "silence" && timingEnabled && !input.exclude) {
     return {
@@ -170,7 +173,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       sampledAct,
       messages,
       ...length,
-      layersUsed: withLengthCapLayer(layersUsed, length),
+      layersUsed: withMeasuredLayers(layersUsed, length, projectionOn),
       exemplarIds: [],
       seedRecordIds: [],
       recalled: [],
@@ -197,7 +200,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     sampledAct,
     messages: composed.messages,
     ...length,
-    layersUsed: withLengthCapLayer(layersUsed, length),
+    layersUsed: withMeasuredLayers(layersUsed, length, projectionOn),
     exemplarIds: [],
     seedRecordIds: [],
     recalled: composed.recalled,
@@ -227,13 +230,46 @@ function lengthCapForTurn(
   };
 }
 
-function withLengthCapLayer(
+function withMeasuredLayers(
   layersUsed: LayerId[],
   length: { maxChars?: number },
+  projectionOn: boolean,
 ): LayerId[] {
-  if (length.maxChars == null) return layersUsed;
-  const used = new Set<LayerId>([...layersUsed, "lengthCap"]);
+  const extra: LayerId[] = [];
+  if (length.maxChars != null) extra.push("lengthCap");
+  if (projectionOn) extra.push("projection");
+  if (extra.length === 0) return layersUsed;
+  const used = new Set<LayerId>([...layersUsed, ...extra]);
   return LAYERS.filter((id) => used.has(id));
+}
+
+function fingerprintCoreForTurn(input: TurnInput): StyleFingerprintCore | null {
+  const fp = effectiveStyleProfile(input.persona).fingerprint ?? null;
+  if (!fp || fp.samples < 1 || !fp.endings) return null;
+  const emotion = input.actCondition?.emotion ?? input.persona.emotionalState;
+  if (typeof emotion === "string" && (FINGERPRINT_STATES as readonly string[]).includes(emotion)) {
+    const per = fp.perState?.[emotion as EmotionalState];
+    if (per) return per;
+  }
+  return fp;
+}
+
+function finalizeGenerated(
+  text: string,
+  plan: TurnPlan,
+  input: TurnInput,
+): { text: string; projection: string[] } {
+  let next = text;
+  let projection: string[] = [];
+  if (plan.layersUsed.includes("projection")) {
+    const core = fingerprintCoreForTurn(input);
+    if (core) {
+      const styled = projectStyle(next, core, seededRandom(input.seed));
+      next = styled.text;
+      projection = [...styled.applied];
+    }
+  }
+  return applyLengthCap(next, plan, projection);
 }
 
 function tighterTokenBudget(plan: number | undefined, requested: number | undefined): number | undefined {
@@ -345,7 +381,7 @@ export async function* executePlan(
         picked: picked?.index ?? null,
       }),
     );
-    const capped = applyLengthCap(replyText, plan, []);
+    const capped = finalizeGenerated(replyText, plan, input);
     if (io.emitDeltas) yield { type: "delta", text: capped.text };
     yield { type: "final", text: capped.text, projection: capped.projection, rerank: picked ?? undefined };
     return;
@@ -363,7 +399,7 @@ export async function* executePlan(
       // the user sees it live.
       yield { type: "delta", text: chunk.text };
     }
-    const streamed = applyLengthCap(replyText, plan, []);
+    const streamed = finalizeGenerated(replyText, plan, input);
     yield { type: "final", text: streamed.text, projection: streamed.projection };
     return;
   }
@@ -377,7 +413,7 @@ export async function* executePlan(
   } else {
     replyText = replyText || copy(locale, "prompt.silence");
   }
-  const once = applyLengthCap(replyText, plan, []);
+  const once = finalizeGenerated(replyText, plan, input);
   if (io.emitDeltas) yield { type: "delta", text: once.text };
   yield { type: "final", text: once.text, projection: once.projection };
 }

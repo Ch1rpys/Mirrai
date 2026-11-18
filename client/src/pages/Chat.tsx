@@ -784,6 +784,10 @@ export default function Chat() {
               setCurrentState(state);
               setMessages(prev => prev.map(m => m.id === streamId ? { ...m, emotionalState: state } : m));
             },
+            onReplace: (text) => {
+              received = text;
+              setMessages(prev => prev.map(m => m.id === streamId ? { ...m, content: text } : m));
+            },
             onChoice: (info) => {
               setLiveChoice(info);
               setMessages((prev) => prev.filter((m) => m.id !== streamId));

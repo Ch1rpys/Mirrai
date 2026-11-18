@@ -204,6 +204,8 @@ async function handleChatStream(req: Request, res: Response): Promise<void> {
             options: event.options,
             replyToMessageId: event.replyToMessageId,
           });
+        } else if (event.type === "replace") {
+          writeEvent(res, "replace", { text: event.text });
         } else if (event.type === "done") {
           writeEvent(res, "done", {
             messageId: event.messageId,

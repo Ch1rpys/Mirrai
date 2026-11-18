@@ -305,6 +305,30 @@ describe("POST /api/chat/stream", () => {
     ).toBe("在的");
   });
 
+  it("forwards a replace event before done", async () => {
+    runConversation.mockImplementation(async function* () {
+      yield { type: "delta", text: "好的。" };
+      yield { type: "replace", text: "好的" };
+      yield {
+        type: "done",
+        messageId: 3,
+        emotionalState: "warm",
+        graduationSuggested: false,
+        careNote: null,
+        crisis: false,
+      };
+    });
+
+    const res = await fetch(`${baseUrl}/api/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personaId: 1, message: "在吗" }),
+    });
+    const frames = await readFrames(res);
+    expect(frames.map((frame) => frame.event)).toEqual(["delta", "replace", "done"]);
+    expect(frames[1].data.text).toBe("好的");
+  });
+
   it("reports a mid-stream failure as an error event and keeps the partial text", async () => {
     runConversation.mockImplementation(async function* () {
       yield { type: "delta", text: "我在" };

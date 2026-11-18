@@ -464,5 +464,76 @@ describe("the length cap layer", () => {
     expect(final?.text).toBe(head);
     expect(final?.projection).toContain("length_cap");
   });
+
+  it("projects a period off when the layer is on", async () => {
+    const withFp = personaWithFingerprint();
+    withFp.styleProfile.fingerprint.endings = {
+      period: 0,
+      ellipsis: 0,
+      question: 0,
+      exclaim: 0,
+      tilde: 0.5,
+      emoji: 0,
+      particle: 0,
+      other: 1,
+    };
+    withFp.styleProfile.fingerprint.punctuation = {
+      commaPerChar: 0.01,
+      spaceAsComma: 0,
+      ellipsisForms: { unicode: 0, dots: 0, cjkDots: 0 },
+      exclaimRuns: [],
+      questionRuns: [],
+      halfWidthRate: 0.5,
+      markCount: 0,
+    };
+    withFp.styleProfile.fingerprint.laugh = { rate: 0, forms: {}, haRuns: [] };
+    withFp.styleProfile.fingerprint.emoji = { rate: 0.2, perLine: 0, top: [] };
+    const input = {
+      persona: withFp,
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "projection:on",
+      exclude: { texts: [HELD_OUT] },
+    };
+    const plan = await planTurn(input);
+    expect(plan.layersUsed).toContain("projection");
+    invokeWithProvider.mockResolvedValue("好的。");
+    const final = await lastFinal(plan, input);
+    expect(final?.text).toBe("好的");
+    expect(final?.projection).toContain("strip_period");
+  });
+
+  it("leaves the model text alone when --without projection", async () => {
+    const withFp = personaWithFingerprint();
+    withFp.styleProfile.fingerprint.endings = {
+      period: 0,
+      ellipsis: 0,
+      question: 0,
+      exclaim: 0,
+      tilde: 0.5,
+      emoji: 0,
+      particle: 0,
+      other: 1,
+    };
+    const input = {
+      persona: withFp,
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "projection:off",
+      exclude: { texts: [HELD_OUT] },
+      layerOverrides: layerOverridesForEval({ without: ["projection"] }),
+    };
+    const plan = await planTurn(input);
+    expect(plan.layersUsed).not.toContain("projection");
+    invokeWithProvider.mockResolvedValue("好的。");
+    const final = await lastFinal(plan, input);
+    expect(final?.text).toBe("好的。");
+  });
 });
 
