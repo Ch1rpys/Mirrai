@@ -20,6 +20,10 @@ import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { computeIntimacy, getEmotionalStateDesc } from "../_core/persona-utils";
 import { inferEmotionalState, isEmotionalState } from "../_core/emotion";
+import { applyInertia, decayState, normalizeEmotionDynamics } from "@shared/emotion-dynamics";
+import { labelUserActByRule } from "@shared/speech-acts";
+import { layersFromSettings } from "@shared/layers";
+import { effectiveStyleProfile } from "@shared/style-profile";
 import { retrieveMemories } from "./retrieval";
 import { buildCrisisResponse, buildGentleCheckIn, detectCrisis } from "../safety/crisis";
 import { evaluateUsage, pickCareNote, type CareNote } from "../safety/usage-monitor";
@@ -854,6 +858,32 @@ export async function commitPendingChoice(params: {
   return { messageId, emotionalState: newEmotionalState };
 }
 
+function emotionInertiaForTurn(
+  persona: Persona,
+  now: Date,
+  userMessage: string,
+): {
+  dynamics: NonNullable<ReturnType<typeof normalizeEmotionDynamics>>;
+  sinceMin: number;
+  userAct: string;
+  repairAcceptRate: number | null;
+} | null {
+  const layers = layersFromSettings(persona);
+  if (!layers.emotionInertia) return null;
+  const dynamics = normalizeEmotionDynamics(effectiveStyleProfile(persona).emotionDynamics);
+  if (!dynamics) return null;
+  const raw = (persona as { emotionalStateSince?: Date | string | null }).emotionalStateSince;
+  const sinceAt = raw ? (raw instanceof Date ? raw.getTime() : new Date(raw).getTime()) : NaN;
+  if (!Number.isFinite(sinceAt)) return null;
+  const conflict = effectiveStyleProfile(persona).conflict as { repairAcceptRate?: number } | undefined;
+  return {
+    dynamics,
+    sinceMin: (now.getTime() - sinceAt) / 60_000,
+    userAct: labelUserActByRule(userMessage) ?? "other",
+    repairAcceptRate: conflict?.repairAcceptRate ?? null,
+  };
+}
+
 async function* runConversationTurn(
   options: ConversationOptions & { mode: ChatMode },
 ): AsyncGenerator<ChatEvent> {
@@ -1063,6 +1093,19 @@ async function* runConversationTurn(
   const timingEnabled = Boolean((persona as any).timingEnabled) && Boolean(loadBehaviorProfile(persona));
   const rerankEnabled = Boolean((persona as any).rerankEnabled);
   const behavior = loadBehaviorProfile(persona);
+  const inertia = emotionInertiaForTurn(persona, now, message);
+  if (inertia) {
+    const decayed = decayState({
+      current: persona.emotionalState,
+      sinceMin: inertia.sinceMin,
+      dynamics: inertia.dynamics,
+    });
+    if (decayed !== persona.emotionalState) {
+      persona.emotionalState = decayed as Persona["emotionalState"];
+      (persona as { emotionalStateSince?: Date | null }).emotionalStateSince = now;
+      inertia.sinceMin = 0;
+    }
+  }
   const turnInput = {
     persona,
     userId,
@@ -1549,7 +1592,24 @@ async function* runConversationTurn(
     providerInstance: classifyProvider ?? undefined,
     locale,
   });
-  const newEmotionalState = emotion.state;
+  let newEmotionalState = emotion.state;
+  let emotionMeta: { proposed: string; kept: boolean; reason?: string } | undefined;
+  if (inertia && plan.kind !== "ritual") {
+    const applied = applyInertia({
+      current: persona.emotionalState,
+      proposed: emotion.state,
+      sinceMin: inertia.sinceMin,
+      userAct: inertia.userAct,
+      dynamics: inertia.dynamics,
+      repairAcceptRate: inertia.repairAcceptRate,
+    });
+    newEmotionalState = applied.state as typeof newEmotionalState;
+    emotionMeta = {
+      proposed: emotion.state,
+      kept: applied.kept,
+      ...(applied.reason ? { reason: applied.reason } : {}),
+    };
+  }
 
   const turnMeta = {
     sampledAct: sampled?.act ?? null,
@@ -1566,6 +1626,7 @@ async function* runConversationTurn(
       : {}),
     ...(plan.reanchor && plan.reanchor.length > 0 ? { reanchor: plan.reanchor } : {}),
     ...(twoStage === "fallback" ? { twoStage: "fallback" as const } : {}),
+    ...(emotionMeta ? { emotion: emotionMeta } : {}),
   };
   let parts = [finalText];
   if (timingEnabled && behavior) {

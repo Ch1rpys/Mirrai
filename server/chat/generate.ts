@@ -44,6 +44,7 @@ import { defaultAddressForms, FINGERPRINT_STATES, type EmotionalState, type Styl
 import { projectStyle } from "@shared/style-projection";
 import { hasPromptLexicon } from "@shared/lexicon";
 import { pickActClusterLines } from "@shared/act-clusters";
+import { normalizeEmotionDynamics } from "@shared/emotion-dynamics";
 import { filterHarm } from "@shared/harm";
 import { relationshipIsOver } from "@shared/relationship-ended";
 import {
@@ -227,6 +228,9 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   const twoStageOn = Boolean(layers.twoStage);
   const clusterLines = actClusterLinesForTurn(layers.actClusters, sampledAct, input, rng);
   const clustersOn = clusterLines.length > 0;
+  const emotionInertiaOn = Boolean(
+    layers.emotionInertia && normalizeEmotionDynamics(effectiveStyleProfile(input.persona).emotionDynamics),
+  );
 
   if (input.exclude) {
     const built = await buildPromptBundleForPersona({
@@ -285,6 +289,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
         reminderOn,
         twoStageOn,
         clustersOn,
+        emotionInertiaOn,
       ),
       exemplarIds: [],
       seedRecordIds: seeds.excludeIds,
@@ -338,6 +343,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       reminderOn,
       twoStageOn,
       clustersOn,
+      emotionInertiaOn,
     ),
     exemplarIds: [],
     seedRecordIds: seeds.excludeIds,
@@ -441,6 +447,7 @@ function withMeasuredLayers(
   styleReminderOn = false,
   twoStageOn = false,
   actClustersOn = false,
+  emotionInertiaOn = false,
 ): LayerId[] {
   const extra: LayerId[] = [];
   if (length.maxChars != null) extra.push("lengthCap");
@@ -452,6 +459,7 @@ function withMeasuredLayers(
   if (styleReminderOn) extra.push("styleReminder");
   if (twoStageOn) extra.push("twoStage");
   if (actClustersOn) extra.push("actClusters");
+  if (emotionInertiaOn) extra.push("emotionInertia");
   if (extra.length === 0) return layersUsed;
   const used = new Set<LayerId>([...layersUsed, ...extra]);
   return LAYERS.filter((id) => used.has(id));

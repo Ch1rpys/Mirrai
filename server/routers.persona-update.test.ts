@@ -80,6 +80,17 @@ describe("saving a persona", () => {
     ).rejects.toThrow();
   });
 
+  it("writes a mood the user picked by hand", async () => {
+    await appRouter
+      .createCaller(ctxFor(1))
+      .persona.update({ id: 5, emotionalState: "happy" });
+    expect(updatePersona).toHaveBeenCalledWith(
+      5,
+      1,
+      expect.objectContaining({ emotionalState: "happy" }),
+    );
+  });
+
   it("refuses to turn rerank on when there are not enough lines", async () => {
     getRerankModel.mockResolvedValue(null);
     await expect(

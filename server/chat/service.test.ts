@@ -418,6 +418,48 @@ describe("runConversation", () => {
     expect(events.some((event) => event.type === "emotion" && event.state === "warm")).toBe(true);
   });
 
+  it("keeps a distant stretch that has only lasted 30 minutes", async () => {
+    const now = new Date("2026-01-15T12:00:00.000Z");
+    inferEmotionalState.mockResolvedValue({ state: "happy", source: "heuristic" });
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona({
+        emotionalState: "distant",
+        emotionalStateSince: new Date(now.getTime() - 30 * 60_000),
+        styleProfile: {
+          version: 1,
+          measuredAt: "2026-01-15T12:00:00.000Z",
+          recordsVersion: "100:100",
+          emotionDynamics: {
+            transitions: { distant: { distant: 20, happy: 1, warm: 1 } },
+            dwell: { distant: { medianMin: 300, p75Min: 360, episodes: 6 } },
+            modal: "warm",
+            samples: 40,
+          },
+        },
+      }),
+      userId: 1,
+      message: "吃饭了吗",
+      mode: "once",
+      now,
+    })) {
+      events.push(event);
+    }
+    const assistant = createMessage.mock.calls.find(
+      (call: unknown[]) => (call[0] as { role?: string }).role === "assistant",
+    )?.[0] as {
+      emotionalState?: string;
+      metadata?: { emotion?: { proposed?: string; kept?: boolean } };
+    };
+    expect(assistant.emotionalState).toBe("distant");
+    expect(assistant.metadata?.emotion).toEqual({
+      proposed: "happy",
+      kept: true,
+      reason: "inertia",
+    });
+    expect(events.some((event) => event.type === "emotion" && event.state === "distant")).toBe(true);
+  });
+
   it("keeps the crisis path even when a ritual table is present", async () => {
     const events = [];
     for await (const event of runConversation({
