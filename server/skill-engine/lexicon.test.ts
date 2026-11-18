@@ -104,6 +104,17 @@ describe("counting the private lexicon", () => {
     expect(terms).not.toContain("又咕咕");
   });
 
+  it("counts a word twice when one line says it twice", () => {
+    const rows = Array.from({ length: 15 }, (_, i) => ({
+      role: "assistant" as const,
+      content: "今天又咕咕了，明天还咕咕",
+      kind: "text",
+      timestamp: new Date(Date.UTC(2022, 3, 2, i)),
+    }));
+    const gugu = collectLexiconCandidates(rows).find((row) => row.term === "咕咕");
+    expect(gugu?.count).toBe(30);
+  });
+
   it("keeps a confirmed word across a re-run and leaves a rejected one gone", () => {
     const confirmed = {
       id: "keep",

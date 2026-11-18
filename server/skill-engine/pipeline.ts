@@ -1692,6 +1692,7 @@ async function runSkillPipelineOnce(
           locale,
           name: input.name,
           nickname: enrichedData.nickname,
+          timeZone: input.timeZone,
         }),
       ];
       await setPersonaProgress(

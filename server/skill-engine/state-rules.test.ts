@@ -3,7 +3,7 @@ import { measureFingerprint, type FingerprintRow } from "@shared/style-fingerpri
 import type { PersonaData } from "../_core/persona-schema";
 import { mergeUserDecisions } from "./pipeline";
 import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
-import { fingerprintRowsFrom, mineStateRules } from "./state-rules";
+import { fingerprintRowsFrom, mineStateRules, stateRulesFromTranscript } from "./state-rules";
 
 const fresh: PersonaData = {
   personality: "温柔",
@@ -59,6 +59,19 @@ describe("mineStateRules", () => {
     expect(address?.evidence.every((item) => item.snippet.includes("陈树"))).toBe(true);
     expect(period?.evidence.every((item) => Boolean(item.at))).toBe(true);
     expect(period?.id).toMatch(/^auto-state-distant-/);
+  });
+
+  it("finds the distant address from the fixture without a hand-fed name list", () => {
+    const rules = stateRulesFromTranscript(fixtureRows(), {
+      locale: "zh",
+      name: "小满",
+      nickname: "宝贝",
+    });
+    const triggers = rules.map((rule) => rule.trigger[0]);
+    expect(triggers).toContain("。");
+    expect(triggers).toContain("陈树");
+    expect(triggers).not.toContain("嗯");
+    expect(triggers).not.toContain("晚安");
   });
 
   it("produces nothing when distant is cut to fifteen lines", () => {

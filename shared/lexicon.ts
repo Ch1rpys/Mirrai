@@ -294,11 +294,8 @@ export function collectLexiconCandidates(rows: LexiconRow[]): LexiconCandidate[]
     if (!snippet) continue;
     const role = row.role === "assistant" || row.role === "user" ? row.role : "other";
     const at = stampOf(row.timestamp);
-    const seen = new Set<string>();
     for (const raw of termsIn(snippet)) {
       const term = /[A-Za-z]/.test(raw) ? raw.toLowerCase() : raw;
-      if (seen.has(term)) continue;
-      seen.add(term);
       const list = hits.get(term) ?? [];
       list.push({ snippet, role, order, ...(at ? { at } : {}) });
       hits.set(term, list);

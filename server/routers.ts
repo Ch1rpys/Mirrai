@@ -5653,12 +5653,13 @@ export const appRouter = router({
         return await withPersonaDataLock(input.personaId, async () => {
           const persona = await getPersonaById(input.personaId, ctx.user.id);
           if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id, { newest: true });
+          // mineLexicon reads every text line through iterateRecords.
+          // The newest-20k helper would drop private words that only
+          // appear earlier than that page.
           const mined = await mineLexicon({
             personaId: input.personaId,
             userId: ctx.user.id,
             locale: input.locale,
-            records: rows,
           });
           if (!mined.length) {
             return { entries: [], hint: copy(input.locale, "labels.lexicon.minedNone") };

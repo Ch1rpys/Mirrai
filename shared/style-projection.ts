@@ -129,7 +129,12 @@ function stripPeriod(text: string): string {
     kept.push(match);
     return `\u0000${kept.length - 1}\u0000`;
   });
-  const withoutIdeographic = protectedText.replace(/。/g, "");
+  const withoutIdeographic = protectedText.replace(/。/g, (mark, offset, source) => {
+    const prev = source[offset - 1] ?? "";
+    const next = source[offset + 1] ?? "";
+    if (/\d/u.test(prev) || /\d/u.test(next)) return mark;
+    return "";
+  });
   const withoutDot = withoutIdeographic.replace(/[^\n]+/g, stripTrailingAsciiDot);
   return withoutDot.replace(/\u0000(\d+)\u0000/g, (_, index) => kept[Number(index)] ?? "");
 }
@@ -138,7 +143,10 @@ function stripTrailingAsciiDot(line: string): string {
   if (!line.endsWith(".")) return line;
   const before = line.slice(0, -1);
   if (/\d$/u.test(before)) return line;
-  if (/[A-Za-z]$/u.test(before)) return line;
+  if (/https?:\/\/\S+$/i.test(before) || /www\.\S+$/i.test(before)) return line;
+  const tail = before.match(/[A-Za-z.]+$/)?.[0] ?? "";
+  if (tail.includes(".")) return line;
+  if (/^[A-Z]{1,3}$/.test(tail)) return line;
   return before;
 }
 

@@ -92,9 +92,7 @@ describe("fingerprint rerank", () => {
         { text: "嗯" },
         { text: "随便吧" },
       ],
-      trainingTexts: Array.from({ length: 40 }, (_, i) =>
-        i % 3 === 0 ? "嗯" : i % 3 === 1 ? "好" : "在",
-      ),
+      trainingTexts: fixtureTexts(),
       fingerprint: fixtureFingerprint(),
       fingerprintRerank: true,
       sampledAct: "acknowledge",

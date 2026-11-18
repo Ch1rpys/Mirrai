@@ -905,6 +905,38 @@ export function lineSurprise(line: string, fp: StyleFingerprintCore): number {
   const pEnding = (fp.endings[ending] ?? 0) + DIST_SMOOTH;
   const pParticle = (fp.particles[particle] ?? 0) + DIST_SMOOTH;
   const chars = codePoints(text);
-  const spread = Math.max(1, fp.length.p90 - fp.length.median);
+  const spread = lengthSpread(fp.length);
   return -Math.log(pEnding) - Math.log(pParticle) + Math.abs(chars - fp.length.median) / spread;
+}
+
+/**
+ * How far a length may sit from the median before it is unusual.
+ *
+ * p90 − median is zero when the mass of the histogram sits on the
+ * median itself (the fixture clamps lines at 10). A one-character
+ * "嗯" then looks nine times further away than it is. The lower tail
+ * is the scale in that case.
+ */
+function lengthSpread(length: { median: number; p90: number; histogram?: number[] }): number {
+  const upper = Math.max(0, length.p90 - length.median);
+  let lower = 0;
+  const hist = length.histogram;
+  if (hist && hist.length > 0) {
+    let total = 0;
+    for (const count of hist) total += count;
+    if (total > 0) {
+      const target = total * 0.1;
+      let seen = 0;
+      let p10 = 0;
+      for (let bin = 0; bin < hist.length; bin++) {
+        seen += hist[bin] ?? 0;
+        if (seen >= target) {
+          p10 = bin;
+          break;
+        }
+      }
+      lower = Math.max(0, length.median - p10);
+    }
+  }
+  return Math.max(1, upper, lower);
 }

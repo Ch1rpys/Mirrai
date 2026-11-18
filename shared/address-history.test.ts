@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildXiaomanRecords } from "../server/test-fixtures/xiaoman";
 import { ADDRESS_WORDS_EN, ADDRESS_WORDS_ZH, type FingerprintRow } from "./style-fingerprint";
-import { mineAddressForms, pickThemToMeAddress } from "./address-history";
+import { mineAddressForms, pickThemToMeAddress, type AddressEntry } from "./address-history";
 import { buildSystemPrompt } from "../server/_core/persona-utils";
 
 function fixtureRows(): FingerprintRow[] {
@@ -33,6 +33,35 @@ describe("mineAddressForms", () => {
     expect(chen).toBeTruthy();
     expect(Object.keys(chen?.byState ?? {})).toEqual(["distant"]);
     expect(them.some((entry) => entry.form === "图书馆")).toBe(false);
+  });
+
+  it("finds 树树 from the lines themselves, and does not take a short reply as a name", () => {
+    const known = ["宝贝", "阿树", "小满", ...ADDRESS_WORDS_ZH, ...ADDRESS_WORDS_EN];
+    const mined = mineAddressForms(fixtureRows(), known, { timeZone: "Asia/Shanghai" });
+    const them = mined.filter((entry) => entry.direction === "them_to_me");
+    const forms = them.map((entry) => entry.form);
+    expect(forms).toContain("树树");
+    expect(forms).toContain("陈树");
+    expect(forms).not.toContain("晚安");
+    expect(forms).not.toContain("嗯");
+    expect(forms).not.toContain("随便");
+    expect(forms).not.toContain("哦");
+    expect(forms).not.toContain("行");
+    expect(pickThemToMeAddress(them)).toBe("树树");
+    expect(them.find((entry) => entry.form === "陈树")?.byState).toEqual({ distant: expect.any(Number) });
+  });
+
+  it("files a Shanghai morning in that morning's quarter", () => {
+    const rows = Array.from({ length: 10 }, () => ({
+      role: "assistant" as const,
+      content: "陈树，早",
+      timestamp: new Date("2022-04-01T07:40:00+08:00"),
+      kind: "text" as const,
+      emotion: "warm" as const,
+    }));
+    const mined = mineAddressForms(rows, ["陈树"], { timeZone: "Asia/Shanghai" });
+    expect(mined[0]?.byQuarter).toEqual({ "2022Q2": 10 });
+    expect(mined[0]?.byMonth).toEqual({ "2022-04": 10 });
   });
 });
 
@@ -130,5 +159,29 @@ describe("the nickname line", () => {
 describe("pickThemToMeAddress", () => {
   it("returns null when the list is empty", () => {
     expect(pickThemToMeAddress([])).toBeNull();
+  });
+
+  it("counts a period by the months inside it, not the whole quarter", () => {
+    const history: AddressEntry[] = [
+      {
+        form: "一月",
+        direction: "them_to_me" as const,
+        total: 10,
+        byQuarter: { "2022Q1": 10 },
+        byMonth: { "2022-01": 10 },
+        byState: {},
+      },
+      {
+        form: "三月中",
+        direction: "them_to_me" as const,
+        total: 3,
+        byQuarter: { "2022Q1": 3 },
+        byMonth: { "2022-03": 3 },
+        byState: {},
+      },
+    ];
+    expect(
+      pickThemToMeAddress(history, { period: { from: "2022-03-15", to: "2022-03-20" } }),
+    ).toBe("三月中");
   });
 });

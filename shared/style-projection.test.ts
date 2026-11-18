@@ -84,7 +84,10 @@ describe("strip_period", () => {
     expect(apply("好的...", ready).text).toBe("好的...");
     expect(apply("好的…", ready).text).toBe("好的…");
     expect(apply("3.5", ready).text).toBe("3.5");
+    expect(apply("3。5", ready).text).toBe("3。5");
     expect(apply("e.g.", ready).text).toBe("e.g.");
+    expect(apply("See you.", ready).text).toBe("See you");
+    expect(apply("https://a.b/c.", ready).text).toBe("https://a.b/c.");
   });
 });
 

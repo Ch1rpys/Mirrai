@@ -8,6 +8,7 @@
 import { copy, type CopyKey, type Locale } from "@shared/copy";
 import { isTextRecord } from "@shared/records";
 import type { MicroRule, MicroRuleEvidence } from "@shared/micro-rules";
+import { mineAddressForms } from "@shared/address-history";
 import {
   defaultAddressForms,
   endingClassOf,
@@ -151,9 +152,15 @@ export function stateRulesFromTranscript(
     nickname?: string | null;
     userName?: string | null;
     addressForms?: string[];
+    timeZone?: string | null;
   } = {},
 ): MicroRule[] {
-  const addressForms = options.addressForms ?? addressFormsForMining(options);
+  const known = options.addressForms ?? addressFormsForMining(options);
+  const mined = mineAddressForms(rows, known, { timeZone: options.timeZone ?? null });
+  const discovered = mined
+    .filter((entry) => entry.direction === "them_to_me")
+    .map((entry) => entry.form);
+  const addressForms = discovered.length > 0 ? [...new Set([...known, ...discovered])] : known;
   const fingerprint = measureFingerprint(rows, { addressForms });
   return mineStateRules({ fingerprint, rows, locale: options.locale });
 }

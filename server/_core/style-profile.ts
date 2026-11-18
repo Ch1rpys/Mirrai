@@ -68,7 +68,11 @@ export async function measureStyleProfile(params: {
   const knownForms = [
     ...new Set([nickname, userName, personaName, ...defaultAddressForms()].filter(Boolean)),
   ];
-  const addressHistory = mineAddressForms(rows, knownForms);
+  const timeZone =
+    (typeof user?.timezone === "string" && user.timezone) ||
+    (typeof persona?.timezone === "string" && persona.timezone) ||
+    null;
+  const addressHistory = mineAddressForms(rows, knownForms, { timeZone });
   const minedForms = addressHistory
     .filter((entry) => entry.direction === "them_to_me")
     .map((entry) => entry.form);
