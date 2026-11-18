@@ -534,6 +534,10 @@ export async function composeMessages(params: {
     quotedSection,
     sampledAct: params.sampledAct ?? null,
     periodId: params.periodId ?? null,
+    history: history.slice(-(contextLimit - 1)).map((row) => ({
+      role: row.role === "user" ? "user" : "assistant",
+      content: row.content,
+    })),
   });
 
   const recent = await Promise.all(

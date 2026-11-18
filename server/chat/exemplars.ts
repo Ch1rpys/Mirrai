@@ -2,14 +2,18 @@
  * Past replies of theirs, retrieved by how the other person had just
  * spoken — not by a fact in a memory.
  *
- * The first scorer is character bigrams (the same tokens memory
- * retrieval already uses). An embedding is a second implementation
- * behind the same function, so a packed build does not need another
- * model, and swapping the scorer later does not change the caller.
+ * The unit is a turn, not a line: one of their bursts, scored against
+ * the user burst that came before it. The first term is character
+ * bigrams (the same tokens memory retrieval already uses). An embedding
+ * of that previous user burst is an optional second look at the same
+ * term; without one, the score is the literal coverage.
  */
 import { copy, type Locale } from "@shared/copy";
 import { isTextRecord } from "@shared/records";
 import { filterHarm, type HarmReport } from "@shared/harm";
+import { splitScenes, toTurns } from "@shared/scenes";
+import { dayPartFromHour, type ActDayPart } from "@shared/act-profile";
+import { zonedHour } from "@shared/timezone";
 import { keywordCoverage, tokenize } from "./retrieval";
 
 export const EXEMPLAR_MIN_SCORE = 0.08;
@@ -21,19 +25,63 @@ export interface CollectedReply {
   content: string;
   timestamp?: Date | string | null;
   kind?: string | null;
+  speaker?: string | null;
+  act?: string | null;
+  emotion?: string | null;
 }
 
 export interface Exemplar {
   id: number;
   content: string;
+  /** Their bubbles in this turn, each already cut to the median ceiling. */
+  turn: string[];
   score: number;
   previousUser: string;
+  at: Date | string | null;
 }
 
-export type ExemplarScoreFn = (queryTokens: Set<string>, previousUser: string) => number;
+export interface ExemplarPeriod {
+  from: string;
+  to: string;
+}
+
+/**
+ * Cosine of the current user message against a previous user burst.
+ *
+ * Below 0.5 it contributes nothing. The first scoring term then takes
+ * the max of the literal coverage and `(cosine − 0.5) × 2`.
+ */
+export type ExemplarEmbedFn = (previousUser: string) => number | null | undefined;
 
 export function bigramScore(queryTokens: Set<string>, previousUser: string): number {
   return keywordCoverage(previousUser, queryTokens);
+}
+
+/**
+ * The first scoring term: literal coverage, optionally lifted by a
+ * cosine that cleared 0.5.
+ */
+export function firstTermScore(coverage: number, cosine?: number | null): number {
+  if (cosine == null || cosine < 0.5) return coverage;
+  return Math.max(coverage, (cosine - 0.5) * 2);
+}
+
+export function scoreExemplar(parts: {
+  firstTerm: number;
+  contextCoverage: number;
+  actMatch: number;
+  emotionMatch: number;
+  dayMatch: number;
+  periodMatch: number;
+}): number {
+  return (
+    0.6 * parts.firstTerm +
+    0.15 * parts.contextCoverage +
+    0.1 * parts.actMatch +
+    0.05 * parts.emotionMatch +
+    0.05 * parts.dayMatch +
+    0.05 * parts.periodMatch
+  );
 }
 
 function medianLength(texts: string[]): number {
@@ -49,8 +97,76 @@ export function truncateExemplar(text: string, medianChars: number): string {
   return trimmed.slice(0, ceiling);
 }
 
+function asDate(value: Date | string | null | undefined): Date | null {
+  if (!value) return null;
+  const time = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(time.getTime()) ? null : time;
+}
+
+function textOf(rows: CollectedReply[]): string {
+  return rows
+    .filter((row) => isTextRecord(row))
+    .map((row) => row.content.trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function textLines(rows: CollectedReply[]): string[] {
+  return rows
+    .filter((row) => isTextRecord(row))
+    .map((row) => row.content.trim())
+    .filter(Boolean);
+}
+
+function inPeriod(at: Date | null, period: ExemplarPeriod | null | undefined): boolean {
+  if (!period || !at) return false;
+  const from = new Date(period.from).getTime();
+  const to = new Date(period.to).getTime();
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return false;
+  const time = at.getTime();
+  return time >= from && time <= to;
+}
+
+function dayPartOf(
+  at: Date | null,
+  timeZone: string | null | undefined,
+): ActDayPart | null {
+  if (!at) return null;
+  return dayPartFromHour(zonedHour(at, timeZone));
+}
+
+function recentContextText(
+  history: Array<{ role: string; content: string; speaker?: string | null }> | undefined,
+  userMessage: string,
+): string {
+  if (!history?.length) return "";
+  const rows = history.map((row, index) => ({
+    id: index + 1,
+    role: row.role,
+    content: row.content,
+    speaker: row.speaker,
+    kind: "text" as const,
+  }));
+  let turns = toTurns(rows);
+  if (turns.length > 0) {
+    const last = turns[turns.length - 1];
+    const lastText = textOf(last);
+    if (last[0]?.role === "user" && lastText === userMessage.trim()) {
+      turns = turns.slice(0, -1);
+    }
+  }
+  return textOf(turns.slice(-2).flat());
+}
+
+function lastUserTurnIndex(turns: CollectedReply[][], before: number): number {
+  for (let i = before - 1; i >= 0; i--) {
+    if (turns[i][0]?.role === "user" && textOf(turns[i])) return i;
+  }
+  return -1;
+}
+
 /**
- * Their replies whose preceding user line is closest to this one.
+ * Their replies whose preceding user turn is closest to this one.
  *
  * A held-out id is excluded so evaluation cannot retrieve the answer.
  * Below the floor, nothing is returned — four unrelated lines would
@@ -61,55 +177,99 @@ export function retrieveExemplars(params: {
   records: CollectedReply[];
   excludeIds?: Iterable<number>;
   excludeTexts?: Iterable<string>;
-  score?: ExemplarScoreFn;
   minScore?: number;
   limit?: number;
   personaData?: { harmReport?: HarmReport | null } | null;
+  sampledAct?: string | null;
+  emotion?: string | null;
+  now?: Date | null;
+  timeZone?: string | null;
+  period?: ExemplarPeriod | null;
+  history?: Array<{ role: string; content: string; speaker?: string | null }>;
+  embedCosine?: ExemplarEmbedFn;
 }): Exemplar[] {
   const query = params.userMessage.trim();
   if (!query) return [];
   const queryTokens = tokenize(query);
   if (!queryTokens.size) return [];
-  const score = params.score ?? bigramScore;
   const minScore = params.minScore ?? EXEMPLAR_MIN_SCORE;
   const limit = params.limit ?? EXEMPLAR_MAX;
   const excludedIds = new Set(params.excludeIds ?? []);
   const excludedTexts = new Set(
     [...(params.excludeTexts ?? [])].map((text) => text.trim()).filter(Boolean),
   );
-  const records = filterHarm(params.records, params.personaData);
+  const kept = new Set(filterHarm(params.records, params.personaData).map((row) => row.id));
+  const currentContext = recentContextText(params.history, query);
+  const currentContextTokens = currentContext ? tokenize(currentContext) : new Set<string>();
+  const currentDay = params.now ? dayPartOf(params.now, params.timeZone) : null;
+  const period = params.period ?? null;
+  const hasAct = Boolean(params.sampledAct);
+  const hasEmotion = Boolean(params.emotion);
+  const hasDay = currentDay != null;
+  const hasPeriod = period != null;
 
   const median = medianLength(
-    records
-      .filter((row) => row.role === "assistant" && isTextRecord(row))
+    params.records
+      .filter((row) => row.role === "assistant" && isTextRecord(row) && kept.has(row.id))
       .map((row) => row.content),
   );
 
   const scored: Exemplar[] = [];
-  for (let i = 0; i < records.length; i++) {
-    const row = records[i];
-    if (row.role !== "assistant") continue;
-    if (!isTextRecord(row)) continue;
-    if (excludedIds.has(row.id)) continue;
-    const content = row.content.trim();
-    if (!content || excludedTexts.has(content)) continue;
-    let previousUser = "";
-    for (let j = i - 1; j >= 0; j--) {
-      const prev = records[j];
-      if (prev.role === "user" && isTextRecord(prev) && prev.content.trim()) {
-        previousUser = prev.content.trim();
-        break;
-      }
+  for (const scene of splitScenes(params.records)) {
+    const turns = toTurns(scene);
+    for (let i = 0; i < turns.length; i++) {
+      const turn = turns[i];
+      if (turn[0]?.role !== "assistant") continue;
+      const lines = turn.filter(
+        (row) => isTextRecord(row) && kept.has(row.id) && row.content.trim(),
+      );
+      if (!lines.length) continue;
+      if (lines.some((row) => excludedIds.has(row.id))) continue;
+      const raw = textLines(lines);
+      if (raw.some((text) => excludedTexts.has(text))) continue;
+
+      const userIndex = lastUserTurnIndex(turns, i);
+      if (userIndex < 0) continue;
+      const previousUser = textOf(turns[userIndex]);
+      if (!previousUser) continue;
+
+      const coverage = bigramScore(queryTokens, previousUser);
+      const cosine = params.embedCosine?.(previousUser) ?? null;
+      const firstTerm = firstTermScore(coverage, cosine);
+      if (firstTerm < minScore) continue;
+
+      const priorContext = textOf(turns.slice(Math.max(0, userIndex - 2), userIndex).flat());
+      const contextCoverage =
+        currentContextTokens.size > 0 && priorContext
+          ? keywordCoverage(priorContext, currentContextTokens)
+          : 0;
+
+      const head = lines[0];
+      const at = head.timestamp ?? null;
+      const atDate = asDate(at);
+      const actMatch = hasAct && head.act && head.act === params.sampledAct ? 1 : 0;
+      const emotionMatch = hasEmotion && head.emotion && head.emotion === params.emotion ? 1 : 0;
+      const dayMatch =
+        hasDay && currentDay && dayPartOf(atDate, params.timeZone) === currentDay ? 1 : 0;
+      const periodMatch = hasPeriod ? (inPeriod(atDate, period) ? 1 : 0) : 1;
+
+      const truncated = raw.map((text) => truncateExemplar(text, median));
+      scored.push({
+        id: head.id,
+        content: truncated.join(" "),
+        turn: truncated,
+        score: scoreExemplar({
+          firstTerm,
+          contextCoverage,
+          actMatch,
+          emotionMatch,
+          dayMatch,
+          periodMatch,
+        }),
+        previousUser,
+        at,
+      });
     }
-    if (!previousUser) continue;
-    const value = score(queryTokens, previousUser);
-    if (value < minScore) continue;
-    scored.push({
-      id: row.id,
-      content: truncateExemplar(content, median),
-      score: value,
-      previousUser,
-    });
   }
 
   scored.sort((a, b) => b.score - a.score || a.id - b.id);
@@ -126,7 +286,10 @@ export function retrieveExemplars(params: {
 
 export function renderExemplars(exemplars: Exemplar[], locale: Locale = "zh"): string {
   if (!exemplars.length) return "";
-  const lines = exemplars.map((item) => `- ${item.content}`);
+  const lines = exemplars.flatMap((item) => {
+    const bubbles = item.turn.length > 0 ? item.turn : [item.content];
+    return bubbles.map((text) => `- ${text}`);
+  });
   return [copy(locale, "prompt.exemplarsHeading"), copy(locale, "prompt.exemplarsIntro"), ...lines].join(
     "\n",
   );

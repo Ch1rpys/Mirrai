@@ -116,6 +116,8 @@ export interface PromptContext {
   excludeExemplarTexts?: string[];
   periodId?: string | null;
   skipExemplars?: boolean;
+  /** Recent in-app turns, used to score the second exemplar term. */
+  history?: Array<{ role: "user" | "assistant"; content: string }>;
 }
 
 /**
@@ -275,21 +277,18 @@ async function exemplarSectionFor(
     [],
   );
   const period = periodOf(context.persona, context.periodId);
-  const from = period?.from ? new Date(period.from) : null;
-  const to = period?.to ? new Date(period.to) : null;
-  const scoped = from && to
-    ? (records as Array<{ timestamp?: Date | string | null }>).filter((row) => {
-        if (!row.timestamp) return false;
-        const at = new Date(row.timestamp).getTime();
-        return at >= from.getTime() && at <= to.getTime();
-      })
-    : records;
   const found = retrieveExemplars({
     userMessage: context.userMessage,
-    records: scoped as any,
+    records: records as never,
     excludeIds: context.excludeExemplarIds,
     excludeTexts: context.excludeExemplarTexts,
-    personaData: context.persona.personaData as any,
+    personaData: context.persona.personaData as never,
+    sampledAct: context.sampledAct ?? null,
+    emotion: context.emotionalState ?? context.persona.emotionalState ?? null,
+    now: context.now ?? null,
+    timeZone: (context.persona as { timezone?: string | null }).timezone ?? null,
+    period: period?.from && period?.to ? { from: period.from, to: period.to } : null,
+    history: context.history,
   });
   return renderExemplars(found, locale);
 }

@@ -174,6 +174,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       excludeExemplarIds: input.exclude.recordIds,
       excludeExemplarTexts: input.exclude.texts,
       markRecalled: false,
+      history: input.history,
     });
     const messages: LLMMessage[] = [{ role: "system", content: systemPrompt }];
     for (const row of input.history) {
@@ -373,12 +374,20 @@ export async function* executePlan(
       records = [];
     }
     const personaData = input.persona.personaData as { harmReport?: unknown } | null;
+    const period = ((input.persona.personaData as { periods?: Array<{ id?: string; from?: string; to?: string }> } | null)?.periods ?? [])
+      .find((item) => item.id === input.periodId);
     const exemplars = retrieveExemplars({
       userMessage: input.userMessage,
       records: records as never,
       excludeTexts: input.exclude?.texts,
       excludeIds: input.exclude?.recordIds,
       personaData: personaData as never,
+      sampledAct: plan.sampledAct,
+      emotion: input.actCondition?.emotion ?? input.persona.emotionalState ?? null,
+      now: input.now,
+      timeZone: (input.persona as { timezone?: string | null }).timezone ?? null,
+      period: period?.from && period?.to ? { from: period.from, to: period.to } : null,
+      history: input.history,
     });
     const profile = effectiveStyleProfile(input.persona);
     const picked = pickRerankWinner({
