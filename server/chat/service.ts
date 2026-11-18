@@ -14,6 +14,7 @@ import type { LLMMessage, LLMProvider } from "../llm/types";
 import { llmService } from "../llm";
 import { resolveProviderForUser, resolveProviderForPurpose } from "../llm/user-provider";
 import { sanitizeRoles } from "../llm/roles";
+import { inspectExtraBody } from "../llm/extra-body";
 import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { computeIntimacy, getEmotionalStateDesc } from "../_core/persona-utils";
@@ -211,6 +212,9 @@ export function sanitizeExtraConfig(extra: unknown): Record<string, unknown> {
   const roles = sanitizeRoles(source.roles);
   if (roles) out.roles = roles;
   else delete out.roles;
+  const extraBody = inspectExtraBody(source.extraBody);
+  if (extraBody.ok && extraBody.value) out.extraBody = extraBody.value;
+  else delete out.extraBody;
   return out;
 }
 
@@ -1150,6 +1154,10 @@ async function* runConversationTurn(
   const invokeOptions = {
     temperature: extraConfig.temperature as number | undefined,
     maxTokens: extraConfig.maxTokens as number | undefined,
+    topP: typeof extraConfig.topP === "number" ? extraConfig.topP : undefined,
+    presencePenalty: typeof extraConfig.presencePenalty === "number" ? extraConfig.presencePenalty : undefined,
+    frequencyPenalty: typeof extraConfig.frequencyPenalty === "number" ? extraConfig.frequencyPenalty : undefined,
+    extraBody: extraConfig.extraBody as Record<string, unknown> | undefined,
     provider: options.providerName,
   };
 

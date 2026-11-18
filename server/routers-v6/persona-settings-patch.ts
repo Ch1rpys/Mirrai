@@ -50,7 +50,8 @@ export const personaSettingsPatchSchema = z
         frequencyPenalty: z.number().optional(),
       })
       .strict()
-      .optional(),
+      .optional()
+      .nullable(),
     providers: z
       .object({
         planner: z.string().optional(),

@@ -19,6 +19,7 @@ import {
   resolveProviderForUserWithOwnership,
   resolveProviderForPurposeWithOwnership,
 } from "./llm/user-provider";
+import { inspectExtraBody } from "./llm/extra-body";
 import { storagePut, storageDelete, storageDeleteTree } from "./storage";
 import {
   createPersona, getPersonasByUserId, getPersonaById, updatePersona, deletePersona,
@@ -4110,6 +4111,18 @@ export const appRouter = router({
          * exceeded", and the bill went up on every turn.
          */
         const incoming = { ...input.extraConfig } as Record<string, unknown>;
+        if ("extraBody" in incoming) {
+          const checked = inspectExtraBody(incoming.extraBody);
+          if (!checked.ok) {
+            const key =
+              checked.error === "too_large"
+                ? "errors.extraBodyTooLarge"
+                : checked.error === "forbidden"
+                  ? "errors.extraBodyForbidden"
+                  : "errors.extraBodyInvalid";
+            throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, key) });
+          }
+        }
         const mergedExtra: Record<string, unknown> = {};
         const bounded = {
           contextLimit: clampContextLimit(incoming.contextLimit ?? (config.extraConfig as any)?.contextLimit),

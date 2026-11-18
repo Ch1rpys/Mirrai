@@ -10,7 +10,7 @@
  * already had.
  */
 import type { Persona } from "../../drizzle/schema";
-import type { LLMMessage, LLMProvider } from "../llm/types";
+import type { LLMMessage, LLMOptions, LLMProvider } from "../llm/types";
 import { llmService } from "../llm";
 import { copy } from "@shared/copy";
 import { dayPartFromHour, normalizeActProfile, sampleAct, type ActDayPart } from "@shared/act-profile";
@@ -38,6 +38,7 @@ import {
   type LayerId,
 } from "@shared/layers";
 import { capReply, replyBudget } from "@shared/length-cap";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 import { effectiveStyleProfile } from "@shared/style-profile";
 import { defaultAddressForms, FINGERPRINT_STATES, type EmotionalState, type StyleFingerprintCore } from "@shared/style-fingerprint";
 import { projectStyle } from "@shared/style-projection";
@@ -676,7 +677,16 @@ export async function* executePlan(
     mode: "stream" | "once";
     rerank: boolean;
     signal?: AbortSignal;
-    options: { temperature?: number; maxTokens?: number; provider?: string };
+    options: Pick<
+      LLMOptions,
+      | "temperature"
+      | "maxTokens"
+      | "provider"
+      | "topP"
+      | "presencePenalty"
+      | "frequencyPenalty"
+      | "extraBody"
+    >;
     emitDeltas?: boolean;
     trainingTexts?: string[];
     /** Chat fills an empty answer with the silence copy. Evaluation leaves it empty so the case is skipped. */
@@ -698,11 +708,23 @@ export async function* executePlan(
     provider: io.options.provider,
     temperature: io.options.temperature,
     maxTokens: tighterTokenBudget(plan.maxTokens, io.options.maxTokens),
+    topP: io.options.topP,
+    presencePenalty: io.options.presencePenalty,
+    frequencyPenalty: io.options.frequencyPenalty,
+    extraBody: io.options.extraBody,
     stop: plan.stop,
     signal: io.signal,
   };
   const plannerOptions = { ...invokeOptions, purpose: "plan" as const };
-  const replyOptions = { ...invokeOptions, purpose: "reply" as const };
+  const sampling = normalizePersonaSettings(input.persona.settings).sampling;
+  const replyOptions = {
+    ...invokeOptions,
+    purpose: "reply" as const,
+    ...(sampling?.temperature != null ? { temperature: sampling.temperature } : {}),
+    ...(sampling?.topP != null ? { topP: sampling.topP } : {}),
+    ...(sampling?.presencePenalty != null ? { presencePenalty: sampling.presencePenalty } : {}),
+    ...(sampling?.frequencyPenalty != null ? { frequencyPenalty: sampling.frequencyPenalty } : {}),
+  };
   const locale = input.locale;
   const plannerProvider = io.plannerProvider ?? io.provider;
   const voiceProvider = io.voiceProvider ?? io.provider;

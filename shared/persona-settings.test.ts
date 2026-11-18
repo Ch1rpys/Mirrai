@@ -34,6 +34,18 @@ describe("persona settings", () => {
     expect(normalizePersonaSettings({ timing: { maxDelayMinutes: 12 } }).timing.maxDelayMinutes).toBe(12);
   });
 
+  it("clamps sampling.temperature to 2", () => {
+    expect(normalizePersonaSettings({ sampling: { temperature: 5 } }).sampling?.temperature).toBe(2);
+    expect(normalizePersonaSettings({ sampling: { temperature: -1 } }).sampling?.temperature).toBe(0);
+    expect(normalizePersonaSettings({ sampling: { topP: 1.4 } }).sampling?.topP).toBe(1);
+    expect(normalizePersonaSettings({ sampling: { presencePenalty: -9 } }).sampling?.presencePenalty).toBe(-2);
+  });
+
+  it("clears sampling when the patch sets it to null", () => {
+    const current = normalizePersonaSettings({ sampling: { temperature: 0.4, topP: 0.9 } });
+    expect(mergePersonaSettings(current, { sampling: null }).sampling).toBeUndefined();
+  });
+
   it("keeps a positive pending-redistill count and drops zero", () => {
     expect(normalizePersonaSettings({ pendingRedistillAdded: 12 }).pendingRedistillAdded).toBe(12);
     expect(normalizePersonaSettings({ pendingRedistillAdded: 0 }).pendingRedistillAdded).toBeUndefined();

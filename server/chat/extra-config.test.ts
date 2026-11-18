@@ -277,6 +277,15 @@ describe("the provider settings, on the way out", () => {
     expect(out.roles).toEqual({ classify: "DeepSeek", extract: "Ollama", summarize: "Kimi" });
   });
 
+  it("keeps extraBody when it is a small object", () => {
+    const out = sanitizeExtraConfig({ extraBody: { enable_thinking: false } });
+    expect(out.extraBody).toEqual({ enable_thinking: false });
+  });
+
+  it("drops extraBody that names model", () => {
+    expect("extraBody" in sanitizeExtraConfig({ extraBody: { model: "other" } })).toBe(false);
+  });
+
   it("does not turn a setting that was never made into a number", () => {
     expect("temperature" in sanitizeExtraConfig({ temperature: null })).toBe(false);
     expect("temperature" in sanitizeExtraConfig({})).toBe(false);

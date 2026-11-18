@@ -280,6 +280,18 @@ export const V6 = {
     zh: "这次预估要调用 {{calls}} 次，超过了上限 {{max}}。换一个更轻的模式。",
     en: "This run would make {{calls}} calls, over the ceiling of {{max}}. Pick a lighter mode.",
   },
+  "errors.extraBodyTooLarge": {
+    zh: "额外请求参数超过了 2 KB。",
+    en: "The extra request body is larger than 2 KB.",
+  },
+  "errors.extraBodyForbidden": {
+    zh: "额外请求参数不能含 model、messages、stream、tools。",
+    en: "The extra request body cannot include model, messages, stream, or tools.",
+  },
+  "errors.extraBodyInvalid": {
+    zh: "额外请求参数必须是一个 JSON 对象。",
+    en: "The extra request body has to be a JSON object.",
+  },
   "prompts.distill.factCard": {
     zh: [
       "你在读 {{name}} 的一段聊天记录。只根据这一段，抽出事实、人物和态度。",

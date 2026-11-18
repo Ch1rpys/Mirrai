@@ -88,6 +88,7 @@ export class ClaudeProvider implements LLMProvider {
         // Claude reply used the provider's own default and the setting
         // was silently ignored for that provider.
         temperature: claudeTemperature(options?.temperature),
+        ...(options?.topP != null ? { top_p: options.topP } : {}),
         ...(options?.stop && options.stop.length > 0 ? { stop_sequences: options.stop } : {}),
         system,
         messages: filtered.map(m => ({ role: m.role, content: toClaudeContent(m.content) })),
@@ -120,6 +121,7 @@ export class ClaudeProvider implements LLMProvider {
         model: this.model,
         max_tokens: options?.maxTokens ?? 4096,
         temperature: claudeTemperature(options?.temperature),
+        ...(options?.topP != null ? { top_p: options.topP } : {}),
         ...(options?.stop && options.stop.length > 0 ? { stop_sequences: options.stop } : {}),
         system,
         stream: true,

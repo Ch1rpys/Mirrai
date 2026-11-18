@@ -30,6 +30,10 @@ export class OllamaProvider implements LLMProvider {
   private samplingOptions(options?: LLMOptions) {
     const next: Record<string, unknown> = {};
     if (options?.temperature != null) next.temperature = options.temperature;
+    if (options?.topP != null) next.top_p = options.topP;
+    if (options?.frequencyPenalty != null) {
+      next.repeat_penalty = Math.min(2, 1 + options.frequencyPenalty);
+    }
     if (options?.stop && options.stop.length > 0) next.stop = options.stop;
     return Object.keys(next).length ? next : undefined;
   }

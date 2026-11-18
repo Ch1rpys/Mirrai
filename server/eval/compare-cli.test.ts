@@ -117,6 +117,14 @@ describe("pnpm eval --ablate", () => {
     expect(src).toContain('variant: "ablate"');
   });
 
+  it("tunes temperature and topP on a grid", () => {
+    expect(src).toContain("--tune");
+    expect(src).toContain("TUNE_TEMPERATURES");
+    expect(src).toContain("TUNE_TOP_P");
+    expect(src).toContain("[eval] tune would make");
+    expect(src).toContain("nothing was written");
+  });
+
   it("calls a layer that hurts when off a contribution, and an unchanged one noise", async () => {
     const baseline = metricsAround(0.55, 0.02);
     const runWithout = vi.fn(async (layer: LayerId) => {

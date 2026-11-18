@@ -25,6 +25,7 @@ import ImperfectionEditor from "@/components/ImperfectionEditor";
 import V5FidelityEditors from "@/components/V5FidelityEditors";
 import LexiconEditor from "@/components/v6/LexiconEditor";
 import PersonaSwitches from "@/components/v6/PersonaSwitches";
+import PersonaSampling from "@/components/v6/PersonaSampling";
 import HarmNotice from "@/components/v6/HarmNotice";
 import VersionHistory from "@/components/v6/VersionHistory";
 import TagInput from "@/components/v6/TagInput";
@@ -570,6 +571,7 @@ export default function PersonaEdit() {
               </span>
             </label>
             <PersonaSwitches personaId={personaId} name={name} />
+            <PersonaSampling personaId={personaId} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="persona-reachability" className="text-xs text-muted-foreground">{t("reachability.label")}</Label>

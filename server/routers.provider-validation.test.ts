@@ -134,4 +134,30 @@ describe("provider names", () => {
     expect(result).toEqual({ success: true });
     expect(updatePersona).toHaveBeenCalled();
   });
+
+  it("refuses extraBody larger than 2 KB", async () => {
+    getDefaultLlmConfig.mockResolvedValue({
+      providerName: "OpenAI",
+      extraConfig: {},
+    });
+    await expect(
+      caller.llmConfig.updateExtraConfig({
+        extraConfig: { extraBody: { blob: "x".repeat(3000) } },
+      }),
+    ).rejects.toThrow(/2 KB/);
+    expect(upsertLlmConfig).not.toHaveBeenCalled();
+  });
+
+  it("refuses extraBody that names model", async () => {
+    getDefaultLlmConfig.mockResolvedValue({
+      providerName: "OpenAI",
+      extraConfig: {},
+    });
+    await expect(
+      caller.llmConfig.updateExtraConfig({
+        extraConfig: { extraBody: { model: "other" } },
+      }),
+    ).rejects.toThrow(/model/);
+    expect(upsertLlmConfig).not.toHaveBeenCalled();
+  });
 });

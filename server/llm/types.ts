@@ -25,6 +25,15 @@ export type LlmPurpose = (typeof LLM_PURPOSES)[number];
 export type LLMOptions = {
   maxTokens?: number;
   temperature?: number;
+  topP?: number;
+  presencePenalty?: number;
+  frequencyPenalty?: number;
+  /**
+   * Extra fields merged into an OpenAI-compatible request body.
+   *
+   * Claude, Ollama, Dify and Spark ignore it.
+   */
+  extraBody?: Record<string, unknown>;
   provider?: string;
   /** Why this call is being made. Callers have to set it. */
   purpose?: LlmPurpose;

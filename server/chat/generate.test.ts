@@ -1404,4 +1404,53 @@ describe("two-stage generation", () => {
   });
 });
 
+describe("persona sampling on the reply", () => {
+  it("sends the persona's sampling on the reply when it has one", async () => {
+    const input = {
+      persona: { ...persona(), settings: { sampling: { temperature: 0.4, topP: 0.5 } } },
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "sampling:persona",
+      exclude: { texts: [HELD_OUT] },
+    };
+    const plan = await planTurn(input);
+    invokeWithProvider.mockResolvedValue("嗯");
+    await lastFinal(plan, input);
+    const options = (invokeWithProvider.mock.calls[0][1] as { options: Record<string, unknown> }).options;
+    expect(options.temperature).toBe(0.4);
+    expect(options.topP).toBe(0.5);
+  });
+
+  it("keeps the global sampling when the persona has none", async () => {
+    const input = {
+      persona: persona(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "sampling:global",
+      exclude: { texts: [HELD_OUT] },
+    };
+    const plan = await planTurn(input);
+    invokeWithProvider.mockResolvedValue("嗯");
+    let final: { text: string; projection: string[] } | null = null;
+    for await (const event of executePlan(plan, input, {
+      provider: stubProvider,
+      mode: "once",
+      rerank: false,
+      options: { temperature: 0.8, topP: 0.95, maxTokens: 200 },
+    })) {
+      if (event.type === "final") final = { text: event.text, projection: event.projection };
+    }
+    expect(final?.text).toBe("嗯");
+    const options = (invokeWithProvider.mock.calls[0][1] as { options: Record<string, unknown> }).options;
+    expect(options.temperature).toBe(0.8);
+    expect(options.topP).toBe(0.95);
+  });
+});
+
 

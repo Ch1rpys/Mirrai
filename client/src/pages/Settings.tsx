@@ -34,6 +34,8 @@ import { useLocale } from "@/contexts/LocaleContext";
 import SafetyTransparency from "@/components/SafetyTransparency";
 import EgressList from "@/components/v6/EgressList";
 import EmbedStatus from "@/components/v6/EmbedStatus";
+import ExtraBodyEditor from "@/components/v6/ExtraBodyEditor";
+import LlmRoles from "@/components/v6/LlmRoles";
 import type { GraduationMode } from "@shared/graduation-mode";
 import {
   DEFAULT_DISTILLATION_MODE,
@@ -879,6 +881,8 @@ function AISettingsTab() {
         </div>
       </section>
 
+      <LlmRoles />
+      <ExtraBodyEditor />
       <EmbedStatus />
     </div>
   );

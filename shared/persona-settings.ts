@@ -188,6 +188,10 @@ function normalizeTiming(value: unknown): PersonaSettings["timing"] {
   return out;
 }
 
+function clampSampling(value: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, value));
+}
+
 function normalizeSampling(value: unknown): PersonaSettings["sampling"] | undefined {
   if (!isPlainObject(value)) return undefined;
   const sampling: NonNullable<PersonaSettings["sampling"]> = {};
@@ -195,10 +199,10 @@ function normalizeSampling(value: unknown): PersonaSettings["sampling"] | undefi
   const topP = asFiniteNumber(value.topP);
   const presencePenalty = asFiniteNumber(value.presencePenalty);
   const frequencyPenalty = asFiniteNumber(value.frequencyPenalty);
-  if (temperature !== undefined) sampling.temperature = temperature;
-  if (topP !== undefined) sampling.topP = topP;
-  if (presencePenalty !== undefined) sampling.presencePenalty = presencePenalty;
-  if (frequencyPenalty !== undefined) sampling.frequencyPenalty = frequencyPenalty;
+  if (temperature !== undefined) sampling.temperature = clampSampling(temperature, 0, 2);
+  if (topP !== undefined) sampling.topP = clampSampling(topP, 0, 1);
+  if (presencePenalty !== undefined) sampling.presencePenalty = clampSampling(presencePenalty, -2, 2);
+  if (frequencyPenalty !== undefined) sampling.frequencyPenalty = clampSampling(frequencyPenalty, -2, 2);
   return Object.keys(sampling).length ? sampling : undefined;
 }
 

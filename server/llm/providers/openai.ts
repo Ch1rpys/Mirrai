@@ -1,5 +1,6 @@
 import type { LLMMessage, LLMOptions, LLMProvider, LLMContentPart } from "../types";
 import { parseSSEData } from "../sse";
+import { stripForbiddenExtraBody } from "../extra-body";
 
 function toOpenAIContent(content: string | LLMContentPart[]): any {
   if (typeof content === "string") return content;
@@ -40,7 +41,7 @@ export class OpenAIProvider implements LLMProvider {
   }
 
   private buildBody(messages: LLMMessage[], options: LLMOptions | undefined, stream: boolean) {
-    return JSON.stringify({
+    const body: Record<string, unknown> = {
       model: this.model,
       messages: this.buildMessages(messages).map(m => ({
         role: m.role,
@@ -48,9 +49,16 @@ export class OpenAIProvider implements LLMProvider {
       })),
       max_tokens: options?.maxTokens ?? 4096,
       temperature: options?.temperature ?? 0.7,
-      ...(options?.stop && options.stop.length > 0 ? { stop: options.stop } : {}),
-      ...(stream ? { stream: true } : {}),
-    });
+    };
+    if (options?.topP != null) body.top_p = options.topP;
+    if (options?.presencePenalty != null) body.presence_penalty = options.presencePenalty;
+    if (options?.frequencyPenalty != null) body.frequency_penalty = options.frequencyPenalty;
+    if (options?.stop && options.stop.length > 0) body.stop = options.stop;
+    if (stream) body.stream = true;
+    if (options?.extraBody) {
+      Object.assign(body, stripForbiddenExtraBody(options.extraBody));
+    }
+    return JSON.stringify(body);
   }
 
   /**

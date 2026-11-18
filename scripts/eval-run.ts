@@ -46,7 +46,7 @@ import {
   trainDiscriminator,
 } from "../server/eval/discriminator";
 import { DriftNeedUserSideError, DRIFT_TURNS_DEFAULT, runDrift } from "../server/eval/drift";
-import { runAudition } from "../server/eval/audition";
+import { attachComposite, runAudition, type AuditionResult } from "../server/eval/audition";
 import { ablationCalls, layersFromBaseline, runAblation } from "../server/eval/ablate";
 import { applyLayerOverrides, layersFromSettings, layersInEffect } from "../shared/layers";
 import { resolveProviderForUser } from "../server/llm/user-provider";
@@ -134,6 +134,13 @@ const audition = args.includes("--audition");
  * `--yes` is also passed.
  */
 const ablate = args.includes("--ablate");
+/**
+ * Tries a small temperature × topP grid and ranks the sets.
+ *
+ * It costs 6 × cases × k calls, so it does not run unless `--yes`
+ * is also passed. Nothing is written back.
+ */
+const tune = args.includes("--tune");
 const yes = args.includes("--yes");
 /**
  * The language the records are written in.
@@ -152,6 +159,7 @@ const locale = (flag("locale") ?? "zh") === "en" ? "en" : "zh";
  * evaluation threw a ReferenceError on every path.
  */
 const temperature = Number(flag("temperature") ?? 0.7);
+const topPFlag = numberOrUndefined(flag("topP"));
 
 /**
  * The calibration.
@@ -177,7 +185,7 @@ const flagTolerances = {
 
 if (!Number.isFinite(personaId) || !Number.isFinite(userId)) {
   console.error(
-    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--k n] [--discriminator] [--drift] [--turns n] [--audition] [--ablate] [--yes] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n] [--tolerance-style n]",
+    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--topP n] [--k n] [--discriminator] [--drift] [--turns n] [--audition] [--ablate] [--tune] [--yes] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n] [--tolerance-style n]",
   );
   process.exit(1);
 }
@@ -504,6 +512,86 @@ if (ablate) {
       persona.personaData,
     );
     console.log("[eval] run saved");
+  }
+  process.exit(0);
+}
+
+const TUNE_TEMPERATURES = [0.6, 0.8, 1.0] as const;
+const TUNE_TOP_P = [0.9, 1] as const;
+
+if (tune) {
+  const combos = TUNE_TEMPERATURES.length * TUNE_TOP_P.length;
+  const estimated = combos * cases.length * samplesPerCase;
+  console.log(
+    `[eval] tune would make ${combos} grids × ${cases.length} cases × ${samplesPerCase} = ${estimated} calls`,
+  );
+  if (!yes) {
+    console.log("[eval] pass --yes to run");
+    process.exit(0);
+  }
+  if (!cases.length) {
+    console.error("No held-out cases to start from.");
+    process.exit(1);
+  }
+  const rows: Array<AuditionResult & { temperature: number; topP: number }> = [];
+  for (const gridTemperature of TUNE_TEMPERATURES) {
+    for (const gridTopP of TUNE_TOP_P) {
+      const metrics = await runEval({
+        persona,
+        userId,
+        cases,
+        trainingTexts: training,
+        variant,
+        without,
+        locale,
+        temperature: gridTemperature,
+        topP: gridTopP,
+        rerank,
+        sampleAct: variant !== "withoutAct",
+        samplesPerCase,
+      });
+      rows.push({
+        id: `t${gridTemperature}-p${gridTopP}`,
+        providerName: "tune",
+        model: "",
+        label: `temperature ${gridTemperature} · topP ${gridTopP}`,
+        temperature: gridTemperature,
+        topP: gridTopP,
+        overlap: metrics.overlap,
+        likelihoodGap: metrics.likelihoodGap,
+        lengthDistance: metrics.lengthDistance,
+        emotionAccuracy: metrics.emotionAccuracy,
+        styleDistance: metrics.styleDistance?.total ?? null,
+        residueRate: metrics.residueRate ?? 0,
+      });
+    }
+  }
+  const ranked = attachComposite(rows) as Array<AuditionResult & { temperature: number; topP: number }>;
+  console.log("");
+  console.log("[eval] tune:");
+  console.log(
+    "  sampling".padEnd(32) +
+      "composite".padStart(10) +
+      "overlap".padStart(10) +
+      "style".padStart(10),
+  );
+  for (const row of ranked) {
+    console.log(
+      `  ${row.label.padEnd(30)}` +
+        `${(row.composite ?? 0).toFixed(3).padStart(10)}` +
+        `${(row.overlap ?? 0).toFixed(3).padStart(10)}` +
+        `${(row.styleDistance ?? 0).toFixed(3).padStart(10)}`,
+    );
+  }
+  const best = ranked[0];
+  if (best && best.composite != null) {
+    console.log(
+      `[eval] best: temperature ${best.temperature} topP ${best.topP}`,
+    );
+    console.log(
+      `[eval] apply with: corepack pnpm eval -- --persona ${personaId} --user ${userId} --temperature ${best.temperature} --topP ${best.topP}`,
+    );
+    console.log("[eval] nothing was written; set the persona's sampling sliders yourself if you want to keep it.");
   }
   process.exit(0);
 }

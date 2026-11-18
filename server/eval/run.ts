@@ -129,6 +129,7 @@ export interface EvalRunOptions {
   without?: string[];
   maxTokens?: number;
   temperature?: number;
+  topP?: number;
   /** Called after each case, so a long run can show progress. */
   onProgress?: (done: number, total: number) => void;
   /**
@@ -240,6 +241,7 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
           options: {
             maxTokens: options.maxTokens ?? 200,
             temperature: options.temperature ?? 0.7,
+            topP: options.topP,
           },
           emitDeltas: false,
           emptyAsSilence: false,
