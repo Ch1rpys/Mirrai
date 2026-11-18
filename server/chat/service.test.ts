@@ -36,6 +36,11 @@ const getUserTimezone = vi.fn();
 const getUserById = vi.fn();
 const getRecentUserMood = vi.fn();
 const getRelationshipEvents = vi.fn();
+const updateMessageMetadata = vi.fn();
+const createFidelityPair = vi.fn();
+const clearMessagePendingChoice = vi.fn();
+const getMessageById = vi.fn();
+const updateEmotionSnapshot = vi.fn();
 
 const storageToDataUrl = vi.fn();
 vi.mock("../storage", () => ({
@@ -79,6 +84,11 @@ vi.mock("../db", () => ({
   getUserById: (...a: unknown[]) => getUserById(...a),
   getRecentUserMood: (...a: unknown[]) => getRecentUserMood(...a),
   getRelationshipEvents: (...a: unknown[]) => getRelationshipEvents(...a),
+  updateMessageMetadata: (...a: unknown[]) => updateMessageMetadata(...a),
+  createFidelityPair: (...a: unknown[]) => createFidelityPair(...a),
+  clearMessagePendingChoice: (...a: unknown[]) => clearMessagePendingChoice(...a),
+  getMessageById: (...a: unknown[]) => getMessageById(...a),
+  updateEmotionSnapshot: (...a: unknown[]) => updateEmotionSnapshot(...a),
 }));
 
 const invoke = vi.fn();
@@ -106,6 +116,7 @@ vi.mock("../_core/emotion", () => ({
 
 import {
   runConversation,
+  commitPendingChoice,
   composeMessages,
   clampContextLimit,
   clampTemperature,
@@ -145,6 +156,8 @@ describe("runConversation", () => {
       createGraduationAssessment, getMessagesSince, getRecentMessages, touchMemoryRecalled, createSafetyEvent,
       getLastMessageAt, getMessageCountSince, getDailyChatCounts,
       getSessionStartAt, getUserMessageCountSince, getDailyUserChatCounts, hasSafetyEventSince,
+      incrementChatCount, updateMessageMetadata, createFidelityPair, clearMessagePendingChoice,
+      getMessageById, updateEmotionSnapshot,
       invoke, invokeWithProvider,
       streamWithProvider, resolveProviderForUser, inferEmotionalState,
     ]) {
@@ -203,6 +216,12 @@ describe("runConversation", () => {
       },
     });
     invokeWithProvider.mockResolvedValue("在的。");
+    updateMessageMetadata.mockResolvedValue(true);
+    createFidelityPair.mockResolvedValue({ id: 1 });
+    clearMessagePendingChoice.mockResolvedValue(true);
+    incrementChatCount.mockResolvedValue(11);
+    getMessageById.mockResolvedValue(null);
+    updateEmotionSnapshot.mockResolvedValue(undefined);
   });
 
   it("stores the user's turn and the persona's reply", async () => {
@@ -774,6 +793,80 @@ describe("runConversation", () => {
     }
 
     expect(createGraduationAssessment).not.toHaveBeenCalled();
+  });
+
+  it("offers two unreplied lines on the eighth web turn when the switch is on", async () => {
+    invokeWithProvider
+      .mockResolvedValueOnce("好的呀")
+      .mockResolvedValueOnce("好的。");
+    const events: Array<{ type: string }> = [];
+    for await (const event of runConversation({
+      persona: persona({ chatCount: 8, settings: { layers: { abPairs: true } } }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+    })) {
+      events.push(event);
+    }
+    expect(invokeWithProvider).toHaveBeenCalledTimes(2);
+    const choice = events.find((event) => event.type === "choice") as
+      | { type: "choice"; options: [string, string]; replyToMessageId: number }
+      | undefined;
+    expect(choice?.options).toEqual(["好的呀", "好的。"]);
+    expect(choice?.replyToMessageId).toBe(99);
+    expect(createMessage.mock.calls.filter((call) => call[0].role === "assistant")).toHaveLength(0);
+    expect(events.some((event) => event.type === "done")).toBe(false);
+    expect(updateMessageMetadata).toHaveBeenCalled();
+  });
+
+  it("does not offer a choice on a channel even when the switch is on", async () => {
+    for await (const _ of runConversation({
+      persona: persona({ chatCount: 8, settings: { layers: { abPairs: true } } }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      channel: "wechat",
+    })) {
+      // drain
+    }
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+    expect(createMessage.mock.calls.filter((call) => call[0].role === "assistant")).toHaveLength(1);
+  });
+
+  it("stores the chosen line and a pair when the user picks", async () => {
+    getMessageById.mockResolvedValue({
+      id: 7,
+      role: "user",
+      content: "在吗",
+      metadata: {
+        pendingChoice: {
+          options: ["好的呀", "好的。"],
+          features: [
+            { ll: 0, length: 3, surprise: 0, residue: 0, act: 0, real: 0.5 },
+            { ll: 0, length: 3, surprise: 0, residue: 0, act: 0, real: 0.5 },
+          ],
+        },
+      },
+    });
+    const result = await commitPendingChoice({
+      persona: persona(),
+      userId: 1,
+      userMessageId: 7,
+      chosen: "好的呀",
+      rejected: "好的。",
+      writePair: true,
+      locale: "zh",
+    });
+    expect(createMessage).toHaveBeenCalledWith(expect.objectContaining({
+      role: "assistant",
+      content: "好的呀",
+    }));
+    expect(createFidelityPair).toHaveBeenCalledWith(expect.objectContaining({
+      chosenText: "好的呀",
+      rejectedText: "好的。",
+      messageId: result.messageId,
+    }));
+    expect(clearMessagePendingChoice).toHaveBeenCalledWith(7, 1, 1);
   });
 });
 

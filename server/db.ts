@@ -10,7 +10,7 @@ import {
   reminderDeliveries, researchProfiles, collectedMessages, collectionSources,
   collectionJobs,
   distillationChunks, distillationCards, personaVersions,
-  evalCases, evalRuns, outboundLetters, fidelityFeedback, blindSessions,
+  evalCases, evalRuns, outboundLetters, fidelityFeedback, fidelityPairs, blindSessions,
   InsertPersona, InsertPersonaFile, InsertMessage,
   InsertWechatBinding, InsertSkillJob, InsertLlmConfig,
   InsertMemory, InsertEmotionSnapshot, InsertDiaryEntry, InsertScene,
@@ -20,6 +20,7 @@ import {
   InsertCollectionJob,
   InsertDistillationChunk, InsertDistillationCard,
   InsertEvalCase, InsertEvalRun, InsertOutboundLetter, InsertFidelityFeedback,
+  InsertFidelityPair,
   InsertBlindSession,
   userMoods, relationshipEvents, letters, memoryExtractions,
   InsertUserMood, InsertRelationshipEvent, InsertLetter,
@@ -1074,6 +1075,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(evalCases).where(eq(evalCases.userId, id));
     await tx.delete(evalRuns).where(eq(evalRuns.userId, id));
     await tx.delete(blindSessions).where(eq(blindSessions.userId, id));
+    await tx.delete(fidelityPairs).where(eq(fidelityPairs.userId, id));
     await tx.delete(fidelityFeedback).where(eq(fidelityFeedback.userId, id));
     await tx.delete(graduationAssessments).where(eq(graduationAssessments.userId, id));
     await tx.delete(llmConfigs).where(eq(llmConfigs.userId, id));
@@ -1467,6 +1469,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(evalCases).where(and(eq(evalCases.personaId, id), eq(evalCases.userId, userId)));
     await tx.delete(evalRuns).where(and(eq(evalRuns.personaId, id), eq(evalRuns.userId, userId)));
     await tx.delete(blindSessions).where(and(eq(blindSessions.personaId, id), eq(blindSessions.userId, userId)));
+    await tx.delete(fidelityPairs).where(and(eq(fidelityPairs.personaId, id), eq(fidelityPairs.userId, userId)));
     await tx.delete(fidelityFeedback).where(and(eq(fidelityFeedback.personaId, id), eq(fidelityFeedback.userId, userId)));
     await tx.delete(graduationAssessments).where(and(eq(graduationAssessments.personaId, id), eq(graduationAssessments.userId, userId)));
     await tx.delete(memories).where(and(eq(memories.personaId, id), eq(memories.userId, userId)));
@@ -1717,6 +1720,92 @@ export async function listFidelityFeedbackForPersona(personaId: number, userId: 
     .from(fidelityFeedback)
     .where(and(eq(fidelityFeedback.personaId, personaId), eq(fidelityFeedback.userId, userId)))
     .orderBy(desc(fidelityFeedback.createdAt));
+}
+
+export async function createFidelityPair(data: InsertFidelityPair) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [result] = await db.insert(fidelityPairs).values(data).returning();
+  return result;
+}
+
+export async function listFidelityPairs(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(fidelityPairs)
+    .where(and(eq(fidelityPairs.personaId, personaId), eq(fidelityPairs.userId, userId)))
+    .orderBy(asc(fidelityPairs.createdAt));
+}
+
+export async function countFidelityPairs(personaId: number, userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [row] = await db
+    .select({ n: count() })
+    .from(fidelityPairs)
+    .where(and(eq(fidelityPairs.personaId, personaId), eq(fidelityPairs.userId, userId)));
+  return Number(row?.n ?? 0);
+}
+
+function metadataObject(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? { ...(value as Record<string, unknown>) }
+    : {};
+}
+
+/**
+ * Merges keys into a message's metadata.
+ *
+ * The A/B pair (B8.8) is stored on the user's own message until they
+ * pick a line — there is no assistant row yet, so this is the only
+ * place the two unreplied lines can sit.
+ */
+export async function updateMessageMetadata(
+  id: number,
+  userId: number,
+  personaId: number,
+  patch: Record<string, unknown>,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const row = await getMessageById(id, userId, personaId);
+  if (!row) return false;
+  const updated = await db.update(messages)
+    .set({ metadata: { ...metadataObject(row.metadata), ...patch } })
+    .where(and(
+      eq(messages.id, id),
+      eq(messages.userId, userId),
+      eq(messages.personaId, personaId),
+    ))
+    .returning({ id: messages.id });
+  return updated.length > 0;
+}
+
+/**
+ * Drops the pending A/B pair off a user message after a line is stored.
+ */
+export async function clearMessagePendingChoice(
+  id: number,
+  userId: number,
+  personaId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const row = await getMessageById(id, userId, personaId);
+  if (!row) return false;
+  const next = metadataObject(row.metadata);
+  delete next.pendingChoice;
+  const updated = await db.update(messages)
+    .set({ metadata: next })
+    .where(and(
+      eq(messages.id, id),
+      eq(messages.userId, userId),
+      eq(messages.personaId, personaId),
+    ))
+    .returning({ id: messages.id });
+  return updated.length > 0;
 }
 
 /**

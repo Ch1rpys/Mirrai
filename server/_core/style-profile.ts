@@ -11,12 +11,18 @@ import {
   getRecordsVersion,
   getUserById,
   iterateRecords,
+  listFidelityPairs,
   setPersonaSettings,
   setPersonaStyleProfile,
 } from "../db";
 import { mergePersonaSettings } from "@shared/persona-settings";
 import { normalizePeriods } from "@shared/periods";
 import { normalizeStyleProfile, type StyleProfile } from "@shared/style-profile";
+import {
+  CHOICE_MIN_PAIRS,
+  pairExamplesFromRows,
+  trainRerankWeights,
+} from "../eval/ab-pairs";
 import {
   defaultAddressForms,
   measureFingerprint,
@@ -33,7 +39,7 @@ export async function measureStyleProfile(params: {
   const recordsVersion = await getRecordsVersion(personaId, userId);
   const current = await getPersonaStyleProfile(personaId, userId);
   if (current && current.recordsVersion === recordsVersion && current.measuredAt) {
-    return current;
+    return applyRerankWeightsFromPairs(personaId, userId, current, { persistAlways: false });
   }
   const rows: FingerprintRow[] = [];
   for await (const row of iterateRecords(personaId, userId)) {
@@ -73,7 +79,30 @@ export async function measureStyleProfile(params: {
     fingerprint,
     userSide: userSide ?? undefined,
   });
-  await setPersonaStyleProfile(personaId, userId, next);
+  return applyRerankWeightsFromPairs(personaId, userId, next, { persistAlways: true });
+}
+
+/**
+ * Thirty A/B picks train the rerank weights, even when the records
+ * have not moved and the rest of the profile is left alone.
+ */
+async function applyRerankWeightsFromPairs(
+  personaId: number,
+  userId: number,
+  profile: StyleProfile,
+  options: { persistAlways: boolean },
+): Promise<StyleProfile> {
+  const rows = await listFidelityPairs(personaId, userId);
+  const weights =
+    rows.length >= CHOICE_MIN_PAIRS
+      ? trainRerankWeights(pairExamplesFromRows(rows), `ab:${personaId}`)
+      : null;
+  const next = weights
+    ? normalizeStyleProfile({ ...profile, rerankWeights: weights })
+    : profile;
+  if (options.persistAlways || weights) {
+    await setPersonaStyleProfile(personaId, userId, next);
+  }
   return next;
 }
 

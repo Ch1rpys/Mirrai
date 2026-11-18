@@ -199,6 +199,11 @@ async function handleChatStream(req: Request, res: Response): Promise<void> {
           writeEvent(res, "burst", { texts: event.texts });
         } else if (event.type === "emotion") {
           writeEvent(res, "emotion", { state: event.state, reason: event.reason });
+        } else if (event.type === "choice") {
+          writeEvent(res, "choice", {
+            options: event.options,
+            replyToMessageId: event.replyToMessageId,
+          });
         } else if (event.type === "done") {
           writeEvent(res, "done", {
             messageId: event.messageId,

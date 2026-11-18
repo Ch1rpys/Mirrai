@@ -91,6 +91,9 @@ vi.mock("../db", () => ({
   getLastExtractionAt: (...a: unknown[]) => getLastExtractionAt(...a),
   getMessageById: (...a: unknown[]) => getMessageById(...a),
   updateEmotionSnapshot: (...a: unknown[]) => updateEmotionSnapshot(...a),
+  updateMessageMetadata: vi.fn().mockResolvedValue(true),
+  createFidelityPair: vi.fn(),
+  clearMessagePendingChoice: vi.fn().mockResolvedValue(true),
 }));
 
 const invoke = vi.fn();

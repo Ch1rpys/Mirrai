@@ -443,4 +443,8 @@ export const V6 = {
   "eval.blind.export.verdict": { zh: "判定", en: "verdict" },
   "eval.blind.export.seconds": { zh: "秒", en: "seconds" },
   "eval.blind.export.reason": { zh: "理由原文", en: "reason" },
+  "eval.choice.missing": {
+    zh: "这两句已经选过了，或者不是这一轮给的。",
+    en: "Those two lines have already been chosen, or they were not the pair for this turn.",
+  },
 } as const satisfies CopyTable;

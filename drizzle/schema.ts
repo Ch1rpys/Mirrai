@@ -1585,6 +1585,29 @@ export type FidelityFeedback = typeof fidelityFeedback.$inferSelect;
 export type InsertFidelityFeedback = typeof fidelityFeedback.$inferInsert;
 
 /**
+ * One A/B choice from the web chat.
+ *
+ * Every eight turns the persona offers two unreplied lines. The one
+ * the user picks is stored as the reply; this row keeps both lines and
+ * the scoring features so thirty of them can train rerank weights.
+ */
+export const fidelityPairs = pgTable("fidelity_pairs", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  messageId: integer("messageId").notNull(),
+  chosenText: text("chosenText").notNull(),
+  rejectedText: text("rejectedText").notNull(),
+  features: jsonb("features"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  personaUserIdx: index("fidelity_pairs_persona_user_idx").on(table.personaId, table.userId),
+}));
+
+export type FidelityPair = typeof fidelityPairs.$inferSelect;
+export type InsertFidelityPair = typeof fidelityPairs.$inferInsert;
+
+/**
  * One sitting of the in-app blind test.
  *
  * A real line and a rebuilt one are shown without saying which is which.

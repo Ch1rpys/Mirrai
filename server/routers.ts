@@ -156,7 +156,9 @@ import { extractJsonArray, extractJsonObject } from "./_core/json";
 import {
   runConversation,
   withPersonaTurn,
+  commitPendingChoice,
   PersonaAsleepError,
+  ChoiceMissingError,
   clampContextLimit,
   clampTemperature,
   clampMaxTokens,
@@ -2265,6 +2267,7 @@ export const appRouter = router({
         let graduationSuggested = false;
         let careNote = null;
         let crisis = false;
+        let choice: { options: [string, string]; replyToMessageId: number } | null = null;
         let failure: string | null = null;
         /**
          * Whether the user's own message is in the transcript.
@@ -2302,6 +2305,10 @@ export const appRouter = router({
             else if (event.type === "silence") reply = event.notice;
             else if (event.type === "burst") reply = event.texts.join("\n\n");
             else if (event.type === "emotion") emotionalState = event.state;
+            else if (event.type === "choice") choice = {
+              options: event.options,
+              replyToMessageId: event.replyToMessageId,
+            };
             else if (event.type === "error") {
               failure = event.message;
               failureStored = event.storedUserMessage === true;
@@ -2375,7 +2382,7 @@ export const appRouter = router({
           });
         }
 
-        return { reply, emotionalState, graduationSuggested, careNote, crisis, failed: false };
+        return { reply, emotionalState, graduationSuggested, careNote, crisis, choice, failed: false };
       }),
 
     sendImage: protectedProcedure.use(rateLimit(RATE_LIMITS.upload))
@@ -5356,6 +5363,41 @@ export const appRouter = router({
           reason: input.reason,
         });
         return { id: row.id };
+      }),
+
+    choose: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        replyToMessageId: z.number(),
+        chosen: z.string().min(1).max(4000),
+        rejected: z.string().min(1).max(4000),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaTurn(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          try {
+            return await commitPendingChoice({
+              persona,
+              userId: ctx.user.id,
+              userMessageId: input.replyToMessageId,
+              chosen: input.chosen,
+              rejected: input.rejected,
+              writePair: true,
+              locale: ctx.locale,
+              providerName: (persona as { llmProvider?: string | null }).llmProvider || undefined,
+              channel: "web",
+            });
+          } catch (e) {
+            if (e instanceof ChoiceMissingError) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: copy(ctx.locale, "eval.choice.missing"),
+              });
+            }
+            throw e;
+          }
+        });
       }),
 
     listForMessage: protectedProcedure

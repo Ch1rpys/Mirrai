@@ -8,6 +8,7 @@ const getPersonaSettings = vi.fn();
 const setPersonaSettings = vi.fn();
 const getUserById = vi.fn();
 const iterateRecords = vi.fn();
+const listFidelityPairs = vi.fn();
 
 vi.mock("../db", () => ({
   getRecordsVersion: (...a: unknown[]) => getRecordsVersion(...a),
@@ -18,6 +19,7 @@ vi.mock("../db", () => ({
   setPersonaSettings: (...a: unknown[]) => setPersonaSettings(...a),
   getUserById: (...a: unknown[]) => getUserById(...a),
   iterateRecords: (...a: unknown[]) => iterateRecords(...a),
+  listFidelityPairs: (...a: unknown[]) => listFidelityPairs(...a),
 }));
 
 import { afterRecordsChanged, afterRecordsRemoved, measureStyleProfile } from "./style-profile";
@@ -27,6 +29,7 @@ describe("measureStyleProfile", () => {
     vi.clearAllMocks();
     setPersonaStyleProfile.mockResolvedValue(true);
     iterateRecords.mockImplementation(async function* () {});
+    listFidelityPairs.mockResolvedValue([]);
   });
 
   it("does not write again when the records version is unchanged", async () => {
@@ -88,6 +91,27 @@ describe("measureStyleProfile", () => {
     expect(measured.fingerprint?.samples).toBe(40);
     expect(measured.fingerprint?.particles["呀"]).toBe(1);
   });
+
+  it("trains a negative length weight from thirty short-line picks even when the records have not moved", async () => {
+    getRecordsVersion.mockResolvedValue("10:40");
+    getPersonaStyleProfile.mockResolvedValue({
+      version: 1,
+      measuredAt: "2026-01-01T00:00:00.000Z",
+      recordsVersion: "10:40",
+    });
+    listFidelityPairs.mockResolvedValue(
+      Array.from({ length: 30 }, (_, i) => ({
+        features: {
+          chosen: { ll: 0, length: 4 + (i % 3), surprise: 0.1, residue: 0, act: 0, real: 0.5 },
+          rejected: { ll: 0, length: 28 + i, surprise: 0.1, residue: 0, act: 0, real: 0.5 },
+        },
+      })),
+    );
+    const measured = await measureStyleProfile({ personaId: 5, userId: 1 });
+    const weights = measured.rerankWeights as { length?: number } | undefined;
+    expect(weights?.length).toBeLessThan(0);
+    expect(setPersonaStyleProfile).toHaveBeenCalled();
+  });
 });
 
 describe("afterRecordsChanged", () => {
@@ -100,6 +124,7 @@ describe("afterRecordsChanged", () => {
     getPersonaSettings.mockResolvedValue(null);
     setPersonaSettings.mockResolvedValue(true);
     iterateRecords.mockImplementation(async function* () {});
+    listFidelityPairs.mockResolvedValue([]);
   });
 
   it("notes new rows on a persona that has already been distilled", async () => {

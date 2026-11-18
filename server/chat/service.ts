@@ -34,6 +34,13 @@ import { sampleBurstSize, sampleReplyDelayMs } from "@shared/behavior-profile";
 import { localDateKey, zonedDateKey, zonedDayStart } from "@shared/timezone";
 import { extractMemories, isExtractionDue } from "./memory-extract";
 import { storageToDataUrl } from "../storage";
+import {
+  featuresOfLine,
+  fingerprintFromPersona,
+  matchesChoicePair,
+  pendingChoiceOf,
+  shouldOfferChoice,
+} from "../eval/ab-pairs";
 
 export type ChatMode = "stream" | "once";
 
@@ -83,6 +90,18 @@ export type ChatEvent =
       message: string;
       partial: boolean;
       storedUserMessage?: boolean;
+    }
+  | {
+      /**
+       * Two unreplied lines for the user to pick from.
+       *
+       * Nothing is stored as the assistant yet. The chosen line becomes
+       * the reply when they pick, or the first line is stored if they
+       * send another message instead.
+       */
+      type: "choice";
+      options: [string, string];
+      replyToMessageId: number;
     };
 
 /**
@@ -98,6 +117,16 @@ export class PersonaAsleepError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "PersonaAsleepError";
+  }
+}
+
+/**
+ * The pair is gone, or the two lines are not the ones that were offered.
+ */
+export class ChoiceMissingError extends Error {
+  constructor() {
+    super("eval.choice.missing");
+    this.name = "ChoiceMissingError";
   }
 }
 
@@ -617,6 +646,173 @@ export async function* runConversation(
  * One turn: the user's message, the persona's answer, and everything
  * that is written down around it.
  */
+async function collectPlanText(
+  plan: Parameters<typeof executePlan>[0],
+  turnInput: Parameters<typeof executePlan>[1],
+  io: {
+    provider: LLMProvider;
+    signal?: AbortSignal;
+    options: { temperature?: number; maxTokens?: number; provider?: string };
+  },
+): Promise<string> {
+  let text = "";
+  for await (const event of executePlan(plan, turnInput, {
+    provider: io.provider,
+    mode: "once",
+    rerank: false,
+    signal: io.signal,
+    options: io.options,
+    emitDeltas: false,
+  })) {
+    if (event.type === "final") text = event.text || text;
+  }
+  return text;
+}
+
+async function findPendingChoiceMessage(
+  personaId: number,
+  userId: number,
+): Promise<{ id: number; pending: NonNullable<ReturnType<typeof pendingChoiceOf>> } | null> {
+  const recent = await db.getMessagesByPersonaId(personaId, userId, 8);
+  if (recent.length === 0) return null;
+  const last = recent[recent.length - 1];
+  if (last.role !== "user") return null;
+  const pending = pendingChoiceOf(last.metadata);
+  if (!pending) return null;
+  return { id: last.id, pending };
+}
+
+/**
+ * Stores the chosen line as this turn's reply.
+ *
+ * The care note, the delay and a burst are skipped: those belong to a
+ * live generation, and this is the user settling a pair that was
+ * already offered.
+ */
+export async function commitPendingChoice(params: {
+  persona: Persona;
+  userId: number;
+  userMessageId: number;
+  chosen: string;
+  rejected: string;
+  writePair: boolean;
+  locale?: "zh" | "en";
+  providerName?: string;
+  now?: Date;
+  channel?: "web" | "wechat" | "feishu";
+}): Promise<{ messageId: number; emotionalState: string }> {
+  const locale = params.locale ?? "zh";
+  const now = params.now ?? new Date();
+  const message = await db.getMessageById(
+    params.userMessageId,
+    params.userId,
+    params.persona.id,
+  );
+  if (!message || message.role !== "user") throw new ChoiceMissingError();
+  const pending = pendingChoiceOf(message.metadata);
+  if (!pending) throw new ChoiceMissingError();
+  if (!matchesChoicePair(params.chosen, params.rejected, pending.options)) {
+    throw new ChoiceMissingError();
+  }
+
+  const provider = await resolveProviderForUser({
+    userId: params.userId,
+    providerName: params.providerName,
+  });
+  const emotion = await inferEmotionalState({
+    userMessage: message.content,
+    assistantReply: params.chosen,
+    currentState: params.persona.emotionalState,
+    provider: params.providerName,
+    providerInstance: provider ?? undefined,
+    locale,
+  });
+  const newEmotionalState = emotion.state;
+  const chosenIdx = pending.options[0] === params.chosen ? 0 : 1;
+
+  const messageId = await db.createMessage({
+    personaId: params.persona.id,
+    userId: params.userId,
+    role: "assistant",
+    content: params.chosen,
+    emotionalState: newEmotionalState,
+    channel: params.channel ?? "web",
+    metadata: {
+      sampledAct: pending.sampledAct,
+      periodId: pending.periodId,
+    },
+  });
+
+  if (params.writePair) {
+    await db.createFidelityPair({
+      userId: params.userId,
+      personaId: params.persona.id,
+      messageId,
+      chosenText: params.chosen,
+      rejectedText: params.rejected,
+      features: {
+        chosen: pending.features[chosenIdx],
+        rejected: pending.features[1 - chosenIdx],
+      },
+    });
+  }
+
+  await db.clearMessagePendingChoice(
+    params.userMessageId,
+    params.userId,
+    params.persona.id,
+  );
+
+  const chatCount = await db.incrementChatCount(params.persona.id, params.userId);
+  const timezone = await db.getUserTimezone(params.userId);
+  const dayStart = zonedDayStart(now, timezone);
+  const todayStr = zonedDateKey(now, timezone) || localDateKey(now);
+  await db.updatePersona(params.persona.id, params.userId, {
+    lastChatAt: now,
+    lastUserMessageAt: now,
+    emotionalState: newEmotionalState as Persona["emotionalState"],
+  });
+  const messageCount = await db.getUserMessageCountForPersonaSince(
+    params.persona.id,
+    params.userId,
+    dayStart,
+  );
+  const existing = await db.getTodaySnapshot(params.persona.id, params.userId, todayStr);
+  if (!existing) {
+    await db.createEmotionSnapshot({
+      personaId: params.persona.id,
+      userId: params.userId,
+      emotionalState: newEmotionalState,
+      messageCount,
+      date: todayStr,
+    });
+  } else {
+    await db.updateEmotionSnapshot(existing.id, params.userId, {
+      emotionalState: newEmotionalState,
+      messageCount,
+    });
+  }
+  const intimacyData = await db.getIntimacyData(params.persona.id, params.userId);
+  const intimacy = computeIntimacy(intimacyData);
+  await db.updateIntimacy(
+    params.persona.id,
+    params.userId,
+    intimacy.score,
+    intimacy.level,
+  );
+  await evaluateGraduation({
+    persona: params.persona,
+    userId: params.userId,
+    intimacyLevel: intimacy.level,
+    chatCount,
+    locale,
+    now,
+  });
+  maybeExtractMemories(params.persona, params.userId, locale, now).catch((e) =>
+    console.warn("[Chat] The memory extraction failed:", e.message));
+  return { messageId, emotionalState: newEmotionalState };
+}
+
 async function* runConversationTurn(
   options: ConversationOptions & { mode: ChatMode },
 ): AsyncGenerator<ChatEvent> {
@@ -656,6 +852,34 @@ async function* runConversationTurn(
     throw new PersonaAsleepError(
       copy(locale, "prompt.graduatedNotice", { name: persona.name }),
     );
+  }
+
+  /**
+   * An unanswered pair is settled first.
+   *
+   * Sending the next message instead of picking is a choice of the
+   * first line, and it must not write a training pair.
+   */
+  const pendingMsg = await findPendingChoiceMessage(persona.id, userId);
+  if (pendingMsg) {
+    try {
+      await commitPendingChoice({
+        persona,
+        userId,
+        userMessageId: pendingMsg.id,
+        chosen: pendingMsg.pending.options[0],
+        rejected: pendingMsg.pending.options[1],
+        writePair: false,
+        locale,
+        now,
+        providerName: options.providerName,
+        channel: options.channel ?? "web",
+      });
+    } catch (e) {
+      if (!(e instanceof ChoiceMissingError)) throw e;
+    }
+    const refreshed = await db.getPersonaById(persona.id, userId).catch(() => null);
+    if (refreshed) Object.assign(persona, refreshed);
   }
 
   const defaultConfig = await db.getDefaultLlmConfig(userId);
@@ -858,18 +1082,96 @@ async function* runConversationTurn(
   let replyText = "";
   let failed = false;
   let failureMessage = "";
+  const invokeOptions = {
+    temperature: extraConfig.temperature as number | undefined,
+    maxTokens: extraConfig.maxTokens as number | undefined,
+    provider: options.providerName,
+  };
+
+  /**
+   * Two unreplied lines, on the eighth web turn.
+   *
+   * Crisis, silence and a ritual reply never reach here. Channels never
+   * offer a pair either: `shouldOfferChoice` looks at the channel.
+   */
+  if (shouldOfferChoice(persona, options.channel ?? "web") && plan.kind !== "ritual") {
+    try {
+      const first = (await collectPlanText(plan, turnInput, {
+        provider,
+        signal: options.signal,
+        options: invokeOptions,
+      })).trim();
+      const second = (await collectPlanText(plan, turnInput, {
+        provider,
+        signal: options.signal,
+        options: invokeOptions,
+      })).trim();
+      let userMessageId = storedUserMessageId;
+      if (!userMessageId) {
+        const recent = await db.getMessagesByPersonaId(persona.id, userId, 8);
+        const lastUser = [...recent].reverse().find((row) => row.role === "user");
+        userMessageId = lastUser?.id ?? null;
+      }
+      if (first && second && first !== second && userMessageId) {
+        const { fingerprint, discriminator } = fingerprintFromPersona(persona);
+        const sampledAct =
+          sampled?.act && sampled.act !== "silence" ? String(sampled.act) : null;
+        await db.updateMessageMetadata(userMessageId, userId, persona.id, {
+          pendingChoice: {
+            options: [first, second],
+            features: [
+              featuresOfLine(first, { fingerprint, sampledAct, discriminator }),
+              featuresOfLine(second, { fingerprint, sampledAct, discriminator }),
+            ],
+            sampledAct,
+            periodId: options.periodId ?? null,
+          },
+        });
+        yield {
+          type: "choice",
+          options: [first, second],
+          replyToMessageId: userMessageId,
+        };
+        return;
+      }
+      replyText = first || second;
+    } catch (e) {
+      failed = true;
+      failureMessage = (e as Error).message;
+      if (options.signal?.aborted) {
+        if (storedUserMessageId) {
+          await db
+            .deleteMessage(storedUserMessageId, userId, persona.id)
+            .catch(() => false);
+        }
+        yield {
+          type: "error",
+          message: "aborted",
+          partial: false,
+          storedUserMessage: false,
+        };
+        return;
+      }
+      console.error("[Chat] LLM call failed:", e);
+      yield {
+        type: "error",
+        message: failureMessage,
+        partial: false,
+        storedUserMessage: Boolean(storedUserMessageId),
+      };
+      return;
+    }
+  }
 
   try {
-    for await (const event of executePlan(plan, turnInput, {
+    if (replyText) {
+      if (!timingEnabled) yield { type: "delta", text: replyText };
+    } else for await (const event of executePlan(plan, turnInput, {
       provider,
       mode: options.mode,
       rerank: rerankEnabled,
       signal: options.signal,
-      options: {
-        temperature: extraConfig.temperature,
-        maxTokens: extraConfig.maxTokens,
-        provider: options.providerName,
-      },
+      options: invokeOptions,
       emitDeltas: !timingEnabled,
     })) {
       if (event.type === "thinking") yield { type: "thinking" };

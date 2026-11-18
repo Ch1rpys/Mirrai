@@ -272,6 +272,39 @@ export function discriminatorForMetrics(
   };
 }
 
+/**
+ * A dense logistic regression, the same SGD the discriminator uses.
+ *
+ * The A/B pairs (B8.8) train on feature differences rather than on
+ * hashed n-grams, so they reuse this loop instead of the text model.
+ */
+export function trainLogistic(
+  examples: Array<{ x: number[]; y: number }>,
+  seed: string,
+): { weights: number[]; bias: number } {
+  if (examples.length === 0) return { weights: [], bias: 0 };
+  const dim = examples[0]!.x.length;
+  const weights = new Float64Array(dim);
+  let bias = 0;
+  for (let epoch = 0; epoch < DISCRIMINATOR_EPOCHS; epoch++) {
+    const rng = seededRandom(`${seed}:epoch:${epoch}`);
+    const order = examples.slice();
+    shuffleInPlace(order, rng);
+    for (const example of order) {
+      let z = bias;
+      for (let i = 0; i < dim; i++) z += weights[i]! * (example.x[i] ?? 0);
+      const p = sigmoid(z);
+      const err = p - example.y;
+      for (let i = 0; i < dim; i++) {
+        const value = example.x[i] ?? 0;
+        weights[i] -= DISCRIMINATOR_LR * (err * value + DISCRIMINATOR_REG * weights[i]!);
+      }
+      bias -= DISCRIMINATOR_LR * err;
+    }
+  }
+  return { weights: Array.from(weights), bias };
+}
+
 export function scoreReal(
   model: SparseModel,
   text: string,
