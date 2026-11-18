@@ -50,6 +50,7 @@ export interface StreamChatCallbacks {
   onBurst?: (texts: string[]) => void;
   onEmotion?: (state: string, reason?: string) => void;
   onDone?: (info: StreamDoneInfo) => void;
+  onChoice?: (info: { options: [string, string]; replyToMessageId: number }) => void;
   onError?: (message: string, partial: boolean) => void;
 }
 
@@ -284,6 +285,18 @@ async function handleEvent(
     case "done":
       callbacks.onDone?.(data as StreamDoneInfo);
       break;
+    case "choice": {
+      const options = Array.isArray(data?.options)
+        ? data.options.filter((item: unknown) => typeof item === "string")
+        : [];
+      if (options.length >= 2 && typeof data?.replyToMessageId === "number") {
+        callbacks.onChoice?.({
+          options: [options[0], options[1]],
+          replyToMessageId: data.replyToMessageId,
+        });
+      }
+      break;
+    }
     case "error":
       /**
        * The sentence is the server's own — and when there is none, the

@@ -177,6 +177,10 @@ export const en = {
     nextLevel: "Next level",
   },
 
+  choice: {
+    title: "Which line is more like {{name}}",
+  },
+
   chat: {
     digitalPersona: "Digital persona",
     conversation: "The conversation with {{name}}",
@@ -1304,6 +1308,8 @@ export const en = {
     timingNote: "The wait before a reply, bursts, and a turn with no reply. It cannot be turned on without a behaviour profile. Off by default.",
     switchesTitle: "Switches for this persona",
     switchesHint: "The first group costs nothing extra and takes effect once there are records. The second group costs more, waits longer, or needs the network, so it stays off.",
+    abPairs: "Offer me a choice now and then",
+    abPairsNote: "About every eight turns they give two unreplied lines and you pick the one that sounds more like them. That turn costs twice as much. The choice trains the rerank.",
     dataTitle: "Persona data",
     dataNote: "The portrait the AI wrote — correct it line by line.",
     preview: "Preview",

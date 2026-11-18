@@ -29,6 +29,7 @@ import DigitalPersonaBadge from "@/components/DigitalPersonaBadge";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionKey } from "@/lib/emotions";
 import { useConfirm } from "@/components/ConfirmDialog";
 import MemoryReview from "@/components/v6/MemoryReview";
+import ChoiceBubble from "@/components/v6/ChoiceBubble";
 
 /**
  * The largest picture the chat will send.
@@ -61,6 +62,17 @@ const MAX_IMAGE_UPLOAD_BYTES = 20 * 1024 * 1024;
  */
 export function failedSendKeepsTheMessage(result: unknown): boolean {
   return Boolean((result as { failed?: boolean } | null | undefined)?.failed);
+}
+
+function pendingChoiceFromMetadata(metadata: unknown): { options: [string, string] } | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const raw = (metadata as { pendingChoice?: unknown }).pendingChoice;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const options = Array.isArray((raw as { options?: unknown }).options)
+    ? (raw as { options: unknown[] }).options.filter((item): item is string => typeof item === "string")
+    : [];
+  if (options.length < 2) return null;
+  return { options: [options[0], options[1]] };
 }
 
 export default function Chat() {
@@ -134,6 +146,10 @@ export default function Chat() {
   }, [messages]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [liveChoice, setLiveChoice] = useState<{
+    options: [string, string];
+    replyToMessageId: number;
+  } | null>(null);
   const [currentState, setCurrentState] = useState("warm");
 
   const [showStatePanel, setShowStatePanel] = useState(false);
@@ -544,6 +560,7 @@ export default function Chat() {
       replyToId: m.replyToId ?? null,
       replyToContent: m.replyToId ? (byId.get(m.replyToId)?.content ?? null) : null,
       recalled: (m.recalled ?? []).filter((r: any) => r.title),
+      pendingChoice: pendingChoiceFromMetadata(m.metadata),
     }));
 
     // The history is polled, so it can arrive while a reply is still
@@ -642,6 +659,7 @@ export default function Chat() {
   useEffect(() => {
     setMessages([]);
     setInput("");
+    setLiveChoice(null);
     setReplyTo(null);
     setShowCrisis(false);
     setShowGraduation(false);
@@ -666,6 +684,7 @@ export default function Chat() {
     const text = input.trim();
     if (!text || isSending) return;
     setInput("");
+    setLiveChoice(null);
     setIsSending(true);
 
     const userMsg: Message = { id: `temp-${Date.now()}`, role: "user", content: text, createdAt: new Date() };
@@ -765,6 +784,11 @@ export default function Chat() {
               setCurrentState(state);
               setMessages(prev => prev.map(m => m.id === streamId ? { ...m, emotionalState: state } : m));
             },
+            onChoice: (info) => {
+              setLiveChoice(info);
+              setMessages((prev) => prev.filter((m) => m.id !== streamId));
+              setIsSending(false);
+            },
             onDone: (info) => {
               setMessages(prev => prev.map(m => m.id === streamId
                 ? {
@@ -829,6 +853,14 @@ export default function Chat() {
         if (failedSendKeepsTheMessage(result)) {
           toast.error(t("chat.failed", { message: t("errors.replyFailed") }));
           setMessages(prev => prev.map(m => (m.id === streamId ? { ...m, isStreaming: false } : m)));
+          return;
+        }
+        if (result.choice?.options?.length >= 2 && typeof result.choice.replyToMessageId === "number") {
+          setLiveChoice({
+            options: [result.choice.options[0], result.choice.options[1]],
+            replyToMessageId: result.choice.replyToMessageId,
+          });
+          setMessages((prev) => prev.filter((m) => m.id !== streamId));
           return;
         }
         setMessages(prev => prev.map(m => m.id === streamId
@@ -1903,6 +1935,13 @@ export default function Chat() {
               msg.emotionalState &&
               msg.emotionalState !== prevMood,
             );
+            const numericId = typeof msg.id === "number" ? msg.id : Number(msg.id);
+            const offer =
+              msg.role === "user" && msg.pendingChoice
+                ? { options: msg.pendingChoice.options, replyToMessageId: numericId }
+                : msg.role === "user" && liveChoice && liveChoice.replyToMessageId === numericId
+                  ? liveChoice
+                  : null;
             return (
               <div key={msg.id} data-message-id={msg.id}>
               <MessageBubble
@@ -1916,6 +1955,32 @@ export default function Chat() {
                 deleting={deleteMessageMutation.isPending}
                 onQuote={handleQuote}
               />
+              {offer && Number.isInteger(offer.replyToMessageId) && (
+                <div className="mt-2">
+                  <ChoiceBubble
+                    personaId={personaId}
+                    personaName={persona?.name || "?"}
+                    replyToMessageId={offer.replyToMessageId}
+                    options={offer.options}
+                    onPicked={(picked) => {
+                      setLiveChoice(null);
+                      setMessages((prev) => [
+                        ...prev.map((row) =>
+                          row.id === msg.id ? { ...row, pendingChoice: null } : row,
+                        ),
+                        {
+                          id: `ai-${picked.messageId}`,
+                          role: "assistant",
+                          content: picked.content,
+                          emotionalState: picked.emotionalState,
+                          createdAt: new Date(),
+                        },
+                      ]);
+                      setCurrentState(picked.emotionalState);
+                    }}
+                  />
+                </div>
+              )}
               </div>
             );
             });

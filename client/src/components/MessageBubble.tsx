@@ -48,6 +48,8 @@ export interface Message {
    * "proactive" — the persona spoke first.
    */
   origin?: "letter" | "proactive" | "system-notice" | null;
+  /** An unanswered A/B pair sitting on the user's own message. */
+  pendingChoice?: { options: [string, string] } | null;
 }
 /** The state of a message, or `null` when it is not a known state. */
 export function emotionOf(state: string | null | undefined): EmotionDefinition | null {

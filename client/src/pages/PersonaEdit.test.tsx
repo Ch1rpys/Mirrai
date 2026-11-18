@@ -41,6 +41,8 @@ vi.mock("@/lib/trpc", () => ({
       applyCorrection: { useMutation: () => ({ mutate: applyCorrection, isPending: false }) },
       correctionLog: { useQuery: () => ({ data: { entries: [] } }) },
       graduationMode: { useQuery: () => ({ data: { mode: "suggest" } }) },
+      getSettings: { useQuery: () => ({ data: { layers: { abPairs: false } }, isLoading: false, refetch: vi.fn() }) },
+      updateSettings: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     personaCard: {
       export: { useMutation: () => ({ mutate: exportCard, isPending: false }) },

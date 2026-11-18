@@ -169,6 +169,10 @@ export const zh = {
     nextLevel: "下一级",
   },
 
+  choice: {
+    title: "哪句更像 {{name}}",
+  },
+
   chat: {
     /**
      * The label that says what this is.
@@ -1305,6 +1309,8 @@ export const zh = {
     timingNote: "回复前的等待、连发、以及这一轮可以不回。没有画像时开不了。默认关。",
     switchesTitle: "这个分身的开关",
     switchesHint: "上面一组不多花钱，有记录就会生效。下面一组会多花钱、多等一会儿，或者需要联网，所以默认关着。",
+    abPairs: "偶尔让我二选一",
+    abPairsNote: "每八轮左右，分身会给两句回复让你挑更像的那句。那一轮的费用是两倍。你的选择会用来调重排。",
     dataTitle: "人设数据",
     dataNote: "AI 解析生成的人格画像，可以逐条修正。",
     preview: "预览",

@@ -71,6 +71,28 @@ describe("streamChat", () => {
     expect(done?.emotionalState).toBe("warm");
   });
 
+  it("hands a choice event to the caller", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      mockSseResponse([
+        'event: choice\ndata: {"options":["好的呀","好的。"],"replyToMessageId":7}\n\n',
+      ]),
+    );
+    globalThis.fetch = fetchMock as any;
+    let choice: { options: [string, string]; replyToMessageId: number } | null = null;
+    await streamChat({
+      personaId: 1,
+      message: "在吗",
+      callbacks: {
+        onDelta: () => {},
+        onChoice: (info) => { choice = info; },
+      },
+    });
+    expect(choice).toEqual({
+      options: ["好的呀", "好的。"],
+      replyToMessageId: 7,
+    });
+  });
+
   it("posts the message and the locale", async () => {
     const fetchMock = vi.fn().mockResolvedValue(mockSseResponse([]));
     globalThis.fetch = fetchMock as any;
