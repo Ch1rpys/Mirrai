@@ -26,6 +26,14 @@ export class OllamaProvider implements LLMProvider {
     return !!this.url && !!this.model;
   }
 
+  /** Sampling fields Ollama accepts on `options`. */
+  private samplingOptions(options?: LLMOptions) {
+    const next: Record<string, unknown> = {};
+    if (options?.temperature != null) next.temperature = options.temperature;
+    if (options?.stop && options.stop.length > 0) next.stop = options.stop;
+    return Object.keys(next).length ? next : undefined;
+  }
+
   async invoke(messages: LLMMessage[], options?: LLMOptions): Promise<string> {
     const response = await fetch(`${this.url.replace(/\/+$/, "")}/api/chat`, {
       method: "POST",
@@ -34,7 +42,7 @@ export class OllamaProvider implements LLMProvider {
         model: this.model,
         messages: messages.map(m => ({ role: m.role, content: getTextContent(m.content) })),
         stream: false,
-        options: options?.temperature != null ? { temperature: options.temperature } : undefined,
+        options: this.samplingOptions(options),
       }),
       signal: options?.signal,
     });
@@ -56,7 +64,7 @@ export class OllamaProvider implements LLMProvider {
         model: this.model,
         messages: messages.map(m => ({ role: m.role, content: getTextContent(m.content) })),
         stream: true,
-        options: options?.temperature != null ? { temperature: options.temperature } : undefined,
+        options: this.samplingOptions(options),
       }),
       signal: options?.signal,
     });

@@ -11,6 +11,14 @@ export type LLMOptions = {
   maxTokens?: number;
   temperature?: number;
   provider?: string;
+  /**
+   * Sequences that end the reply.
+   *
+   * OpenAI sends `stop`, Claude sends `stop_sequences`, Ollama puts it
+   * on `options.stop`. Dify and Spark have no field for it, so they
+   * ignore it.
+   */
+  stop?: string[];
   /** Cancels an in-flight request (used by the streaming route). */
   signal?: AbortSignal;
 };
