@@ -701,6 +701,8 @@ export async function* executePlan(
     stop: plan.stop,
     signal: io.signal,
   };
+  const plannerOptions = { ...invokeOptions, purpose: "plan" as const };
+  const replyOptions = { ...invokeOptions, purpose: "reply" as const };
   const locale = input.locale;
   const plannerProvider = io.plannerProvider ?? io.provider;
   const voiceProvider = io.voiceProvider ?? io.provider;
@@ -711,7 +713,7 @@ export async function* executePlan(
     try {
       const raw = await llmService.invokeWithProvider(plannerProvider, {
         messages: plan.plannerMessages ?? plan.messages,
-        options: invokeOptions,
+        options: { ...plannerOptions, purpose: "plan" },
       });
       gist = parsePlannerGist(typeof raw === "string" ? raw : "");
     } catch {
@@ -742,7 +744,7 @@ export async function* executePlan(
         try {
           const answer = await llmService.invokeWithProvider(voiceProvider, {
             messages: replyMessages,
-            options: invokeOptions,
+            options: { ...replyOptions, purpose: "reply" },
           });
           return typeof answer === "string" ? answer : "";
         } catch {
@@ -815,7 +817,7 @@ export async function* executePlan(
     let replyText = "";
     for await (const chunk of llmService.streamWithProvider(voiceProvider, {
       messages: replyMessages,
-      options: invokeOptions,
+      options: { ...replyOptions, purpose: "reply" },
     })) {
       replyText += chunk.text;
       // Always yield the chunk so a mid-stream failure still leaves the
@@ -835,7 +837,7 @@ export async function* executePlan(
 
   let replyText = await llmService.invokeWithProvider(voiceProvider, {
     messages: replyMessages,
-    options: invokeOptions,
+    options: { ...replyOptions, purpose: "reply" },
   });
   if (io.emptyAsSilence === false) {
     replyText = typeof replyText === "string" ? replyText : "";

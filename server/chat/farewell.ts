@@ -276,7 +276,10 @@ async function writeSinglePassLetter(params: {
 
   if (mayUseServerProvider) {
     try {
-      const response = await llmService.invoke({ messages });
+      const response = await llmService.invoke({
+        messages,
+        options: { purpose: "letter" },
+      });
       if (response?.trim()) return response.trim();
     } catch (e) {
       console.warn("[Graduation] No provider could write the letter:", e);

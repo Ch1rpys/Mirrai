@@ -658,7 +658,7 @@ export async function mineMicroRules(params: MineMicroRulesParams): Promise<Micr
           }),
         },
       ],
-      options: { temperature: params.temperature ?? 0.3, maxTokens: 2000 },
+      options: { temperature: params.temperature ?? 0.3, maxTokens: 2000, purpose: "distill" },
     });
   } catch (error) {
     // The mining is a bonus: the persona is already written by the time it

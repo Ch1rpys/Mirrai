@@ -344,7 +344,10 @@ export async function composeProactiveMessage(params: {
   if (provider) {
     try {
       // Through the service, so the deadline and the retry policy apply.
-      text = await llmService.invokeWithProvider(provider, { messages });
+      text = await llmService.invokeWithProvider(provider, {
+        messages,
+        options: { purpose: "reply" },
+      });
     } catch (e) {
       console.warn("[Proactive] The user's provider failed:", (e as Error).message);
     }
@@ -352,7 +355,10 @@ export async function composeProactiveMessage(params: {
 
   if (!text?.trim() && mayUseServerProvider) {
     try {
-      text = await llmService.invoke({ messages });
+      text = await llmService.invoke({
+        messages,
+        options: { purpose: "reply" },
+      });
     } catch (e) {
       console.warn("[Proactive] No provider could write the message:", (e as Error).message);
     }

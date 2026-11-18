@@ -494,7 +494,7 @@ export async function invokeForUserWithReason(params: {
     if (provider) {
       const text = await llmService.invokeWithProvider(provider, {
         messages: params.messages,
-        options: params.options,
+        options: { ...params.options, purpose: params.options?.purpose ?? "other" },
       });
       if (text?.trim()) return { text };
     }
@@ -512,7 +512,7 @@ export async function invokeForUserWithReason(params: {
   try {
     const text = await llmService.invoke({
       messages: params.messages,
-      options: params.options,
+      options: { ...params.options, purpose: params.options?.purpose ?? "other" },
     });
     return text?.trim() ? { text } : { text: null, reason: "The provider returned nothing." };
   } catch (e) {

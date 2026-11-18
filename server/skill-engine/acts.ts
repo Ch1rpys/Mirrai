@@ -78,7 +78,7 @@ async function labelWithModel(params: {
           content: asMaterial(JSON.stringify(payload)),
         },
       ],
-      options: { temperature: 0, maxTokens: 1200 },
+      options: { temperature: 0, maxTokens: 1200, purpose: "extract" },
     });
     const parsed = extractJsonArray(typeof answer === "string" ? answer : "");
     if (!Array.isArray(parsed)) return out;

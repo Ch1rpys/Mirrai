@@ -82,7 +82,7 @@ export async function applyPersonaCorrection(
         }),
       },
     ];
-    const options = { provider: request.provider, temperature: 0.3, maxTokens: 2000 };
+    const options = { provider: request.provider, temperature: 0.3, maxTokens: 2000, purpose: "distill" as const };
     let response = "";
     if (request.userProvider) {
       response = await llmService.invokeWithProvider(request.userProvider, {

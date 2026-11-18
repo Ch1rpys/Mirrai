@@ -387,7 +387,10 @@ export async function composeLetterReply(params: {
   if (provider) {
     try {
       // Through the service, so the deadline and the retry policy apply.
-      const response = await llmService.invokeWithProvider(provider, { messages });
+      const response = await llmService.invokeWithProvider(provider, {
+        messages,
+        options: { purpose: "letter" },
+      });
       if (response?.trim()) return response.trim();
     } catch (e) {
       console.warn("[Letters] The user's provider could not answer:", (e as Error).message);
@@ -396,7 +399,10 @@ export async function composeLetterReply(params: {
 
   if (mayUseServerProvider) {
     try {
-      const response = await llmService.invoke({ messages });
+      const response = await llmService.invoke({
+        messages,
+        options: { purpose: "letter" },
+      });
       if (response?.trim()) return response.trim();
     } catch (e) {
       console.warn("[Letters] No provider could answer the letter:", (e as Error).message);

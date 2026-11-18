@@ -159,7 +159,7 @@ export async function assessTrajectory(params: {
         { role: "system" as const, content: copy(locale, "prompts.trajectoryAnalysis") },
         { role: "user" as const, content: transcript },
       ],
-      options: { provider: params.provider, temperature: 0, maxTokens: 300 },
+      options: { provider: params.provider, temperature: 0, maxTokens: 300, purpose: "classify" as const },
     };
     const response = params.providerInstance
       ? await llmService.invokeWithProvider(params.providerInstance, request)

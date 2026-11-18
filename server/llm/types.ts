@@ -7,10 +7,27 @@ export type LLMMessage = {
   content: string | LLMContentPart[];
 };
 
+export const LLM_PURPOSES = [
+  "reply",
+  "plan",
+  "rerank",
+  "classify",
+  "extract",
+  "summarize",
+  "distill",
+  "letter",
+  "eval",
+  "other",
+] as const;
+
+export type LlmPurpose = (typeof LLM_PURPOSES)[number];
+
 export type LLMOptions = {
   maxTokens?: number;
   temperature?: number;
   provider?: string;
+  /** Why this call is being made. Callers have to set it. */
+  purpose?: LlmPurpose;
   /**
    * Sequences that end the reply.
    *

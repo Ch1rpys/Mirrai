@@ -586,7 +586,7 @@ async function collectWithModel(params: {
         content: asMaterial(transcript, params.locale),
       },
     ],
-    options: { temperature: 0, maxTokens: 800 },
+    options: { temperature: 0, maxTokens: 800, purpose: "letter" },
   };
 
   let raw: string | null = null;
@@ -613,7 +613,10 @@ async function collectWithModel(params: {
   if (provider) {
     try {
       // Through the service, so the deadline and the retry policy apply.
-      raw = await llmService.invokeWithProvider(provider, request);
+      raw = await llmService.invokeWithProvider(provider, {
+        ...request,
+        options: { ...request.options, purpose: "letter" },
+      });
     } catch (e) {
       console.warn(
         "[Outbound] The user's provider could not pick the candidates:",
@@ -624,7 +627,10 @@ async function collectWithModel(params: {
 
   if (!raw?.trim() && mayUseServerProvider) {
     try {
-      raw = await llmService.invoke(request);
+      raw = await llmService.invoke({
+        ...request,
+        options: { ...request.options, purpose: "letter" },
+      });
     } catch (e) {
       console.warn(
         "[Outbound] No provider could pick the candidates:",

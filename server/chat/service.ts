@@ -361,7 +361,7 @@ async function maybeCompactHistory(params: {
         },
         { role: "user", content: asMaterial(transcript, locale) },
       ],
-      options: { provider: params.providerName, temperature: 0.2, maxTokens: 500 },
+      options: { provider: params.providerName, temperature: 0.2, maxTokens: 500, purpose: "summarize" },
     });
 
     const trimmed = (summary || "").trim();

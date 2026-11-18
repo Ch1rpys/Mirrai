@@ -142,7 +142,7 @@ export async function mineLexicon(params: MineLexiconParams): Promise<LexiconEnt
       if (!provider) return [];
       answer = await llmService.invokeWithProvider(provider, {
         messages,
-        options: { temperature: 0.2, maxTokens: 1500 },
+        options: { temperature: 0.2, maxTokens: 1500, purpose: "distill" },
       });
     }
   } catch (error) {

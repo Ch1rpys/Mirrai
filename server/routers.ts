@@ -4454,12 +4454,18 @@ export const appRouter = router({
         ];
         let response = "";
         if (provider) {
-          response = await llmService.invokeWithProvider(provider, { messages });
+          response = await llmService.invokeWithProvider(provider, {
+            messages,
+            options: { purpose: "summarize" },
+          });
         }
         if (!response.trim() && !owned) {
           // The operator's provider may only be used when the user has
           // no provider of their own.
-          response = await llmService.invoke({ messages });
+          response = await llmService.invoke({
+            messages,
+            options: { purpose: "summarize" },
+          });
         }
         if (!response.trim()) {
           throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.noProviderConfigured") });

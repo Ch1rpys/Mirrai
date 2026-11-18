@@ -131,7 +131,10 @@ async function invokePipeline(params: {
    * service they had already configured, and the actual error was
    * nowhere.
    */
-  const outcome = await invokeForUserWithReason(params);
+  const outcome = await invokeForUserWithReason({
+    ...params,
+    options: { ...params.options, purpose: params.options?.purpose ?? "distill" },
+  });
   if (outcome.text == null) {
     throw new Error(
       outcome.reason

@@ -167,7 +167,7 @@ export async function runDrift(options: DriftOptions): Promise<DriftReport> {
           { role: "system", content: simUserSystemPrompt(locale, sampleLines) },
           ...toMessages(history),
         ],
-        options: { maxTokens: 80, temperature: 0.7 },
+        options: { maxTokens: 80, temperature: 0.7, purpose: "eval" },
       });
     } catch (error) {
       console.warn(`[Drift] simulated user failed on turn ${turn}: ${(error as Error).message}`);

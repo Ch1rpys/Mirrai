@@ -112,11 +112,11 @@ export async function inferEmotionalState(params: {
     const response = params.providerInstance
       ? await llmService.invokeWithProvider(params.providerInstance, {
           messages,
-          options: { provider: params.provider, temperature: 0, maxTokens: 200 },
+          options: { provider: params.provider, temperature: 0, maxTokens: 200, purpose: "classify" },
         })
       : await llmService.invoke({
           messages,
-          options: { provider: params.provider, temperature: 0, maxTokens: 200 },
+          options: { provider: params.provider, temperature: 0, maxTokens: 200, purpose: "classify" },
         });
 
     const parsed = extractJsonObject(response);

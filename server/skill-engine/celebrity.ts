@@ -540,6 +540,7 @@ async function invokeStage(
       provider: options.provider,
       maxTokens: options.maxTokens,
       temperature: options.temperature ?? 0.4,
+      purpose: "distill",
     },
   });
   return result?.trim() ?? "";
