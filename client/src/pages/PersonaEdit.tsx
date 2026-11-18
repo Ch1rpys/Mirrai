@@ -23,6 +23,7 @@ import LetterBox from "@/components/LetterBox";
 import MicroRulesEditor from "@/components/MicroRulesEditor";
 import ImperfectionEditor from "@/components/ImperfectionEditor";
 import V5FidelityEditors from "@/components/V5FidelityEditors";
+import LexiconEditor from "@/components/v6/LexiconEditor";
 import PersonaSwitches from "@/components/v6/PersonaSwitches";
 import HarmNotice from "@/components/v6/HarmNotice";
 import VersionHistory from "@/components/v6/VersionHistory";
@@ -807,6 +808,8 @@ export default function PersonaEdit() {
             <MicroRulesEditor personaId={personaId} />
             <hr className="rule" />
             <ImperfectionEditor personaId={personaId} />
+            <hr className="rule" />
+            <LexiconEditor personaId={personaId} />
             <hr className="rule" />
             <V5FidelityEditors personaId={personaId} />
           </section>

@@ -39,6 +39,7 @@ export const PERSONA_ARRAY_FIELDS = [
   "periods",
   "rejectedFeedbackKeys",
   "clarified",
+  "lexicon",
 ] as const;
 
 export type PersonaArrayField = (typeof PERSONA_ARRAY_FIELDS)[number];

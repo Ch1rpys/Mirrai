@@ -34,6 +34,7 @@ import { capReply, replyBudget } from "@shared/length-cap";
 import { effectiveStyleProfile } from "@shared/style-profile";
 import { FINGERPRINT_STATES, type EmotionalState, type StyleFingerprintCore } from "@shared/style-fingerprint";
 import { projectStyle } from "@shared/style-projection";
+import { hasPromptLexicon } from "@shared/lexicon";
 import type { ScoredMemory } from "./retrieval";
 
 export interface TurnInput {
@@ -135,6 +136,9 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       layersUsed.includes("rerank") &&
       fingerprintCoreForTurn(input),
   );
+  const lexiconOn = Boolean(
+    layers.lexicon && hasPromptLexicon((input.persona.personaData as { lexicon?: unknown } | null)?.lexicon),
+  );
 
   if (sampled?.act === "silence" && timingEnabled && !input.exclude) {
     return {
@@ -165,6 +169,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       microRules: layers.rules ? undefined : null,
       imperfectionProfile: layers.imperfection ? undefined : null,
       suppressions: layers.suppressions ? undefined : null,
+      lexicon: layers.lexicon ? undefined : null,
       skipExemplars: !layers.exemplars,
       excludeExemplarIds: input.exclude.recordIds,
       excludeExemplarTexts: input.exclude.texts,
@@ -182,7 +187,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       sampledAct,
       messages,
       ...length,
-      layersUsed: withMeasuredLayers(layersUsed, length, projectionOn, fingerprintRerankOn),
+      layersUsed: withMeasuredLayers(layersUsed, length, projectionOn, fingerprintRerankOn, lexiconOn),
       exemplarIds: [],
       seedRecordIds: [],
       recalled: [],
@@ -209,7 +214,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     sampledAct,
     messages: composed.messages,
     ...length,
-    layersUsed: withMeasuredLayers(layersUsed, length, projectionOn, fingerprintRerankOn),
+    layersUsed: withMeasuredLayers(layersUsed, length, projectionOn, fingerprintRerankOn, lexiconOn),
     exemplarIds: [],
     seedRecordIds: [],
     recalled: composed.recalled,
@@ -244,11 +249,13 @@ function withMeasuredLayers(
   length: { maxChars?: number },
   projectionOn: boolean,
   fingerprintRerankOn: boolean,
+  lexiconOn: boolean,
 ): LayerId[] {
   const extra: LayerId[] = [];
   if (length.maxChars != null) extra.push("lengthCap");
   if (projectionOn) extra.push("projection");
   if (fingerprintRerankOn) extra.push("fingerprintRerank");
+  if (lexiconOn) extra.push("lexicon");
   if (extra.length === 0) return layersUsed;
   const used = new Set<LayerId>([...layersUsed, ...extra]);
   return LAYERS.filter((id) => used.has(id));

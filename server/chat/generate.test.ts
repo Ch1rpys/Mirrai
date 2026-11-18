@@ -625,3 +625,59 @@ describe("fingerprint rerank layer", () => {
   });
 });
 
+describe("the lexicon layer", () => {
+  function personaWithLexicon() {
+    const row = persona();
+    row.personaData = {
+      personality: "温柔",
+      speakingStyle: "慢慢说",
+      lexicon: [
+        {
+          id: "l1",
+          term: "咕咕",
+          gloss: "放鸽子",
+          who: "them",
+          count: 15,
+          evidence: [{ snippet: "又咕咕了" }],
+          source: "auto",
+          verified: true,
+        },
+      ],
+    };
+    return row;
+  }
+
+  it("puts confirmed private words in the prompt and in layersUsed", async () => {
+    const input = {
+      persona: personaWithLexicon(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "lexicon:on",
+      exclude: { texts: [HELD_OUT] },
+    };
+    const plan = await planTurn(input);
+    expect(plan.layersUsed).toContain("lexicon");
+    expect(plan.messages[0]?.content).toContain("咕咕");
+  });
+
+  it("omits them with --without lexicon", async () => {
+    const input = {
+      persona: personaWithLexicon(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "lexicon:off",
+      exclude: { texts: [HELD_OUT] },
+      layerOverrides: layerOverridesForEval({ without: ["lexicon"] }),
+    };
+    const plan = await planTurn(input);
+    expect(plan.layersUsed).not.toContain("lexicon");
+    expect(plan.messages[0]?.content).not.toContain("咕咕");
+  });
+});
+

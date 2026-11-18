@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { collectLexiconCandidates } from "@shared/lexicon";
+import { collectLexiconCandidates, mergeLexicon } from "@shared/lexicon";
 import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
 import { mineLexicon } from "./lexicon";
 
@@ -102,5 +102,37 @@ describe("counting the private lexicon", () => {
     expect(terms).toContain("咕咕");
     expect(terms).not.toContain("又咕咕了");
     expect(terms).not.toContain("又咕咕");
+  });
+
+  it("keeps a confirmed word across a re-run and leaves a rejected one gone", () => {
+    const confirmed = {
+      id: "keep",
+      term: "咕咕",
+      gloss: "放鸽子",
+      who: "them" as const,
+      count: 15,
+      evidence: [{ snippet: "又咕咕了" }],
+      source: "auto" as const,
+      verified: true,
+    };
+    const merged = mergeLexicon(
+      [confirmed],
+      [
+        { ...confirmed, id: "auto-new", gloss: "新的解释", verified: false },
+        {
+          id: "auto-no",
+          term: "专属黑话",
+          gloss: "不该回来",
+          who: "both" as const,
+          count: 8,
+          evidence: [{ snippet: "专属黑话" }],
+          source: "auto" as const,
+          verified: false,
+        },
+      ],
+      ["lexicon:专属黑话"],
+    );
+    expect(merged.map((row) => row.term)).toEqual(["咕咕"]);
+    expect(merged[0]?.gloss).toBe("放鸽子");
   });
 });

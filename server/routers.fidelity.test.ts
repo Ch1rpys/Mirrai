@@ -525,3 +525,60 @@ describe("the way out", () => {
     expect(updateOutboundLetterText).toHaveBeenCalledWith(7, 1, "改过的句子");
   });
 });
+
+describe("the private lexicon", () => {
+  it("refuses a persona the user does not own", async () => {
+    getPersonaById.mockResolvedValue(null);
+    const caller = appRouter.createCaller(makeCtx());
+    await expect(caller.lexicon.list({ personaId: 1 })).rejects.toThrow();
+  });
+
+  it("writes confirmed words into the persona's own data", async () => {
+    const caller = appRouter.createCaller(makeCtx());
+    await caller.lexicon.save({
+      personaId: 1,
+      entries: [
+        {
+          term: "咕咕",
+          gloss: "放鸽子",
+          who: "them",
+          count: 15,
+          source: "manual",
+          verified: true,
+          evidence: [{ snippet: "又咕咕了" }],
+        },
+      ],
+    });
+    expect(updatePersona).toHaveBeenCalled();
+    const written = (updatePersona.mock.calls[0][2] as any).personaData;
+    expect(written.lexicon).toHaveLength(1);
+    expect(written.lexicon[0].term).toBe("咕咕");
+    expect(written.personality).toBe("温柔");
+  });
+
+  it("remembers a rejected word so a later mine does not bring it back", async () => {
+    getPersonaById.mockResolvedValue(persona({
+      personaData: {
+        personality: "温柔",
+        speakingStyle: "短句",
+        lexicon: [
+          {
+            id: "l1",
+            term: "咕咕",
+            gloss: "放鸽子",
+            who: "them",
+            count: 15,
+            evidence: [],
+            source: "auto",
+            verified: false,
+          },
+        ],
+      },
+    }));
+    const caller = appRouter.createCaller(makeCtx());
+    await caller.lexicon.save({ personaId: 1, entries: [] });
+    const written = (updatePersona.mock.calls[0][2] as any).personaData;
+    expect(written.lexicon).toEqual([]);
+    expect(written.rejectedFeedbackKeys).toContain("lexicon:咕咕");
+  });
+});

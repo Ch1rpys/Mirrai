@@ -146,6 +146,8 @@ import { normalizeSuppressions } from "@shared/suppressions";
 import { correctActCount, normalizeActProfile } from "@shared/act-profile";
 import { normalizeLifeEvents } from "@shared/life-events";
 import { mineForgetStyles, mineSuppressions } from "./skill-engine/suppressions";
+import { mineLexicon } from "./skill-engine/lexicon";
+import { lexiconRejectedKey, normalizeLexicon } from "@shared/lexicon";
 import { mineOpenLoops } from "./skill-engine/open-loops";
 import { feedbackRowsFromBlindSessions } from "./eval/blind";
 import {
@@ -5629,6 +5631,94 @@ export const appRouter = router({
             personaData: { ...((persona.personaData as any) || {}), suppressions: rules },
           });
           return { rules };
+        });
+      }),
+  }),
+
+  lexicon: router({
+    list: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const entries = normalizeLexicon((persona.personaData as any)?.lexicon);
+        return {
+          entries,
+          hint: entries.length ? undefined : copy(ctx.locale, "labels.lexicon.minedNone"),
+        };
+      }),
+    mine: protectedProcedure
+      .input(z.object({ personaId: z.number(), locale: z.enum(["zh", "en"]).default("zh") }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id, { newest: true });
+          const mined = await mineLexicon({
+            personaId: input.personaId,
+            userId: ctx.user.id,
+            locale: input.locale,
+            records: rows,
+          });
+          if (!mined.length) {
+            return { entries: [], hint: copy(input.locale, "labels.lexicon.minedNone") };
+          }
+          const data = (persona.personaData as any) || {};
+          const existing = normalizeLexicon(data.lexicon);
+          const known = new Set(existing.map((row) => row.term));
+          const rejected = new Set(
+            (Array.isArray(data.rejectedFeedbackKeys) ? data.rejectedFeedbackKeys : []).filter(
+              (key: unknown): key is string => typeof key === "string",
+            ),
+          );
+          const fresh = mined.filter(
+            (row) => !known.has(row.term) && !rejected.has(lexiconRejectedKey(row.term)),
+          );
+          const entries = normalizeLexicon([...existing, ...fresh]);
+          await updatePersona(input.personaId, ctx.user.id, {
+            personaData: { ...data, lexicon: entries },
+          });
+          return { entries: fresh, hint: copy(input.locale, "labels.lexicon.mine") };
+        });
+      }),
+    save: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        entries: z.array(z.object({
+          id: z.string().max(64).optional(),
+          term: z.string().min(1).max(40),
+          gloss: z.string().max(20).default(""),
+          who: z.enum(["them", "me", "both"]).default("both"),
+          count: z.number().int().min(0).default(0),
+          firstAt: z.string().max(40).optional(),
+          evidence: z.array(z.object({
+            at: z.string().max(40).optional(),
+            snippet: z.string().max(1000),
+          })).max(20).default([]),
+          source: z.enum(["auto", "manual"]).default("manual"),
+          verified: z.boolean().default(true),
+        })).max(200),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const data = (persona.personaData as any) || {};
+          const previous = normalizeLexicon(data.lexicon);
+          const entries = normalizeLexicon(input.entries);
+          const nextTerms = new Set(entries.map((row) => row.term));
+          const rejected = Array.isArray(data.rejectedFeedbackKeys)
+            ? data.rejectedFeedbackKeys.filter((key: unknown): key is string => typeof key === "string")
+            : [];
+          for (const row of previous) {
+            if (nextTerms.has(row.term)) continue;
+            const key = lexiconRejectedKey(row.term);
+            if (!rejected.includes(key)) rejected.push(key);
+          }
+          await updatePersona(input.personaId, ctx.user.id, {
+            personaData: { ...data, lexicon: entries, rejectedFeedbackKeys: rejected },
+          });
+          return { entries };
         });
       }),
   }),

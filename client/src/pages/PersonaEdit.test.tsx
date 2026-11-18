@@ -108,6 +108,9 @@ vi.mock("@/components/ImperfectionEditor", () => ({
 vi.mock("@/components/V5FidelityEditors", () => ({
   default: () => <div data-testid="v5-editors" />,
 }));
+vi.mock("@/components/v6/LexiconEditor", () => ({
+  default: () => <div data-testid="lexicon-editor" />,
+}));
 vi.mock("@/components/v6/VersionHistory", () => ({
   default: () => <div data-testid="version-history" />,
 }));

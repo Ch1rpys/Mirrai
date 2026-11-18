@@ -14,6 +14,7 @@ import { renderActInstruction, type SpeechAct } from "@shared/speech-acts";
 import { normalizePersonaData } from "./persona-schema";
 import { shouldInstructHarm } from "@shared/harm";
 import { normalizeAddressHistory, pickThemToMeAddress } from "@shared/address-history";
+import { normalizeLexicon, renderLexicon, type LexiconEntry } from "@shared/lexicon";
 
 export { INTIMACY_LEVELS, normalizeIntimacyLevel };
 
@@ -270,6 +271,10 @@ export interface SystemPromptOptions {
    * them-to-me form from the address history.
    */
   periodId?: string | null;
+  /**
+   * Private words. `null` turns them off without touching the persona.
+   */
+  lexicon?: LexiconEntry[] | null;
 }
 
 export function buildSystemPrompt(persona: any, sceneOverlay?: string | null): string;
@@ -438,6 +443,11 @@ export function buildSystemPrompt(
           locale,
         );
 
+  const lexiconLines =
+    options.lexicon === null
+      ? ""
+      : renderLexicon(options.lexicon ?? normalizeLexicon(p.lexicon), locale);
+
   const actInstruction = options.sampledAct
     ? renderActInstruction(options.sampledAct, locale)
     : "";
@@ -510,7 +520,7 @@ export function buildSystemPrompt(
             },
           )}\n${copy(locale, "prompt.nickname", {
             value: nicknameForPrompt(persona, p.nickname, options.periodId, locale),
-          })}`,
+          })}${lexiconLines ? `\n${lexiconLines}` : ""}`,
         )
       : "",
     // These already carry their own heading.

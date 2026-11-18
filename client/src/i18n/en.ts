@@ -1376,6 +1376,19 @@ export const en = {
     sourceManual: "Written by you",
   },
 
+  lexicon: {
+    title: "Words between you",
+    hint: "Nicknames, in-jokes, and phrases that only these two people use. They reach the prompt once you confirm them.",
+    empty: "No words yet. Mine some from the records, or write one yourself.",
+    add: "Add a word",
+    term: "Word",
+    gloss: "Meaning",
+    confirm: "Confirm",
+    reject: "Not ours",
+    mine: "Mine from the records",
+    verified: "Confirmed — in effect",
+  },
+
   /**
    * Imperfection, per state.
    *

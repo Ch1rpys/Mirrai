@@ -39,6 +39,7 @@ import { normalizeSuppressions, type Suppression } from "@shared/suppressions";
 import { normalizeActProfile, type ActProfile } from "@shared/act-profile";
 import { normalizeLifeEvents, type LifeEvent } from "@shared/life-events";
 import { normalizeOpeningProfile, type OpeningProfile } from "@shared/opening-profile";
+import { mergeLexicon, type LexiconEntry } from "@shared/lexicon";
 import { normalizePeriods, type PersonaPeriod } from "@shared/periods";
 import { mineSuppressions, mineForgetStyles } from "./suppressions";
 import { mineOpenLoops } from "./open-loops";
@@ -71,6 +72,7 @@ import {
   parseTranscriptMessages,
 } from "./micro-rules";
 import { stateRulesFromTranscript } from "./state-rules";
+import { mineLexicon } from "./lexicon";
 import { toMinerRows } from "./roles";
 import { isTextRecord, type RecordKind } from "@shared/records";
 import { parseExportTime } from "../importers/normalize";
@@ -272,6 +274,7 @@ export interface MinedV5 {
   actProfile?: ActProfile | null;
   openingProfile?: OpeningProfile | null;
   periods?: PersonaPeriod[];
+  lexicon?: LexiconEntry[];
 }
 
 export function mergeUserDecisions(
@@ -333,6 +336,13 @@ export function mergeUserDecisions(
     rejectedFeedbackKeys: Array.isArray(previous.rejectedFeedbackKeys)
       ? previous.rejectedFeedbackKeys.filter((key): key is string => typeof key === "string")
       : fresh.rejectedFeedbackKeys,
+    lexicon: mergeLexicon(
+      previous.lexicon,
+      mined.lexicon,
+      Array.isArray(previous.rejectedFeedbackKeys)
+        ? previous.rejectedFeedbackKeys.filter((key): key is string => typeof key === "string")
+        : fresh.rejectedFeedbackKeys ?? [],
+    ),
     imperfectionDefaultsReviewed: Boolean(
       previous.imperfectionDefaultsReviewed ?? fresh.imperfectionDefaultsReviewed,
     ),
@@ -1718,6 +1728,16 @@ async function runSkillPipelineOnce(
       })),
       locale,
     });
+    const minedLexicon = await mineLexicon({
+      personaId,
+      userId,
+      locale,
+      records: transcriptRows,
+      invoke: invokeForDistill,
+    }).catch((e) => {
+      console.warn("[SkillEngine] The lexicon could not be mined:", e.message);
+      return [];
+    });
 
     /**
      * The facts in the upload become memories.
@@ -1858,6 +1878,7 @@ async function runSkillPipelineOnce(
             actProfile: minedActProfile,
             openingProfile: minedOpeningProfile,
             periods: minedPeriods,
+            lexicon: minedLexicon,
           })) as PersonaData;
 
       if (changedWhileRunning) {

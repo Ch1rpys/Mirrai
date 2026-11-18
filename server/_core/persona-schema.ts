@@ -47,6 +47,7 @@ import {
   type OpeningProfile,
 } from "@shared/opening-profile";
 import { normalizeHarmReport, type HarmReport } from "@shared/harm";
+import { normalizeLexicon, type LexiconEntry } from "@shared/lexicon";
 
 export interface PersonaData {
   personality: string;
@@ -108,6 +109,10 @@ export interface PersonaData {
   harmReport?: HarmReport | null;
   /** Question ids the user already answered or skipped, so they are not asked again. */
   clarified?: string[];
+  /**
+   * Private words. Unconfirmed candidates stay out of the prompt.
+   */
+  lexicon?: LexiconEntry[];
 }
 
 /** The stages a relationship can be in. */
@@ -143,6 +148,7 @@ export const PERSONA_DATA_FIELDS: Array<keyof PersonaData> = [
   "imperfectionDefaultsReviewed",
   "harmReport",
   "clarified",
+  "lexicon",
 ];
 
 /**
@@ -189,6 +195,7 @@ export const PERSONA_DOCUMENT_EXCLUDED_FIELDS: Array<keyof PersonaData> = [
   "imperfectionDefaultsReviewed",
   "harmReport",
   "clarified",
+  "lexicon",
 ];
 
 /** The default realism level: noticeably imperfect, but not a mess. */
@@ -335,6 +342,7 @@ export function normalizePersonaData(
     fallback.imperfectionDefaultsReviewed === true;
   const harmReport = normalizeHarmReport(source.harmReport ?? fallback.harmReport);
   const clarified = toStringList(source.clarified ?? fallback.clarified);
+  const lexicon = normalizeLexicon(source.lexicon ?? fallback.lexicon);
 
   return {
     personality,
@@ -360,5 +368,6 @@ export function normalizePersonaData(
     imperfectionDefaultsReviewed,
     ...(harmReport ? { harmReport } : {}),
     ...(clarified.length ? { clarified } : {}),
+    lexicon,
   };
 }

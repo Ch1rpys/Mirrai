@@ -348,3 +348,20 @@ export function lexiconWho(candidate: Pick<LexiconCandidate, "them" | "me">): Le
 export function isLexiconWho(value: unknown): value is LexiconWho {
   return isWho(value);
 }
+
+/**
+ * Confirmed entries survive a re-run. Rejected terms stay gone.
+ */
+export function mergeLexicon(
+  previous: unknown,
+  mined: unknown,
+  rejectedKeys: string[] = [],
+): LexiconEntry[] {
+  const confirmed = normalizeLexicon(previous).filter((row) => row.verified);
+  const confirmedTerms = new Set(confirmed.map((row) => row.term));
+  const rejected = new Set(rejectedKeys);
+  const fresh = normalizeLexicon(mined).filter(
+    (row) => !confirmedTerms.has(row.term) && !rejected.has(lexiconRejectedKey(row.term)),
+  );
+  return [...confirmed, ...fresh];
+}

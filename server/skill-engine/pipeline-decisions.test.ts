@@ -250,6 +250,56 @@ describe("a re-run of the distillation", () => {
     expect(merged.harmReport?.decidedAt).toBe("2026-01-01T00:00:00.000Z");
   });
 
+  it("keeps a confirmed private word and does not revive a rejected one", () => {
+    const merged = mergeUserDecisions(
+      fresh,
+      {
+        lexicon: [
+          {
+            id: "keep",
+            term: "咕咕",
+            gloss: "放鸽子",
+            who: "them",
+            count: 15,
+            evidence: [{ snippet: "又咕咕了" }],
+            source: "auto",
+            verified: true,
+          },
+        ],
+        rejectedFeedbackKeys: ["lexicon:专属黑话"],
+      },
+      [],
+      "zh",
+      {
+        lexicon: [
+          {
+            id: "auto-gugu",
+            term: "咕咕",
+            gloss: "新的解释",
+            who: "them",
+            count: 16,
+            evidence: [{ snippet: "又咕咕了" }],
+            source: "auto",
+            verified: false,
+          },
+          {
+            id: "auto-slang",
+            term: "专属黑话",
+            gloss: "不该回来",
+            who: "both",
+            count: 8,
+            evidence: [{ snippet: "专属黑话" }],
+            source: "auto",
+            verified: false,
+          },
+        ],
+      },
+    );
+    expect(merged.lexicon?.map((row) => row.term)).toEqual(["咕咕"]);
+    expect(merged.lexicon?.[0].gloss).toBe("放鸽子");
+    expect(merged.lexicon?.[0].verified).toBe(true);
+  });
+
   it("keeps the questions the user already answered", () => {
     const merged = mergeUserDecisions(
       fresh,

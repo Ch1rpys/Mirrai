@@ -523,4 +523,12 @@ export const V6 = {
     zh: "你们之间的说法：{{term}}——{{gloss}}",
     en: "A phrase between you: {{term}} — {{gloss}}",
   },
+  "labels.lexicon.mine": {
+    zh: "从记录里挖词",
+    en: "Mine words from the records",
+  },
+  "labels.lexicon.minedNone": {
+    zh: "记录里没有挖到专属的说法。",
+    en: "The records did not yield a private phrase.",
+  },
 } as const satisfies CopyTable;

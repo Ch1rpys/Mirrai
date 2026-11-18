@@ -15,6 +15,7 @@ import { copy } from "@shared/copy";
 import type { MicroRule } from "@shared/micro-rules";
 import type { ImperfectionEntry } from "@shared/imperfection";
 import type { Suppression } from "@shared/suppressions";
+import type { LexiconEntry } from "@shared/lexicon";
 import type { SpeechAct } from "@shared/speech-acts";
 import { retrieveExemplars, renderExemplars } from "./exemplars";
 
@@ -106,6 +107,7 @@ export interface PromptContext {
    */
   imperfectionProfile?: ImperfectionEntry[] | null;
   suppressions?: Suppression[] | null;
+  lexicon?: LexiconEntry[] | null;
   sampledAct?: SpeechAct | null;
   /**
    * Held-out reply ids/texts that must not appear as exemplars.
@@ -208,6 +210,7 @@ export async function buildPromptForPersona(
       "suppressions",
       context.suppressions,
     ),
+    lexicon: context.lexicon,
     sampledAct: context.sampledAct ?? null,
     exemplarSection: context.skipExemplars
       ? ""

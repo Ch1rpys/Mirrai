@@ -1377,6 +1377,19 @@ export const zh = {
     sourceManual: "你写的",
   },
 
+  lexicon: {
+    title: "你们之间的词",
+    hint: "只在这两个人之间才有的说法、外号、梗。确认之后才会进提示词。",
+    empty: "还没有词。从聊天记录里挖一批，或者自己写一条。",
+    add: "加一个词",
+    term: "词",
+    gloss: "意思",
+    confirm: "确认",
+    reject: "不是",
+    mine: "从记录里挖",
+    verified: "已确认，会生效",
+  },
+
   /**
    * Imperfection, per state.
    *

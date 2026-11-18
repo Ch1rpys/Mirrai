@@ -258,3 +258,80 @@ describe("the imperfection in the prompt", () => {
     expect(prompt).not.toContain("不完美的特征");
   });
 });
+
+describe("private words in the prompt", () => {
+  it("says nothing about a word the user has not confirmed", () => {
+    const prompt = buildSystemPrompt(
+      {
+        ...persona,
+        personaData: {
+          ...persona.personaData,
+          lexicon: [
+            {
+              id: "l1",
+              term: "咕咕",
+              gloss: "放鸽子",
+              who: "them",
+              count: 15,
+              evidence: [{ snippet: "又咕咕了" }],
+              source: "auto",
+              verified: false,
+            },
+          ],
+        },
+      },
+      { locale: "zh" },
+    );
+    expect(prompt).not.toContain("咕咕");
+  });
+
+  it("puts a confirmed word in the speaking-style fence", () => {
+    const prompt = buildSystemPrompt(
+      {
+        ...persona,
+        personaData: {
+          ...persona.personaData,
+          lexicon: [
+            {
+              id: "l1",
+              term: "咕咕",
+              gloss: "放鸽子",
+              who: "them",
+              count: 15,
+              evidence: [{ snippet: "又咕咕了" }],
+              source: "auto",
+              verified: true,
+            },
+          ],
+        },
+      },
+      { locale: "zh" },
+    );
+    expect(prompt).toContain("你们之间的说法：咕咕——放鸽子");
+    const withoutFence = prompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "");
+    expect(withoutFence).not.toContain("咕咕");
+  });
+
+  it("can be switched off without touching the persona", () => {
+    const withLexicon = {
+      ...persona,
+      personaData: {
+        ...persona.personaData,
+        lexicon: [
+          {
+            id: "l1",
+            term: "咕咕",
+            gloss: "放鸽子",
+            who: "them",
+            count: 15,
+            evidence: [{ snippet: "又咕咕了" }],
+            source: "auto",
+            verified: true,
+          },
+        ],
+      },
+    };
+    const prompt = buildSystemPrompt(withLexicon, { locale: "zh", lexicon: null });
+    expect(prompt).not.toContain("咕咕");
+  });
+});

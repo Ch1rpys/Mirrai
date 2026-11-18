@@ -223,6 +223,33 @@ describe("the simulated user in a drift run", () => {
   });
 });
 
+describe("a private word's gloss", () => {
+  it("reaches the prompt only inside the fence", () => {
+    const prompt = buildSystemPrompt(
+      persona({
+        personaData: {
+          speakingStyle: "短句",
+          catchphrases: ["嗯"],
+          lexicon: [
+            {
+              id: "l1",
+              term: "咕咕",
+              gloss: HOSTILE_NOTE,
+              who: "them",
+              count: 15,
+              evidence: [{ snippet: "又咕咕了" }],
+              source: "auto",
+              verified: true,
+            },
+          ],
+        },
+      }),
+    );
+    expect(prompt).toContain(HOSTILE_NOTE);
+    expect(unfenced(prompt)).not.toContain(HOSTILE_NOTE);
+  });
+});
+
 describe("a counted address from the records", () => {
   it("reaches the prompt only inside the fence", () => {
     const prompt = buildSystemPrompt(

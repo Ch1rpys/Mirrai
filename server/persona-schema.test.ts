@@ -29,6 +29,7 @@ describe("normalizePersonaData", () => {
       periods: [],
       rejectedFeedbackKeys: [],
       imperfectionDefaultsReviewed: false,
+      lexicon: [],
     });
   });
 
@@ -91,6 +92,7 @@ describe("normalizePersonaData", () => {
       "conflictStyle",
       "imperfectionDefaultsReviewed",
       "imperfectionProfile",
+      "lexicon",
       "lifeEvents",
       "loveLanguage",
       "memories",
