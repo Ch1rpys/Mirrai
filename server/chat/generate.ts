@@ -66,6 +66,10 @@ import { minuteOfDay } from "@shared/proactive-decision";
 import { normalizeInSession, pickInSessionFact } from "@shared/in-session";
 import { currentRoutines, normalizeLifeEvents } from "@shared/life-events";
 import { filterHarm } from "@shared/harm";
+import {
+  hasUnsupportedClaim,
+  type VerifyClaimsContext,
+} from "./fact-check";
 import { relationshipIsOver } from "@shared/relationship-ended";
 import {
   matchRitual,
@@ -281,6 +285,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   ]);
   const reminderOn = reminder.lines.length > 0 || reminder.issues.length > 0;
   const twoStageOn = Boolean(layers.twoStage);
+  const factRewriteOn = Boolean(layers.factRewrite);
   const clusterLines = actClusterLinesForTurn(layers.actClusters, sampledAct, input, rng);
   const clustersOn = clusterLines.length > 0;
   const emotionInertiaOn = Boolean(
@@ -366,6 +371,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
         emotionInertiaOn,
         closingTurn.closing,
         peopleLayerOn(layers.people, messages, input.locale),
+        factRewriteOn,
       ),
       exemplarIds: [],
       seedRecordIds: seeds.excludeIds,
@@ -439,6 +445,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       emotionInertiaOn,
       closingTurn.closing,
       peopleLayerOn(layers.people, composed.messages, input.locale),
+      factRewriteOn,
     ),
     exemplarIds: [],
     seedRecordIds: seeds.excludeIds,
@@ -573,6 +580,7 @@ function withMeasuredLayers(
   emotionInertiaOn = false,
   closingOn = false,
   peopleOn = false,
+  factRewriteOn = false,
 ): LayerId[] {
   const extra: LayerId[] = [];
   if (length.maxChars != null) extra.push("lengthCap");
@@ -587,6 +595,7 @@ function withMeasuredLayers(
   if (emotionInertiaOn) extra.push("emotionInertia");
   if (closingOn) extra.push("closing");
   if (peopleOn) extra.push("people");
+  if (factRewriteOn) extra.push("factRewrite");
   if (extra.length === 0) return layersUsed;
   const used = new Set<LayerId>([...layersUsed, ...extra]);
   return LAYERS.filter((id) => used.has(id));
@@ -957,6 +966,22 @@ function tighterTokenBudget(plan: number | undefined, requested: number | undefi
   return Math.min(plan, requested);
 }
 
+function withFactRewriteInstruction(messages: LLMMessage[], locale: "zh" | "en"): LLMMessage[] {
+  const line = copy(locale, "prompt.factRewrite");
+  if (messages.length === 0) return [{ role: "system", content: line }];
+  const first = messages[0]!;
+  if (first.role !== "system") return [{ role: "system", content: line }, ...messages];
+  return [{ ...first, content: `${first.content}\n\n${line}` }, ...messages.slice(1)];
+}
+
+function claimsContextFor(plan: TurnPlan, input: TurnInput): VerifyClaimsContext {
+  return {
+    personaId: input.persona.id,
+    userId: input.userId,
+    memories: plan.recalled.map((row) => ({ id: row.id, title: row.title })),
+  };
+}
+
 function applyLengthCap(text: string, plan: TurnPlan, projection: string[]): {
   text: string;
   projection: string[];
@@ -1061,7 +1086,7 @@ export async function* executePlan(
 
   if (useRerank && rerankModel) {
     yield { type: "thinking" };
-    const texts = await Promise.all(
+    let texts = await Promise.all(
       Array.from({ length: 4 }, async () => {
         try {
           const answer = await llmService.invokeWithProvider(voiceProvider, {
@@ -1074,6 +1099,30 @@ export async function* executePlan(
         }
       }),
     );
+    const rewriteOn = plan.layersUsed.includes("factRewrite");
+    if (rewriteOn) {
+      const ctx = claimsContextFor(plan, input);
+      const judged = await Promise.all(
+        texts.map(async (text) => ({
+          text,
+          unsupported: text ? await hasUnsupportedClaim(text, ctx, locale) : true,
+        })),
+      );
+      const kept = judged.filter((row) => row.text && !row.unsupported).map((row) => row.text);
+      if (kept.length > 0) {
+        texts = kept;
+      } else {
+        try {
+          const rewritten = await llmService.invokeWithProvider(voiceProvider, {
+            messages: withFactRewriteInstruction(replyMessages, locale),
+            options: { ...replyOptions, purpose: "reply" },
+          });
+          texts = [typeof rewritten === "string" ? rewritten : ""];
+        } catch {
+          texts = judged.map((row) => row.text).filter(Boolean);
+        }
+      }
+    }
     let records: Array<{ role: string; content: string; id?: number; kind?: string | null }> = [];
     try {
       records = await db.getCollectedMessagesForPersona(input.persona.id, input.userId, { newest: true });
@@ -1166,6 +1215,19 @@ export async function* executePlan(
     replyText = typeof replyText === "string" ? replyText : "";
   } else {
     replyText = replyText || copy(locale, "prompt.silence");
+  }
+  if (plan.layersUsed.includes("factRewrite") && typeof replyText === "string" && replyText) {
+    try {
+      if (await hasUnsupportedClaim(replyText, claimsContextFor(plan, input), locale)) {
+        const rewritten = await llmService.invokeWithProvider(voiceProvider, {
+          messages: withFactRewriteInstruction(replyMessages, locale),
+          options: { ...replyOptions, purpose: "reply" },
+        });
+        if (typeof rewritten === "string" && rewritten) replyText = rewritten;
+      }
+    } catch {
+      // The first reply still goes out.
+    }
   }
   const once = finalizeGenerated(replyText, plan, input);
   if (io.emitDeltas) yield { type: "delta", text: once.text };

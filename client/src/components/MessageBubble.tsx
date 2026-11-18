@@ -42,6 +42,11 @@ export interface Message {
   /** The memories that were injected into this turn. */
   recalled?: Array<{ id: number; title: string; subject: string }>;
   /**
+   * Dates, places, and old days named in this reply, and whether the
+   * record holds them.
+   */
+  claims?: Array<{ text: string; supported: boolean; date?: string | null }>;
+  /**
    * Where the message came from, when it is not an ordinary turn.
    *
    * "letter" — the answer to a letter the user wrote.
@@ -561,6 +566,17 @@ export function MessageBubble({
               ))}
             </ul>
           </details>
+        )}
+        {!isUser && msg.claims && msg.claims.length > 0 && (
+          <ul className="space-y-0.5">
+            {msg.claims.map((claim) => (
+              <li key={`${claim.text}:${claim.supported}`} className="text-[11px] text-muted-subtle leading-relaxed">
+                {claim.supported
+                  ? t("chat.claimSupported", { text: claim.text, date: claim.date ?? "" })
+                  : t("chat.claimUnsupported", { text: claim.text })}
+              </li>
+            ))}
+          </ul>
         )}
         <div className={`px-3.5 py-2.5 text-sm leading-relaxed ${isUser ? "bubble-user" : "bubble-ai"}`}>
           {msg.replyToContent && !editing && (

@@ -88,6 +88,7 @@ vi.mock("../db", () => ({
   getRecentUserMood: (...a: unknown[]) => getRecentUserMood(...a),
   getRelationshipEvents: (...a: unknown[]) => getRelationshipEvents(...a),
   getCollectedMessagesForPersona: (...a: unknown[]) => getCollectedMessagesForPersona(...a),
+  searchRecordsLexical: vi.fn().mockResolvedValue([]),
   getLastExtractionAttemptAt: (...a: unknown[]) => getLastExtractionAttemptAt(...a),
   getLastExtractionAt: (...a: unknown[]) => getLastExtractionAt(...a),
   getMessageById: (...a: unknown[]) => getMessageById(...a),
@@ -767,6 +768,81 @@ describe("fingerprint rerank layer", () => {
     });
     expect(plan.layersUsed).toContain("rerank");
     expect(plan.layersUsed).not.toContain("fingerprintRerank");
+  });
+});
+
+describe("the fact rewrite layer", () => {
+  function personaWithFactRewrite() {
+    const next = personaWithRerankFingerprint();
+    next.settings = { layers: { factRewrite: true } };
+    return next;
+  }
+
+  it("picks the candidate that does not invent a place", async () => {
+    invokeWithProvider
+      .mockResolvedValueOnce("上次去蓝湖餐厅那天你迟到了")
+      .mockResolvedValueOnce("上次去蓝湖餐厅那天你迟到了")
+      .mockResolvedValueOnce("上次去蓝湖餐厅那天你迟到了")
+      .mockResolvedValueOnce("好的呀");
+    const input = {
+      persona: personaWithFactRewrite(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "fact-rewrite:keep",
+      exclude: { texts: [HELD_OUT] },
+    };
+    const plan = await planTurn(input);
+    expect(plan.layersUsed).toContain("factRewrite");
+    let final: { text: string } | null = null;
+    for await (const event of executePlan(plan, input, {
+      provider: stubProvider,
+      mode: "once",
+      rerank: true,
+      options: {},
+      trainingTexts: Array.from({ length: 40 }, (_, i) => `嗯${i}`),
+    })) {
+      if (event.type === "final") final = event;
+    }
+    expect(final?.text).toBe("好的呀");
+  });
+
+  it("calls the model once more with the rewrite instruction when every candidate invents", async () => {
+    invokeWithProvider.mockImplementation(async (_provider, args: { messages?: Array<{ role: string; content: string }> }) => {
+      const system = args.messages?.[0]?.content ?? "";
+      if (system.includes(copy("zh", "prompt.factRewrite"))) return "好吧";
+      return "上次去蓝湖餐厅那天你迟到了";
+    });
+    const input = {
+      persona: personaWithFactRewrite(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "fact-rewrite:again",
+      exclude: { texts: [HELD_OUT] },
+    };
+    const plan = await planTurn(input);
+    let final: { text: string } | null = null;
+    for await (const event of executePlan(plan, input, {
+      provider: stubProvider,
+      mode: "once",
+      rerank: true,
+      options: {},
+      trainingTexts: Array.from({ length: 40 }, (_, i) => `嗯${i}`),
+    })) {
+      if (event.type === "final") final = event;
+    }
+    expect(invokeWithProvider).toHaveBeenCalledTimes(5);
+    const rewriteCall = invokeWithProvider.mock.calls.find((call) => {
+      const system = (call[1] as { messages?: Array<{ content?: string }> })?.messages?.[0]?.content ?? "";
+      return system.includes(copy("zh", "prompt.factRewrite"));
+    });
+    expect(rewriteCall).toBeTruthy();
+    expect(final?.text).toBe("好吧");
   });
 });
 

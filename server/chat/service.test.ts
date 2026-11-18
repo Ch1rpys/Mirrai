@@ -37,6 +37,7 @@ const getUserById = vi.fn();
 const getRecentUserMood = vi.fn();
 const getRelationshipEvents = vi.fn();
 const updateMessageMetadata = vi.fn();
+const searchRecordsLexical = vi.fn();
 const createFidelityPair = vi.fn();
 const clearMessagePendingChoice = vi.fn();
 const getMessageById = vi.fn();
@@ -85,6 +86,7 @@ vi.mock("../db", () => ({
   getRecentUserMood: (...a: unknown[]) => getRecentUserMood(...a),
   getRelationshipEvents: (...a: unknown[]) => getRelationshipEvents(...a),
   updateMessageMetadata: (...a: unknown[]) => updateMessageMetadata(...a),
+  searchRecordsLexical: (...a: unknown[]) => searchRecordsLexical(...a),
   createFidelityPair: (...a: unknown[]) => createFidelityPair(...a),
   clearMessagePendingChoice: (...a: unknown[]) => clearMessagePendingChoice(...a),
   getMessageById: (...a: unknown[]) => getMessageById(...a),
@@ -164,7 +166,7 @@ describe("runConversation", () => {
       getLastMessageAt, getMessageCountSince, getDailyChatCounts,
       getSessionStartAt, getUserMessageCountSince, getDailyUserChatCounts, hasSafetyEventSince,
       incrementChatCount, updateMessageMetadata, createFidelityPair, clearMessagePendingChoice,
-      getMessageById, updateEmotionSnapshot,
+      getMessageById, updateEmotionSnapshot, searchRecordsLexical,
       invoke, invokeWithProvider,
       streamWithProvider, resolveProviderForUser, resolveProviderForPurpose, inferEmotionalState,
     ]) {
@@ -225,6 +227,7 @@ describe("runConversation", () => {
     resolveProviderForPurpose.mockImplementation((...a: unknown[]) => resolveProviderForUser(...a));
     invokeWithProvider.mockResolvedValue("在的。");
     updateMessageMetadata.mockResolvedValue(true);
+    searchRecordsLexical.mockResolvedValue([]);
     createFidelityPair.mockResolvedValue({ id: 1 });
     clearMessagePendingChoice.mockResolvedValue(true);
     incrementChatCount.mockResolvedValue(11);
@@ -528,6 +531,69 @@ describe("runConversation", () => {
       (call: unknown[]) => (call[0] as { role?: string }).role === "assistant",
     )?.[0] as { metadata?: { ritual?: string } };
     expect(assistant.metadata?.ritual).toBeUndefined();
+  });
+
+  it("streams the reply, then writes claim metadata", async () => {
+    streamWithProvider.mockImplementation(async function* () {
+      yield { text: "上次去拾光咖啡那天你迟到了" };
+    });
+    searchRecordsLexical.mockResolvedValue([
+      {
+        id: 12,
+        content: "拾光咖啡第一次见面",
+        timestamp: new Date("2022-03-12T04:00:00Z"),
+        coverage: 1,
+      },
+    ]);
+
+    const deltas: string[] = [];
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "在吗",
+      mode: "stream",
+    })) {
+      events.push(event);
+      if (event.type === "delta") deltas.push(event.text);
+    }
+
+    expect(deltas.join("")).toBe("上次去拾光咖啡那天你迟到了");
+    expect(events.find((event) => event.type === "done")).toBeTruthy();
+    expect(updateMessageMetadata).toHaveBeenCalledWith(
+      99,
+      1,
+      1,
+      expect.objectContaining({
+        claims: expect.arrayContaining([
+          expect.objectContaining({ text: "拾光咖啡", supported: true, source: expect.objectContaining({ type: "record", id: 12 }) }),
+        ]),
+      }),
+    );
+  });
+
+  it("still replies when the fact check throws", async () => {
+    streamWithProvider.mockImplementation(async function* () {
+      yield { text: "上次去拾光咖啡那天你迟到了" };
+    });
+    searchRecordsLexical.mockRejectedValue(new Error("the table is gone"));
+
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "在吗",
+      mode: "stream",
+    })) {
+      events.push(event);
+    }
+
+    expect(events.find((event) => event.type === "error")).toBeUndefined();
+    expect(events.find((event) => event.type === "done")).toBeTruthy();
+    const assistant = createMessage.mock.calls.find(
+      (call: unknown[]) => (call[0] as { role?: string }).role === "assistant",
+    );
+    expect(assistant).toBeTruthy();
   });
 
   it("streams the reply in pieces", async () => {

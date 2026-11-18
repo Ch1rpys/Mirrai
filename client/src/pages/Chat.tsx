@@ -87,6 +87,25 @@ function routineFromMetadata(metadata: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
 }
 
+function claimsFromMetadata(
+  metadata: unknown,
+): Array<{ text: string; supported: boolean; date?: string | null }> {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return [];
+  const raw = (metadata as { claims?: unknown }).claims;
+  if (!Array.isArray(raw)) return [];
+  const out: Array<{ text: string; supported: boolean; date?: string | null }> = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+    const text = (row as { text?: unknown }).text;
+    if (typeof text !== "string" || !text.trim()) continue;
+    const supported = Boolean((row as { supported?: unknown }).supported);
+    const at = (row as { source?: { at?: unknown } }).source?.at;
+    const date = typeof at === "string" && at.trim() ? at : null;
+    out.push({ text, supported, date });
+  }
+  return out;
+}
+
 function pendingChoiceFromMetadata(metadata: unknown): { options: [string, string] } | null {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
   const raw = (metadata as { pendingChoice?: unknown }).pendingChoice;
@@ -589,6 +608,7 @@ export default function Chat() {
       recalled: (m.recalled ?? []).filter((r: any) => r.title),
       pendingChoice: pendingChoiceFromMetadata(m.metadata),
       routine: routineFromMetadata(m.metadata),
+      claims: claimsFromMetadata(m.metadata),
     }));
 
     // The history is polled, so it can arrive while a reply is still
@@ -832,6 +852,11 @@ export default function Chat() {
                     isStreaming: false,
                     recalled: info.recalled,
                     routine: info.routine ?? null,
+                    claims: (info.claims ?? []).map((row) => ({
+                      text: row.text,
+                      supported: row.supported,
+                      date: row.source?.at ?? null,
+                    })),
                   }
                 : m
               ));

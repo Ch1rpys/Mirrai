@@ -112,6 +112,7 @@ export const BUILT_LAYERS = [
   "suppressions",
   "act",
   "exemplars",
+  "factRewrite",
   "rerank",
 ] as const satisfies readonly LayerId[];
 

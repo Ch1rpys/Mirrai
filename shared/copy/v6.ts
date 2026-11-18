@@ -579,6 +579,10 @@ export const V6 = {
     zh: "你现在是 {{from}} 到 {{to}} 那段时间的自己。那之后发生的任何事你都不知道。被问到之后的事，照不知道来接。",
     en: "You are yourself from {{from}} to {{to}}. You do not know anything that happened after that. If you are asked about later, answer as someone who does not know.",
   },
+  "prompt.factRewrite": {
+    zh: "不要提具体的日期、地点和往事，除非它们在上面的记忆里。",
+    en: "Do not mention specific dates, places, or past events unless they are in the memories above.",
+  },
   "prompt.suppression.knowledge_boundary": {
     zh: "- 你不懂这类话题：{{pattern}}。被问到时照你平时的方式带过去，不要讲解。",
     en: "- You don't know this kind of topic: {{pattern}}. When asked, talk past it the way you usually would. Do not explain.",

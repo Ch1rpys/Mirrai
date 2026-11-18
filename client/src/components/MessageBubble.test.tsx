@@ -406,6 +406,27 @@ describe("the message bubble", () => {
     expect(screen.getByText(/她养的那只猫/)).toBeInTheDocument();
   });
 
+  it("marks a supported claim and an unsupported one", () => {
+    render(
+      <MessageBubble
+        msg={makeMessage({
+          claims: [
+            { text: "拾光咖啡", supported: true, date: "2022-03-12" },
+            { text: "蓝湖餐厅", supported: false },
+          ],
+        })}
+        personaName="小A"
+        showMood={false}
+      />,
+    );
+    expect(
+      screen.getByText(translate("zh", "chat.claimSupported", { text: "拾光咖啡", date: "2022-03-12" })),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(translate("zh", "chat.claimUnsupported", { text: "蓝湖餐厅" })),
+    ).toBeInTheDocument();
+  });
+
   it("says where an ordinary-looking message really came from", () => {
     // A reply to a letter, and a message the persona started, look like
     // any other turn unless the bubble says so.

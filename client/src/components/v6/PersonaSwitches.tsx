@@ -27,8 +27,10 @@ export default function PersonaSwitches(props: { personaId: number; name: string
   const actClusters = settings.data?.layers?.actClusters !== false;
   const emotionInertia = settings.data?.layers?.emotionInertia !== false;
   const closing = settings.data?.layers?.closing !== false;
+  const factAnnotate = settings.data?.layers?.factAnnotate !== false;
   const abPairs = Boolean(settings.data?.layers?.abPairs);
   const twoStage = Boolean(settings.data?.layers?.twoStage);
+  const factRewrite = Boolean(settings.data?.layers?.factRewrite);
   const busy = settings.isLoading || update.isPending;
 
   return (
@@ -200,6 +202,26 @@ export default function PersonaSwitches(props: { personaId: number; name: string
       <label className="flex items-start gap-2 text-sm">
         <input
           type="checkbox"
+          checked={factAnnotate}
+          disabled={busy}
+          onChange={(event) =>
+            update.mutate({
+              id: props.personaId,
+              patch: { layers: { factAnnotate: event.target.checked } },
+            })
+          }
+          className="mt-0.5"
+        />
+        <span>
+          <span className="block">{t("personaEdit.factAnnotate")}</span>
+          <span className="block text-xs text-muted-foreground leading-relaxed">
+            {t("personaEdit.factAnnotateNote")}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
           checked={abPairs}
           disabled={busy}
           onChange={(event) =>
@@ -234,6 +256,26 @@ export default function PersonaSwitches(props: { personaId: number; name: string
           <span className="block">{t("personaEdit.twoStage", { name: props.name })}</span>
           <span className="block text-xs text-muted-foreground leading-relaxed">
             {t("personaEdit.twoStageNote")}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={factRewrite}
+          disabled={busy}
+          onChange={(event) =>
+            update.mutate({
+              id: props.personaId,
+              patch: { layers: { factRewrite: event.target.checked } },
+            })
+          }
+          className="mt-0.5"
+        />
+        <span>
+          <span className="block">{t("personaEdit.factRewrite")}</span>
+          <span className="block text-xs text-muted-foreground leading-relaxed">
+            {t("personaEdit.factRewriteNote")}
           </span>
         </span>
       </label>

@@ -61,6 +61,14 @@ describe("layersFromSettings", () => {
     ]);
   });
 
+  it("counts factRewrite when the switch is on", () => {
+    const layers = layersFromSettings({
+      settings: { layers: { factRewrite: true } },
+      rerankEnabled: false,
+    });
+    expect(layersInEffect(layers, { rerankEnabled: false })).toContain("factRewrite");
+  });
+
   it("keeps rerank when the persona column is on, even if an eval override asked for it", () => {
     const layers = applyLayerOverrides(
       layersFromSettings({ settings: null, rerankEnabled: true }),

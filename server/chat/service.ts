@@ -38,6 +38,7 @@ import { buildPromptBundleForPersona } from "./prompt";
 import { splitBurst } from "./burst";
 import { loadBehaviorProfile } from "../_core/behavior-profile";
 import { planTurn, executePlan } from "./generate";
+import { extractClaims, verifyClaims } from "./fact-check";
 import type { ReanchorIssue } from "@shared/style-reminder";
 import { sampleBurstSize, sampleReplyDelayMs } from "@shared/behavior-profile";
 import { localDateKey, zonedDateKey, zonedDayStart } from "@shared/timezone";
@@ -77,6 +78,13 @@ export type ChatEvent =
       recalled?: Array<{ id: number; title: string; subject: string }>;
       /** Confirmed routine window this reply used. */
       routine?: string;
+      /** Dates, places, and old days named in this reply. */
+      claims?: Array<{
+        text: string;
+        kind: "date" | "place" | "event";
+        supported: boolean;
+        source?: { type: "memory" | "record"; id: number; at?: string };
+      }>;
       emotionalState: string;
       graduationSuggested: boolean;
       careNote: CareNote | null;
@@ -1829,6 +1837,36 @@ async function* runConversationTurn(
   maybeExtractMemories(persona, userId, locale, now).catch((e) =>
     console.warn("[Chat] The memory extraction failed:", e.message));
 
+  let claims:
+    | Array<{
+        text: string;
+        kind: "date" | "place" | "event";
+        supported: boolean;
+        source?: { type: "memory" | "record"; id: number; at?: string };
+      }>
+    | undefined;
+  const annotateOn =
+    plan.kind === "model" &&
+    normalizePersonaSettings(persona.settings).layers.factAnnotate !== false;
+  if (annotateOn && messageId) {
+    try {
+      const extracted = extractClaims(finalText, locale);
+      claims = extracted.length
+        ? await verifyClaims(extracted, {
+            personaId: persona.id,
+            userId,
+            memories: recalled.map((row) => ({ id: row.id, title: row.title })),
+          })
+        : [];
+      if (claims.length > 0) {
+        await db.updateMessageMetadata(messageId, userId, persona.id, { claims });
+      }
+    } catch (error) {
+      console.warn("[Chat] The fact check failed:", error);
+      claims = undefined;
+    }
+  }
+
   yield {
     type: "done",
     messageId,
@@ -1838,6 +1876,7 @@ async function* runConversationTurn(
     crisis: false,
     recalled,
     ...(plan.routine ? { routine: plan.routine } : {}),
+    ...(claims && claims.length > 0 ? { claims } : {}),
   };
 }
 

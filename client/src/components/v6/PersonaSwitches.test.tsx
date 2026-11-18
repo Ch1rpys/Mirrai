@@ -53,8 +53,10 @@ describe("the persona switches section", () => {
     expect(screen.getByText("做同一件事时，照 小满 做过的样子")).toBeInTheDocument();
     expect(screen.getByText("小满 的情绪按 小满 的节奏变")).toBeInTheDocument();
     expect(screen.getByText("小满 会自己说「我先睡了」")).toBeInTheDocument();
+    expect(screen.getByText("分身提到往事时，标出记录里有没有")).toBeInTheDocument();
     expect(screen.getByText("偶尔让我二选一")).toBeInTheDocument();
     expect(screen.getByText("先想好说什么，再用 小满 的话说")).toBeInTheDocument();
+    expect(screen.getByText("提到了记录里没有的往事，就让它重说")).toBeInTheDocument();
   });
 
   it("turns the A/B pair on", async () => {
@@ -74,6 +76,26 @@ describe("the persona switches section", () => {
     expect(mutate).toHaveBeenCalledWith({
       id: 5,
       patch: { layers: { twoStage: true } },
+    });
+  });
+
+  it("turns fact annotation off", async () => {
+    const user = userEvent.setup();
+    render(<PersonaSwitches personaId={5} name="小满" />);
+    await user.click(screen.getByRole("checkbox", { name: /分身提到往事时，标出记录里有没有/ }));
+    expect(mutate).toHaveBeenCalledWith({
+      id: 5,
+      patch: { layers: { factAnnotate: false } },
+    });
+  });
+
+  it("turns fact rewrite on", async () => {
+    const user = userEvent.setup();
+    render(<PersonaSwitches personaId={5} name="小满" />);
+    await user.click(screen.getByRole("checkbox", { name: /提到了记录里没有的往事，就让它重说/ }));
+    expect(mutate).toHaveBeenCalledWith({
+      id: 5,
+      patch: { layers: { factRewrite: true } },
     });
   });
 });
