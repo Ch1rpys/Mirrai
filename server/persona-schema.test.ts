@@ -30,6 +30,7 @@ describe("normalizePersonaData", () => {
       rejectedFeedbackKeys: [],
       imperfectionDefaultsReviewed: false,
       lexicon: [],
+      people: [],
     });
   });
 
@@ -99,6 +100,7 @@ describe("normalizePersonaData", () => {
       "microRules",
       "nickname",
       "openingProfile",
+      "people",
       "periods",
       "personality",
       "realismLevel",

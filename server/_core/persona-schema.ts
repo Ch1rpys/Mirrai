@@ -48,6 +48,7 @@ import {
 } from "@shared/opening-profile";
 import { normalizeHarmReport, type HarmReport } from "@shared/harm";
 import { normalizeLexicon, type LexiconEntry } from "@shared/lexicon";
+import { normalizePeople, type Person } from "@shared/people";
 
 export interface PersonaData {
   personality: string;
@@ -113,6 +114,11 @@ export interface PersonaData {
    * Private words. Unconfirmed candidates stay out of the prompt.
    */
   lexicon?: LexiconEntry[];
+  /**
+   * People who keep turning up in the records. Unconfirmed names
+   * stay out of the prompt; confirmed ones only appear when mentioned.
+   */
+  people?: Person[];
 }
 
 /** The stages a relationship can be in. */
@@ -149,6 +155,7 @@ export const PERSONA_DATA_FIELDS: Array<keyof PersonaData> = [
   "harmReport",
   "clarified",
   "lexicon",
+  "people",
 ];
 
 /**
@@ -196,6 +203,7 @@ export const PERSONA_DOCUMENT_EXCLUDED_FIELDS: Array<keyof PersonaData> = [
   "harmReport",
   "clarified",
   "lexicon",
+  "people",
 ];
 
 /** The default realism level: noticeably imperfect, but not a mess. */
@@ -343,6 +351,7 @@ export function normalizePersonaData(
   const harmReport = normalizeHarmReport(source.harmReport ?? fallback.harmReport);
   const clarified = toStringList(source.clarified ?? fallback.clarified);
   const lexicon = normalizeLexicon(source.lexicon ?? fallback.lexicon);
+  const people = normalizePeople(source.people ?? fallback.people);
 
   return {
     personality,
@@ -369,5 +378,6 @@ export function normalizePersonaData(
     ...(harmReport ? { harmReport } : {}),
     ...(clarified.length ? { clarified } : {}),
     lexicon,
+    people,
   };
 }

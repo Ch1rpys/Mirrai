@@ -40,6 +40,7 @@ import { normalizeActProfile, type ActProfile } from "@shared/act-profile";
 import { normalizeLifeEvents, type LifeEvent } from "@shared/life-events";
 import { normalizeOpeningProfile, type OpeningProfile } from "@shared/opening-profile";
 import { mergeLexicon, type LexiconEntry } from "@shared/lexicon";
+import { aggregatePeople, mergePeople, type Person, type PersonCard } from "@shared/people";
 import { normalizePeriods, type PersonaPeriod } from "@shared/periods";
 import { mineForgetStyles, mineSuppressions } from "./suppressions";
 import { mineMultiPoint } from "@shared/multi-point";
@@ -280,6 +281,7 @@ export interface MinedV5 {
   openingProfile?: OpeningProfile | null;
   periods?: PersonaPeriod[];
   lexicon?: LexiconEntry[];
+  people?: Person[];
 }
 
 export function mergeUserDecisions(
@@ -344,6 +346,13 @@ export function mergeUserDecisions(
     lexicon: mergeLexicon(
       previous.lexicon,
       mined.lexicon,
+      Array.isArray(previous.rejectedFeedbackKeys)
+        ? previous.rejectedFeedbackKeys.filter((key): key is string => typeof key === "string")
+        : fresh.rejectedFeedbackKeys ?? [],
+    ),
+    people: mergePeople(
+      previous.people,
+      mined.people,
       Array.isArray(previous.rejectedFeedbackKeys)
         ? previous.rejectedFeedbackKeys.filter((key): key is string => typeof key === "string")
         : fresh.rejectedFeedbackKeys ?? [],
@@ -1825,6 +1834,30 @@ async function runSkillPipelineOnce(
     }
 
     /**
+     * Person cards become a table the user can confirm.
+     *
+     * Distillation already wrote a card per name. Folding happens
+     * here, on the same records the cards came from, so a re-run
+     * sees the same people the last run did.
+     */
+    const minedPeople = await (async (): Promise<Person[]> => {
+      const listCards = dbFn("listDistillationCards") as
+        | ((personaId: number, userId: number, options?: { kind?: string }) => Promise<PersonCard[]>)
+        | undefined;
+      if (!listCards) return [];
+      try {
+        const cards = await listCards(personaId, userId, { kind: "person" });
+        return aggregatePeople(cards ?? [], transcriptRows);
+      } catch (e) {
+        console.warn(
+          "[SkillEngine] The people could not be aggregated:",
+          e instanceof Error ? e.message : e,
+        );
+        return [];
+      }
+    })();
+
+    /**
      * The read and the write are under the persona's lock.
      *
      * The persona's own fields are one column, so writing them is a
@@ -1894,6 +1927,7 @@ async function runSkillPipelineOnce(
             openingProfile: minedOpeningProfile,
             periods: minedPeriods,
             lexicon: minedLexicon,
+            people: minedPeople,
           })) as PersonaData;
 
       if (changedWhileRunning) {

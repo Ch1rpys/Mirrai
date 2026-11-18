@@ -651,4 +651,12 @@ export const V6 = {
     zh: "（这是你在这里说过的话，不是记录里的事实）",
     en: " (this is something you said here, not a fact from the records)",
   },
+  "prompt.peopleHeading": {
+    zh: "【提到的人】",
+    en: "【People mentioned】",
+  },
+  "prompt.peopleLine": {
+    zh: "{{name}}：你的{{relation}}",
+    en: "{{name}}: your {{relation}}",
+  },
 } as const satisfies CopyTable;

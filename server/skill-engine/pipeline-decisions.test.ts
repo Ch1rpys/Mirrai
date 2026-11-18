@@ -300,6 +300,59 @@ describe("a re-run of the distillation", () => {
     expect(merged.lexicon?.[0].verified).toBe(true);
   });
 
+  it("keeps a confirmed person and does not revive a rejected one", () => {
+    const merged = mergeUserDecisions(
+      fresh,
+      {
+        people: [
+          {
+            id: "keep",
+            name: "琪琪",
+            aliases: [],
+            relation: "室友",
+            side: "them",
+            mentions: 12,
+            evidence: [{ snippet: "琪琪今天也在" }],
+            source: "auto",
+            verified: true,
+          },
+        ],
+        rejectedFeedbackKeys: ["people:路过的人"],
+      },
+      [],
+      "zh",
+      {
+        people: [
+          {
+            id: "auto-qiqi",
+            name: "琪琪",
+            aliases: [],
+            relation: "同事",
+            side: "them",
+            mentions: 13,
+            evidence: [],
+            source: "auto",
+            verified: false,
+          },
+          {
+            id: "auto-stranger",
+            name: "路过的人",
+            aliases: [],
+            relation: "同学",
+            side: "them",
+            mentions: 8,
+            evidence: [],
+            source: "auto",
+            verified: false,
+          },
+        ],
+      },
+    );
+    expect(merged.people?.map((row) => row.name)).toEqual(["琪琪"]);
+    expect(merged.people?.[0].relation).toBe("室友");
+    expect(merged.people?.[0].verified).toBe(true);
+  });
+
   it("keeps the questions the user already answered", () => {
     const merged = mergeUserDecisions(
       fresh,
