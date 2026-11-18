@@ -8,6 +8,7 @@
  */
 import type { AddressEntry } from "./address-history";
 import { normalizeActClusters, type ActClusters } from "./act-clusters";
+import { normalizeEmotionDynamics, type EmotionDynamics } from "./emotion-dynamics";
 import { normalizeSamplePool, type SamplePool } from "./sample-pool";
 import type { StyleFingerprint } from "./style-fingerprint";
 import type { ImperfectionDrafts } from "./imperfection-draft";
@@ -66,7 +67,7 @@ export interface StyleProfile {
   sessions?: unknown; // 由 B4.6 填
   inSession?: unknown; // 由 B4.8 填
   multiPoint?: unknown; // 由 B4.7 填
-  emotionDynamics?: unknown; // 由 B4.3 填
+  emotionDynamics?: EmotionDynamics;
   conflict?: unknown; // 由 B4.4 填
   triggers?: unknown; // 由 B4.5 填
   actClusters?: ActClusters;
@@ -113,6 +114,11 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
       if (key === "actClusters") {
         const actClusters = normalizeActClusters(source.actClusters);
         if (actClusters) profile.actClusters = actClusters;
+        continue;
+      }
+      if (key === "emotionDynamics") {
+        const emotionDynamics = normalizeEmotionDynamics(source.emotionDynamics);
+        if (emotionDynamics) profile.emotionDynamics = emotionDynamics;
         continue;
       }
       (profile as unknown as Record<string, unknown>)[key] = source[key];

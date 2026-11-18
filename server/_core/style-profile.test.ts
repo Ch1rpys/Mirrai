@@ -221,6 +221,40 @@ describe("measureStyleProfile", () => {
     }
   });
 
+  it("writes emotion dynamics whose distant dwell is about five hours", async () => {
+    getRecordsVersion.mockResolvedValue("3200:3200");
+    getPersonaStyleProfile.mockResolvedValue(null);
+    getPersonaById.mockResolvedValue({
+      id: 5,
+      userId: 1,
+      name: "小满",
+      personaData: { nickname: "树树" },
+    });
+    getUserById.mockResolvedValue({ id: 1, name: "阿树" });
+    iterateRecords.mockImplementation(async function* () {
+      for (const row of buildXiaomanRecords()) {
+        yield {
+          id: row.id,
+          role: row.role,
+          content: row.content,
+          timestamp: row.timestamp,
+          kind: row.kind,
+          speaker: row.speaker,
+          emotion: row.truth.state,
+        };
+      }
+    });
+    const measured = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    expect(measured.emotionDynamics?.modal).toBe("warm");
+    expect(measured.emotionDynamics?.samples).toBeGreaterThanOrEqual(30);
+    expect(measured.emotionDynamics?.dwell.distant?.medianMin).toBeGreaterThanOrEqual(240);
+    expect(measured.emotionDynamics?.dwell.distant?.medianMin).toBeLessThanOrEqual(330);
+  });
+
   it("remakes the sample pool from labelled rows even when the records version is unchanged", async () => {
     getRecordsVersion.mockResolvedValue("10:40");
     getPersonaStyleProfile.mockResolvedValue({

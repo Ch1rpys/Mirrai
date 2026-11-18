@@ -116,6 +116,13 @@ export const personas = pgTable("personas", {
   analysisProgress: integer("analysisProgress").default(0).notNull(),
   analysisMessage: text("analysisMessage"),
   emotionalState: emotionalStateEnum().default("warm").notNull(),
+  /**
+   * When the current emotional state started.
+   *
+   * Inertia measures this stretch against how long that mood used to
+   * last in the records. Empty means the stretch has not been timed yet.
+   */
+  emotionalStateSince: timestamp("emotionalStateSince"),
   chatCount: integer("chatCount").default(0).notNull(),
   lastChatAt: timestamp("lastChatAt"),
   /**

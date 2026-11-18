@@ -39,6 +39,8 @@ import {
 } from "@shared/ritual-table";
 import { measureSamplePool } from "@shared/sample-pool";
 import { measureActClusters } from "@shared/act-clusters";
+import { measureEmotionDynamics } from "@shared/emotion-dynamics";
+import { splitScenes } from "@shared/scenes";
 import { schedulePersonaEmbeddings } from "../chat/embeddings";
 
 export async function measureStyleProfile(params: {
@@ -108,6 +110,16 @@ export async function measureStyleProfile(params: {
   const rituals = mergeManualRituals(minedRituals, normalizeRituals(current?.rituals));
   const samplePool = measureSamplePool(rows, rawData);
   const actClusters = measureActClusters(rows, rawData);
+  const emotionDynamics = measureEmotionDynamics(
+    splitScenes(
+      rows.map((row) => ({
+        role: row.role,
+        emotion: row.emotion,
+        timestamp: row.timestamp,
+        kind: row.kind,
+      })),
+    ),
+  );
   const next = normalizeStyleProfile({
     ...(current ?? {}),
     version: 1,
@@ -120,6 +132,7 @@ export async function measureStyleProfile(params: {
     ...(rituals.length > 0 ? { rituals } : { rituals: undefined }),
     ...(samplePool ? { samplePool } : { samplePool: undefined }),
     ...(actClusters ? { actClusters } : { actClusters: undefined }),
+    ...(emotionDynamics ? { emotionDynamics } : { emotionDynamics: undefined }),
   });
   return applyRerankWeightsFromPairs(personaId, userId, next, { persistAlways: true });
 }

@@ -1428,9 +1428,16 @@ export async function updatePersona(
 ): Promise<boolean> {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
+  const patch: Partial<InsertPersona> = { ...data };
+  if (patch.emotionalState !== undefined && patch.emotionalStateSince === undefined) {
+    const current = await getPersonaById(id, userId);
+    if (current && current.emotionalState !== patch.emotionalState) {
+      patch.emotionalStateSince = new Date();
+    }
+  }
   const rows = await db
     .update(personas)
-    .set(data)
+    .set(patch)
     .where(and(eq(personas.id, id), eq(personas.userId, userId)))
     .returning({ id: personas.id });
   return rows.length > 0;

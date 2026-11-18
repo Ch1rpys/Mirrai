@@ -54,4 +54,27 @@ describe("the style profile", () => {
       tease: [{ size: 12, lines: ["你真行", "行啊你"] }],
     });
   });
+
+  it("keeps emotion dynamics and drops a malformed one", () => {
+    const profile = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      emotionDynamics: {
+        transitions: { distant: { warm: 10 } },
+        dwell: { distant: { medianMin: 300, p75Min: 360, episodes: 6 } },
+        modal: "warm",
+        samples: 40,
+      },
+    });
+    expect(profile.emotionDynamics?.modal).toBe("warm");
+    expect(profile.emotionDynamics?.samples).toBe(40);
+    const empty = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      emotionDynamics: { modal: "warm" },
+    });
+    expect(empty.emotionDynamics).toBeUndefined();
+  });
 });
