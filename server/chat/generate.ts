@@ -25,8 +25,8 @@ import { buildPromptForPersona } from "./prompt";
 import * as db from "../db";
 import {
   applyLayerOverrides,
-  enabledLayerIds,
   layersFromSettings,
+  layersInEffect,
   type LayerId,
 } from "@shared/layers";
 import type { ScoredMemory } from "./retrieval";
@@ -93,7 +93,7 @@ function actProfileForTurn(
 
 export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   const layers = applyLayerOverrides(layersFromSettings(input.persona), input.layerOverrides);
-  const layersUsed = enabledLayerIds(layers);
+  const layersUsed = layersInEffect(layers, input.persona);
   const rng = seededRandom(input.seed);
   const timingEnabled =
     Boolean((input.persona as { timingEnabled?: boolean }).timingEnabled) &&

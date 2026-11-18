@@ -13,6 +13,22 @@
 import { copy } from "./copy";
 
 /** The hour of the day (0-23) in a given time zone. */
+/**
+ * The zone a record's clock is read in.
+ *
+ * The persona's own zone wins when it is set. Otherwise the user's zone
+ * is the one the export was interpreted with. An empty pair means the
+ * server's clock, which is the old fallback.
+ */
+export function zoneForRecords(
+  personaTimezone: string | null | undefined,
+  userTimezone: string | null | undefined,
+): string | null {
+  const persona = personaTimezone?.trim() || null;
+  if (persona) return persona;
+  return userTimezone?.trim() || null;
+}
+
 export function zonedHour(date: Date, timeZone?: string | null): number {
   if (!timeZone) return date.getHours();
   try {

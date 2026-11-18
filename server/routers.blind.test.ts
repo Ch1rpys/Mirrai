@@ -170,35 +170,48 @@ describe("the in-app blind test", () => {
     expect(markdown).toContain("pickedReal:");
   });
 
-  it("refuses a bad, expired, or finished invite", async () => {
-    getBlindSessionByTokenHash.mockResolvedValueOnce(undefined);
-    await expect(
-      appRouter.createCaller({ ...ctxFor(1), user: null }).blind.guestLoad({ token: "a".repeat(32) }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
-
-    getBlindSessionByTokenHash.mockResolvedValueOnce({
-      id: 7,
-      userId: 1,
-      personaId: 3,
-      groups: [],
-      expiresAt: new Date(Date.now() - 1000),
-      finishedAt: null,
-    });
-    await expect(
-      appRouter.createCaller({ ...ctxFor(1), user: null }).blind.guestLoad({ token: "b".repeat(32) }),
-    ).rejects.toMatchObject({ message: copy("zh", "eval.blind.expired") });
-
-    getBlindSessionByTokenHash.mockResolvedValueOnce({
-      id: 7,
-      userId: 1,
-      personaId: 3,
-      groups: [],
-      expiresAt: new Date(Date.now() + 60_000),
-      finishedAt: new Date(),
-    });
-    await expect(
-      appRouter.createCaller({ ...ctxFor(1), user: null }).blind.guestLoad({ token: "c".repeat(32) }),
-    ).rejects.toMatchObject({ message: copy("zh", "eval.blind.finished") });
+  it("refuses a bad, expired, or finished invite the same way", async () => {
+    const sessions = [
+      undefined,
+      {
+        id: 7,
+        userId: 1,
+        personaId: 3,
+        groups: [],
+        expiresAt: new Date(Date.now() - 1000),
+        finishedAt: null,
+      },
+      {
+        id: 7,
+        userId: 1,
+        personaId: 3,
+        groups: [],
+        expiresAt: new Date(Date.now() + 60_000),
+        finishedAt: new Date(),
+      },
+    ];
+    const failures = [];
+    for (const [index, session] of sessions.entries()) {
+      getBlindSessionByTokenHash.mockResolvedValueOnce(session);
+      failures.push(
+        await appRouter
+          .createCaller({ ...ctxFor(1), user: null })
+          .blind.guestLoad({ token: String(index).repeat(32) })
+          .then(
+            () => null,
+            (error: TRPCError) => error,
+          ),
+      );
+    }
+    expect(failures.every((error) => error instanceof TRPCError)).toBe(true);
+    expect(failures.map((error) => error?.code)).toEqual([
+      "NOT_FOUND",
+      "NOT_FOUND",
+      "NOT_FOUND",
+    ]);
+    expect(new Set(failures.map((error) => error?.message)).size).toBe(1);
+    expect(failures[0]?.message).not.toContain("失效");
+    expect(failures[0]?.message).not.toContain("答完");
   });
 
   it("does not let one token write onto another sitting", async () => {

@@ -427,10 +427,6 @@ export const V6 = {
     zh: "先跑一次评测。",
     en: "Run an evaluation first.",
   },
-  "eval.blind.expired": {
-    zh: "这个链接已经失效了。",
-    en: "That link has expired.",
-  },
   "eval.blind.finished": {
     zh: "这一场已经答完了。",
     en: "That sitting is already finished.",

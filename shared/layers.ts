@@ -97,3 +97,31 @@ export function applyLayerOverrides(
 export function enabledLayerIds(layers: Record<LayerId, boolean>): LayerId[] {
   return LAYERS.filter((id) => layers[id]);
 }
+
+/**
+ * Layers the generator actually runs.
+ *
+ * A switch can be on before its code exists. Ablation only spends a run
+ * on a layer that can change the reply. Rerank follows the persona's
+ * column: an evaluation override may turn the mechanism on for one run,
+ * but that does not make it one of this persona's layers.
+ */
+export const BUILT_LAYERS = [
+  "rules",
+  "imperfection",
+  "suppressions",
+  "act",
+  "exemplars",
+  "rerank",
+] as const satisfies readonly LayerId[];
+
+export function layersInEffect(
+  layers: Record<LayerId, boolean>,
+  persona?: { rerankEnabled?: boolean | null },
+): LayerId[] {
+  return BUILT_LAYERS.filter((id) => {
+    if (!layers[id]) return false;
+    if (id === "rerank" && persona && !persona.rerankEnabled) return false;
+    return true;
+  });
+}

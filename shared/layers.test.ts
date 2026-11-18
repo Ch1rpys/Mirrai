@@ -5,6 +5,7 @@ import {
   isLayerId,
   LAYERS,
   layersFromSettings,
+  layersInEffect,
   USER_ONLY_LAYER_KEYS,
 } from "./layers";
 import { DEFAULT_PERSONA_SETTINGS } from "./persona-settings";
@@ -47,5 +48,25 @@ describe("layersFromSettings", () => {
   it("recognises the closed set of layer ids", () => {
     expect(isLayerId("act")).toBe(true);
     expect(isLayerId("stickers")).toBe(false);
+  });
+
+  it("counts only the layers the generator runs, for a persona without rerank", () => {
+    const layers = layersFromSettings({ settings: null, rerankEnabled: false });
+    expect(layersInEffect(layers, { rerankEnabled: false })).toEqual([
+      "rules",
+      "imperfection",
+      "suppressions",
+      "act",
+      "exemplars",
+    ]);
+  });
+
+  it("keeps rerank when the persona column is on, even if an eval override asked for it", () => {
+    const layers = applyLayerOverrides(
+      layersFromSettings({ settings: null, rerankEnabled: true }),
+      { rerank: true, seededTurns: true },
+    );
+    expect(layersInEffect(layers, { rerankEnabled: true })).toContain("rerank");
+    expect(layersInEffect(layers, { rerankEnabled: false })).not.toContain("rerank");
   });
 });

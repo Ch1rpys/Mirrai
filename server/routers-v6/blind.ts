@@ -101,14 +101,12 @@ function publicSitting(groups: BlindStoredGroup[], name: string, extra: Record<s
 
 function throwIfGuestClosed(
   session: { expiresAt?: Date | string | null; finishedAt?: Date | string | null } | undefined,
-  locale: string,
 ): asserts session is NonNullable<typeof session> {
-  if (!session) throw new TRPCError({ code: "NOT_FOUND" });
-  if (session.finishedAt) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: copy(locale, "eval.blind.finished") });
-  }
-  if (session.expiresAt && new Date(session.expiresAt).getTime() < Date.now()) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: copy(locale, "eval.blind.expired") });
+  const expired = Boolean(
+    session?.expiresAt && new Date(session.expiresAt).getTime() < Date.now(),
+  );
+  if (!session || session.finishedAt || expired) {
+    throw new TRPCError({ code: "NOT_FOUND" });
   }
 }
 
@@ -273,7 +271,7 @@ export const blindRouter = router({
     .input(z.object({ token: z.string().min(16).max(128) }))
     .query(async ({ ctx, input }) => {
       const session = await getBlindSessionByTokenHash(hashBlindToken(input.token));
-      throwIfGuestClosed(session, ctx.locale);
+      throwIfGuestClosed(session);
       const persona = await getPersonaById(session.personaId, session.userId);
       const groups = asStoredGroups(session.groups);
       return publicSitting(groups, persona?.name ?? "");
@@ -293,7 +291,7 @@ export const blindRouter = router({
     .mutation(async ({ ctx, input }) => {
       const tokenHash = hashBlindToken(input.token);
       const session = await getBlindSessionByTokenHash(tokenHash);
-      throwIfGuestClosed(session, ctx.locale);
+      throwIfGuestClosed(session);
       const groups = asStoredGroups(session.groups);
       if (input.group >= groups.length) throw new TRPCError({ code: "BAD_REQUEST" });
       const answers = upsertAnswer(asAnswers(session.answers), {

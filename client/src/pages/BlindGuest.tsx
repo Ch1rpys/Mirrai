@@ -32,6 +32,16 @@ export default function BlindGuest() {
   const answer = trpc.blind.guestAnswer.useMutation();
 
   useEffect(() => {
+    const meta = document.createElement("meta");
+    meta.name = "robots";
+    meta.content = "noindex";
+    document.head.appendChild(meta);
+    return () => {
+      meta.remove();
+    };
+  }, []);
+
+  useEffect(() => {
     shownAt.current = Date.now();
   }, [index, data?.groups]);
 

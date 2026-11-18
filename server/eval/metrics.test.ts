@@ -13,7 +13,7 @@ import {
   wasserstein1d,
   type EvalCaseScore,
 } from "./metrics";
-import { measureFingerprint } from "@shared/style-fingerprint";
+import { measureFingerprint, styleDistance } from "@shared/style-fingerprint";
 import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
 
 /**
@@ -331,6 +331,35 @@ describe("aggregating a run", () => {
     expect(without.emotionAccuracy).toBe(withFp.emotionAccuracy);
     expect(without.cases).toBe(withFp.cases);
     expect(without.lengthDistance).toBe(withFp.lengthDistance);
+  });
+
+  it("measures every sample against the state's fingerprint", () => {
+    const fp = measureFingerprint(
+      buildXiaomanRecords().map((row) => ({
+        role: row.role,
+        content: row.content,
+        kind: row.kind,
+        emotion: row.truth.state,
+      })),
+      { addressForms: ["陈树", "树树"] },
+    );
+    expect(fp?.perState?.warm).toBeTruthy();
+    const samples = ["在的呀", "。".repeat(40), "好的。好的。好的。"];
+    const scored = {
+      ...score(0.5, 0, 3, 3),
+      expectedState: "warm" as const,
+      generatedText: samples[0],
+      generatedSamples: samples,
+    };
+    const metrics = aggregateScores([scored], { fingerprint: fp });
+    expect(metrics.styleDistance?.total).toBeCloseTo(
+      styleDistance(samples, fp!.perState!.warm!).total,
+      8,
+    );
+    expect(metrics.styleDistance?.total).not.toBeCloseTo(
+      styleDistance([samples[0]!], fp!.perState!.warm!).total,
+      5,
+    );
   });
 
   it("leaves styleDistance null when there is no fingerprint", () => {

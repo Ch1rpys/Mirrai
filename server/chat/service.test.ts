@@ -819,6 +819,26 @@ describe("runConversation", () => {
     expect(updateMessageMetadata).toHaveBeenCalled();
   });
 
+  it("still offers the pair when both lines are the same", async () => {
+    invokeWithProvider.mockResolvedValue("好的呀");
+    const events: Array<{ type: string }> = [];
+    for await (const event of runConversation({
+      persona: persona({ chatCount: 8, settings: { layers: { abPairs: true } } }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+    })) {
+      events.push(event);
+    }
+    expect(invokeWithProvider).toHaveBeenCalledTimes(2);
+    const choice = events.find((event) => event.type === "choice") as
+      | { type: "choice"; options: [string, string] }
+      | undefined;
+    expect(choice?.options).toEqual(["好的呀", "好的呀"]);
+    expect(createMessage.mock.calls.filter((call) => call[0].role === "assistant")).toHaveLength(0);
+    expect(events.some((event) => event.type === "done")).toBe(false);
+  });
+
   it("does not offer a choice on a channel even when the switch is on", async () => {
     for await (const _ of runConversation({
       persona: persona({ chatCount: 8, settings: { layers: { abPairs: true } } }),

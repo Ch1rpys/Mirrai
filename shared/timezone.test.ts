@@ -7,10 +7,32 @@ import {
   previousDateKey,
   shiftDateKey,
   zonedDateKey,
+  zoneForRecords,
   zonedHour,
   zonedOffsetHours,
   zonedOffsetMinutes,
 } from "./timezone";
+
+describe("the zone a record is read in", () => {
+  it("uses the user's zone when the persona has none", () => {
+    const at = new Date("2024-01-15T15:00:00.000Z");
+    const zone = zoneForRecords(null, "Asia/Shanghai");
+    expect(zone).toBe("Asia/Shanghai");
+    expect(zonedHour(at, zone)).toBe(23);
+  });
+
+  it("keeps the persona's zone when both are set", () => {
+    const at = new Date("2024-01-15T15:00:00.000Z");
+    const zone = zoneForRecords("America/New_York", "Asia/Shanghai");
+    expect(zone).toBe("America/New_York");
+    expect(zonedHour(at, zone)).toBe(10);
+  });
+
+  it("is empty when neither side has a zone", () => {
+    expect(zoneForRecords(null, "  ")).toBeNull();
+    expect(zoneForRecords(undefined, null)).toBeNull();
+  });
+});
 
 describe("the day in the machine's own calendar", () => {
   it("is the day the clock says, not the day Greenwich says", () => {

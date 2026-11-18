@@ -446,16 +446,20 @@ function styleDistanceForScores(
   const groups = new Map<string, { core: StyleFingerprintCore; lines: string[] }>();
   const fallback: string[] = [];
   for (const score of scores) {
-    const text = score.generatedText?.trim();
-    if (!text) continue;
+    const texts = score.generatedSamples?.length
+      ? score.generatedSamples.map((text) => text.trim()).filter((text) => text.length > 0)
+      : typeof score.generatedText === "string" && score.generatedText.trim().length > 0
+        ? [score.generatedText.trim()]
+        : [];
+    if (!texts.length) continue;
     const state = score.expectedState;
     const core = state ? perState[state] : undefined;
     if (state && core) {
       const group = groups.get(state) ?? { core, lines: [] };
-      group.lines.push(text);
+      group.lines.push(...texts);
       groups.set(state, group);
     } else {
-      fallback.push(text);
+      fallback.push(...texts);
     }
   }
   const parts: Array<{ n: number; d: StyleDistance }> = [];

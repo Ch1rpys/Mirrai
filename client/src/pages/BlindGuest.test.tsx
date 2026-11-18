@@ -60,6 +60,13 @@ describe("the guest blind test", () => {
     });
   });
 
+  it("asks crawlers not to index the page", () => {
+    render(<BlindGuest />);
+    expect(document.head.querySelector('meta[name="robots"]')?.getAttribute("content")).toBe(
+      "noindex",
+    );
+  });
+
   it("does not show the next pair until this one is answered", async () => {
     const user = userEvent.setup();
     render(<BlindGuest />);

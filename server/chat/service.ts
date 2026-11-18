@@ -1112,7 +1112,7 @@ async function* runConversationTurn(
         const lastUser = [...recent].reverse().find((row) => row.role === "user");
         userMessageId = lastUser?.id ?? null;
       }
-      if (first && second && first !== second && userMessageId) {
+      if (first && second && userMessageId) {
         const { fingerprint, discriminator } = fingerprintFromPersona(persona);
         const sampledAct =
           sampled?.act && sampled.act !== "silence" ? String(sampled.act) : null;

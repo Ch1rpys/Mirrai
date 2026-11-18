@@ -303,9 +303,20 @@ describe("the shared generation path", () => {
       layerOverrides: layerOverridesForEval({ without: ["act"] }),
     });
     expect(sampled.sampledAct).toBe("tease");
-    expect(sampled.layersUsed).toContain("act");
+    expect(sampled.layersUsed).toEqual([
+      "rules",
+      "imperfection",
+      "suppressions",
+      "act",
+      "exemplars",
+    ]);
     expect(suppressed.sampledAct).toBeNull();
-    expect(suppressed.layersUsed).not.toContain("act");
+    expect(suppressed.layersUsed).toEqual([
+      "rules",
+      "imperfection",
+      "suppressions",
+      "exemplars",
+    ]);
   });
 
   it("does not put the user's sample lines into the prompt", async () => {

@@ -27,9 +27,9 @@ import {
 } from "../server/eval/dataset";
 import { normalizePeriods } from "../shared/periods";
 import { dayPartFromHour } from "../shared/act-profile";
-import { zonedHour } from "../shared/timezone";
+import { zoneForRecords, zonedHour } from "../shared/timezone";
 import { labelEvalCases } from "../server/eval/act-labels";
-import { runEval } from "../server/eval/run";
+import { layerOverridesForEval, runEval } from "../server/eval/run";
 import {
   compareMetricCI,
   evaluateGate,
@@ -48,7 +48,7 @@ import {
 import { DriftNeedUserSideError, DRIFT_TURNS_DEFAULT, runDrift } from "../server/eval/drift";
 import { runAudition } from "../server/eval/audition";
 import { ablationCalls, layersFromBaseline, runAblation } from "../server/eval/ablate";
-import { enabledLayerIds, layersFromSettings } from "../shared/layers";
+import { applyLayerOverrides, layersFromSettings, layersInEffect } from "../shared/layers";
 import { resolveProviderForUser } from "../server/llm/user-provider";
 
 const args = process.argv.slice(2);
@@ -228,7 +228,11 @@ if (!persona) {
 const periods = normalizePeriods(
   (persona.personaData as { periods?: unknown } | null)?.periods,
 );
-const timezone = (persona as { timezone?: string | null }).timezone ?? null;
+const timezone = zoneForRecords(
+  (persona as { timezone?: string | null }).timezone,
+  await db.getUserTimezone(userId),
+);
+if (!persona.timezone && timezone) persona.timezone = timezone;
 
 function withDayPart(item: EvalCaseData): EvalCaseData {
   if (item.dayPart) return item;
@@ -421,7 +425,16 @@ if (audition) {
 }
 
 if (ablate) {
-  const previewLayers = enabledLayerIds(layersFromSettings(persona));
+  const previewEnabled = applyLayerOverrides(
+    layersFromSettings(persona),
+    layerOverridesForEval({
+      variant,
+      without,
+      sampleAct: variant !== "withoutAct",
+    }),
+  );
+  if (!rerank) previewEnabled.rerank = false;
+  const previewLayers = layersInEffect(previewEnabled, persona);
   const estimated = ablationCalls(previewLayers.length, cases.length, samplesPerCase);
   console.log(
     `[eval] ablation would make ${previewLayers.length + 1} runs × ${cases.length} cases × ${samplesPerCase} = ${estimated} calls`,
