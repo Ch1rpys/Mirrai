@@ -628,6 +628,65 @@ function safeTaTime(date: Date): Date {
   return shanghaiDate(w.year, w.month, w.day, 7, 30, 0);
 }
 
+/**
+ * Ordinary negative scenes sit on a day whose next active day is at
+ * least three away.
+ *
+ * A fight ends the same day, on its repair line. Every other distant
+ * or melancholy scene is only that day's mood: the next thing TA says
+ * has to be more than 48 hours later, or the stretch is another
+ * conflict. Dates are swapped, not created, so the set of active days
+ * and the Wednesday classes stay put. A noon or afternoon mood cannot
+ * land on Wednesday, because the 16:05 class would end it that afternoon.
+ */
+function seatNegativeMoodsBeforeALongGap(main: ScenePlan[]): void {
+  const keyOf = (date: CivilDate) => ymd(date.year, date.month, date.day);
+  const negativeMood = (scene: ScenePlan) =>
+    (scene.state === "distant" || scene.state === "melancholy") && scene.conflictEpisode == null;
+  const byDate = () =>
+    [...main].sort((a, b) => keyOf(a.date) - keyOf(b.date));
+  const gapAfter = (list: ScenePlan[], index: number): number => {
+    const next = list[index + 1];
+    if (!next) return 99;
+    if (crossesSilence(list[index]!.date, next.date)) return 99;
+    return daysBetween(list[index]!.date, next.date);
+  };
+  const exposed = (scene: ScenePlan, list: ScenePlan[], index: number): boolean => {
+    if (!negativeMood(scene)) return false;
+    const daytime = scene.slot === "noon" || scene.slot === "afternoon";
+    if (daytime && weekdayOf(scene.date.year, scene.date.month, scene.date.day) === 3) return true;
+    return gapAfter(list, index) < 3;
+  };
+  const swapDates = (a: ScenePlan, b: ScenePlan) => {
+    const saved = { year: a.date.year, month: a.date.month, day: a.date.day };
+    a.date.year = b.date.year;
+    a.date.month = b.date.month;
+    a.date.day = b.date.day;
+    b.date.year = saved.year;
+    b.date.month = saved.month;
+    b.date.day = saved.day;
+    a.period = periodOf(a.date.year, a.date.month, a.date.day);
+    b.period = periodOf(b.date.year, b.date.month, b.date.day);
+  };
+  for (let guard = 0; guard < main.length * 2; guard++) {
+    const list = byDate();
+    const needyAt = list.findIndex((scene, index) => exposed(scene, list, index));
+    if (needyAt < 0) return;
+    const needy = list[needyAt]!;
+    const daytime = needy.slot === "noon" || needy.slot === "afternoon";
+    const donorAt = list.findIndex((scene, index) => {
+      if (scene === needy || scene.conflictEpisode) return false;
+      if (negativeMood(scene)) return false;
+      if (periodOf(scene.date.year, scene.date.month, scene.date.day) !== needy.period) return false;
+      if (gapAfter(list, index) < 3) return false;
+      if (daytime && weekdayOf(scene.date.year, scene.date.month, scene.date.day) === 3) return false;
+      return true;
+    });
+    if (donorAt < 0) return;
+    swapDates(needy, list[donorAt]!);
+  }
+}
+
 // i18n:allow-identifier — the whole generator emits a designed Chinese log.
 export function buildXiaomanRecords(options?: {
   seed?: string;
@@ -729,6 +788,8 @@ export function buildXiaomanRecords(options?: {
     episodeHours.set(scene.conflictEpisode, hours);
   });
 
+  seatNegativeMoodsBeforeALongGap(main);
+
   let nextId = main.length + 1;
   const wednesdayScenes: ScenePlan[] = [];
   for (const day of days) {
@@ -828,16 +889,19 @@ export function buildXiaomanRecords(options?: {
     start: Date,
     state: FixtureState,
     extra: Partial<FixtureRecord["truth"]> = {},
+    /** Label and wording, when the draw has to stay on `state` for the rng. */
+    label: FixtureState = state,
   ): Date => {
     const size = burstCount(rng);
     const burstId = burstSeq++;
     let t = start;
     for (let i = 0; i < size; i++) {
-      const content = state === "distant" ? pick(rng, DISTANT_PLAIN) : "今天还好";
+      const drawn = state === "distant" ? pick(rng, DISTANT_PLAIN) : "今天还好";
+      const content = label === state ? drawn : "今天还好";
       if (i > 0) t = addMs(t, charCount(content) * XIAOMAN_TRUTH.burstGapMsPerChar);
       addTa(scene, t, content, {
         ...extra,
-        state,
+        state: label,
         burstId,
         burstSize: size,
         burstIndex: i,
@@ -900,20 +964,28 @@ export function buildXiaomanRecords(options?: {
       );
       addUser(scene, t, makeUserLine(rng, "generic"));
       t = addMs(t, delayMs(rng, "noon"));
-      t = addTaBurst(scene, t, scene.state);
+      const preamble = scene.state === "distant" || scene.state === "melancholy" ? "warm" : scene.state;
+      t = addTaBurst(scene, t, scene.state, {}, preamble);
       t = addMs(t, 25_000);
       addUser(scene, t, makeUserLine(rng, "generic"));
       t = addMs(t, delayMs(rng, "noon"));
       const first = "今天还好";
       const conflictBurst = burstSeq++;
-      addTa(scene, t, first, { burstId: conflictBurst, burstSize: 2, burstIndex: 0, state: scene.state });
+      addTa(scene, t, first, { burstId: conflictBurst, burstSize: 2, burstIndex: 0, state: preamble });
       const second = "我跟你说";
       t = addMs(t, charCount(second) * XIAOMAN_TRUTH.burstGapMsPerChar);
-      addTa(scene, t, second, { burstId: conflictBurst, burstSize: 2, burstIndex: 1, state: scene.state });
+      addTa(scene, t, second, { burstId: conflictBurst, burstSize: 2, burstIndex: 1, state: preamble });
       t = addMs(t, 20_000);
       addUser(scene, t, XIAOMAN_TRUTH.conflicts.triggerUser, { userAct: "acknowledge", locked: true });
       t = addMs(t, delayMs(rng, "noon"));
-      addTa(scene, t, XIAOMAN_TRUTH.conflicts.triggerTa, {
+      const flareAt = t;
+      addTa(scene, addMs(flareAt, -500), DISTANT_PERIOD[0]!, {
+        state: "distant",
+        locked: true,
+        act: "acknowledge",
+        conflictEpisode: scene.conflictEpisode,
+      });
+      addTa(scene, flareAt, XIAOMAN_TRUTH.conflicts.triggerTa, {
         state: "distant",
         locked: true,
         act: "tease",

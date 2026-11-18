@@ -51,7 +51,7 @@ describe("measuring how a mood used to move", () => {
     expect(dynamics!.modal).toBe("warm");
     expect(dynamics!.samples).toBeGreaterThanOrEqual(30);
     expect(dynamics!.dwell.distant).toBeTruthy();
-    expect(dynamics!.dwell.distant!.medianMin).toBeGreaterThanOrEqual(240);
+    expect(dynamics!.dwell.distant!.medianMin).toBeGreaterThanOrEqual(270);
     expect(dynamics!.dwell.distant!.medianMin).toBeLessThanOrEqual(330);
   });
 

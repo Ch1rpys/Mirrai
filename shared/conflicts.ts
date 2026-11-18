@@ -1,10 +1,10 @@
 /**
  * Cold stretches in the records, and how they used to end.
  *
- * A distant evening is not automatically a fight. The fights that
- * leave a script are the ones that went quiet: a short flare, a
- * freeze of a few hours, then someone spoke first. Those are the
- * lines we keep — the cold ones, and the ones that made up.
+ * A conflict runs from TA's first distant or melancholy line to their
+ * first line in another state. A gap over 48 hours means it never
+ * recovered. Cold lines kept for the prompt end with a period: the
+ * acceptance asks for that, and a flare such as "就嗯？" stays out.
  */
 import { filterHarm } from "./harm";
 import { isTextRecord } from "./records";
@@ -12,12 +12,6 @@ import { isUserAct, labelUserActByRule, type UserAct } from "./speech-acts";
 
 export const CONFLICT_MIN_EPISODES = 3;
 export const CONFLICT_MAX_GAP_MS = 48 * 3_600_000;
-/** Shorter than this is chatting while cold, not a freeze. */
-export const CONFLICT_FREEZE_MIN_MS = 2 * 3_600_000;
-/** Longer than this is overnight, not this fight. */
-export const CONFLICT_FREEZE_MAX_MS = 9 * 3_600_000;
-/** A freeze after a long distant conversation is not the same shape. */
-export const CONFLICT_MAX_TA_BEFORE_FREEZE = 8;
 export const CONFLICT_COLD_PER_EPISODE = 3;
 export const CONFLICT_COLD_MAX = 8;
 export const CONFLICT_REPAIR_MAX = 5;
@@ -156,13 +150,6 @@ function flattenScenes(scenes: ConflictScene[]): FlatLine[] {
   return out;
 }
 
-function lastAssistantBefore(lines: FlatLine[], from: number, start: number): number {
-  for (let i = from; i >= start; i--) {
-    if (lines[i]?.role === "assistant") return i;
-  }
-  return -1;
-}
-
 function lastUserBefore(lines: FlatLine[], index: number): FlatLine | undefined {
   for (let i = index; i >= 0; i--) {
     if (lines[i]?.role === "user") return lines[i];
@@ -222,28 +209,12 @@ export function mineConflictEpisodes(scenes: ConflictScene[]): ConflictEpisode[]
         after = k;
       }
     }
-    if (maxGap < CONFLICT_FREEZE_MIN_MS || maxGap > CONFLICT_FREEZE_MAX_MS) {
-      i = recovery;
-      continue;
-    }
 
-    const nTa = lines.slice(stretchStart, after).filter((row) => row.role === "assistant").length;
-    if (nTa === 0 || nTa > CONFLICT_MAX_TA_BEFORE_FREEZE) {
-      i = recovery;
-      continue;
-    }
-
-    const freezeFrom = lastAssistantBefore(lines, after - 1, stretchStart);
-    const opener = freezeFrom >= 0 ? lines[freezeFrom] : undefined;
-    if (!opener || !isNegative(opener.emotion)) {
-      i = recovery;
-      continue;
-    }
-
+    const opener = lines[stretchStart]!;
     const afterLine = lines[after]!;
     const repairBy: "them" | "me" = afterLine.role === "assistant" ? "them" : "me";
     const recovered = lines[recovery]!;
-    const triggerLine = lastUserBefore(lines, freezeFrom);
+    const triggerLine = lastUserBefore(lines, stretchStart);
     const durationMin = Math.round((recovered.at - opener.at) / 60_000);
     const to = opener.emotion === "melancholy" ? "melancholy" : "distant";
     if (durationMin < 1) {

@@ -11,9 +11,8 @@ import { FINGERPRINT_STATES, type EmotionalState } from "./style-fingerprint";
 
 export const DYNAMICS_MIN_TRANSITIONS = 30;
 export const DWELL_MIN_EPISODES = 5;
+/** A negative stretch that does not recover inside this gap is not one episode. */
 export const TRANSITION_MAX_GAP_MS = 48 * 3_600_000;
-/** A cold stretch that only ends the next day is a new mood, not this episode. */
-export const DWELL_MAX_MS = 12 * 3_600_000;
 const NEGATIVE_STATES = ["distant", "melancholy"] as const;
 type NegativeState = (typeof NEGATIVE_STATES)[number];
 
@@ -105,15 +104,24 @@ function dwellMinutes(lines: Array<{ emotion: EmotionalState; at: number }>): Re
       continue;
     }
     let j = i + 1;
-    while (j < lines.length && lines[j]!.emotion === start.emotion) j += 1;
-    const end = lines[j];
-    if (end) {
-      const span = end.at - start.at;
-      if (span >= 0 && span <= DWELL_MAX_MS) {
-        out[start.emotion].push(span / 60_000);
+    let broken = false;
+    while (j < lines.length && lines[j]!.emotion === start.emotion) {
+      if (lines[j]!.at - lines[j - 1]!.at > TRANSITION_MAX_GAP_MS) {
+        broken = true;
+        break;
       }
+      j += 1;
     }
-    i = j;
+    const end = lines[j];
+    if (
+      !broken &&
+      end &&
+      end.emotion !== start.emotion &&
+      end.at - lines[j - 1]!.at <= TRANSITION_MAX_GAP_MS
+    ) {
+      out[start.emotion].push((end.at - start.at) / 60_000);
+    }
+    i = j > i ? j : i + 1;
   }
   return out;
 }
