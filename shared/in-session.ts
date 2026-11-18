@@ -88,9 +88,13 @@ export function normalizeInSession(value: unknown): InSessionProfile | undefined
   };
 }
 
-/** Open loops first, then an in-progress life event. Routine waits on B6.3. */
-export function pickInSessionFact(events: LifeEvent[]): string | null {
-  const picked = openLoops(events)[0] ?? inProgressLife(events)[0];
+/** Open loops first, then an in-progress life event, then the current routine. */
+export function pickInSessionFact(
+  events: LifeEvent[],
+  now?: Date,
+  timeZone?: string | null,
+): string | null {
+  const picked = openLoops(events)[0] ?? inProgressLife(events, now, timeZone)[0];
   if (!picked) return null;
   const text = (picked.detail || picked.title).trim();
   return text || null;

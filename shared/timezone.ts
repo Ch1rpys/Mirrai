@@ -47,6 +47,38 @@ export function zonedHour(date: Date, timeZone?: string | null): number {
 }
 
 /**
+ * The weekday (0 = Sunday … 6 = Saturday) on that calendar.
+ *
+ * A Wednesday afternoon in Shanghai is still Wednesday after the
+ * timestamp is stored as UTC. The wall-clock day is what the records
+ * were talking about.
+ */
+export function zonedWeekday(date: Date, timeZone?: string | null): number {
+  const key = zonedDateKey(date, timeZone);
+  const [year, month, day] = key.split("-").map((part) => Number(part));
+  if (!year || !month || !day) return date.getDay();
+  return new Date(year, month - 1, day).getDay();
+}
+
+/**
+ * ISO week of that calendar day, as `YYYY-Www`.
+ *
+ * Recurring windows are counted across distinct weeks, not distinct
+ * timestamps in the same week.
+ */
+export function isoWeekKey(date: Date, timeZone?: string | null): string {
+  const key = zonedDateKey(date, timeZone);
+  const [year, month, day] = key.split("-").map((part) => Number(part));
+  if (!year || !month || !day) return "0000-W00";
+  const utc = new Date(Date.UTC(year, month - 1, day));
+  const thursday = new Date(utc);
+  thursday.setUTCDate(utc.getUTCDate() + 4 - (utc.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((thursday.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  return `${thursday.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+/**
  * The minute of the hour (0-59) in a given time zone.
  *
  * The quiet-hours window is measured in minutes, and the hour alone

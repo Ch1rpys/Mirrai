@@ -50,4 +50,20 @@ describe("starting a topic in the middle of a chat", () => {
     ]);
     expect(pickInSessionFact(events)).toBe("记得带伞");
   });
+
+  it("picks the current routine when nothing else is open", () => {
+    const events = normalizeLifeEvents([
+      {
+        id: "r1",
+        kind: "routine",
+        title: "周三下午上课",
+        source: "auto",
+        verified: true,
+        closed: false,
+        schedule: { weekdays: [3], startHour: 14, endHour: 16 },
+      },
+    ]);
+    expect(pickInSessionFact(events, new Date("2026-11-18T07:00:00Z"), "Asia/Shanghai")).toBe("周三下午上课");
+    expect(pickInSessionFact(events, new Date("2026-11-19T07:00:00Z"), "Asia/Shanghai")).toBeNull();
+  });
 });

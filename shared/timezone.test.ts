@@ -12,6 +12,8 @@ import {
   zonedHour,
   zonedOffsetHours,
   zonedOffsetMinutes,
+  zonedWeekday,
+  isoWeekKey,
 } from "./timezone";
 
 describe("the zone a record is read in", () => {
@@ -32,6 +34,15 @@ describe("the zone a record is read in", () => {
   it("is empty when neither side has a zone", () => {
     expect(zoneForRecords(null, "  ")).toBeNull();
     expect(zoneForRecords(undefined, null)).toBeNull();
+  });
+});
+
+describe("the weekday on that calendar", () => {
+  it("is Wednesday at 15:00 in Shanghai on 2026-11-18", () => {
+    const at = new Date("2026-11-18T07:00:00.000Z");
+    expect(zonedHour(at, "Asia/Shanghai")).toBe(15);
+    expect(zonedWeekday(at, "Asia/Shanghai")).toBe(3);
+    expect(isoWeekKey(at, "Asia/Shanghai")).toMatch(/^2026-W\d{2}$/);
   });
 });
 

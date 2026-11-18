@@ -167,6 +167,7 @@ import {
   stanceRejectedKey,
 } from "@shared/stances";
 import { mineOpenLoops } from "./skill-engine/open-loops";
+import { mineRoutines } from "./skill-engine/routine";
 import { feedbackRowsFromBlindSessions } from "./eval/blind";
 import {
   aggregateFidelityFeedback,
@@ -6021,8 +6022,26 @@ export const appRouter = router({
         return await withPersonaDataLock(input.personaId, async () => {
           const persona = await getPersonaById(input.personaId, ctx.user.id);
           if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id, { newest: true });
-          const mined = mineOpenLoops({ messages: rows });
+          const rows: Array<{
+            role: string;
+            content: string;
+            kind?: string | null;
+            meta?: Record<string, unknown> | null;
+            timestamp: Date | string | null;
+          }> = [];
+          for await (const row of iterateRecords(input.personaId, ctx.user.id)) {
+            rows.push({
+              role: row.role,
+              content: row.content,
+              kind: row.kind,
+              meta: row.meta && typeof row.meta === "object" ? row.meta as Record<string, unknown> : null,
+              timestamp: row.timestamp,
+            });
+          }
+          const mined = [
+            ...mineOpenLoops({ messages: rows }),
+            ...mineRoutines(rows, persona.timezone, { locale: ctx.locale }),
+          ];
           const existing = normalizeLifeEvents((persona.personaData as any)?.lifeEvents);
           const known = new Set(existing.map((event) => event.title));
           const fresh = mined.filter((event) => !known.has(event.title));
@@ -6038,7 +6057,7 @@ export const appRouter = router({
         personaId: z.number(),
         events: z.array(z.object({
           id: z.string().max(64).optional(),
-          kind: z.enum(["life", "open_loop"]),
+          kind: z.enum(["life", "open_loop", "routine"]),
           title: z.string().min(1).max(80),
           detail: z.string().max(400).default(""),
           whoSaid: z.string().max(40).default(""),
@@ -6050,6 +6069,11 @@ export const appRouter = router({
             at: z.string().max(40).optional(),
             snippet: z.string().max(1000),
           })).max(20).default([]),
+          schedule: z.object({
+            weekdays: z.array(z.number().int().min(0).max(6)).min(1).max(7),
+            startHour: z.number().int().min(0).max(23),
+            endHour: z.number().int().min(1).max(24),
+          }).optional(),
         })).max(200),
       }))
       .mutation(async ({ ctx, input }) => {
