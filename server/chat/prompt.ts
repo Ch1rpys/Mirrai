@@ -218,6 +218,7 @@ export async function buildPromptForPersona(
     ),
     locale,
     now,
+    periodId: context.periodId ?? null,
   });
 }
 

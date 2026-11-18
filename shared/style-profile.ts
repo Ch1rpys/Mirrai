@@ -6,6 +6,7 @@
  * and a merge of confirmations. A field that has not been measured is
  * simply absent — there is no default to fill it with.
  */
+import type { AddressEntry } from "./address-history";
 import type { StyleFingerprint } from "./style-fingerprint";
 import type { ImperfectionDrafts } from "./imperfection-draft";
 import type { UserSideProfile } from "./user-side-profile";
@@ -66,7 +67,7 @@ export interface StyleProfile {
   conflict?: unknown; // 由 B4.4 填
   triggers?: unknown; // 由 B4.5 填
   actClusters?: unknown; // 由 B4.2 填
-  addressHistory?: unknown; // 由 B3.8 填
+  addressHistory?: AddressEntry[];
   stickers?: unknown; // 由 B7.1 填
   voice?: unknown; // 由 B7.4 填
   photos?: unknown; // 由 B7.9 填

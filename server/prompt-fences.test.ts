@@ -223,6 +223,32 @@ describe("the simulated user in a drift run", () => {
   });
 });
 
+describe("a counted address from the records", () => {
+  it("reaches the prompt only inside the fence", () => {
+    const prompt = buildSystemPrompt(
+      persona({
+        personaData: { speakingStyle: "短句", catchphrases: ["嗯"] },
+        styleProfile: {
+          version: 1,
+          measuredAt: "2026-01-01T00:00:00.000Z",
+          recordsVersion: "1:1",
+          addressHistory: [
+            {
+              form: HOSTILE_NOTE,
+              direction: "them_to_me",
+              total: 20,
+              byQuarter: { "2023Q1": 20 },
+              byState: {},
+            },
+          ],
+        },
+      }),
+    );
+    expect(prompt).toContain(HOSTILE_NOTE);
+    expect(unfenced(prompt)).not.toContain(HOSTILE_NOTE);
+  });
+});
+
 describe("a line they would never say", () => {
   it("reaches the prompt only inside the fence", async () => {
     const { applyClarification } = await import("@shared/clarify");

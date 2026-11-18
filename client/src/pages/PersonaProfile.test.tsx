@@ -218,6 +218,26 @@ describe("the portrait", () => {
     expect(screen.getByTestId("fidelity-panel")).toBeInTheDocument();
   });
 
+  it("shows the counted addresses", () => {
+    persona.styleProfile = {
+      version: 1,
+      measuredAt: "2026-01-01T00:00:00.000Z",
+      recordsVersion: "1:1",
+      addressHistory: [
+        {
+          form: "树树",
+          direction: "them_to_me",
+          total: 10,
+          byQuarter: { "2022Q1": 10 },
+          byState: { warm: 10 },
+        },
+      ],
+    };
+    render(<PersonaProfile />);
+    expect(screen.getByText(translate("zh", "profile.address"))).toBeInTheDocument();
+    expect(screen.getByText("树树")).toBeInTheDocument();
+  });
+
   it("has no rules section when there are no rules", () => {
     persona.personaData.microRules = [];
     render(<PersonaProfile />);

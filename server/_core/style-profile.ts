@@ -17,6 +17,7 @@ import {
 } from "../db";
 import { mergePersonaSettings } from "@shared/persona-settings";
 import { normalizePeriods } from "@shared/periods";
+import { mineAddressForms } from "@shared/address-history";
 import { draftImperfection } from "@shared/imperfection-draft";
 import { normalizeStyleProfile, type StyleProfile } from "@shared/style-profile";
 import {
@@ -63,9 +64,15 @@ export async function measureStyleProfile(params: {
       : {};
   const nickname = typeof rawData.nickname === "string" ? rawData.nickname.trim() : "";
   const userName = typeof user?.name === "string" ? user.name.trim() : "";
-  const addressForms = [
-    ...new Set([nickname, userName, ...defaultAddressForms()].filter(Boolean)),
+  const personaName = typeof persona?.name === "string" ? persona.name.trim() : "";
+  const knownForms = [
+    ...new Set([nickname, userName, personaName, ...defaultAddressForms()].filter(Boolean)),
   ];
+  const addressHistory = mineAddressForms(rows, knownForms);
+  const minedForms = addressHistory
+    .filter((entry) => entry.direction === "them_to_me")
+    .map((entry) => entry.form);
+  const addressForms = minedForms.length > 0 ? minedForms : knownForms;
   const periods = normalizePeriods(rawData.periods);
   const fingerprint = measureFingerprint(rows, { addressForms, periods }) ?? undefined;
   const userSide = measureUserSide(rows);
@@ -86,6 +93,7 @@ export async function measureStyleProfile(params: {
     fingerprint,
     userSide: userSide ?? undefined,
     imperfectionDrafts: drafts,
+    addressHistory,
   });
   return applyRerankWeightsFromPairs(personaId, userId, next, { persistAlways: true });
 }

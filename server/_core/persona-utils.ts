@@ -13,6 +13,7 @@ import { renderSuppressions, type Suppression } from "@shared/suppressions";
 import { renderActInstruction, type SpeechAct } from "@shared/speech-acts";
 import { normalizePersonaData } from "./persona-schema";
 import { shouldInstructHarm } from "@shared/harm";
+import { normalizeAddressHistory, pickThemToMeAddress } from "@shared/address-history";
 
 export { INTIMACY_LEVELS, normalizeIntimacyLevel };
 
@@ -264,6 +265,11 @@ export interface SystemPromptOptions {
    * A note that two memories of the same fact do not agree.
    */
   memoryConflictSection?: string | null;
+  /**
+   * When set, the nickname line uses that period's most common
+   * them-to-me form from the address history.
+   */
+  periodId?: string | null;
 }
 
 export function buildSystemPrompt(persona: any, sceneOverlay?: string | null): string;
@@ -503,7 +509,7 @@ export function buildSystemPrompt(
                 copy(locale, "prompt.noCatchphrases"),
             },
           )}\n${copy(locale, "prompt.nickname", {
-            value: p.nickname || copy(locale, "prompt.noNickname"),
+            value: nicknameForPrompt(persona, p.nickname, options.periodId, locale),
           })}`,
         )
       : "",
@@ -597,6 +603,25 @@ const MATERIAL_CLOSE = "</persona_data>";
  * `</PERSONA_DATA>` and `< /persona_data>` all ended the block early
  * and everything after them was read as the app's own instructions.
  */
+function nicknameForPrompt(
+  persona: { styleProfile?: unknown; personaData?: unknown },
+  stored: string,
+  periodId: string | null | undefined,
+  locale: "zh" | "en",
+): string {
+  const history = normalizeAddressHistory(
+    persona.styleProfile && typeof persona.styleProfile === "object"
+      ? (persona.styleProfile as { addressHistory?: unknown }).addressHistory
+      : undefined,
+  );
+  const periods = Array.isArray((persona.personaData as { periods?: unknown } | undefined)?.periods)
+    ? ((persona.personaData as { periods: Array<{ id?: string; from?: string; to?: string }> }).periods)
+    : [];
+  const period = periodId ? periods.find((item) => item.id === periodId) : undefined;
+  const fromHistory = pickThemToMeAddress(history, { period: period ?? null });
+  return fromHistory || stored || copy(locale, "prompt.noNickname");
+}
+
 const MATERIAL_TAG = /<\s*\/?\s*persona_data\s*>/gi;
 
 /**
