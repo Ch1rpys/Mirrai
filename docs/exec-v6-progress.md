@@ -60,7 +60,7 @@
 | B3.2 | ✅ | 2e05643 | `shared/style-fingerprint.test.ts`：`is small when the generated lines are the person's own` 通过（夹具 200 句 `total < 0.1`；末尾加「。」后 `endings > 0.5` 且 `total` 变大；80 字长句 `length === 1`）；`treats a period line as more surprising in warm than in distant` 通过。「哦。」对 warm 的 `lineSurprise` 大于 distant。`metrics.test.ts`：`fills styleDistance when a fingerprint is given` 通过；`leaves styleDistance null when there is no fingerprint` 通过，且 overlap / likelihoodGap / emotionAccuracy / cases / lengthDistance 与有指纹时相同。`compare-cli.test.ts`：`includes style in the comparison` 通过（源码含 `row("style"`、`[eval] style`、`tolerance-style`）。闸门 `341 passed \| 4 skipped (345)` 文件，`3042 passed \| 18 skipped (3060)` 用例，`all six steps passed`。 |
 | B3.3 | 🟡 | 020c183 (score); 78f2500 (skip) | 先红后绿：`rerank-empty-corpus.test.ts` 旧码 `expected 1, got 4`；改后 1 通过。`rerank.test.ts` 6 通过：夹具四候选不选「好的。」和长问句；acknowledge 时选「嗯」且陈述 `act === 1`；句号=假的判别器下 `real` 更高的候选胜出；原有三条未改仍过。`rerank-model.test.ts` 4 通过：39 行 `null`；同版本第二次不读库；版本变了重建；只留最近 5000 行。`generate.test.ts`：层开着 `layersUsed` 含 `fingerprintRerank`；`--without fingerprintRerank` 不含；`final.rerank.scores` 长度 4。`routers.persona-update.test.ts`：语料不够 `BAD_REQUEST`、不写库。`PersonaEdit.test.tsx` 开关置灰并出现「记录不够，重排选不出来」。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `361 passed \| 5 skipped (366)` 文件，`3198 passed \| 21 skipped (3219)` 用例。效果量见未验证清单。 |
 | B3.4 | 🟡 | 16c888f (rules); 498033c (wire) | `shared/style-projection.test.ts` 27 通过：每条规则生效/不够/不该动；夹具 happy 把「知道了。哈哈」投成 `/^知道了哈{2,}$/`；distant「随便。」仍带句号；50 句同种子两次等于一次。`generate.test.ts`：层开着「好的。」→「好的」且 `projection` 含 `strip_period`；`--without projection` 原文不动、`layersUsed` 不含该层。`service.test.ts`：事件 `delta`→`replace`（「好的」）→`done`，落库「好的」；无指纹无 `replace`、落库「好的。」。`stream.test.ts` SSE 同序。`chat-stream-e2e.test.ts` `onReplace` 收到「好的」。`PersonaSwitches.test.tsx` 文案「按 小满 的标点习惯收尾」。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `359 passed \| 5 skipped (364)` 文件，`3185 passed \| 21 skipped (3206)` 用例。效果量见未验证清单。 |
-| B3.5 | ⬜ |  |  |
+| B3.5 | ✅ | 6dbb539 | `state-rules.test.ts` 3 通过：夹具产出 `["。"]`/`["陈树"]` 两条，meaning 都是「疏离」，各 3 条证据且含 trigger；distant 删到 15 行无候选；`mergeUserDecisions` 已确认的 `["。"]` 只留一条。`fidelity-prompt.test.ts` `says nothing about a rule the user has not confirmed` 通过。`micro-rules.test.ts` `does not mine at all when the caller does not want it` 通过。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `362 passed \| 5 skipped (367)` 文件，`3201 passed \| 21 skipped (3222)` 用例。 |
 | B3.6 | ⬜ |  |  |
 | B3.7 | ⬜ |  |  |
 | B3.8 | ⬜ |  |  |
@@ -289,6 +289,8 @@
 | 85 | B3.3 | `fingerprintRerank` 进 `BUILT_LAYERS` | 不进；只在将要四选一且有指纹时写入 `layersUsed` | 没有指纹或语料不够时这一层改不了回复。消融表对老分身仍是五层。 |
 | 86 | B3.3 | acknowledge 用例的语料是夹具全文 | 40 条短应答（嗯/好/在） | 夹具 n-gram 更贴近长句，「我今天去了图书馆」的似然项会盖过动作项。动作项本身仍按高精度规则计。 |
 | 87 | B3.3 | 语料条数用 `getRerankModel` / `iterateRecords` | 编辑页置灰读 `material.report` 里 fingerprint 层的 `have`（即 TA 文本行） | 和「按 TA 的时间」读 `behavior.get` 一样用已有聚合，不在保存前再扫一遍记录。 |
+| 88 | B3.5 | 蒸馏管线在 `transcriptRowsFrom` 之后立刻挖状态规则 | 对比对仍在那里挖；状态规则在 `labelEmotionsForRecords` 之后 | `perState` 要情绪标签。第一次蒸馏在标完情绪之前没有分态。 |
+| 89 | B3.5 | 管线称呼表可用 nickname + name + `defaultAddressForms`（陈树要等 B3.8） | 单元测试显式传入 `["陈树","树树"]`；管线和 `microRule.mine` 用 nickname + 分身名 + 默认表 | 默认表没有人名。夹具里的「陈树」在重挖时要等 B3.8 或用户名写进称呼表。 |
 
 ## 未验证清单
 
@@ -814,3 +816,10 @@ B3.1、B3.2、B8.3、B8.4、B8.9、B8.10 维持 ✅。B8.1 改 🟡。B8.2、B8.
 - 闸门 `361 passed | 5 skipped (366)` 文件，`3198 passed | 21 skipped (3219)` 用例，`all six steps passed`。相对 B3.4（359/5 文件、3185/21 用例）：通过文件 +2、通过用例 +13；跳过数不变。
 - 偏差 85–87。未验证清单新增 B3.3。待用户决定无新增。
 - B3.3 标 🟡。下一条 B3.5。
+
+### WP5 · 实现会话 · 2026-11-18 · B3.5
+
+- `6dbb539`：`mineStateRules` 按分态指纹对比其余状态；句号 / 称呼 / 语气词 / 省略号四类候选；证据不足 3 条不产出；`mineRules === false` 时也不挖。蒸馏在情绪回标之后拼进同一份 `microRules`，走 `mergeUserDecisions`。`microRule.mine` 同样调用。
+- 闸门 `362 passed | 5 skipped (367)` 文件，`3201 passed | 21 skipped (3222)` 用例，`all six steps passed`。相对 B3.3（361/5 文件、3198/21 用例）：通过文件 +1、通过用例 +3；跳过数不变。
+- 偏差 88–89。未验证清单、待用户决定无新增。
+- B3.5 标 ✅。下一条 B3.6。
