@@ -59,19 +59,52 @@ export class ClaudeProvider implements LLMProvider {
   /** Splits the system prompt out; Claude takes it as a top-level field. */
   private splitMessages(messages: LLMMessage[]) {
     let system: string | undefined;
+    let cacheBreak: number | undefined;
     const filtered: LLMMessage[] = [];
     for (const m of messages) {
       if (m.role === "system") {
-        system = (system ? system + "\n" : "") + getTextContent(m.content);
+        const text = getTextContent(m.content);
+        if (system === undefined) {
+          system = text;
+          cacheBreak = m.cacheBreak;
+        } else {
+          system += "\n" + text;
+        }
       } else {
         filtered.push(m);
       }
     }
-    return { system, filtered };
+    return { system, filtered, cacheBreak };
+  }
+
+  /**
+   * Claude's system field.
+   *
+   * A string stays a string. When the stable prefix is marked, it
+   * becomes two text blocks and the first one carries
+   * `cache_control: { type: "ephemeral" }`
+   * (https://platform.claude.com/docs/en/build-with-claude/prompt-caching).
+   */
+  private systemField(system: string | undefined, cacheBreak?: number) {
+    if (!system) return undefined;
+    if (
+      cacheBreak == null ||
+      cacheBreak <= 0 ||
+      cacheBreak >= system.length
+    ) {
+      return system;
+    }
+    const stable = system.slice(0, cacheBreak);
+    const volatile = system.slice(cacheBreak).replace(/^\n+/, "");
+    if (!volatile) return system;
+    return [
+      { type: "text", text: stable, cache_control: { type: "ephemeral" } },
+      { type: "text", text: volatile },
+    ];
   }
 
   async invoke(messages: LLMMessage[], options?: LLMOptions): Promise<string> {
-    const { system, filtered } = this.splitMessages(messages);
+    const { system, filtered, cacheBreak } = this.splitMessages(messages);
 
     const url = `${this.baseUrl.replace(/\/+$/, "")}/v1/messages`;
     const response = await fetch(url, {
@@ -90,7 +123,7 @@ export class ClaudeProvider implements LLMProvider {
         temperature: claudeTemperature(options?.temperature),
         ...(options?.topP != null ? { top_p: options.topP } : {}),
         ...(options?.stop && options.stop.length > 0 ? { stop_sequences: options.stop } : {}),
-        system,
+        system: this.systemField(system, cacheBreak),
         messages: filtered.map(m => ({ role: m.role, content: toClaudeContent(m.content) })),
       }),
       signal: options?.signal,
@@ -107,7 +140,7 @@ export class ClaudeProvider implements LLMProvider {
   }
 
   async *stream(messages: LLMMessage[], options?: LLMOptions): AsyncGenerator<{ text: string }> {
-    const { system, filtered } = this.splitMessages(messages);
+    const { system, filtered, cacheBreak } = this.splitMessages(messages);
 
     const url = `${this.baseUrl.replace(/\/+$/, "")}/v1/messages`;
     const response = await fetch(url, {
@@ -123,7 +156,7 @@ export class ClaudeProvider implements LLMProvider {
         temperature: claudeTemperature(options?.temperature),
         ...(options?.topP != null ? { top_p: options.topP } : {}),
         ...(options?.stop && options.stop.length > 0 ? { stop_sequences: options.stop } : {}),
-        system,
+        system: this.systemField(system, cacheBreak),
         stream: true,
         messages: filtered.map(m => ({ role: m.role, content: toClaudeContent(m.content) })),
       }),

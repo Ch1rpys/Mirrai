@@ -10,6 +10,10 @@
  * Usage: pnpm fidelity:gate
  */
 import { checkPersonaStructure, completePersona } from "../server/_core/fidelity-gate";
+import { resolvePromptLayout } from "../server/_core/persona-utils";
+
+const layout = resolvePromptLayout();
+console.log(`[gate] prompt layout: ${layout}`);
 
 const result = checkPersonaStructure(completePersona());
 

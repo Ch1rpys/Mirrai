@@ -305,6 +305,31 @@ export interface SystemPromptOptions {
    * style, catchphrases, exemplars, seeds, or style samples.
    */
   promptMode?: "planner";
+  /**
+   * Override `PROMPT_LAYOUT`. Tests pass this so they do not have to
+   * mutate the process environment.
+   */
+  layout?: PromptLayout;
+}
+
+export type PromptLayout = "classic" | "cache";
+
+/** `cache` only when the env is exactly that word. Anything else is classic. */
+export function resolvePromptLayout(raw = process.env.PROMPT_LAYOUT): PromptLayout {
+  return raw === "cache" ? "cache" : "classic";
+}
+
+export type SystemPromptParts = {
+  stable: string;
+  volatile: string;
+  prompt: string;
+  cacheBreak?: number;
+};
+
+type PromptBlock = { kind: "stable" | "volatile"; text: string; id?: string };
+
+function joinPromptBlocks(texts: string[]): string {
+  return texts.filter(Boolean).join("\n\n");
 }
 
 export function buildSystemPrompt(persona: any, sceneOverlay?: string | null): string;
@@ -313,6 +338,13 @@ export function buildSystemPrompt(
   persona: any,
   sceneOrOptions?: string | null | SystemPromptOptions,
 ): string {
+  return buildSystemPromptParts(persona, sceneOrOptions as never).prompt;
+}
+
+export function buildSystemPromptParts(
+  persona: any,
+  sceneOrOptions?: string | null | SystemPromptOptions,
+): SystemPromptParts {
   const options: SystemPromptOptions =
     typeof sceneOrOptions === "string" || sceneOrOptions == null
       ? { sceneOverlay: sceneOrOptions ?? null }
@@ -483,7 +515,7 @@ export function buildSystemPrompt(
     const actLabel = options.sampledAct
       ? copy(locale, ACT_COPY_KEYS[options.sampledAct])
       : copy(locale, "prompts.twoStage.actNone");
-    return [
+    const prompt = [
       copy(locale, "prompts.twoStage.planner", { act: actLabel }),
       identityRule,
       hardRules,
@@ -497,6 +529,7 @@ export function buildSystemPrompt(
     ]
       .filter(Boolean)
       .join("\n\n");
+    return { stable: prompt, volatile: "", prompt };
   }
 
   /**
@@ -544,111 +577,174 @@ export function buildSystemPrompt(
     ? asMaterial(imperfectionSection)
     : "";
 
-  const sections: Array<string | null | undefined> = [
-    identityRule,
-    hardRules,
-    harmInstruction,
-    options.seedTurnsNote || "",
-    // Everything below is material, and the material says so.
-    copy(locale, "prompt.materialIsData"),
-    identitySection,
-    p.personality
-      ? asMaterial(copy(locale, "prompt.personalityHeading"), p.personality)
-      : "",
-    p.speakingStyle
-      ? asMaterial(
-          copy(locale, "prompt.speakingStyleHeading"),
-          `${p.speakingStyle}\n${copy(
-            locale,
-            "prompt.catchphrases",
-            {
-              value:
-                (p.catchphrases || []).join(locale === "en" ? ", " : "、") ||
-                copy(locale, "prompt.noCatchphrases"),
-            },
-          )}\n${copy(locale, "prompt.nickname", {
-            value: nicknameForPrompt(persona, p.nickname, options.periodId, locale),
-          })}${lexiconLines ? `\n${lexiconLines}` : ""}`,
-        )
-      : "",
-    // These already carry their own heading.
-    microRulesSection ? asMaterial(microRulesSection) : "",
-    // Subtractions sit next to the discriminative rules, still fenced.
-    suppressionsSection ? asMaterial(suppressionsSection) : "",
-    actInstruction,
-    options.reanchorIssues && options.reanchorIssues.length > 0
-      ? copy(locale, "prompt.reanchor", {
-          issues: formatReanchorIssues(options.reanchorIssues, locale),
-        })
-      : "",
-    options.userContext ? asMaterial(options.userContext) : "",
-    options.quotedSection ? asMaterial(options.quotedSection) : "",
-    options.relationshipEvents ? asMaterial(options.relationshipEvents) : "",
-    buildReachabilityNote(
-      (options.reachability as Reachability) ?? "reachable",
-      locale,
-    ),
-    options.anchorSection ? asMaterial(options.anchorSection) : "",
-    options.memorySection ? asMaterial(options.memorySection) : "",
-    options.exemplarSection ? asMaterial(options.exemplarSection) : "",
-    options.contrastSection ? asMaterial(options.contrastSection) : "",
-    options.styleReminderLines && options.styleReminderLines.length > 0
-      ? asMaterial(
-          copy(locale, "prompt.styleReminderHeading"),
-          options.styleReminderLines.join("\n"),
-        )
-      : "",
-    options.memoryConflictSection ? asMaterial(options.memoryConflictSection) : "",
-    options.summarySection ? asMaterial(options.summarySection) : "",
-    p.memories ? asMaterial(copy(locale, "prompt.memoriesHeading"), p.memories) : "",
-    p.attachmentStyle
-      ? asMaterial(
-          copy(locale, "prompt.attachmentHeading"),
-          `${copy(locale, "prompt.attachmentStyle", {
-            value: p.attachmentStyle,
-          })}\n${copy(locale, "prompt.loveLanguage", {
-            value: p.loveLanguage || copy(locale, "prompt.unknown"),
-          })}\n${copy(locale, "prompt.conflictStyle", {
-            value: p.conflictStyle || copy(locale, "prompt.unknown"),
-          })}`,
-        )
-      : "",
-    [
-      `${copy(locale, "prompt.emotionalStateHeading")}\n${
-        options.emotionalDesc || getEmotionalStateDesc(persona.emotionalState, locale)
-      }`,
-      fencedImperfectionSection,
-    ]
-      .filter(Boolean)
-      .join("\n"),
-    buildTimeAwareness(timeOfDay, togetherDays, locale, isOver),
-    options.sceneOverlay
-      ? asMaterial(copy(locale, "prompt.sceneHeading"), options.sceneOverlay)
-      : "",
-    buildRealismRules(
-      options.realismLevel ?? (p.realismLevel as number | undefined) ?? 70,
-      locale,
-    ),
-    /**
-     * The stage of the relationship.
-     *
-     * It used to come from the persona's own record — a field nothing
-     * writes. So every prompt ended with "you are still feeling each
-     * other out — answer as though you are at this stage", for every
-     * persona, including one whose own event log says they broke up a
-     * few lines above.
-     *
-     * The phase the events resolve to is the real one; the stored one
-     * is only a fallback.
-     */
-    buildRelationshipPhase(options.relationshipPhase ?? p.relationshipPhase, locale),
-    copy(locale, "prompt.conversationPrinciples", { name }),
-    p.customInstructions
-      ? asMaterial(copy(locale, "prompt.customInstructionsHeading"), p.customInstructions)
-      : "",
+  const blocks: PromptBlock[] = [
+    { kind: "stable", text: identityRule },
+    { kind: "stable", text: hardRules },
+    { kind: "stable", text: harmInstruction },
+    { kind: "volatile", text: options.seedTurnsNote || "" },
+    { kind: "stable", text: copy(locale, "prompt.materialIsData") },
+    { kind: "stable", text: identitySection },
+    {
+      kind: "stable",
+      text: p.personality
+        ? asMaterial(copy(locale, "prompt.personalityHeading"), p.personality)
+        : "",
+    },
+    {
+      kind: "stable",
+      text: p.speakingStyle
+        ? asMaterial(
+            copy(locale, "prompt.speakingStyleHeading"),
+            `${p.speakingStyle}\n${copy(
+              locale,
+              "prompt.catchphrases",
+              {
+                value:
+                  (p.catchphrases || []).join(locale === "en" ? ", " : "、") ||
+                  copy(locale, "prompt.noCatchphrases"),
+              },
+            )}\n${copy(locale, "prompt.nickname", {
+              value: nicknameForPrompt(persona, p.nickname, options.periodId, locale),
+            })}${lexiconLines ? `\n${lexiconLines}` : ""}`,
+          )
+        : "",
+    },
+    { kind: "stable", text: microRulesSection ? asMaterial(microRulesSection) : "" },
+    { kind: "stable", text: suppressionsSection ? asMaterial(suppressionsSection) : "" },
+    { kind: "volatile", text: actInstruction, id: "act" },
+    {
+      kind: "volatile",
+      text:
+        options.reanchorIssues && options.reanchorIssues.length > 0
+          ? copy(locale, "prompt.reanchor", {
+              issues: formatReanchorIssues(options.reanchorIssues, locale),
+            })
+          : "",
+    },
+    { kind: "volatile", text: options.userContext ? asMaterial(options.userContext) : "" },
+    { kind: "volatile", text: options.quotedSection ? asMaterial(options.quotedSection) : "" },
+    {
+      kind: "volatile",
+      text: options.relationshipEvents ? asMaterial(options.relationshipEvents) : "",
+    },
+    {
+      kind: "volatile",
+      text: buildReachabilityNote(
+        (options.reachability as Reachability) ?? "reachable",
+        locale,
+      ),
+    },
+    { kind: "volatile", text: options.anchorSection ? asMaterial(options.anchorSection) : "" },
+    { kind: "volatile", text: options.memorySection ? asMaterial(options.memorySection) : "" },
+    {
+      kind: "volatile",
+      text: options.exemplarSection ? asMaterial(options.exemplarSection) : "",
+    },
+    {
+      kind: "volatile",
+      text: options.contrastSection ? asMaterial(options.contrastSection) : "",
+    },
+    {
+      kind: "volatile",
+      text:
+        options.styleReminderLines && options.styleReminderLines.length > 0
+          ? asMaterial(
+              copy(locale, "prompt.styleReminderHeading"),
+              options.styleReminderLines.join("\n"),
+            )
+          : "",
+    },
+    {
+      kind: "volatile",
+      text: options.memoryConflictSection ? asMaterial(options.memoryConflictSection) : "",
+    },
+    {
+      kind: "volatile",
+      text: options.summarySection ? asMaterial(options.summarySection) : "",
+    },
+    {
+      kind: "stable",
+      text: p.memories ? asMaterial(copy(locale, "prompt.memoriesHeading"), p.memories) : "",
+    },
+    {
+      kind: "stable",
+      text: p.attachmentStyle
+        ? asMaterial(
+            copy(locale, "prompt.attachmentHeading"),
+            `${copy(locale, "prompt.attachmentStyle", {
+              value: p.attachmentStyle,
+            })}\n${copy(locale, "prompt.loveLanguage", {
+              value: p.loveLanguage || copy(locale, "prompt.unknown"),
+            })}\n${copy(locale, "prompt.conflictStyle", {
+              value: p.conflictStyle || copy(locale, "prompt.unknown"),
+            })}`,
+          )
+        : "",
+    },
+    {
+      kind: "volatile",
+      text: [
+        `${copy(locale, "prompt.emotionalStateHeading")}\n${
+          options.emotionalDesc || getEmotionalStateDesc(persona.emotionalState, locale)
+        }`,
+        fencedImperfectionSection,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    },
+    {
+      kind: "volatile",
+      text: buildTimeAwareness(timeOfDay, togetherDays, locale, isOver),
+    },
+    {
+      kind: "volatile",
+      text: options.sceneOverlay
+        ? asMaterial(copy(locale, "prompt.sceneHeading"), options.sceneOverlay)
+        : "",
+    },
+    {
+      kind: "stable",
+      text: buildRealismRules(
+        options.realismLevel ?? (p.realismLevel as number | undefined) ?? 70,
+        locale,
+      ),
+    },
+    {
+      kind: "stable",
+      text: buildRelationshipPhase(options.relationshipPhase ?? p.relationshipPhase, locale),
+    },
+    { kind: "stable", text: copy(locale, "prompt.conversationPrinciples", { name }) },
+    {
+      kind: "stable",
+      text: p.customInstructions
+        ? asMaterial(copy(locale, "prompt.customInstructionsHeading"), p.customInstructions)
+        : "",
+    },
   ];
 
-  return sections.filter(Boolean).join("\n\n");
+  const present = blocks.filter((block) => Boolean(block.text));
+  const stableBlocks = present.filter((block) => block.kind === "stable");
+  const volatileBlocks = present.filter((block) => block.kind === "volatile");
+  const stable = joinPromptBlocks(stableBlocks.map((block) => block.text));
+  const volatileClassic = joinPromptBlocks(volatileBlocks.map((block) => block.text));
+  const act = volatileBlocks.filter((block) => block.id === "act");
+  const restVolatile = volatileBlocks.filter((block) => block.id !== "act");
+  const volatileCache = joinPromptBlocks([...act, ...restVolatile].map((block) => block.text));
+  const layout = options.layout ?? resolvePromptLayout();
+  if (layout === "cache") {
+    const prompt = joinPromptBlocks([stable, volatileCache]);
+    return {
+      stable,
+      volatile: volatileCache,
+      prompt,
+      cacheBreak: stable ? stable.length : undefined,
+    };
+  }
+  return {
+    stable,
+    volatile: volatileClassic,
+    prompt: joinPromptBlocks(present.map((block) => block.text)),
+  };
 }
 
 /**

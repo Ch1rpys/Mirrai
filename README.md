@@ -652,6 +652,7 @@ letters             -- 信 (写给分身 / 等 TA 回来再说), 回信是延迟
 | `MIRRAI_DATA_ROOT` | 首次运行凭据与数据文件的存放目录 | UPLOAD_DIR 的上级目录 |
 | `SAFETY_RESOURCES_FILE` | 危机支持资源清单的覆盖文件（JSON） | 空（用内置清单） |
 | `REMINDER_QUIET_HOURS` | 主动提醒的免打扰时段 | `23:00-08:00` |
+| `PROMPT_LAYOUT` | 系统提示词段落顺序：`classic`（现在的顺序）/ `cache`（稳定段在前，方便 Claude 缓存） | `classic` |
 | `REDIS_URL` | 共享存储的地址。留空则应用自己找一个（默认端口上的，或自己起一个） | 空 |
 | `MIRRAI_REDIS` | 共享存储：`auto`（默认）/ `managed`（强制自己起一个）/ `off`（不用） | `auto` |
 

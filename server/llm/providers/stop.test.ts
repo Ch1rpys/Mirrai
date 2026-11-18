@@ -137,6 +137,24 @@ describe("sampling and extraBody on the request", () => {
     expect(body.presence_penalty).toBeUndefined();
   });
 
+  it("splits a cached Claude system prompt into two blocks", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ content: [{ type: "text", text: "在" }] }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const provider = new ClaudeProvider("sk-test", "claude-sonnet-4-6", "https://example.invalid");
+    const stable = "identity and rules";
+    const volatile = "this turn's memories";
+    await provider.invoke(
+      [{ role: "system", content: `${stable}\n\n${volatile}`, cacheBreak: stable.length }, ...messages],
+    );
+    const body = requestBody();
+    expect(body.system).toEqual([
+      { type: "text", text: stable, cache_control: { type: "ephemeral" } },
+      { type: "text", text: volatile },
+    ]);
+  });
+
   it("maps frequencyPenalty onto Ollama repeat_penalty", async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ message: { content: "在" } }), { status: 200 }),

@@ -5,6 +5,14 @@ export type LLMContentPart =
 export type LLMMessage = {
   role: "system" | "user" | "assistant";
   content: string | LLMContentPart[];
+  /**
+   * Character length of the stable prefix of a system prompt.
+   *
+   * Claude splits the system field into two blocks at this index and
+   * marks the first with `cache_control: { type: "ephemeral" }`. Other
+   * providers ignore it.
+   */
+  cacheBreak?: number;
 };
 
 export const LLM_PURPOSES = [

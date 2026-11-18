@@ -29,7 +29,7 @@ import { mayReachOut } from "@shared/graduation-mode";
 import { copy, localizeScene } from "@shared/copy";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import { asMaterial } from "../_core/material";
-import { buildPromptForPersona } from "./prompt";
+import { buildPromptBundleForPersona } from "./prompt";
 import { splitBurst } from "./burst";
 import { loadBehaviorProfile } from "../_core/behavior-profile";
 import { planTurn, executePlan } from "./generate";
@@ -519,7 +519,7 @@ export async function composeMessages(params: {
   // the one the model works from. It carries everything the app knows:
   // who the persona is, who it is talking to, what has been happening
   // between them, and what the persona remembers.
-  const systemPrompt = await buildPromptForPersona({
+  const built = await buildPromptBundleForPersona({
     persona: params.persona,
     userId: params.userId,
     userMessage: params.userMessage,
@@ -567,7 +567,12 @@ export async function composeMessages(params: {
   );
 
   return {
-    messages: [{ role: "system", content: systemPrompt }, ...recent],
+    messages: [
+      built.cacheBreak != null
+        ? { role: "system" as const, content: built.prompt, cacheBreak: built.cacheBreak }
+        : { role: "system" as const, content: built.prompt },
+      ...recent,
+    ],
     /**
      * The memories that went into this turn.
      *

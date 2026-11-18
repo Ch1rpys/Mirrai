@@ -11,6 +11,10 @@ const buildPromptForPersona = vi.fn();
 
 vi.mock("../chat/prompt", () => ({
   buildPromptForPersona: (...a: unknown[]) => buildPromptForPersona(...a),
+  buildPromptBundleForPersona: async (...a: unknown[]) => {
+    const prompt = await buildPromptForPersona(...a);
+    return typeof prompt === "string" ? { prompt } : prompt;
+  },
 }));
 
 import {

@@ -29,7 +29,7 @@
  *
  *     pnpm eval -- --persona 1 --user 1 --compare
  */
-import { buildSystemPrompt } from "./persona-utils";
+import { buildSystemPrompt, type PromptLayout } from "./persona-utils";
 import { normalizePersonaData } from "./persona-schema";
 import { PROMPT } from "@shared/copy/prompt";
 
@@ -117,7 +117,7 @@ export function completePersona(): any {
  * i18n:allow-identifier — the words looked for below are the persona's
  * own, for the same reason as in the fixture above.
  */
-export function checkPersonaStructure(persona: any): GateResult {
+export function checkPersonaStructure(persona: any, layout?: PromptLayout): GateResult {
   const failures: GateFailure[] = [];
   const checks: string[] = [];
 
@@ -125,7 +125,7 @@ export function checkPersonaStructure(persona: any): GateResult {
     if (!holds) failures.push({ what, why });
   };
 
-  const prompt = buildSystemPrompt(persona, { locale: "zh" });
+  const prompt = buildSystemPrompt(persona, { locale: "zh", layout });
 
   // ── The rules are in the prompt, and they are instructions ────────────
 
@@ -201,7 +201,7 @@ export function checkPersonaStructure(persona: any): GateResult {
 
     const inHappy = buildSystemPrompt(
       { ...persona, emotionalState: "happy" },
-      { locale: "zh" },
+      { locale: "zh", layout },
     );
     check(
       inHappy.includes("一次发五句") && !inHappy.includes("只用三个字"),

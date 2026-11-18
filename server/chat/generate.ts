@@ -21,7 +21,7 @@ import { pickRerankWinner, type RerankResult } from "./rerank";
 import { buildRerankModel, getRerankModel } from "./rerank-model";
 import { sparseModelFromUnknown } from "../eval/ab-pairs";
 import { retrieveExemplarsWithEmbed } from "./embeddings";
-import { buildPromptForPersona } from "./prompt";
+import { buildPromptBundleForPersona } from "./prompt";
 import { isSafeSeedLine } from "@shared/seed-safety";
 import {
   selectSeedExchanges,
@@ -214,7 +214,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   const twoStageOn = Boolean(layers.twoStage);
 
   if (input.exclude) {
-    const systemPrompt = await buildPromptForPersona({
+    const built = await buildPromptBundleForPersona({
       persona: input.persona,
       userId: input.userId,
       locale: input.locale,
@@ -244,7 +244,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       content: row.content,
     }));
     const messages = spliceAfterSystem(
-      [{ role: "system", content: systemPrompt }, ...historyMessages],
+      [asSystemMessage(built.prompt, built.cacheBreak), ...historyMessages],
       seedMsgs,
     );
     const plannerMessages = twoStageOn
@@ -437,7 +437,7 @@ async function plannerMessagesForTurn(
   sampledAct: SpeechAct | null,
   history: LLMMessage[],
 ): Promise<LLMMessage[]> {
-  const prompt = await buildPromptForPersona({
+  const built = await buildPromptBundleForPersona({
     persona: input.persona,
     userId: input.userId,
     locale: input.locale,
@@ -458,7 +458,13 @@ async function plannerMessagesForTurn(
     suppressions: null,
     lexicon: null,
   });
-  return [{ role: "system", content: prompt }, ...history];
+  return [asSystemMessage(built.prompt, built.cacheBreak), ...history];
+}
+
+function asSystemMessage(prompt: string, cacheBreak?: number): LLMMessage {
+  return cacheBreak != null
+    ? { role: "system", content: prompt, cacheBreak }
+    : { role: "system", content: prompt };
 }
 
 function parsePlannerGist(raw: string): string | null {

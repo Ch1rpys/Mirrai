@@ -8,7 +8,7 @@
  */
 import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
-import { buildSystemPrompt } from "../_core/persona-utils";
+import { buildSystemPromptParts } from "../_core/persona-utils";
 import { retrieveMemories, formatMemoriesForPrompt, formatAnchorsForPrompt } from "./retrieval";
 import { buildUserContextBlock, buildRelationshipSection, resolveRelationshipPhase, isUserMood } from "@shared/user-side";
 import { copy } from "@shared/copy";
@@ -133,9 +133,9 @@ export interface PromptContext {
 /**
  * Assembles the full system prompt.
  */
-export async function buildPromptForPersona(
+export async function buildPromptBundleForPersona(
   context: PromptContext,
-): Promise<string> {
+): Promise<{ prompt: string; cacheBreak?: number }> {
   const { persona, userId } = context;
   const locale = context.locale ?? "zh";
   const now = context.now ?? new Date();
@@ -179,7 +179,7 @@ export async function buildPromptForPersona(
     },
   );
 
-  return buildSystemPrompt(persona, {
+  const parts = buildSystemPromptParts(persona, {
     sceneOverlay: context.sceneOverlay ?? null,
     emotionalDesc: context.emotionalDesc,
     emotionalState: context.emotionalState ?? null,
@@ -246,6 +246,13 @@ export async function buildPromptForPersona(
     styleReminderLines: context.promptMode === "planner" ? null : context.styleReminderLines ?? null,
     reanchorIssues: context.promptMode === "planner" ? null : context.reanchorIssues ?? null,
   });
+  return { prompt: parts.prompt, cacheBreak: parts.cacheBreak };
+}
+
+export async function buildPromptForPersona(
+  context: PromptContext,
+): Promise<string> {
+  return (await buildPromptBundleForPersona(context)).prompt;
 }
 
 function applyPeriod<T>(

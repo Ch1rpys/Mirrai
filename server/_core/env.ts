@@ -173,6 +173,18 @@ export const ENV = {
 
   defaultLlmProvider: process.env.DEFAULT_LLM_PROVIDER ?? "openai",
 
+  /**
+   * How the system prompt is laid out.
+   *
+   * `classic` keeps the current order. `cache` puts the stable prefix
+   * first so Claude can cache it. The prompt builder reads the env on
+   * every call, so a test can switch layouts without reloading this
+   * module.
+   */
+  promptLayout: (process.env.PROMPT_LAYOUT === "cache" ? "cache" : "classic") as
+    | "classic"
+    | "cache",
+
   // 情绪判定引擎：llm（默认，由模型阅读对话判断）/ heuristic（纯关键词规则，零额外调用）
   emotionEngine: (process.env.EMOTION_ENGINE ?? "llm") as "llm" | "heuristic",
 
