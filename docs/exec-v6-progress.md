@@ -81,7 +81,7 @@
 | B5.7 | ⬜ |  |  |
 | B5.8 | ⬜ |  |  |
 | B6.1 | 🟡 | 9e6dcc0 (count); d82a6ee (prompt/UI) | `shared/people.test.ts` 8 通过：夹具 mock 卡「琪琪/室友」「我妈/妈妈」得到两人，`mentions` 分别为 12 和 9；出现 2 次的「路过的人」不产出；「阿强」与「强」归并。`generate.test.ts`：用户消息含「琪琪」且已确认 → 提示词有 `prompt.peopleHeading` 和「琪琪：你的室友」、在围栏内、`layersUsed` 含 `people`；消息不含人名 → 无该段；未确认 → 无；`--without people` 无。`prompt-fences.test.ts` `a person's relation`：敌意 relation 只在围栏内。`pipeline-decisions.test.ts` `keeps a confirmed person and does not revive a rejected one`：重跑保住「琪琪」室友、`people:路过的人` 不再出现。`WorldEditors.test.tsx` 确认/拒绝/手写/合并各调 `people.save`。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `394 passed \| 5 skipped (399)` 文件，`3466 passed \| 21 skipped (3487)` 用例。效果量见未验证清单。 |
-| B6.2 | ⬜ |  |  |
+| B6.2 | 🟡 | 7d942a8 | `shared/stances.test.ts` 5 通过：夹具「香菜 / dislike」3 条证据、「海 / like」4 条证据；只有 1 条证据的「咖啡」不产出；同一 topic 的 like 与 dislike 都留。`generate.test.ts`：用户消息含「香菜」且已确认 → 提示词有 `prompt.stancesHeading` 和「讨厌香菜」、在围栏内、`layersUsed` 含 `people`；消息不含 topic → 无该段；未确认 → 无；`--without people` 无。`prompt-fences.test.ts` `a stance they hold`：敌意 statement 只在围栏内。`pipeline-decisions.test.ts` `keeps a confirmed stance and does not revive a rejected one`：重跑保住「香菜」dislike、`stance:咖啡:like` 不再出现。`WorldEditors.test.tsx` 确认/手写各调 `stance.save`。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `395 passed \| 5 skipped (400)` 文件，`3481 passed \| 21 skipped (3502)` 用例。效果量见未验证清单。 |
 | B6.3 | ⬜ |  |  |
 | B6.4 | ⬜ |  |  |
 | B6.5 | ⬜ |  |  |
@@ -339,6 +339,7 @@
 | 135 | B6.1 | `people` 进 `LAYERS`，有数据就默认开 | 不进 `BUILT_LAYERS`；只在这一轮真的插入了「提到的人」段时写入 `layersUsed` | 没人被提到时这一层改不了回复。消融表对老分身仍是五层。 |
 | 136 | B6.1 | 归并后展示名取出现最多的写法 | 若一名是另一名去掉「我/阿/小」前缀后的结果，优先用带前缀的（「阿强」而不是「强」） | 「强」是「阿强」的子串，按出现次数会把展示名算成「强」。 |
 | 137 | B6.1 | 新路由组放 `routers-v6` | `people` 组和 `lexicon` 一样写在 `server/routers.ts` | 手册本条写照 lexicon；lexicon 已经在 `routers.ts`。 |
+| 138 | B6.2 | 新路由组放 `routers-v6` | `stance` 组和 `people` / `lexicon` 一样写在 `server/routers.ts` | 手册本条写照人物表；人物表已经在 `routers.ts`。 |
 
 ## 未验证清单
 
@@ -368,6 +369,7 @@
 | B4.7 | 只接半句的减法进提示词有没有让生成更像 TA。本机没有非 stub 的模型。属于 suppressions 层 | `corepack pnpm eval -- --persona <id> --user <id> --compare suppressions --k 3` | 配了真实模型、并且该分身已确认 multi_point、已有分层标答的人 |
 | B4.8 | 会话内顺带起话头有没有让生成更像 TA。本机没有非 stub 的模型。属于 `act` 层 | `corepack pnpm eval -- --persona <id> --user <id> --compare act --k 3` | 配了真实模型、并且该分身已量出 inSession、已确认生活事件或未结事项、已有分层标答的人 |
 | B6.1 | 提到的人进提示词有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare people --k 3` | 配了真实模型、并且该分身已确认人物、已有分层标答的人 |
+| B6.2 | 提到的喜恶进提示词有没有让生成更像 TA。本机没有非 stub 的模型。喜恶属于 `people` 层 | `corepack pnpm eval -- --persona <id> --user <id> --compare people --k 3` | 配了真实模型、并且该分身已确认立场、已有分层标答的人 |
 
 ## 待用户决定
 
@@ -1155,5 +1157,12 @@ B4.1、B4.2 维持 🟡。B4.3、B4.4、B4.5、B4.6、B4.7、B4.8 改回 ⬜。�
 - 闸门 `394 passed | 5 skipped (399)` 文件，`3466 passed | 21 skipped (3487)` 用例，`all six steps passed`。相对 B6.9（392/5 文件、3445/21 用例）：通过文件 +2、通过用例 +21；跳过数不变。
 - 偏差 135–137。未验证清单新增 B6.1。待用户决定无新增。
 - B6.1 标 🟡。接着做 B6.2。
+
+### WP8 · 实现会话 · 2026-11-18 · B6.2
+
+- `7d942a8`：`aggregateStances` 把 `kind: "stance"` 卡按 topic+polarity 归并，证据不到 2 条丢掉，相反 polarity 都留；候选进 `personaData.stances`；`stance.list` / `mine` / `save`；已确认且本轮消息或最近 6 条历史点到 topic 时才挂 `【你对这些事的态度】`，最多 4 条，围栏材料，属 `people` 层；`WorldEditors` 确认/手写。
+- 闸门 `395 passed | 5 skipped (400)` 文件，`3481 passed | 21 skipped (3502)` 用例，`all six steps passed`。相对 B6.1（394/5 文件、3466/21 用例）：通过文件 +1、通过用例 +15；跳过数不变。
+- 偏差 138。未验证清单新增 B6.2。待用户决定无新增。
+- B6.2 标 🟡。接着做 B6.3。
 
 
