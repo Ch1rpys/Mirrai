@@ -20,7 +20,7 @@ import { zonedHour } from "@shared/timezone";
 import { pickRerankWinner, type RerankResult } from "./rerank";
 import { buildRerankModel, getRerankModel } from "./rerank-model";
 import { sparseModelFromUnknown } from "../eval/ab-pairs";
-import { retrieveExemplars } from "./exemplars";
+import { retrieveExemplarsWithEmbed } from "./embeddings";
 import { buildPromptForPersona } from "./prompt";
 import * as db from "../db";
 import {
@@ -376,7 +376,7 @@ export async function* executePlan(
     const personaData = input.persona.personaData as { harmReport?: unknown } | null;
     const period = ((input.persona.personaData as { periods?: Array<{ id?: string; from?: string; to?: string }> } | null)?.periods ?? [])
       .find((item) => item.id === input.periodId);
-    const exemplars = retrieveExemplars({
+    const exemplars = await retrieveExemplarsWithEmbed({
       userMessage: input.userMessage,
       records: records as never,
       excludeTexts: input.exclude?.texts,
@@ -388,6 +388,8 @@ export async function* executePlan(
       timeZone: (input.persona as { timezone?: string | null }).timezone ?? null,
       period: period?.from && period?.to ? { from: period.from, to: period.to } : null,
       history: input.history,
+      personaId: input.persona.id,
+      userId: input.userId,
     });
     const profile = effectiveStyleProfile(input.persona);
     const picked = pickRerankWinner({

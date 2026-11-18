@@ -33,6 +33,7 @@ import DistillationModePicker from "@/components/DistillationModePicker";
 import { useLocale } from "@/contexts/LocaleContext";
 import SafetyTransparency from "@/components/SafetyTransparency";
 import EgressList from "@/components/v6/EgressList";
+import EmbedStatus from "@/components/v6/EmbedStatus";
 import type { GraduationMode } from "@shared/graduation-mode";
 import {
   DEFAULT_DISTILLATION_MODE,
@@ -877,6 +878,8 @@ function AISettingsTab() {
           </Button>
         </div>
       </section>
+
+      <EmbedStatus />
     </div>
   );
 }

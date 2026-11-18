@@ -51,7 +51,10 @@ export interface ExemplarPeriod {
  * Below 0.5 it contributes nothing. The first scoring term then takes
  * the max of the literal coverage and `(cosine − 0.5) × 2`.
  */
-export type ExemplarEmbedFn = (previousUser: string) => number | null | undefined;
+export type ExemplarEmbedFn = (
+  previousUser: string,
+  recordId: number,
+) => number | null | undefined;
 
 export function bigramScore(queryTokens: Set<string>, previousUser: string): number {
   return keywordCoverage(previousUser, queryTokens);
@@ -166,6 +169,34 @@ function lastUserTurnIndex(turns: CollectedReply[][], before: number): number {
 }
 
 /**
+ * The user burst that sat in front of each of their turns.
+ *
+ * The first text id of that burst is the key `record_embeddings` stores.
+ */
+export function userBurstsForEmbedding(
+  records: CollectedReply[],
+): Array<{ recordId: number; text: string }> {
+  const out: Array<{ recordId: number; text: string }> = [];
+  const seen = new Set<number>();
+  for (const scene of splitScenes(records)) {
+    const turns = toTurns(scene);
+    for (let i = 0; i < turns.length; i++) {
+      if (turns[i][0]?.role !== "assistant") continue;
+      if (!turns[i].some((row) => isTextRecord(row) && row.content.trim())) continue;
+      const userIndex = lastUserTurnIndex(turns, i);
+      if (userIndex < 0) continue;
+      const first = turns[userIndex].find((row) => isTextRecord(row) && row.content.trim());
+      if (!first || seen.has(first.id)) continue;
+      const text = textOf(turns[userIndex]);
+      if (!text) continue;
+      seen.add(first.id);
+      out.push({ recordId: first.id, text });
+    }
+  }
+  return out;
+}
+
+/**
  * Their replies whose preceding user turn is closest to this one.
  *
  * A held-out id is excluded so evaluation cannot retrieve the answer.
@@ -232,9 +263,10 @@ export function retrieveExemplars(params: {
       if (userIndex < 0) continue;
       const previousUser = textOf(turns[userIndex]);
       if (!previousUser) continue;
+      const previousUserId = turns[userIndex].find((row) => isTextRecord(row) && row.content.trim())?.id ?? 0;
 
       const coverage = bigramScore(queryTokens, previousUser);
-      const cosine = params.embedCosine?.(previousUser) ?? null;
+      const cosine = params.embedCosine?.(previousUser, previousUserId) ?? null;
       const firstTerm = firstTermScore(coverage, cosine);
       if (firstTerm < minScore) continue;
 

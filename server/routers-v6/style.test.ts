@@ -85,4 +85,18 @@ describe("the style profile routes", () => {
       vi.useRealTimers();
     }
   });
+
+  it("reports when the local embedding model is missing", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.reject(new Error("ECONNREFUSED"))),
+    );
+    try {
+      const got = await appRouter.createCaller(ctxFor(1)).style.embedStatus();
+      expect(got.status).toBe("no_ollama");
+      expect(got.model).toBe("bge-m3");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

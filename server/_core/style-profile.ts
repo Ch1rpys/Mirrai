@@ -31,6 +31,7 @@ import {
   type FingerprintRow,
 } from "@shared/style-fingerprint";
 import { measureUserSide } from "@shared/user-side-profile";
+import { schedulePersonaEmbeddings } from "../chat/embeddings";
 
 export async function measureStyleProfile(params: {
   personaId: number;
@@ -139,6 +140,7 @@ export async function afterRecordsChanged(params: {
   added: number;
 }): Promise<StyleProfile> {
   const profile = await measureStyleProfile(params);
+  schedulePersonaEmbeddings(params.personaId, params.userId);
   if (params.added <= 0) return profile;
   const persona = await getPersonaById(params.personaId, params.userId);
   if (persona?.analysisStatus !== "ready") return profile;

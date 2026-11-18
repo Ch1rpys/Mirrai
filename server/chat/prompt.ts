@@ -17,7 +17,8 @@ import type { ImperfectionEntry } from "@shared/imperfection";
 import type { Suppression } from "@shared/suppressions";
 import type { LexiconEntry } from "@shared/lexicon";
 import type { SpeechAct } from "@shared/speech-acts";
-import { retrieveExemplars, renderExemplars } from "./exemplars";
+import { renderExemplars } from "./exemplars";
+import { retrieveExemplarsWithEmbed } from "./embeddings";
 
 /**
  * The user's own time zone, for the parts of the prompt that are about
@@ -277,7 +278,7 @@ async function exemplarSectionFor(
     [],
   );
   const period = periodOf(context.persona, context.periodId);
-  const found = retrieveExemplars({
+  const found = await retrieveExemplarsWithEmbed({
     userMessage: context.userMessage,
     records: records as never,
     excludeIds: context.excludeExemplarIds,
@@ -289,6 +290,8 @@ async function exemplarSectionFor(
     timeZone: (context.persona as { timezone?: string | null }).timezone ?? null,
     period: period?.from && period?.to ? { from: period.from, to: period.to } : null,
     history: context.history,
+    personaId: context.persona.id,
+    userId: context.userId,
   });
   return renderExemplars(found, locale);
 }

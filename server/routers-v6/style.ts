@@ -11,6 +11,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getPersonaById, getPersonaStyleProfile } from "../db";
 import { measureStyleProfile } from "../_core/style-profile";
 import { normalizeStyleProfile } from "@shared/style-profile";
+import { embedModelName, probeEmbedStatus, schedulePersonaEmbeddings } from "../chat/embeddings";
 
 export const styleRouter = router({
   get: protectedProcedure
@@ -31,6 +32,12 @@ export const styleRouter = router({
         personaId: input.personaId,
         userId: ctx.user.id,
       });
+      schedulePersonaEmbeddings(input.personaId, ctx.user.id);
       return { profile };
     }),
+
+  embedStatus: protectedProcedure.query(async () => {
+    const status = await probeEmbedStatus();
+    return { status, model: embedModelName() };
+  }),
 });
