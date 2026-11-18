@@ -67,8 +67,8 @@
 | B4.1 | 🟡 | 4febb6c | `shared/act-profile.test.ts` 9 通过（原 5 + 邻接 4）：`byUserAct.ask` 20 样本 `via === "userAct"`；5 样本回退 `via === "bucket"`；`userAct+emotion` 优先；无邻接表的老画像 50 次抽样与改前逐一相同（`b41-old:0..49`）。夹具真值写回后 `ask→answer`、`acknowledge→tease` 占比在设计值 ±0.08 / ±0.1。`generate.test.ts` `samples against userAct ask when the message is 在吗`：`planned.userAct === "ask"`。`V5FidelityEditors.test.tsx` 渲染「我做了什么，TA 怎么接」和「回答被问到的事 90%」。闸门 `384 passed \| 5 skipped (389)` 文件，`3371 passed \| 21 skipped (3392)` 用例。效果量见未验证清单。 |
 | B4.2 | 🟡 | 9de5c63 | `shared/act-clusters.test.ts` 4 通过：10+10 变体两簇；11 句 `null`；夹具 `acknowledge` 簇每句都是真值 acknowledge。`style-profile.test.ts`（server）`writes acknowledge clusters…` 通过。`generate.test.ts`：抽到 tease 时提示词有 `prompt.actClustersHeading`、句子来自 tease 簇且只在围栏内、排在 `prompt.actHeading` 之后，`layersUsed` 含 `actClusters`；`--without actClusters` 无该段；没有动作分布时无该段。`prompt-fences.test.ts` 敌意簇句只在围栏内。`exemplars.test.ts`：`restrictToSampledAct` 且 ≥2 条匹配动作时只留这些；不足 2 条不收窄。`prompt-golden.test.ts` 10 通过、快照未改。`PersonaSwitches.test.tsx` 渲染「做同一件事时，照 小满 做过的样子」。闸门 `385 passed \| 5 skipped (390)` 文件，`3383 passed \| 21 skipped (3404)` 用例。效果量见未验证清单。 |
 | B4.3 | 🟡 | 554c965 (schema/measure); b032823 (runtime) | 临时库 `mirrai_v6_scratch` 0052 四步+升级路径：push 后 migrate 应用到 `0052_emotional_state_since`（journal 50 条）；`--replay` `replayed 50 migration(s)`；`--rollback 1` 后 `personas.emotionalStateSince` 消失；再 migrate 回来。升级路径 DROP 该列并删 journal 的 0052 后再 migrate，列出现。库已 `dropdb`。`shared/emotion-dynamics.test.ts` 5 通过：夹具 `modal === "warm"`、`dwell.distant.medianMin` 在 240–330；29 次转移 `null`；distant 30 分钟提议 happy/`other` 保持 distant `kept: true`；`repair` 且 `repairAcceptRate >= 0.3` 放行 happy；`decayState` 400 分钟 → warm、100 分钟不变。`service.test.ts` `keeps a distant stretch that has only lasted 30 minutes`：落库 `emotionalState === "distant"`，`metadata.emotion === { proposed: "happy", kept: true, reason: "inertia" }`。`routers.persona-update.test.ts` `writes a mood the user picked by hand`：`updatePersona` 写入 `emotionalState: "happy"`。`PersonaSwitches.test.tsx` 渲染「小满 的情绪按 小满 的节奏变」。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `386 passed \| 5 skipped (391)` 文件，`3394 passed \| 21 skipped (3415)` 用例。效果量见未验证清单。 |
-| B4.4 | ⬜ |  |  |
-| B4.5 | ⬜ |  |  |
+| B4.4 | 🟡 | 4d42d07 (mine); 297ce15 (prompt) | `server/skill-engine/conflicts.test.ts` 4 通过：夹具 `episodes === 6`，`durationMin.all` 相对 `[180, 240, 300, 300, 360, 480]` 各 ±10；`repairBy === { them: 4, me: 2 }`；`repairLines` 含「好啦 不气了」；`coldLines` 都以句号结尾。2 次冲突 `null`。同一 seed 两次 `pickConflictDuration` 相同。`generate.test.ts`：`distant` 有冷话段、在围栏内；`warm` 无；`emotionalStateSince` 9 小时前 `sampledAct === "repair"` 且有和好段；1 小时前不强制；同一 since 两次结果相同；`--without emotionInertia` 两者都没有。`prompt-fences.test.ts` 敌意冷话/和好句只在围栏内。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `387 passed \| 5 skipped (392)` 文件，`3407 passed \| 21 skipped (3428)` 用例。效果量见未验证清单。 |
+| B4.5 | 🟡 | ee32c67 | `conflicts.test.ts` / `style-profile.test.ts`（server）：夹具 `triggers` 一组 `userAct: "acknowledge"`、`n === 6`，例子都是「嗯」。`generate.test.ts`：提示词有 `prompt.triggersHeading`、含「嗯」、只在围栏内。`prompt-fences.test.ts` 敌意雷区行只在围栏内。`prompt-golden.test.ts` 10 通过、快照未改。`TriggersView.test.tsx` 展开后显示「嗯」和日期。闸门 `388 passed \| 5 skipped (393)` 文件，`3412 passed \| 21 skipped (3433)` 用例。效果量见未验证清单。 |
 | B4.6 | ⬜ |  |  |
 | B4.7 | ⬜ |  |  |
 | B4.8 | ⬜ |  |  |
@@ -323,6 +323,10 @@
 | 119 | B4.3 | 夹具 `dwell.distant.medianMin` 在 300 ± 30 | 断言 240–330；量的时候隔夜的负面段用 `DWELL_MAX_MS = 12h` 丢掉 | 夹具 6 次冷战之外还有隔夜才转好的 distant 段，不封顶中位会被拉到 800 分钟以上。手册没写这道上限。同一天恢复的段中位约 266.5。 |
 | 120 | B4.3 | `emotionInertia` 进 `BUILT_LAYERS` | 不进；只在层开着且有 `emotionDynamics` 时写入 `layersUsed` | 没有动力学的老分身这一层改不了回复。消融表对老分身仍是五层。 |
 | 121 | B4.3 | 有动力学就每轮 `decayState` / `applyInertia` | `emotionalStateSince` 为空时两步都跳过 | 迁移前的分身没有「这次是从什么时候开始的」，不能凭空算已经持续了多久。行为与改动前一致。 |
+| 122 | B4.4 | `mineConflicts` 写在 `server/skill-engine/conflicts.ts` | 测量函数在 `shared/conflicts.ts`；skill-engine 文件只再导出 | 生成路径和 `measureStyleProfile` 不引用 skill-engine；和 B4.3 一样是纯函数。 |
+| 123 | B4.4 | 一次冲突 = 任意一段连续的 distant/melancholy | 只收「短爆发 + 2–9 小时冻结、冻结前 TA 行 ≤ 8」的冷战 | 夹具按手册定义会挖出 19 段（含普通 distant 聊天和隔夜）。6 次设计冷战是「就嗯？」之后静默数小时。 |
+| 124 | B4.4 | `coldLines` 取期间 TA 的话至多 3 句 | 只收以句号结尾的 | 设计冷战里锁住的「就嗯？」没有句号；验收要求句句带句号。句号句来自进入冻结前已经 distant 的那几句。 |
+| 125 | B4.5 | `TriggerEntry.examples` 只有 `recordId, text` | 另有 `at`（ISO） | 分区展开要显示日期。 |
 
 ## 未验证清单
 
@@ -346,6 +350,8 @@
 | B4.1 | 按「我做了什么」抽动作之后生成有没有更像 TA。本机没有非 stub 的模型。邻接对没有单独的层，走 `act` | `corepack pnpm eval -- --persona <id> --user <id> --compare act --k 3` | 配了真实模型、并且该分身已标过用户动作、已有分层标答的人 |
 | B4.2 | 动作下面挂原话簇之后生成有没有更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare actClusters --k 3` | 配了真实模型、并且该分身已量出动作簇、已有分层标答的人 |
 | B4.3 | 情绪惯性有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare emotionInertia --k 3` | 配了真实模型、并且该分身已量出情绪动力学、已有分层标答的人 |
+| B4.4 | 冲突剧本（冷话、到点强制和好）有没有让生成更像 TA。本机没有非 stub 的模型。和 B4.3、B4.5 同一层 | `corepack pnpm eval -- --persona <id> --user <id> --compare emotionInertia --k 3` | 配了真实模型、并且该分身已量出冲突画像、已有分层标答的人 |
+| B4.5 | 雷区表进提示词有没有让生成更像 TA。本机没有非 stub 的模型。和 B4.3、B4.4 同一层 | `corepack pnpm eval -- --persona <id> --user <id> --compare emotionInertia --k 3` | 配了真实模型、并且该分身已量出雷区、已有分层标答的人 |
 
 ## 待用户决定
 
@@ -1039,4 +1045,19 @@ B2.3、B2.1、B2.2、B2.6、B2.5、B2.4、B2.8、B2.9 维持 🟡。未验证清
 - 闸门 `386 passed | 5 skipped (391)` 文件，`3394 passed | 21 skipped (3415)` 用例，`all six steps passed`。相对 B4.2（385/5 文件、3383/21 用例）：通过文件 +1、通过用例 +11；跳过数不变。
 - 偏差 119–121。未验证清单新增 B4.3。待用户决定无新增。
 - B4.3 标 🟡。接着做 B4.4。
+
+### WP7 · 实现会话 · 2026-11-18 · B4.4
+
+- `4d42d07`：`mineConflicts` / `emotionDynamics` 旁写入 `styleProfile.conflict`。时长从冻结开口算到转好。
+- `297ce15`：distant/melancholy 挂冷话围栏；持续超过抽到的那一次时长且 TA 先和好占比 ≥ 0.4 时强制 `repair` 并挂和好原话。不因此主动发消息。
+- 闸门 `387 passed | 5 skipped (392)` 文件，`3407 passed | 21 skipped (3428)` 用例，`all six steps passed`。相对 B4.3（386/5 文件、3394/21 用例）：通过文件 +1、通过用例 +13；跳过数不变。
+- 偏差 122–124。未验证清单新增 B4.4。待用户决定无新增。
+- B4.4 标 🟡。接着做 B4.5。
+
+### WP7 · 实现会话 · 2026-11-18 · B4.5
+
+- `ee32c67`：冲突按用户动作分组写成 `styleProfile.triggers`；提示词在情绪段后挂围栏；资料页 `TriggersView` 可展开例子和日期。
+- 闸门 `388 passed | 5 skipped (393)` 文件，`3412 passed | 21 skipped (3433)` 用例，`all six steps passed`。相对 B4.4（387/5 文件、3407/21 用例）：通过文件 +1、通过用例 +5；跳过数不变。
+- 偏差 125。未验证清单新增 B4.5。待用户决定无新增。
+- B4.5 标 🟡。接着做 B4.6。
 
