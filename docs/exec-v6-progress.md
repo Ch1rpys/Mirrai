@@ -85,7 +85,7 @@
 | B6.3 | 🟡 | 46fc165 (mine); d29d4b2 (prompt/UI) | `server/skill-engine/routine.test.ts`：小满夹具产出周三 14–16、title「周三下午上课」、证据含「刚下课」；3 个不同周的「刚下课」不产出。`shared/life-events.test.ts`：老数据 `kind: "life"`/`open_loop` 无 schedule、`inProgressLife` 仍只有 life；无 schedule 的 routine 丢掉。`generate.test.ts`：已确认、`now` 周三 15:00 Asia/Shanghai → `prompt.timeRoutine`「这个钟点你通常在周三下午上课。」、`plan.routine === "r1"`；周四 15:00 无；未确认无。`proactive-context.test.ts`：此刻在窗内且 opening 全是 share → `opening === "share"`。`in-session.test.ts`：窗内拾到「周三下午上课」，窗外 null。`V5FidelityEditors.test.tsx` 显示 14/16 和 `v5.routineHint`。`MessageBubble.test.tsx` 渲染「按以前的作息推的」。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `397 passed \| 5 skipped (402)` 文件，`3494 passed \| 21 skipped (3515)` 用例。效果量见未验证清单。 |
 | B6.4 | 🟡 | c280031 | `knowledge-boundary.test.ts` 4 通过：`reads stocks and funds off Xiaoman, from the reply she actually gave` 夹具 `minTaLines: 500` 产出 `pattern === "股票基金理财"`、`kind: "knowledge_boundary"`、`verified: false`，证据含「听不懂 说人话」且 3 条；`does not mine a domain they named once` 加一句 TA「股票还行」后无该候选；`does not mine a domain the other person only mentioned four times` 2000 条「嗯」+ 用户提 4 次无候选。`fidelity-prompt.test.ts` `does not mention a knowledge boundary until the user confirms it`：未确认没有「你不懂这类话题」/「股票基金理财」；确认后有、只在 `<persona_data>` 围栏内、在【减法】段。`suppressions.test.ts` `renders a confirmed knowledge-boundary subtraction` 通过。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `398 passed \| 5 skipped (403)` 文件，`3500 passed \| 21 skipped (3521)` 用例。效果量见未验证清单。 |
 | B6.5 | 🟡 | ee77205 | `prompt.test.ts` `does not tell the earlier stretch that they have already parted`：不选时期提示词有「你们已经分开了」；`periodId: period-1` 没有，有 `prompt.periodBoundary`「你现在是 2022-01-01 到 2022-06-01 那段时间的自己」，去掉 `<persona_data>` 围栏后仍有「那之后发生的任何事你都不知道」。`keeps memories from inside the stretch, drops later ones, and keeps a pin`：有「时期内的事」「置顶」，没有「时期之后的事」。`prompt-golden.test.ts` 10 通过、快照未改。`Chat-period.test.tsx` 渲染「正在和 2022-01-01–2022-06-01 那段时间的 小满 说话。那之后的事，这个 小满 不知道。」。闸门 `399 passed \| 5 skipped (404)` 文件，`3503 passed \| 21 skipped (3524)` 用例。效果量见未验证清单。 |
-| B6.6 | ⬜ |  |  |
+| B6.6 | 🟡 | 5549ead (extract); 9f0d83d (annotate/rewrite/UI) | `fact-check.test.ts` 5 通过：`extractClaims("上次去拾光咖啡那天你迟到了")` 有地点「拾光咖啡」和往事（含「上次」）；「你吃饭了吗」空；「我们是不是去过拾光咖啡？」空。夹具：`拾光咖啡` `supported` 出处 `record` id 等于含该句的那条；`蓝湖餐厅` 不支持。记忆标题覆盖时出处是 `memory`。`service.test.ts`：`streams the reply, then writes claim metadata` 流式 delta 为整句后 `updateMessageMetadata` 写入 `claims` 含 `拾光咖啡` supported；`still replies when the fact check throws` mock `searchRecordsLexical` 抛错仍有 `done`、assistant 落库。`generate.test.ts`：四候选三个含「蓝湖餐厅」选出「好的呀」；四个都含则 `invokeWithProvider` 5 次且第 5 次系统提示含 `prompt.factRewrite`「不要提具体的日期、地点和往事，除非它们在上面的记忆里。」。`MessageBubble.test.tsx` 渲染「「拾光咖啡」— 记录里有（2022-03-12）」和「「蓝湖餐厅」— 记录里没找到」。`PersonaSwitches.test.tsx` 两个开关文案；勾掉标注走 `factAnnotate: false`，勾上重写走 `factRewrite: true`。闸门 `400 passed \| 5 skipped (405)` 文件，`3516 passed \| 21 skipped (3537)` 用例。效果量见未验证清单。 |
 | B6.7 | ⬜ |  |  |
 | B6.8 | ⬜ |  |  |
 | B6.9 | ✅ | 881d917 | `memory-extract-source.test.ts` `stores a fact the persona said as a ledger entry, not an anchor`：`createMemory` 一次，`subject: "said"` `category: "memory"` `importance: 1` `source: "chat"`，不是锚点。`retrieval.test.ts` `marks a said memory, and never puts it among the anchors`：渲染含 `prompt.memoryMarkerSaid`「这是你在这里说过的话，不是记录里的事实」；`selectMemories` 里 `said` 即使 `category: "anchor"` 也不进 `anchors`，仍进 `selected`。`routers.memory-said.test.ts` 2 通过：`said`→`them` 时 `updateMemory` 收到 `source: "manual"`；已经是 `them` 的不改 source。`MemoryReview.test.tsx`：三个分组标题「关于 TA 的 / 关于我的 / 分身说过的」；点「这是真的」调用 `memory.update({ id: 3, subject: "them" })`。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `392 passed \| 5 skipped (397)` 文件，`3445 passed \| 21 skipped (3466)` 用例。 |
@@ -346,6 +346,9 @@
 | 142 | B6.4 | 夹具 TA 行复制到超过 2000，或把最小行数调低 | 生产默认 `KNOWLEDGE_BOUNDARY_MIN_TA = 2000`；夹具测试 `minTaLines: 500` | 小满夹具 TA 文本行约 1400，不到 2000。手册验收允许调低。 |
 | 143 | B6.5 | Chat 的组件测试 | 测从 `Chat.tsx` 抽出的 `ChatPeriodHint`，没有把整页 Chat 挂起来 | Chat 页依赖一整套 trpc；提示行是头部实际渲染的那个组件。 |
 | 144 | B6.5 | 人物首次出现晚于 to 的不注入 | 只看 `evidence[].at` 的最早时间，不用 `lastMentionedAt` | `lastMentionedAt` 是最后一次，用它会把时期内已经认识、后来还出现过的人丢掉。 |
+| 145 | B6.6 | 地点后缀 `店\|馆\|路\|街\|公园\|广场\|学校\|医院\|机场\|车站` | 另加「咖啡」 | 夹具验收句是「拾光咖啡」；手册后缀表不含「咖啡」，不加则抽不出地点。 |
+| 146 | B6.6 | `verifyClaims` 只读注入记忆和 `searchRecordsLexical` | 测试可传 `ctx.records` 走同一套覆盖度，不连库 | 夹具分身验收要在无 DATABASE_URL 的闸门里跑。生产路径仍只打表。 |
+| 147 | B6.6 | 开关文案只给了标题 | 标注另有 `factAnnotateNote`；重写用手册说明 | 其它开关都有说明行，空着会在开关区缺一块。 |
 
 ## 未验证清单
 
@@ -379,6 +382,7 @@
 | B6.3 | 作息进时间感知、主动开口和会话内起话头之后生成有没有更像 TA。本机没有非 stub 的模型。作息不是单独的层 | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身已确认作息、已有分层标答的人 |
 | B6.4 | 知识边界减法进提示词有没有让生成更像 TA。本机没有非 stub 的模型。属于 suppressions 层 | `corepack pnpm eval -- --persona <id> --user <id> --compare suppressions --k 3` | 配了真实模型、并且该分身已确认 knowledge_boundary、已有分层标答的人 |
 | B6.5 | 选了时期之后提示词只知道那段时间。本机没有非 stub 的模型。时期不是单独的层 | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身已切出时期、已有带 `periodId` 的分层标答的人 |
+| B6.6 | 事实核查标注和重写有没有让生成更像 TA、少编往事。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare factRewrite --k 3` | 配了真实模型、并且该分身已打开事实重写或标注、已有分层标答的人 |
 
 ## 待用户决定
 
@@ -1195,6 +1199,14 @@ B4.1、B4.2 维持 🟡。B4.3、B4.4、B4.5、B4.6、B4.7、B4.8 改回 ⬜。�
 - 闸门 `399 passed | 5 skipped (404)` 文件，`3503 passed | 21 skipped (3524)` 用例，`all six steps passed`。相对 B6.4（398/5 文件、3500/21 用例）：通过文件 +1、通过用例 +3；跳过数不变。
 - 偏差 143、144。未验证清单新增 B6.5。待用户决定无新增。
 - B6.5 标 🟡。接着做 B6.6。
+
+### WP8 · 实现会话 · 2026-11-18 · B6.6
+
+- `5549ead`：`extractClaims` / `verifyClaims`；`searchRecordsLexical` 扫最近两万行，字二元组覆盖度 ≥ 0.5。
+- `9f0d83d`：回复落库后写 `metadata.claims`；气泡两种提示；`factRewrite` 在重排/非流式路径淘汰无依据候选，四个都无依据则加一句指令再生成一次。
+- 闸门 `400 passed | 5 skipped (405)` 文件，`3516 passed | 21 skipped (3537)` 用例，`all six steps passed`。相对 B6.5（399/5 文件、3503/21 用例）：通过文件 +1、通过用例 +13；跳过数不变。
+- 偏差 145–147。未验证清单新增 B6.6。待用户决定无新增。
+- B6.6 标 🟡。接着做 B6.7。
 
 
 
