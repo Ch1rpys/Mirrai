@@ -49,7 +49,7 @@
 | B1.10 | ✅ | 26df59c | `shared/user-side-profile.test.ts` 2 通过：48 条用户文本 `samples` 相等、`sampleLines` 恰好 12 句且都是用户原话；39 条返回 `null`。`generate.test.ts`：`planTurn` 的 `messages` 不含 `sampleLines` 里那句独特原话。`measureStyleProfile` 写入 `styleProfile.userSide`。指纹等 B3.1。闸门 `339 passed \| 4 skipped (343)` 文件，`3009 passed \| 18 skipped (3027)` 用例。 |
 | B2.1 | ⬜ |  |  |
 | B2.2 | ⬜ |  |  |
-| B2.3 | ⬜ |  |  |
+| B2.3 | 🟡 | 166458b (scoring); abf59f0 (storage); efdca0d (wire/UI) | `exemplars.test.ts` 11 通过：`returns goodnight turns when the current message is 晚安`（夹具示范都来自晚安后那一轮）；`returns nothing when the first term is below the floor`；`ranks a tease turn first when the sampled act is tease and the literal scores match`；`ranks a turn outside the selected period behind one inside it`；`does not return a held-out line, a harm line, or a non-text row`；原有「不够近返回空 / 相似用户行 / 留出 id / 中位 1.5 倍」仍过。`embeddings.test.ts` 11 通过：fetch 拒绝时 `embedTexts` 为 `null` 且 `retrieveExemplars` 与无嵌入 `toEqual`；假余弦下「海边」能检索到「沙滩」；int8 往返余弦误差 < 0.02；无存向量时 `retrieveExemplarsWithEmbed` 不调用 fetch；假 `/api/embed` 下存了沙滩向量能检索到；query embed 失败退回字面。`egress.test.ts` 4 通过，CALL_SITES 含 `server/chat/embeddings.ts`。`EmbedStatus.test.tsx` 3 通过（可用 / 没装 Ollama / 没有嵌入模型）。`style.test.ts` `reports when the local embedding model is missing` 通过。临时库 `mirrai_v6_scratch` 0050 四步（commit 2）：push 后 migrate 到 `0050_record_embeddings`；`--replay` 含 0050；`--rollback 1` 后无表；再 migrate 回来；DROP 表并删 journal 后再 migrate，表出现。库已 `dropdb`。闸门 `369 passed \| 5 skipped (374)` 文件，`3258 passed \| 21 skipped (3279)` 用例。效果量见未验证清单。 |
 | B2.4 | ⬜ |  |  |
 | B2.5 | ⬜ |  |  |
 | B2.6 | ⬜ |  |  |
@@ -298,6 +298,10 @@
 | 94 | B3.7 | 更长短语次数达到短词八成就丢掉短的 | 短词若只是被语气助词/常用词包着，丢掉长的 | 夹具 15 条「又咕咕了」，按原文会丢掉「咕咕」。验收要「咕咕」。 |
 | 95 | B3.7 | 先计数、再删常用词表里有的、再取前 80 | 先在原文里盖掉常用词再切 n-gram | 夹具 `fitLength` 会拼出「今天还好今天晚上」这类三、四字串，次数上千，「咕咕」进不了前 80。 |
 | 96 | B3.7 | `lexicon` 进 `BUILT_LAYERS` | 不进；只在已确认且 `who` 为 them/both 的词存在时写入 `layersUsed` | 没有词时这一层改不了回复。消融表对老分身仍是五层。 |
+| 97 | B2.3 | 检索单位用 `toTurns` 得到每一轮 | 先 `splitScenes` 再按场景 `toTurns` | 整份记录直接 `toTurns` 会把晚间「晚安」和次日第一轮 TA 粘成一轮。 |
+| 98 | B2.3 | `listRecordEmbeddings` 返回匿名对象 | 具名 `RecordEmbeddingRow` | `db-isolation` 的函数体扫描把 `Promise<{` 当成函数体开头（与偏差 19、52 同类）。 |
+| 99 | B2.3 | 内存索引按 `personaId:recordsVersion` 缓存 | 键是 `personaId:recordsVersion:model`，最多 2 条 | 换嵌入模型后旧向量不能混用。 |
+| 100 | B2.3 | 未点名文案走 `copy` 还是 i18n | 设置页语义检索状态走 `client/src/i18n` | 同一页其余 AI 设置都走 i18n。 |
 
 ## 未验证清单
 
@@ -310,6 +314,7 @@
 | B3.3 | 指纹重排有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare fingerprintRerank --k 3` | 配了真实模型、并且该分身已有指纹和分层标答的人 |
 | B3.7 | 专属词进提示词有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare lexicon --k 3` | 配了真实模型、并且该分身已确认词和分层标答的人 |
 | B3.8 | 称呼行改成最近一季最常用的称呼之后，生成有没有更像 TA。本机没有非 stub 的模型。称呼史没有单独的层，不能 `--compare` | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身已重测过称呼史、已有分层标答的人 |
+| B2.3 | 示范改成按轮检索、并可选本机嵌入之后，生成有没有更像 TA。本机没有非 stub 的模型。示范没有单独的 `--compare` 层 | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身已有记录和分层标答的人 |
 
 ## 待用户决定
 
@@ -890,3 +895,12 @@ B2.7 维持 🟡。B3.6 维持 ✅。B3.3、B3.4、B3.5、B3.7、B3.8 改回 ⬜
 - B3.7：`lexicon.mine` 不再塞最近 2 万条，`mineLexicon` 自己用 `iterateRecords`。同一行里的「咕咕」出现两次就计 30，不再被一行去重成 15。
 - 闸门 `367 passed | 5 skipped (372)` 文件，`3236 passed | 21 skipped (3257)` 用例，`all six steps passed`。相对验收时的 3231/21：通过用例 +5，跳过数不变。
 - 未验证清单新增 B3.8。称呼史没有单独的层。偏差表、待用户决定无新增。
+
+### WP6 · 实现会话 · 2026-11-18 · B2.3
+
+- `166458b`：检索单位改成一轮；`scoreExemplar` 六项；第一项不过 `EXEMPLAR_MIN_SCORE` 丢掉；时期只排序不筛掉；先切场景再切轮。
+- `abf59f0`：`record_embeddings`（0050）、int8 量化、`embedTexts` 只打本机 `/api/embed`；连不上返回 `null`。egress 登记 `ollama-embed`。
+- `efdca0d`：`retrieveExemplarsWithEmbed` 有存向量才嵌入当前句；`style.measure` / `afterRecordsChanged` 后台建向量；设置页 `EmbedStatus` 三态。无存向量时不调用 fetch。
+- 闸门 `369 passed | 5 skipped (374)` 文件，`3258 passed | 21 skipped (3279)` 用例，`all six steps passed`。相对 WP5 修复后（367/5 文件、3236/21 用例）：通过文件 +2、通过用例 +22；跳过数不变。
+- 偏差 97–100。未验证清单新增 B2.3。待用户决定无新增。
+- B2.3 标 🟡。接着做 B2.1。
