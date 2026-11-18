@@ -51,7 +51,7 @@
 | B2.2 | 🟡 | eca88ed (mine); 4a9e816 (generate); cc50ed1 (UI) | `shared/ritual-table.test.ts` 6 通过：夹具挖出「晚安」「早」「在吗」；「晚安」`coverage === 1`，三种回法占比在 0.6/0.25/0.15 ±0.08；次数 11 不成立；前三种占比 0.5 不成立；TA 两条气泡不计入；`matchRitual`「晚安~」「晚安啦」命中，「晚安 今天好累」不命中。`normalizeRituals` 把 B1.6 的 `{ cue, reply }` 收成 `RitualEntry`。`style-profile.test.ts`：夹具写入三张表并保住手写「嗨」。`generate.test.ts`：命中时 provider 0 次、最终文本是三种回法之一、同一种子两次相同；关系已结束时「树树晚安」不抽、全部含「树树」时 `kind === "model"`；10 分钟内第二次「在吗」走模型；`--without ritual` 走模型。`service.test.ts`：不调 `inferEmotionalState`，`metadata.ritual === "晚安"`，`incrementChatCount` 被调用；危机用语即使有仪式表也走危机路径。`prompt-golden.test.ts` 10 通过、快照未改。`RitualsView.test.tsx` 列出回法和次数。`PersonaSwitches.test.tsx` 渲染「「晚安」「在吗」这类话，直接用 小满 的原话回」。`material-report.test.ts`：`MATERIAL_LAYER_NEEDS.rituals === RITUAL_MIN_COUNT`。闸门 `374 passed \| 5 skipped (379)` 文件，`3290 passed \| 21 skipped (3311)` 用例。效果量见未验证清单。 |
 | B2.3 | 🟡 | 166458b (scoring); abf59f0 (storage); efdca0d (wire/UI) | `exemplars.test.ts` 11 通过：`returns goodnight turns when the current message is 晚安`（夹具示范都来自晚安后那一轮）；`returns nothing when the first term is below the floor`；`ranks a tease turn first when the sampled act is tease and the literal scores match`；`ranks a turn outside the selected period behind one inside it`；`does not return a held-out line, a harm line, or a non-text row`；原有「不够近返回空 / 相似用户行 / 留出 id / 中位 1.5 倍」仍过。`embeddings.test.ts` 11 通过：fetch 拒绝时 `embedTexts` 为 `null` 且 `retrieveExemplars` 与无嵌入 `toEqual`；假余弦下「海边」能检索到「沙滩」；int8 往返余弦误差 < 0.02；无存向量时 `retrieveExemplarsWithEmbed` 不调用 fetch；假 `/api/embed` 下存了沙滩向量能检索到；query embed 失败退回字面。`egress.test.ts` 4 通过，CALL_SITES 含 `server/chat/embeddings.ts`。`EmbedStatus.test.tsx` 3 通过（可用 / 没装 Ollama / 没有嵌入模型）。`style.test.ts` `reports when the local embedding model is missing` 通过。临时库 `mirrai_v6_scratch` 0050 四步（commit 2）：push 后 migrate 到 `0050_record_embeddings`；`--replay` 含 0050；`--rollback 1` 后无表；再 migrate 回来；DROP 表并删 journal 后再 migrate，表出现。库已 `dropdb`。闸门 `369 passed \| 5 skipped (374)` 文件，`3258 passed \| 21 skipped (3279)` 用例。效果量见未验证清单。 |
 | B2.4 | ⬜ |  |  |
-| B2.5 | ⬜ |  |  |
+| B2.5 | 🟡 | 9d1bea6 (schema/routes); 2b834b7 (prompt/UI) | 临时库 `mirrai_v6_scratch` 0051 四步+升级路径：push 后 migrate 应用到 `0051_fidelity_rewrite`（journal 49 条）；`--replay` `replayed 49 migration(s)`；`--rollback 1` 后 `fidelity_feedback.rewrite` 消失；再 migrate 回来。升级路径 DROP 该列并删 journal 的 0051 后再 migrate，列出现。库已 `dropdb`。`routers.fidelity-rewrite.test.ts` 3 通过：`rewrite` 201 字被拒；别人的反馈 `NOT_FOUND`；自己的 `mark`/`setRewrite` 写入。`generate.test.ts`：两条改写时提示词含 `prompt.contrastHeading` 和两行对照，原文只在围栏内；`--without exemplars` 无对照段。`prompt-fences.test.ts` `an unlike rewrite from the reader`：敌意改写只在围栏内。`routers.eval.test.ts`：带改写的反馈生成 `source: "feedback"` 标答；`trainingTexts` 不含「那才像」。`dataset.test.ts` `does not train on a rewrite the person never said` 通过。`MessageBubble.test.tsx`：选原因后出现输入框、不填直接关只提交原因；填了则 `rewrite` 随请求发出。`feedback-aggregate.test.ts` 改写进证据。`export.test.ts` JSON/Markdown 带对子。`prompt-golden.test.ts` 10 通过、快照未改。`schema-coverage`/`schema-parity`/`db-isolation` 通过。闸门 `377 passed \| 5 skipped (382)` 文件，`3317 passed \| 21 skipped (3338)` 用例。效果量见未验证清单。 |
 | B2.6 | 🟡 | 51fccde (pool); 035613c (prompt/UI) | `shared/sample-pool.test.ts` 4 通过：夹具 `samplePool.distant` 每句 ≤4 字、句号占比 ≥0.7，`warm` 无句号结尾；`harmReport.remove` 时「废物」不进池。`style-profile.test.ts`：按状态池写入；裸数组收成 `{ any }`。`style-profile.test.ts`（server）夹具写入 distant/warm。`style-reminder.test.ts` 4 通过：`chatCount` 0 与 5 同一批 6 句、到 6 换一批、distant 只取 distant 池；种子句被跳过；8 条长问句触发 `long`+`question`，8 条「在的呀」不触发。`generate.test.ts` 同上，且 `layersUsed` 含 `styleReminder`；漂移句 `prompt.reanchor` 在围栏外；`--without styleReminder` 两者都没有。`prompt-fences.test.ts` 敌意样本只在围栏内。`prompt-golden.test.ts` 10 通过、快照未改。`PersonaSwitches.test.tsx` 渲染「聊久了也别跑偏」。闸门 `376 passed \| 5 skipped (381)` 文件，`3304 passed \| 21 skipped (3325)` 用例。效果量见未验证清单。 |
 | B2.7 | 🟡 | 9147cf4 (stop); 89f29db (cap) | `shared/length-cap.test.ts` 7 通过：夹具 `maxChars === ceil(p95 × 1.5)`；无指纹 `null`；用户 `maxTokens` 更小则用用户的；`burstMax===1` 且 `newlineRate<0.02` 时 `stop: ["\\n"]`；200 字在 `maxChars=30` 截在句界；无句界恰好 30 字。`server/llm/providers/stop.test.ts` 4 通过：OpenAI 请求体 `stop`、Claude `stop_sequences`、Ollama `options.stop`。`generate.test.ts` 层开着 provider 收到 `maxTokens: 72`（p95=24）；`--without lengthCap` 收到 200；截断后 `projection` 含 `length_cap`。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `358 passed \| 5 skipped (363)` 文件，`3151 passed \| 21 skipped (3172)` 用例。效果量见未验证清单。 |
 | B2.8 | ⬜ |  |  |
@@ -310,6 +310,7 @@
 | 106 | B2.6 | §3.3 `samplePool?: string[]` | `Partial<Record<EmotionalState \| "any", string[]>>`；裸数组仍读成 `{ any }` | 同条做法要按状态取池。 |
 | 107 | B2.6 | 夹具 `samplePool.distant` 每句都以句号结尾 | 每句 ≤4 字，句号占比 ≥0.7 | 夹具 `distantPeriodEnd = 0.9`，约一成 distant 行没有句号。 |
 | 108 | B2.6 | `styleReminder` 进 `BUILT_LAYERS` | 不进；只在写出了 6 句或漂移提醒时写入 `layersUsed` | 没有样本池、最近也不像跑偏时这一层改不了回复。消融表对老分身仍是五层。 |
+| 109 | B2.5 | 只写 `eval.buildCases` 增加 `source: "feedback"` 标答 | `eval.run` / `eval.audition` 在没有已存标答时也会把改写标答拼进去 | 第一次评测若只走 run、没先 buildCases，手册里的对照标答会缺席。已存标答仍以库里的为准。 |
 
 ## 未验证清单
 
@@ -326,6 +327,7 @@
 | B2.1 | 开口前放几句原话之后，生成有没有更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare seededTurns --k 3` | 配了真实模型、并且该分身已有记录和分层标答的人 |
 | B2.2 | 固定回法有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare ritual --k 3` | 配了真实模型、并且该分身已量出仪式表、已有分层标答的人 |
 | B2.6 | 风格样本和漂移提醒有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare styleReminder --k 3` | 配了真实模型、并且该分身已量出样本池和指纹、已有分层标答的人 |
+| B2.5 | 不像/像对照段有没有让生成更像 TA。本机没有非 stub 的模型。对照属于 exemplars 层 | `corepack pnpm eval -- --persona <id> --user <id> --compare exemplars --k 3` | 配了真实模型、并且该分身已有带改写的不像标记和分层标答的人 |
 
 ## 待用户决定
 
@@ -940,4 +942,12 @@ B2.7 维持 🟡。B3.6 维持 ✅。B3.3、B3.4、B3.5、B3.7、B3.8 改回 ⬜
 - 闸门 `376 passed | 5 skipped (381)` 文件，`3304 passed | 21 skipped (3325)` 用例，`all six steps passed`。相对 B2.2（374/5 文件、3290/21 用例）：通过文件 +2、通过用例 +14；跳过数不变。
 - 偏差 106–108。未验证清单新增 B2.6。待用户决定无新增。
 - B2.6 标 🟡。接着做 B2.5。
+
+### WP6 · 实现会话 · 2026-11-18 · B2.5
+
+- `9d1bea6`：`fidelity_feedback.rewrite`（0051）、`listFidelityRewritePairs` / `setFidelityFeedbackRewrite`；`fidelity.mark` 可选 `rewrite` 1–200 字，另加 `fidelity.setRewrite`。`eval.buildCases` 把带改写的反馈收成 `source: "feedback"` 标答。
+- `2b834b7`：提示词对照段（exemplars 层一起开关）；不像流程选原因后可填「会怎么说」；导出和对候选队列带上对子。
+- 闸门 `377 passed | 5 skipped (382)` 文件，`3317 passed | 21 skipped (3338)` 用例，`all six steps passed`。相对 B2.6（376/5 文件、3304/21 用例）：通过文件 +1、通过用例 +13；跳过数不变。
+- 偏差 109。未验证清单新增 B2.5。待用户决定无新增。
+- B2.5 标 🟡。接着做 B2.4。
 
