@@ -469,4 +469,36 @@ export const V6 = {
     zh: "这种时候话常常不说完",
     en: "In this mood they often trail off.",
   },
+  "v6.imperfection.short": {
+    zh: "话很短，通常不超过 {{n}} 个字",
+    en: "The lines are short, usually no more than {{n}} characters.",
+  },
+  "v6.imperfection.long": {
+    zh: "话变多，一条常常有 {{n}} 个字",
+    en: "The lines get longer; one is often {{n}} characters.",
+  },
+  "v6.imperfection.burst": {
+    zh: "一口气连发好几条",
+    en: "They send several in a row.",
+  },
+  "v6.imperfection.single": {
+    zh: "一次只发一条",
+    en: "They send one at a time.",
+  },
+  "v6.imperfection.noSticker": {
+    zh: "不发表情包",
+    en: "They don't send stickers.",
+  },
+  "v6.imperfection.noLaugh": {
+    zh: "不笑，不打「哈哈」",
+    en: "They don't laugh, and they don't type haha.",
+  },
+  "v6.imperfection.slow": {
+    zh: "回得慢，常常隔 {{m}} 分钟",
+    en: "They reply slowly, often after {{m}} minutes.",
+  },
+  "v6.imperfection.period": {
+    zh: "句末带句号",
+    en: "They end on a period.",
+  },
 } as const satisfies CopyTable;

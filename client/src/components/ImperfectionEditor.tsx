@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Save, RotateCcw } from "lucide-react";
 import { EMOTIONS, EMOTION_KEYS, type EmotionKey } from "@/lib/emotions";
 import { mergeImperfectionDefaults, type ImperfectionEntry } from "@shared/imperfection";
+import type { ImperfectionDraft } from "@shared/imperfection-draft";
 
 /**
  * Imperfection, per state.
@@ -213,6 +214,10 @@ export default function ImperfectionEditor({ personaId }: { personaId: number })
                  */
                 maxLength={IMPERFECTION_DEVIATION_MAX}
               />
+              <DraftLines
+                drafts={userWroteThis(data?.stored, state) ? [] : data?.drafts?.[state] ?? []}
+                onUse={(text) => update(state, text)}
+              />
             </div>
           );
         })}
@@ -229,5 +234,44 @@ export default function ImperfectionEditor({ personaId }: { personaId: number })
         </Button>
       </div>
     </section>
+  );
+}
+
+function userWroteThis(stored: ImperfectionEntry[] | undefined, state: EmotionKey): boolean {
+  return (stored ?? []).some((entry) => entry.state === state && entry.deviations.length > 0);
+}
+
+function DraftLines({
+  drafts,
+  onUse,
+}: {
+  drafts: ImperfectionDraft[];
+  onUse: (text: string) => void;
+}) {
+  const { t } = useLocale();
+  if (drafts.length === 0) return null;
+  return (
+    <div className="space-y-1.5 pt-1">
+      <p className="text-[11px] text-muted-foreground">{t("imperfection.draftsTitle")}</p>
+      {drafts.map((draft) => (
+        <div key={draft.text} className="flex flex-wrap items-start gap-2">
+          <p className="text-xs flex-1 min-w-0">{draft.text}</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => onUse(draft.text)}
+          >
+            {t("imperfection.useThis")}
+          </Button>
+          {draft.evidence.length > 0 ? (
+            <details className="text-[11px] text-muted-foreground">
+              <summary>{t("imperfection.showEvidence")}</summary>
+              <p>{draft.evidence.map((id) => `#${id}`).join(" ")}</p>
+            </details>
+          ) : null}
+        </div>
+      ))}
+    </div>
   );
 }

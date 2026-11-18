@@ -17,6 +17,7 @@ import {
 } from "../db";
 import { mergePersonaSettings } from "@shared/persona-settings";
 import { normalizePeriods } from "@shared/periods";
+import { draftImperfection } from "@shared/imperfection-draft";
 import { normalizeStyleProfile, type StyleProfile } from "@shared/style-profile";
 import {
   CHOICE_MIN_PAIRS,
@@ -44,6 +45,7 @@ export async function measureStyleProfile(params: {
   const rows: FingerprintRow[] = [];
   for await (const row of iterateRecords(personaId, userId)) {
     rows.push({
+      id: row.id,
       role: row.role,
       content: row.content,
       timestamp: row.timestamp,
@@ -71,6 +73,11 @@ export async function measureStyleProfile(params: {
     const userFingerprint = measureFingerprint(rows, { role: "user", addressForms });
     if (userFingerprint) userSide.fingerprint = userFingerprint;
   }
+  const locale = user?.locale === "en" ? "en" : "zh";
+  const drafts = draftImperfection(
+    { fingerprint, doubleText: current?.doubleText, stickers: current?.stickers, replyDelay: current?.replyDelay },
+    { locale, rows },
+  );
   const next = normalizeStyleProfile({
     ...(current ?? {}),
     version: 1,
@@ -78,6 +85,7 @@ export async function measureStyleProfile(params: {
     recordsVersion,
     fingerprint,
     userSide: userSide ?? undefined,
+    imperfectionDrafts: drafts,
   });
   return applyRerankWeightsFromPairs(personaId, userId, next, { persistAlways: true });
 }

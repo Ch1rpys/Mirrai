@@ -19,11 +19,12 @@ let stored: any[] = [];
 let merged: any[] = [];
 let productWritten: string[] = [];
 let reviewed = true;
+let drafts: Record<string, Array<{ text: string; evidence: number[] }>> = {};
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     imperfection: {
-      get: { useQuery: () => ({ data: { stored, merged, productWritten, reviewed }, refetch: vi.fn() }) },
+      get: { useQuery: () => ({ data: { stored, merged, productWritten, reviewed, drafts }, refetch: vi.fn() }) },
       save: { useMutation: () => ({ mutate: save, isPending: false }) },
       reviewDefaults: { useMutation: () => ({ mutate: reviewDefaults, isPending: false }) },
     },
@@ -64,6 +65,7 @@ describe("the imperfection, per state", () => {
     merged = fullProfile();
     productWritten = [];
     reviewed = true;
+    drafts = {};
   });
 
   it("says that the defaults are not applied yet", () => {
@@ -162,5 +164,35 @@ describe("the imperfection, per state", () => {
     expect(screen.getByText(translate("zh", "imperfection.productWritten"))).toBeInTheDocument();
     await userEvent.click(screen.getByText(translate("zh", "imperfection.clearDefaults")));
     expect(reviewDefaults).toHaveBeenCalledWith({ personaId: 1, keep: false, locale: "zh" });
+  });
+
+  it("puts a counted draft into the box without saving", async () => {
+    stored = [];
+    merged = [
+      { state: "distant", deviations: [] },
+      { state: "warm", deviations: [] },
+      { state: "playful", deviations: [] },
+      { state: "nostalgic", deviations: [] },
+      { state: "melancholy", deviations: [] },
+      { state: "happy", deviations: [] },
+    ];
+    drafts = {
+      distant: [{ text: "话很短，通常不超过 4 个字", evidence: [11, 12, 13] }],
+    };
+    render(<ImperfectionEditor personaId={1} />);
+    expect(screen.getByText(translate("zh", "imperfection.draftsTitle"))).toBeInTheDocument();
+    await userEvent.click(screen.getByText(translate("zh", "imperfection.useThis")));
+    expect(screen.getByDisplayValue("话很短，通常不超过 4 个字")).toBeInTheDocument();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("hides the drafts once the user has written that state", () => {
+    stored = [{ state: "distant", deviations: ["极短句"] }];
+    drafts = {
+      distant: [{ text: "话很短，通常不超过 4 个字", evidence: [] }],
+    };
+    render(<ImperfectionEditor personaId={1} />);
+    expect(screen.queryByText(translate("zh", "imperfection.draftsTitle"))).toBeNull();
+    expect(screen.queryByText(translate("zh", "imperfection.useThis"))).toBeNull();
   });
 });

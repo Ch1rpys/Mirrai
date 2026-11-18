@@ -1395,6 +1395,9 @@ export const zh = {
     productWritten: "这些是产品代写的通用句子。保留还是清掉？",
     keepDefaults: "保留",
     clearDefaults: "清掉",
+    draftsTitle: "记录里看得出来的",
+    useThis: "用这句",
+    showEvidence: "看证据",
   },
 
   /**

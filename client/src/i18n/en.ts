@@ -1394,6 +1394,9 @@ export const en = {
     productWritten: "These sentences were written by the product. Keep them, or clear them?",
     keepDefaults: "Keep",
     clearDefaults: "Clear",
+    draftsTitle: "What the record already shows",
+    useThis: "Use this line",
+    showEvidence: "Show the evidence",
   },
 
   /**

@@ -177,6 +177,7 @@ const TRAILING_MARKS = new Set([
 ]);
 
 export interface FingerprintRow {
+  id?: number;
   role: string;
   content: string;
   timestamp?: Date | string | null;

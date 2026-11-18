@@ -159,6 +159,27 @@ describe("the imperfection in the prompt", () => {
     expect(distant).not.toContain("不解释自己");
   });
 
+  it("does not put a counted draft into the prompt until the user takes it", () => {
+    const prompt = buildSystemPrompt(
+      {
+        ...persona,
+        emotionalState: "distant",
+        styleProfile: {
+          version: 1,
+          measuredAt: "2026-01-01T00:00:00.000Z",
+          recordsVersion: "1:1",
+          imperfectionDrafts: {
+            distant: [{ text: "话很短，通常不超过 4 个字", evidence: [1, 2, 3] }],
+          },
+        },
+        personaData: { ...persona.personaData, imperfectionProfile: [] },
+      },
+      { locale: "zh" },
+    );
+    expect(prompt).not.toContain("话很短");
+    expect(prompt).not.toContain("通常不超过");
+  });
+
   it("gives a persona that never opted in nothing at all", () => {
     // A persona built before this field existed must not quietly gain a
     // personality nobody chose for it.

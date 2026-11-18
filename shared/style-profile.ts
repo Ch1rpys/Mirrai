@@ -7,6 +7,7 @@
  * simply absent — there is no default to fill it with.
  */
 import type { StyleFingerprint } from "./style-fingerprint";
+import type { ImperfectionDrafts } from "./imperfection-draft";
 import type { UserSideProfile } from "./user-side-profile";
 
 export const STYLE_PROFILE_KEYS = [
@@ -51,7 +52,7 @@ export interface StyleProfile {
   userSide?: UserSideProfile;
   rituals?: unknown; // 由 B2.2 填
   samplePool?: unknown; // 由 B2.6 填
-  imperfectionDrafts?: unknown; // 由 B3.6 填
+  imperfectionDrafts?: ImperfectionDrafts;
   discriminator?: unknown; // 由 B8.1 填
   replyDelay?: unknown; // 由 B5.3 填
   routine?: unknown; // 由 B5.4 填
