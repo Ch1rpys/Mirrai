@@ -51,6 +51,9 @@ vi.mock("@/lib/trpc", () => ({
       sources: { useQuery: () => ({ data: [] }) },
       deleteSource: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    material: {
+      report: { useQuery: () => ({ data: undefined, isError: false }) },
+    },
     import: {
       backfill: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       formats: { useQuery: () => ({ data: [{ id: "generic-line", label: "一行一条" }] }) },

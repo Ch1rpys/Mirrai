@@ -11,6 +11,7 @@ import DistillationModePicker from "@/components/DistillationModePicker";
 import BackfillBanner from "@/components/v6/BackfillBanner";
 import StaleRecordsBanner from "@/components/v6/StaleRecordsBanner";
 import RecordSources from "@/components/v6/RecordSources";
+import MaterialReport from "@/components/v6/MaterialReport";
 import ImportWizard from "@/components/v6/ImportWizard";
 import HarmNotice from "@/components/v6/HarmNotice";
 import ClarifyCard from "@/components/v6/ClarifyCard";
@@ -631,6 +632,7 @@ export default function Upload() {
           pending={triggerMutation.isPending}
           onRebuild={() => { void startDistillation(); }}
         />
+        <MaterialReport personaId={personaId} />
         <RecordSources personaId={personaId} />
 
         {/* Analysis Status · Ready */}

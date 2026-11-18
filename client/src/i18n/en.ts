@@ -2040,6 +2040,33 @@ export const en = {
     newlineRate: "Newline rate",
     questionEndingRate: "Question-ending rate",
   },
+
+  material: {
+    title: "Whether the material is enough",
+    hint: "Before distillation, whether each layer has enough of the record to stand on. The numbers come from the records, not from a feeling.",
+    ok: "{{n}} so far",
+    short: "{{n}} short",
+    layer: {
+      fingerprint: "How they write",
+      acts: "What a turn does",
+      suppressions: "What they never do",
+      timing: "How long they take",
+      openings: "How they start",
+      periods: "Periods",
+      perState: "Per mood",
+      evalCases: "Held-out cases",
+    },
+    how: {
+      fingerprint: "Import more of what they said. The fingerprint needs enough of their wording.",
+      acts: "Acts are labelled during distillation. There are not enough labelled turns yet.",
+      suppressions: "Import more of what they said. The subtractions need enough of what they never do.",
+      timing: "Import more timed back-and-forth.",
+      openings: "They have not spoken first often enough.",
+      periods: "The record has no long enough silence with enough of their lines on both sides.",
+      perState: "They only have {{have}} lines in “{{state}}”. That is not enough to see a pattern.",
+      evalCases: "There are not enough of their lines to cut held-out cases.",
+    },
+  },
 } as const;
 
 export type EnDictionary = typeof en;

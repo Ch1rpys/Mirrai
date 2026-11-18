@@ -2051,6 +2051,33 @@ export const zh = {
     newlineRate: "换行率",
     questionEndingRate: "问句收尾率",
   },
+
+  material: {
+    title: "材料够不够",
+    hint: "蒸馏之前先看每一层站不站得住。数字来自记录，不是感觉。",
+    ok: "有 {{n}}",
+    short: "还差 {{n}}",
+    layer: {
+      fingerprint: "语气指纹",
+      acts: "动作分布",
+      suppressions: "减法规则",
+      timing: "回复节奏",
+      openings: "开场分布",
+      periods: "时期",
+      perState: "分状态统计",
+      evalCases: "评测标答",
+    },
+    how: {
+      fingerprint: "再导入一些 TA 说的话。语气指纹要看用字习惯，条数不够看不出。",
+      acts: "蒸馏之后才会标上动作。标过的 TA 轮次还不够。",
+      suppressions: "再导入一些 TA 说的话。减法规则要看 TA 从不做的事。",
+      timing: "再导入一些带时间的一问一答。",
+      openings: "TA 先开口的次数还不够。",
+      periods: "记录里还没有一段足够长的静默，两边都有足够的 TA 的话。",
+      perState: "TA 处于「{{state}}」时的话只有 {{have}} 条，还看不出规律。",
+      evalCases: "TA 的话还不够切出评测标答。",
+    },
+  },
 } as const;
 
 export type ZhDictionary = typeof zh;
