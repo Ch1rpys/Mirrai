@@ -20,6 +20,7 @@ export default function PersonaSwitches(props: { personaId: number; name: string
     onError: (error) => toast.error(error.message),
   });
   const seededTurns = settings.data?.layers?.seededTurns !== false;
+  const ritualTable = settings.data?.layers?.ritualTable !== false;
   const lengthCap = settings.data?.layers?.lengthCap !== false;
   const styleProjection = settings.data?.layers?.styleProjection !== false;
   const abPairs = Boolean(settings.data?.layers?.abPairs);
@@ -48,6 +49,26 @@ export default function PersonaSwitches(props: { personaId: number; name: string
           <span className="block">{t("personaEdit.seededTurns", { name: props.name })}</span>
           <span className="block text-xs text-muted-foreground leading-relaxed">
             {t("personaEdit.seededTurnsNote", { name: props.name })}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={ritualTable}
+          disabled={busy}
+          onChange={(event) =>
+            update.mutate({
+              id: props.personaId,
+              patch: { layers: { ritualTable: event.target.checked } },
+            })
+          }
+          className="mt-0.5"
+        />
+        <span>
+          <span className="block">{t("personaEdit.ritualTable", { name: props.name })}</span>
+          <span className="block text-xs text-muted-foreground leading-relaxed">
+            {t("personaEdit.ritualTableNote", { name: props.name })}
           </span>
         </span>
       </label>

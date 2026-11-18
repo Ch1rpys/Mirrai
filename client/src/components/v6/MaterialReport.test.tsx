@@ -39,6 +39,7 @@ describe("the material report", () => {
       timedExchanges: 0,
       openings: 0,
       periodHave: 0,
+      ritualHave: 0,
     });
     render(<MaterialReportView report={report} />);
     const short = MIN_FINGERPRINT_SAMPLES - 15;

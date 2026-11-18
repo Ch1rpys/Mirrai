@@ -7,6 +7,7 @@ import { Gauge, Timer, Play } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import FingerprintView from "@/components/v6/FingerprintView";
+import RitualsView from "@/components/v6/RitualsView";
 import DiscriminatorView, {
   type DiscriminatorReportView,
 } from "@/components/v6/DiscriminatorView";
@@ -293,7 +294,10 @@ export default function FidelityPanel({
       {styleFailed ? (
         <p className="text-xs text-destructive" role="alert">{t("common.error")}</p>
       ) : (
-        <FingerprintView fingerprint={styleData?.profile?.fingerprint} />
+        <>
+          <FingerprintView fingerprint={styleData?.profile?.fingerprint} />
+          <RitualsView rituals={styleData?.profile?.rituals} />
+        </>
       )}
 
       <hr className="rule" />

@@ -1319,6 +1319,8 @@ export const en = {
     switchesHint: "The first group costs nothing extra and takes effect once there are records. The second group costs more, waits longer, or needs the network, so it stays off.",
     seededTurns: "Look at a few of {{name}}'s real lines before speaking",
     seededTurnsNote: "Each turn finds a few real exchanges close to this one and puts them in front of the conversation. It does not cost extra.",
+    ritualTable: "Answer “goodnight” and “you there?” in {{name}}'s own words",
+    ritualTableNote: "{{name}} answered these almost the same way every time. On a hit, one of those real lines is used and the model is not called.",
     lengthCap: "Don't let them write longer than {{name}}",
     lengthCapNote: "The cap is how long {{name}} went in one turn in the record. It stays off until there are enough lines.",
     styleProjection: "End the way {{name}} punctuates",
@@ -1509,6 +1511,11 @@ export const en = {
       laughFourHa: "When they laugh they usually type four ha's",
       topParticles: "Most common sentence endings: {{list}}",
       particleSep: ", ",
+    },
+    rituals: {
+      title: "Fixed replies",
+      reply: "{{text}} ×{{n}}",
+      sep: " · ",
     },
     discriminator: {
       summary: "On {{pairs}} real/fake pairs the discriminator's AUC is {{auc}}. 0.5 means it cannot tell them apart; closer to 1 means the rebuilt line is easier to pick out.",
@@ -2089,6 +2096,7 @@ export const en = {
       periods: "Periods",
       perState: "Per mood",
       evalCases: "Held-out cases",
+      rituals: "Fixed replies",
     },
     how: {
       fingerprint: "Import more of what they said. The fingerprint needs enough of their wording.",
@@ -2099,6 +2107,7 @@ export const en = {
       periods: "The record has no long enough silence with enough of their lines on both sides.",
       perState: "They only have {{have}} lines in “{{state}}”. That is not enough to see a pattern.",
       evalCases: "There are not enough of their lines to cut held-out cases.",
+      rituals: "Import more short back-and-forth, such as goodnight, morning, or “you there?”.",
     },
   },
 } as const;

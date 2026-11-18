@@ -17,6 +17,7 @@ const measure = vi.fn();
 const run = vi.fn();
 
 let profile: any = null;
+let styleProfile: any = null;
 let lastRun: any = null;
 /** Whether the behaviour query failed. */
 let behaviorFailed = false;
@@ -39,7 +40,7 @@ vi.mock("@/lib/trpc", () => ({
       measure: { useMutation: () => ({ mutate: measure, isPending: false }) },
     },
     style: {
-      get: { useQuery: () => ({ data: { profile: null }, isError: false }) },
+      get: { useQuery: () => ({ data: { profile: styleProfile }, isError: false }) },
     },
     eval: {
       latest: { useQuery: () => ({ data: { run: lastRun } }) },
@@ -139,6 +140,7 @@ describe("the ruler and the timing", () => {
     invalidateList.mockClear();
     vi.clearAllMocks();
     profile = null;
+    styleProfile = null;
     lastRun = null;
   });
 
@@ -273,6 +275,23 @@ describe("the ruler and the timing", () => {
     await userEvent.click(screen.getByText(translate("zh", "fidelity.run")));
     await waitFor(() => expect(run).toHaveBeenCalled());
     await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ personaId: 1 }));
+  });
+
+  it("shows the ritual table from the style profile", () => {
+    styleProfile = {
+      rituals: [
+        {
+          trigger: "晚安",
+          variants: ["晚安"],
+          n: 100,
+          coverage: 1,
+          replies: [{ text: "安", n: 25, recordId: 1 }],
+        },
+      ],
+    };
+    render(<FidelityPanel personaId={1} />);
+    expect(screen.getByText("固定回法")).toBeInTheDocument();
+    expect(screen.getByTestId("ritual-晚安")).toHaveTextContent("安");
   });
 
   it("shows the last run's discriminator AUC", () => {

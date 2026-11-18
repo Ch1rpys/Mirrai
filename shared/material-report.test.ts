@@ -9,6 +9,7 @@ import {
   MIN_FINGERPRINT_STATE_SAMPLES,
 } from "./style-fingerprint";
 import { SUPPRESSION_MIN_SAMPLES } from "./suppressions";
+import { RITUAL_MIN_COUNT } from "./ritual-table";
 import { buildMaterialReport, MATERIAL_LAYER_NEEDS } from "./material-report";
 
 describe("the material report thresholds", () => {
@@ -21,6 +22,7 @@ describe("the material report thresholds", () => {
     expect(MATERIAL_LAYER_NEEDS.periods).toBe(PERIOD_MIN_MESSAGES);
     expect(MATERIAL_LAYER_NEEDS.perState).toBe(MIN_FINGERPRINT_STATE_SAMPLES);
     expect(MATERIAL_LAYER_NEEDS.evalCases).toBe(EVAL_MIN_ASSISTANT_LINES);
+    expect(MATERIAL_LAYER_NEEDS.rituals).toBe(RITUAL_MIN_COUNT);
     const report = buildMaterialReport({
       total: 0,
       theirs: 0,
@@ -36,6 +38,7 @@ describe("the material report thresholds", () => {
       timedExchanges: 0,
       openings: 0,
       periodHave: 0,
+      ritualHave: 0,
     });
     for (const row of report.layers) {
       expect(row.need).toBe(MATERIAL_LAYER_NEEDS[row.id as keyof typeof MATERIAL_LAYER_NEEDS]);
@@ -58,6 +61,7 @@ describe("the material report thresholds", () => {
       timedExchanges: 8,
       openings: 2,
       periodHave: 0,
+      ritualHave: 0,
     });
     const fingerprint = report.layers.find((row) => row.id === "fingerprint");
     expect(fingerprint?.ok).toBe(false);

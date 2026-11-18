@@ -18,6 +18,7 @@ import {
   type EmotionalState,
 } from "./style-fingerprint";
 import { SUPPRESSION_MIN_SAMPLES } from "./suppressions";
+import { RITUAL_MIN_COUNT } from "./ritual-table";
 
 export interface MaterialLayer {
   id: string;
@@ -57,6 +58,7 @@ export interface MaterialCounts {
   timedExchanges: number;
   openings: number;
   periodHave: number;
+  ritualHave: number;
 }
 
 export const MATERIAL_LAYER_NEEDS = {
@@ -68,6 +70,7 @@ export const MATERIAL_LAYER_NEEDS = {
   periods: PERIOD_MIN_MESSAGES,
   perState: MIN_FINGERPRINT_STATE_SAMPLES,
   evalCases: EVAL_MIN_ASSISTANT_LINES,
+  rituals: RITUAL_MIN_COUNT,
 } as const;
 
 export { PERIOD_SILENCE_DAYS };
@@ -135,6 +138,7 @@ export function buildMaterialReport(counts: MaterialCounts): MaterialReport {
       layer("periods", counts.periodHave, MATERIAL_LAYER_NEEDS.periods, "lines"),
       layer("perState", weakestHave, MATERIAL_LAYER_NEEDS.perState, "lines", { weakestState }),
       layer("evalCases", counts.theirsText, MATERIAL_LAYER_NEEDS.evalCases, "lines"),
+      layer("rituals", counts.ritualHave, MATERIAL_LAYER_NEEDS.rituals, "exchanges"),
     ],
   };
 }

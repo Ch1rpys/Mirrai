@@ -1320,6 +1320,8 @@ export const zh = {
     switchesHint: "上面一组不多花钱，有记录就会生效。下面一组会多花钱、多等一会儿，或者需要联网，所以默认关着。",
     seededTurns: "开口前先看几句 {{name}} 的原话",
     seededTurnsNote: "每一轮会从记录里找几段和眼前这句相近的真实往来，放在对话前面。不多花钱。",
+    ritualTable: "「晚安」「在吗」这类话，直接用 {{name}} 的原话回",
+    ritualTableNote: "记录里 {{name}} 对这些话的回法几乎是固定的。命中时直接从真实的回法里抽一句，不调用模型。",
     lengthCap: "不让它写得比 {{name}} 长",
     lengthCapNote: "按记录里 {{name}} 一次最多说多少来设上限。记录不够时不生效。",
     styleProjection: "按 {{name}} 的标点习惯收尾",
@@ -1515,6 +1517,11 @@ export const zh = {
       laughFourHa: "笑的时候通常打四个「哈」",
       topParticles: "句末最常用：{{list}}",
       particleSep: "、",
+    },
+    rituals: {
+      title: "固定回法",
+      reply: "{{text}} {{n}}次",
+      sep: " · ",
     },
     discriminator: {
       summary: "判别器在 {{pairs}} 组真假句上的 AUC 是 {{auc}}。0.5 表示它分不出来；越接近 1，说明分身的话越容易被认出来。",
@@ -2100,6 +2107,7 @@ export const zh = {
       periods: "时期",
       perState: "分状态统计",
       evalCases: "评测标答",
+      rituals: "固定回法",
     },
     how: {
       fingerprint: "再导入一些 TA 说的话。语气指纹要看用字习惯，条数不够看不出。",
@@ -2110,6 +2118,7 @@ export const zh = {
       periods: "记录里还没有一段足够长的静默，两边都有足够的 TA 的话。",
       perState: "TA 处于「{{state}}」时的话只有 {{have}} 条，还看不出规律。",
       evalCases: "TA 的话还不够切出评测标答。",
+      rituals: "再导入一些短的一问一答，比如晚安、早、在吗。",
     },
   },
 } as const;

@@ -40,6 +40,7 @@ import { BEHAVIOR_MAX_GAP_SEC, BEHAVIOR_MIN_GAP_SEC } from "@shared/behavior-pro
 import { DEFAULT_SCENE_BREAK_HOURS } from "@shared/scenes";
 import { PERIOD_SILENCE_DAYS } from "@shared/periods";
 import type { MaterialCounts } from "@shared/material-report";
+import { RITUAL_MAX_REPLY_CHARS, RITUAL_MAX_TRIGGER_CHARS } from "@shared/ritual-table";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -6337,6 +6338,7 @@ export async function getMaterialCounts(
     timedExchanges: 0,
     openings: 0,
     periodHave: 0,
+    ritualHave: 0,
   };
   const db = await getDb();
   if (!db) return empty;
@@ -6493,6 +6495,37 @@ export async function getMaterialCounts(
       periodHave: sql<number>`period_have`,
     })
     .from(periodSub);
+  const ritualWindow = sql`
+    (
+      SELECT
+        role,
+        COALESCE(kind, 'text') AS kind,
+        char_length(trim(content)) AS len,
+        LAG(role) OVER (ORDER BY "timestamp", id) AS prev_role,
+        LAG(COALESCE(kind, 'text')) OVER (ORDER BY "timestamp", id) AS prev_kind,
+        LAG(char_length(trim(content))) OVER (ORDER BY "timestamp", id) AS prev_len
+      FROM collected_messages
+      WHERE "personaId" = ${personaId}
+        AND "userId" = ${userId}
+        AND (
+          meta IS NULL
+          OR meta->>'register' IS NULL
+          OR meta->>'register' = 'private'
+        )
+    ) AS material_rituals
+  `;
+  const [rituals] = await db
+    .select({
+      ritualHave: sql<number>`count(*) FILTER (
+        WHERE role = 'assistant'
+          AND kind = 'text'
+          AND len > 0 AND len <= ${RITUAL_MAX_REPLY_CHARS}
+          AND prev_role = 'user'
+          AND prev_kind = 'text'
+          AND prev_len > 0 AND prev_len <= ${RITUAL_MAX_TRIGGER_CHARS}
+      )`,
+    })
+    .from(ritualWindow);
   const byKind: Record<string, number> = {};
   for (const row of kindRows) byKind[row.kind] = asCount(row.n);
   const byEmotion: Record<string, number> = {};
@@ -6514,6 +6547,7 @@ export async function getMaterialCounts(
     timedExchanges: asCount(windows?.timedExchanges),
     openings: asCount(windows?.openings),
     periodHave: asCount(period?.periodHave),
+    ritualHave: asCount(rituals?.ritualHave),
   };
 }
 

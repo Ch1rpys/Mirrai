@@ -13,6 +13,7 @@ const LAYER_NAME: Record<string, TranslationKey> = {
   periods: "material.layer.periods",
   perState: "material.layer.perState",
   evalCases: "material.layer.evalCases",
+  rituals: "material.layer.rituals",
 };
 
 const LAYER_HOW: Record<string, TranslationKey> = {
@@ -24,6 +25,7 @@ const LAYER_HOW: Record<string, TranslationKey> = {
   periods: "material.how.periods",
   perState: "material.how.perState",
   evalCases: "material.how.evalCases",
+  rituals: "material.how.rituals",
 };
 
 const STATE_LABEL: Record<string, TranslationKey> = {
