@@ -86,7 +86,7 @@
 | B6.4 | 🟡 | c280031 | `knowledge-boundary.test.ts` 4 通过：`reads stocks and funds off Xiaoman, from the reply she actually gave` 夹具 `minTaLines: 500` 产出 `pattern === "股票基金理财"`、`kind: "knowledge_boundary"`、`verified: false`，证据含「听不懂 说人话」且 3 条；`does not mine a domain they named once` 加一句 TA「股票还行」后无该候选；`does not mine a domain the other person only mentioned four times` 2000 条「嗯」+ 用户提 4 次无候选。`fidelity-prompt.test.ts` `does not mention a knowledge boundary until the user confirms it`：未确认没有「你不懂这类话题」/「股票基金理财」；确认后有、只在 `<persona_data>` 围栏内、在【减法】段。`suppressions.test.ts` `renders a confirmed knowledge-boundary subtraction` 通过。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `398 passed \| 5 skipped (403)` 文件，`3500 passed \| 21 skipped (3521)` 用例。效果量见未验证清单。 |
 | B6.5 | 🟡 | ee77205 | `prompt.test.ts` `does not tell the earlier stretch that they have already parted`：不选时期提示词有「你们已经分开了」；`periodId: period-1` 没有，有 `prompt.periodBoundary`「你现在是 2022-01-01 到 2022-06-01 那段时间的自己」，去掉 `<persona_data>` 围栏后仍有「那之后发生的任何事你都不知道」。`keeps memories from inside the stretch, drops later ones, and keeps a pin`：有「时期内的事」「置顶」，没有「时期之后的事」。`prompt-golden.test.ts` 10 通过、快照未改。`Chat-period.test.tsx` 渲染「正在和 2022-01-01–2022-06-01 那段时间的 小满 说话。那之后的事，这个 小满 不知道。」。闸门 `399 passed \| 5 skipped (404)` 文件，`3503 passed \| 21 skipped (3524)` 用例。效果量见未验证清单。 |
 | B6.6 | 🟡 | 5549ead (extract); 9f0d83d (annotate/rewrite/UI) | `fact-check.test.ts` 5 通过：`extractClaims("上次去拾光咖啡那天你迟到了")` 有地点「拾光咖啡」和往事（含「上次」）；「你吃饭了吗」空；「我们是不是去过拾光咖啡？」空。夹具：`拾光咖啡` `supported` 出处 `record` id 等于含该句的那条；`蓝湖餐厅` 不支持。记忆标题覆盖时出处是 `memory`。`service.test.ts`：`streams the reply, then writes claim metadata` 流式 delta 为整句后 `updateMessageMetadata` 写入 `claims` 含 `拾光咖啡` supported；`still replies when the fact check throws` mock `searchRecordsLexical` 抛错仍有 `done`、assistant 落库。`generate.test.ts`：四候选三个含「蓝湖餐厅」选出「好的呀」；四个都含则 `invokeWithProvider` 5 次且第 5 次系统提示含 `prompt.factRewrite`「不要提具体的日期、地点和往事，除非它们在上面的记忆里。」。`MessageBubble.test.tsx` 渲染「「拾光咖啡」— 记录里有（2022-03-12）」和「「蓝湖餐厅」— 记录里没找到」。`PersonaSwitches.test.tsx` 两个开关文案；勾掉标注走 `factAnnotate: false`，勾上重写走 `factRewrite: true`。闸门 `400 passed \| 5 skipped (405)` 文件，`3516 passed \| 21 skipped (3537)` 用例。效果量见未验证清单。 |
-| B6.7 | ⬜ |  |  |
+| B6.7 | ✅ | 1dcaf36 | 临时库 `mirrai_v6_scratch` 0053 四步+升级路径：push 后 migrate 应用到 `0053_memory_entities`；`--replay` `replayed 51 migration(s)`；`--rollback 1` 后 `memories.entities` 0 行；再 migrate 列回来 `jsonb`。升级路径 DROP 该列并删 journal 的 `0053_memory_entities` 后再 migrate，列出现。`db-delete-coverage.test.ts` 9 通过。库已 `dropdb`。`retrieval.test.ts` `hops to a memory that shares a place with the top hit`：用户消息「还记得我们第一次约会吗」、topK 1，选中 id `[1, 2]`（约会 / 橘猫，实体都是拾光咖啡）。`respects the top-K limit for ordinary memories` 仍是 length 3（无实体，不扩）。`facts.test.ts` `drops entities that are not in the cited line`：`people: ["蓝湖"]` 丢掉，`places: ["5月21号"]` 留下。`memory-extract.test.ts` `keeps entities that appear in the cited line, and drops the rest`：`things` 只留「蓝色」。`memory-entities.test.ts` 2 通过。`routers.memory-date.test.ts` `fills confirmed people from the title`：`createMemory` 收到 `people: ["琪琪"]`。原有 retrieval 打分/topK 测试未改仍过。闸门 `401 passed \| 5 skipped (406)` 文件，`3524 passed \| 21 skipped (3545)` 用例。 |
 | B6.8 | ⬜ |  |  |
 | B6.9 | ✅ | 881d917 | `memory-extract-source.test.ts` `stores a fact the persona said as a ledger entry, not an anchor`：`createMemory` 一次，`subject: "said"` `category: "memory"` `importance: 1` `source: "chat"`，不是锚点。`retrieval.test.ts` `marks a said memory, and never puts it among the anchors`：渲染含 `prompt.memoryMarkerSaid`「这是你在这里说过的话，不是记录里的事实」；`selectMemories` 里 `said` 即使 `category: "anchor"` 也不进 `anchors`，仍进 `selected`。`routers.memory-said.test.ts` 2 通过：`said`→`them` 时 `updateMemory` 收到 `source: "manual"`；已经是 `them` 的不改 source。`MemoryReview.test.tsx`：三个分组标题「关于 TA 的 / 关于我的 / 分身说过的」；点「这是真的」调用 `memory.update({ id: 3, subject: "them" })`。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `392 passed \| 5 skipped (397)` 文件，`3445 passed \| 21 skipped (3466)` 用例。 |
 | B7.1 | ⬜ |  |  |
@@ -349,6 +349,7 @@
 | 145 | B6.6 | 地点后缀 `店\|馆\|路\|街\|公园\|广场\|学校\|医院\|机场\|车站` | 另加「咖啡」 | 夹具验收句是「拾光咖啡」；手册后缀表不含「咖啡」，不加则抽不出地点。 |
 | 146 | B6.6 | `verifyClaims` 只读注入记忆和 `searchRecordsLexical` | 测试可传 `ctx.records` 走同一套覆盖度，不连库 | 夹具分身验收要在无 DATABASE_URL 的闸门里跑。生产路径仍只打表。 |
 | 147 | B6.6 | 开关文案只给了标题 | 标注另有 `factAnnotateNote`；重写用手册说明 | 其它开关都有说明行，空着会在开关区缺一块。 |
+| 148 | B6.7 | 一跳还加上用户消息里命中的人物名和地点 | 用户消息里出现的、已选记忆或池里记忆的任意实体（含 things）都会当种子 | 手册没写物品；实体已经过原话子串校验，不另开白名单。 |
 
 ## 未验证清单
 
@@ -1207,6 +1208,13 @@ B4.1、B4.2 维持 🟡。B4.3、B4.4、B4.5、B4.6、B4.7、B4.8 改回 ⬜。�
 - 闸门 `400 passed | 5 skipped (405)` 文件，`3516 passed | 21 skipped (3537)` 用例，`all six steps passed`。相对 B6.5（399/5 文件、3503/21 用例）：通过文件 +1、通过用例 +13；跳过数不变。
 - 偏差 145–147。未验证清单新增 B6.6。待用户决定无新增。
 - B6.6 标 🟡。接着做 B6.7。
+
+### WP8 · 实现会话 · 2026-11-18 · B6.7
+
+- `1dcaf36`：`memories.entities` jsonb；事实卡和应用内抽取都带可选实体，不在引用原话里的丢掉；手动创建/编辑用已确认人物名填 `people`；召回在普通记忆之后按实体一跳，最多再补 2 条。
+- 闸门 `401 passed | 5 skipped (406)` 文件，`3524 passed | 21 skipped (3545)` 用例，`all six steps passed`。相对 B6.6（400/5 文件、3516/21 用例）：通过文件 +1、通过用例 +8；跳过数不变。
+- 偏差 148。未验证清单、待用户决定无新增。
+- B6.7 标 ✅。接着做 B6.8。
 
 
 
