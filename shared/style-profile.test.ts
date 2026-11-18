@@ -117,4 +117,26 @@ describe("the style profile", () => {
       { userAct: "acknowledge", to: "distant", n: 6, examples: [{ text: "嗯" }] },
     ]);
   });
+
+  it("keeps a session profile and drops a malformed one", () => {
+    const profile = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      sessions: {
+        scenes: 30,
+        lengthMin: { median: 15, p90: 40 },
+        closeByThemRate: 0.9,
+        closers: [{ text: "晚安", n: 20 }],
+      },
+    });
+    expect(profile.sessions?.closers[0]?.text).toBe("晚安");
+    const empty = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      sessions: { scenes: 0 },
+    });
+    expect(empty.sessions).toBeUndefined();
+  });
 });

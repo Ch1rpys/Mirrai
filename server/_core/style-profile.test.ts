@@ -259,6 +259,11 @@ describe("measureStyleProfile", () => {
     const ack = measured.triggers?.find((row) => row.userAct === "acknowledge");
     expect(ack?.n).toBe(6);
     expect(ack?.examples.every((example) => example.text === "嗯")).toBe(true);
+    expect(measured.sessions?.closers.slice(0, 3).map((row) => row.text)).toEqual([
+      "晚安",
+      "安",
+      "睡啦",
+    ]);
   });
 
   it("remakes the sample pool from labelled rows even when the records version is unchanged", async () => {

@@ -14,6 +14,7 @@ import {
   type ConflictProfile,
   type TriggerEntry,
 } from "./conflicts";
+import { normalizeSessionProfile, type SessionProfile } from "./session-profile";
 import { normalizeEmotionDynamics, type EmotionDynamics } from "./emotion-dynamics";
 import { normalizeSamplePool, type SamplePool } from "./sample-pool";
 import type { StyleFingerprint } from "./style-fingerprint";
@@ -70,7 +71,7 @@ export interface StyleProfile {
   typing?: unknown; // 由 B5.5 填
   quirks?: unknown; // 由 B5.6 填
   doubleText?: unknown; // 由 B5.7 填
-  sessions?: unknown; // 由 B4.6 填
+  sessions?: SessionProfile;
   inSession?: unknown; // 由 B4.8 填
   multiPoint?: unknown; // 由 B4.7 填
   emotionDynamics?: EmotionDynamics;
@@ -135,6 +136,11 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
       if (key === "triggers") {
         const triggers = normalizeTriggers(source.triggers);
         if (triggers) profile.triggers = triggers;
+        continue;
+      }
+      if (key === "sessions") {
+        const sessions = normalizeSessionProfile(source.sessions);
+        if (sessions) profile.sessions = sessions;
         continue;
       }
       (profile as unknown as Record<string, unknown>)[key] = source[key];
