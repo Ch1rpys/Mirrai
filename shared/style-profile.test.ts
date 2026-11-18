@@ -22,4 +22,21 @@ describe("the style profile", () => {
     expect(profile.fingerprint).toEqual({ tokens: 3 });
     expect(profile.recordsVersion).toBe("12:40");
   });
+
+  it("keeps a per-state sample pool and reads a bare array as any", () => {
+    const keyed = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      samplePool: { distant: ["哦。"], warm: ["好呀"] },
+    });
+    expect(keyed.samplePool).toEqual({ distant: ["哦。"], warm: ["好呀"] });
+    const any = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      samplePool: ["嗯"],
+    });
+    expect(any.samplePool).toEqual({ any: ["嗯"] });
+  });
 });

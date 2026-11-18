@@ -142,6 +142,42 @@ describe("measureStyleProfile", () => {
     expect(rituals?.find((entry) => entry.trigger === "嗨")?.manual).toBe(true);
   });
 
+  it("writes a per-state sample pool from the fixture", async () => {
+    getRecordsVersion.mockResolvedValue("3200:3200");
+    getPersonaStyleProfile.mockResolvedValue(null);
+    getPersonaById.mockResolvedValue({
+      id: 5,
+      userId: 1,
+      name: "小满",
+      personaData: { nickname: "树树" },
+    });
+    getUserById.mockResolvedValue({ id: 1, name: "阿树" });
+    iterateRecords.mockImplementation(async function* () {
+      for (const row of buildXiaomanRecords()) {
+        yield {
+          id: row.id,
+          role: row.role,
+          content: row.content,
+          timestamp: row.timestamp,
+          kind: row.kind,
+          speaker: row.speaker,
+          emotion: row.truth.state,
+        };
+      }
+    });
+    const measured = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    const distant = measured.samplePool?.distant ?? [];
+    const warm = measured.samplePool?.warm ?? [];
+    expect(distant.length).toBeGreaterThan(0);
+    expect(warm.length).toBeGreaterThan(0);
+    expect(distant.every((line) => Array.from(line).length <= 4)).toBe(true);
+    expect(warm.some((line) => /[。.．]$/.test(line))).toBe(false);
+  });
+
   it("trains a negative length weight from thirty short-line picks even when the records have not moved", async () => {
     getRecordsVersion.mockResolvedValue("10:40");
     getPersonaStyleProfile.mockResolvedValue({

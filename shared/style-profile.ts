@@ -7,6 +7,7 @@
  * simply absent — there is no default to fill it with.
  */
 import type { AddressEntry } from "./address-history";
+import { normalizeSamplePool, type SamplePool } from "./sample-pool";
 import type { StyleFingerprint } from "./style-fingerprint";
 import type { ImperfectionDrafts } from "./imperfection-draft";
 import { normalizeRituals, type RitualEntry } from "./ritual-table";
@@ -53,7 +54,7 @@ export interface StyleProfile {
   fingerprint?: StyleFingerprint;
   userSide?: UserSideProfile;
   rituals?: RitualEntry[];
-  samplePool?: unknown; // 由 B2.6 填
+  samplePool?: SamplePool;
   imperfectionDrafts?: ImperfectionDrafts;
   discriminator?: unknown; // 由 B8.1 填
   replyDelay?: unknown; // 由 B5.3 填
@@ -101,6 +102,11 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
       if (key === "rituals") {
         const rituals = normalizeRituals(source.rituals);
         if (rituals.length > 0) profile.rituals = rituals;
+        continue;
+      }
+      if (key === "samplePool") {
+        const samplePool = normalizeSamplePool(source.samplePool);
+        if (samplePool) profile.samplePool = samplePool;
         continue;
       }
       (profile as unknown as Record<string, unknown>)[key] = source[key];
