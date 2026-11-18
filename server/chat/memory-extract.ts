@@ -128,9 +128,9 @@ export interface ExtractResult {
   /**
    * How many items were about something the persona said.
    *
-   * In an in-app conversation those lines are reconstructed, not a
-   * fact about them. They are counted rather than stored; WP8 will
-   * keep a ledger of them.
+   * In an in-app conversation those lines are reconstructed. They are
+   * stored as `subject: "said"` so later turns stay consistent, and
+   * they are counted here so the panel can group them.
    */
   fromPersona: number;
 }
@@ -449,10 +449,7 @@ async function runExtraction(params: {
       continue;
     }
     const source = fresh[lineIndex - 1];
-    if (!fromUpload && (source.role === "assistant" || source.role === "persona")) {
-      fromPersona += 1;
-      continue;
-    }
+    const fromPersonaLine = !fromUpload && (source.role === "assistant" || source.role === "persona");
 
     const factKey = factKeyFromTitle(title);
     const sameClaim = (other: { title: string; description?: string | null }) =>
@@ -471,10 +468,13 @@ async function runExtraction(params: {
     }
     seen.push({ title, description: item.description });
 
-    const category = ["milestone", "memory", "anniversary", "anchor"].includes(item.category ?? "")
-      ? item.category!
-      : "memory";
-    const subject = item.subject === "me" ? "me" : "them";
+    const category = fromPersonaLine
+      ? "memory"
+      : ["milestone", "memory", "anniversary", "anchor"].includes(item.category ?? "")
+        ? item.category!
+        : "memory";
+    const subject = fromPersonaLine ? "said" : item.subject === "me" ? "me" : "them";
+    if (fromPersonaLine) fromPersona += 1;
 
     const id = await db.createMemory({
       personaId: persona.id,
@@ -484,9 +484,12 @@ async function runExtraction(params: {
       category: category as any,
       subject,
       date: item.date ?? null,
-      importance: category === "anchor" ? 5 : category === "milestone" ? 3 : 1,
+      importance: fromPersonaLine
+        ? 1
+        : category === "anchor" ? 5 : category === "milestone" ? 3 : 1,
       messageId: typeof source?.id === "number" ? source.id : null,
       factKey,
+      ...(fromPersonaLine ? { source: "chat" as const } : {}),
       status: "active",
     } as any);
 

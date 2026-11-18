@@ -3019,6 +3019,15 @@ export async function getLastExtractionAt(personaId: number, userId: number): Pr
  * memory titles for the ids it is given. The only caller passes it, but
  * a parameter that may be left out is a parameter that will be.
  */
+export async function getMemoryById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(memories)
+    .where(and(eq(memories.id, id), eq(memories.userId, userId)))
+    .limit(1);
+  return rows[0];
+}
+
 export async function getMemoryTitles(ids: number[], userId: number) {
   const db = await getDb();
   if (!db || ids.length === 0) return new Map<number, string>();
@@ -3048,8 +3057,10 @@ export async function updateMemory(
     date?: string | null;
     isPinned?: boolean;
     importance?: number;
-    /** Whose memory this is: "them" or "me". */
-    subject?: "them" | "me";
+    /** Whose memory this is: "them", "me", or "said". */
+    subject?: "them" | "me" | "said";
+    /** Where the memory came from: `chat`, `records`, or `manual`. */
+    source?: "chat" | "records" | "manual";
     /**
      * Clearing the source line means the user has looked at it.
      *

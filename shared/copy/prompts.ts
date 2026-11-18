@@ -165,8 +165,8 @@ Do not extract small talk, greetings, or anything without information in it.`,
    * not: the persona's lines were rebuilt.
    */
   "prompts.memoryExtractionInApp": {
-    zh: "关于对方的事实只能来自用户说的话；对方（分身）在这段对话里说的话是重建出来的，不是事实来源。",
-    en: "Facts about the other party may only come from what the user said. What the other party (the persona) says in this conversation is reconstructed speech, not a source of facts.",
+    zh: "关于对方的事实只能来自用户说的话。对方（分身）在这段对话里说的话是重建出来的，仍可以提取，应用会把它们记成「分身说过的」，不是记录里的事实。",
+    en: "Facts about the other party may only come from what the user said. What the other party (the persona) says in this conversation is reconstructed speech: you may still extract it, and the app will keep it as something they said here, not as a fact from the records.",
   },
 
   /**

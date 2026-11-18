@@ -74,15 +74,24 @@ beforeEach(() => {
 });
 
 describe("the source of an extracted memory", () => {
-  it("does not store a fact the persona said", async () => {
+  it("stores a fact the persona said as a ledger entry, not an anchor", async () => {
     invoke.mockResolvedValue(JSON.stringify([
       { title: "周三下午有课", category: "anchor", subject: "them", line: 2 },
     ]));
 
     const result = await extractMemories({ persona, userId: 1, now: NOW });
 
-    expect(createMemory).not.toHaveBeenCalled();
+    expect(createMemory).toHaveBeenCalledTimes(1);
+    expect(createMemory.mock.calls[0][0]).toMatchObject({
+      title: "周三下午有课",
+      subject: "said",
+      category: "memory",
+      importance: 1,
+      source: "chat",
+      messageId: 11,
+    });
     expect(result.fromPersona).toBe(1);
+    expect(result.added).toEqual([{ id: 1, title: "周三下午有课", subject: "said" }]);
     expect(systemOf()).toContain("重建出来的");
   });
 

@@ -7,7 +7,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import {
   ArrowLeft, Send, ChevronDown, Trash2, MoreVertical,
   Plus, Image, Mic, X, Clock, BarChart3, Search, BookOpen, Theater,
-  Download, Check, HeartCrack, Pin, UserRound, Moon, CornerUpLeft,
+  Download, Check, HeartCrack, UserRound, Moon, CornerUpLeft,
 } from "lucide-react";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
 import { MessageBubble, emotionOf, type Message } from "@/components/MessageBubble";
@@ -2300,16 +2300,8 @@ function SearchPanel({
 
 // ─── MEMORY TIMELINE ─────────────────────────────────────────────────────────
 
-const CATEGORY_LABELS: Record<string, { labelKey: "chat.memory.categories.memory" | "chat.memory.categories.milestone" | "chat.memory.categories.anniversary" | "chat.memory.categories.anchor"; dot: string; chip: string }> = {
-  milestone: { labelKey: "chat.memory.categories.milestone", dot: "bg-mood-playful", chip: "bg-mood-playful/10 text-mood-playful" },
-  memory: { labelKey: "chat.memory.categories.memory", dot: "bg-primary", chip: "bg-primary/10 text-primary" },
-  anniversary: { labelKey: "chat.memory.categories.anniversary", dot: "bg-chart-2", chip: "bg-chart-2/10 text-chart-2" },
-  anchor: { labelKey: "chat.memory.categories.anchor", dot: "bg-chart-4", chip: "bg-chart-4/10 text-chart-4" },
-};
-
 function MemoryTimeline({ personaId, onClose, onJumpTo }: { personaId: number; onClose: () => void; onJumpTo?: (messageId: number) => void }) {
-  const { t, locale } = useLocale();
-  const confirm = useConfirm();
+  const { t } = useLocale();
   const { data: memories, refetch, isError: memoriesFailed, isLoading: memoriesLoading } =
     trpc.memory.list.useQuery({ personaId });
   const memoryItems = memories?.items ?? [];
@@ -2323,21 +2315,6 @@ function MemoryTimeline({ personaId, onClose, onJumpTo }: { personaId: number; o
    */
   const createMutation = trpc.memory.create.useMutation({
     onSuccess: () => { refetch(); setShowAdd(false); },
-    onError: (e: any) => toast.error(e.message),
-  });
-  const deleteMutation = trpc.memory.delete.useMutation({
-    onSuccess: () => refetch(),
-    onError: (e: any) => toast.error(e.message),
-  });
-  /* Pinning a memory: a pinned one is injected into every prompt. The
-     field and the retrieval have always been there; there was just no
-     way to set it. */
-  const updateMutation = trpc.memory.update.useMutation({
-    onSuccess: () => refetch(),
-    onError: (e: any) => toast.error(e.message),
-  });
-  const adjudicateMutation = trpc.memory.adjudicate.useMutation({
-    onSuccess: () => refetch(),
     onError: (e: any) => toast.error(e.message),
   });
   const extractMutation = trpc.memory.autoExtract.useMutation({
@@ -2400,7 +2377,6 @@ function MemoryTimeline({ personaId, onClose, onJumpTo }: { personaId: number; o
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          <MemoryReview personaId={personaId} />
           {/**
            * A failure is not an empty list.
            *
@@ -2429,107 +2405,18 @@ function MemoryTimeline({ personaId, onClose, onJumpTo }: { personaId: number; o
             </div>
           )}
 
-          <div className="relative">
-            {memoryItems && memoryItems.length > 0 && <div className="absolute left-3 top-0 bottom-0 w-px bg-border" />}
-            {/* The list is capped, and it used to be capped silently. */}
-            {(memories?.total ?? 0) > memoryItems.length && (
-              <p className="text-xs text-muted-foreground mb-3">
-                {t("chat.memory.capped", { shown: memoryItems.length, total: memories?.total ?? 0 })}
-              </p>
-            )}
-            {memoryItems?.map((m: any) => {
-              const cat = CATEGORY_LABELS[m.category] || CATEGORY_LABELS.memory;
-              const rivals = m.factKey && m.status !== "superseded"
-                ? memoryItems.filter((other: any) => other.factKey === m.factKey && other.id !== m.id && other.status !== "superseded")
-                : [];
-              return (
-                <div key={m.id} className="relative pl-8 pb-6 group">
-                  <div className={`absolute left-1.5 top-1 w-3 h-3 rounded-full ${cat.dot} ring-2 ring-card`} />
-                  <div className="flex items-start justify-between">
-                    <div className="min-w-0">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-sm ${cat.chip}`}>{t(cat.labelKey)}</span>
-                      {m.date && (
-                        /**
-                         * The day, in the reader's own language.
-                         *
-                         * The stored key was printed as it is — so
-                         * "2024-03-14" sat next to "2024年3月14日" on
-                         * the other screens.
-                         */
-                        <span className="text-xs text-muted-foreground ml-2">
-                          {formatDayKey(m.date, locale)}
-                        </span>
-                      )}
-                      <p className="text-sm font-medium text-foreground mt-1">{m.title}</p>
-                      {m.description && <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>}
-                      {m.messageId ? (
-                        <button
-                          type="button"
-                          className="text-[11px] text-cinnabar mt-1 underline underline-offset-2"
-                          onClick={() => { onJumpTo?.(m.messageId); onClose(); }}
-                        >
-                          {t("chat.memory.source")}
-                        </button>
-                      ) : (
-                        <p className="text-[11px] text-muted-subtle mt-1">{t("chat.memory.writtenLater")}</p>
-                      )}
-                      {rivals.length > 0 && (
-                        <div className="mt-1.5 space-y-1">
-                          <p className="text-[11px] text-muted-foreground">{t("chat.memory.conflict")}</p>
-                          <button
-                            type="button"
-                            className="text-[11px] underline underline-offset-2"
-                            disabled={adjudicateMutation.isPending}
-                            onClick={() => adjudicateMutation.mutate({
-                              personaId,
-                              winnerId: m.id,
-                              loserId: rivals[0].id,
-                            })}
-                          >
-                            {t("chat.memory.keepThis")}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button
-                        onClick={() => updateMutation.mutate({ id: m.id, isPinned: !m.isPinned })}
-                        /**
-                         * The name says what the button will do.
-                         *
-                         * It was always "pin" — so a screen reader
-                         * announced "pin" on a button that would unpin.
-                         */
-                        aria-label={m.isPinned ? t("chat.memory.unpin") : t("chat.memory.pin")}
-                        title={m.isPinned ? t("chat.memory.unpin") : t("chat.memory.pin")}
-                        className={`opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-all ${m.isPinned ? "text-cinnabar opacity-100" : "text-muted-foreground hover:text-foreground"}`}
-                      >
-                        <Pin className="w-3.5 h-3.5" />
-                      </button>
-                      {/**
-                       * The delete asks first.
-                       *
-                       * It used to fire with one click and nothing
-                       * said — and a memory that is pinned is in every
-                       * single prompt the persona is given.
-                       */}
-                      <button
-                        onClick={async () => {
-                          const yes = await confirm({ description: t("chat.memory.deleteConfirm") });
-                          if (!yes) return;
-                          deleteMutation.mutate({ id: m.id });
-                        }}
-                        disabled={deleteMutation.isPending}
-                        aria-label={t("chat.memory.delete")}
-                        className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-destructive transition-all flex-shrink-0 disabled:opacity-50">
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {(memories?.total ?? 0) > memoryItems.length && (
+            <p className="text-xs text-muted-foreground mb-3">
+              {t("chat.memory.capped", { shown: memoryItems.length, total: memories?.total ?? 0 })}
+            </p>
+          )}
+          <MemoryReview
+            personaId={personaId}
+            items={memoryItems}
+            onJumpTo={onJumpTo}
+            onChanged={() => refetch()}
+            onClose={onClose}
+          />
 
           {showAdd && (
             <div className="mt-4 p-3.5 bg-muted/40 rounded-md border border-border space-y-2">

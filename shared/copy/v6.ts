@@ -647,4 +647,8 @@ export const V6 = {
     zh: "记录里没有挖到专属的说法。",
     en: "The records did not yield a private phrase.",
   },
+  "prompt.memoryMarkerSaid": {
+    zh: "（这是你在这里说过的话，不是记录里的事实）",
+    en: " (this is something you said here, not a fact from the records)",
+  },
 } as const satisfies CopyTable;

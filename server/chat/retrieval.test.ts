@@ -234,6 +234,38 @@ describe("prompt rendering", () => {
     expect(text).toContain("第一次见面");
   });
 
+  it("marks a said memory, and never puts it among the anchors", () => {
+    const text = formatMemoriesForPrompt([
+      { ...candidate({ subject: "said", title: "周三下午有课" }), score: 1 },
+    ]);
+    expect(text).toContain("这是你在这里说过的话，不是记录里的事实");
+    expect(text).not.toContain("（事实）");
+
+    const now = new Date("2025-01-01T00:00:00Z").getTime();
+    const { anchors, selected } = selectMemories(
+      [
+        candidate({
+          id: 1,
+          subject: "said",
+          category: "anchor",
+          title: "周三下午有课",
+          description: "我周三下午有课",
+        }),
+        candidate({
+          id: 2,
+          category: "anchor",
+          title: "生日",
+          description: "5月21号",
+        }),
+      ],
+      "你周三下午有课吗",
+      { now },
+    );
+    expect(anchors.map((m) => m.id)).toEqual([2]);
+    expect(selected.map((m) => m.id)).toContain(1);
+    expect(selected.map((m) => m.id)).toContain(2);
+  });
+
   it("renders nothing when there are no memories", () => {
     expect(formatMemoriesForPrompt([])).toBe("");
   });

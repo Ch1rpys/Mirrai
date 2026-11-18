@@ -21,7 +21,7 @@ export interface MemoryCandidate {
   isPinned: boolean;
   importance: number;
   lastRecalledAt: Date | null;
-  /** Whose memory this is: "them" or "me". */
+  /** Whose memory this is: "them", "me", or "said". */
   subject: string;
   createdAt: Date;
 }
@@ -222,6 +222,9 @@ export function selectMemories(
   const pinned = scored.filter((m) => m.isPinned);
   const pinnedIds = new Set(pinned.map((m) => m.id));
   const rest = scored.filter((m) => !pinnedIds.has(m.id));
+  const isSaid = (m: { subject: string }) => m.subject === "said";
+  const isAnchor = (m: { category: string; subject: string }) =>
+    m.category === "anchor" && !isSaid(m);
 
   /**
    * The anchors, and only the best of them.
@@ -231,19 +234,23 @@ export function selectMemories(
    * every single turn, with nothing to trim it. They are the facts that
    * must hold, so they are the last thing to be cut — but not all
    * fifty.
+   *
+   * Something the persona said in the app is not a fact about them, so
+   * it never joins this block — even if it was stored with the wrong
+   * category.
    */
-  const pinnedAnchors = pinned.filter((m) => m.category === "anchor");
+  const pinnedAnchors = pinned.filter(isAnchor);
   const otherAnchors = rest
-    .filter((m) => m.category === "anchor")
+    .filter(isAnchor)
     .sort((a, b) => b.score - a.score);
   const anchors = [
     ...pinnedAnchors,
     ...otherAnchors.slice(0, Math.max(0, MAX_ANCHORS - pinnedAnchors.length)),
   ];
 
-  const pinnedOrdinary = pinned.filter((m) => m.category !== "anchor");
+  const pinnedOrdinary = pinned.filter((m) => !isAnchor(m));
   const otherOrdinary = rest
-    .filter((m) => m.category !== "anchor")
+    .filter((m) => !isAnchor(m))
     .filter((m) => keywordCoverage(
       [m.title, m.description, m.date].filter(Boolean).join(" "),
       messageTokens,
@@ -286,15 +293,16 @@ export function formatMemoriesForPrompt(
     const description = m.description
       ? `${descriptionSeparator(locale)}${m.description}`
       : "";
-    const kind = m.category === "anchor"
+    const kind = m.category === "anchor" && m.subject !== "said"
       ? copy(locale, "prompt.memoryMarkerFact")
       : m.category === "milestone"
         ? copy(locale, "prompt.memoryMarkerMilestone")
         : "";
     // A memory about the user is marked, so the persona does not mistake
     // the user's own life for the persona's.
-    const whose = (m as any).subject === "me" ? copy(locale, "prompt.memoryMarkerAboutUser") : "";
-    return `- ${date}${m.title}${description}${kind}${whose}`;
+    const whose = m.subject === "me" ? copy(locale, "prompt.memoryMarkerAboutUser") : "";
+    const said = m.subject === "said" ? copy(locale, "prompt.memoryMarkerSaid") : "";
+    return `- ${date}${m.title}${description}${kind}${whose}${said}`;
   });
   return `${copy(locale, "prompt.memorySectionHeading")}\n${lines.join("\n")}`;
 }

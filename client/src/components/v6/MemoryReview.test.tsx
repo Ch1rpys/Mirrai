@@ -3,37 +3,30 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
+import { ConfirmProvider } from "@/components/ConfirmDialog";
 
-const keep = vi.fn();
+const update = vi.fn();
 const remove = vi.fn();
-const refetch = vi.fn();
-const invalidate = vi.fn();
-
-let rows: Array<{
-  id: number;
-  title: string;
-  description: string | null;
-  category: string;
-  messageId: number | null;
-}> = [];
+const adjudicate = vi.fn();
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     memory: {
-      listFromPersona: {
-        useQuery: () => ({ data: rows, isLoading: false, isError: false, refetch }),
-      },
-      keepFromPersona: {
-        useMutation: () => ({ mutate: keep, isPending: false }),
+      update: {
+        useMutation: () => ({ mutate: update, isPending: false }),
       },
       delete: {
         useMutation: () => ({ mutate: remove, isPending: false }),
       },
+      adjudicate: {
+        useMutation: () => ({ mutate: adjudicate, isPending: false }),
+      },
     },
-    useUtils: () => ({
-      memory: { list: { invalidate } },
-    }),
   },
+}));
+
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
 vi.mock("@/contexts/LocaleContext", () => ({
@@ -47,45 +40,40 @@ vi.mock("@/contexts/LocaleContext", () => ({
 
 import MemoryReview from "./MemoryReview";
 
-describe("memories taken from what the persona said", () => {
+const items = [
+  { id: 1, title: "第一次见面", description: null, category: "memory", subject: "them" },
+  { id: 2, title: "我今天好累", description: null, category: "memory", subject: "me" },
+  { id: 3, title: "周三下午有课", description: null, category: "memory", subject: "said" },
+];
+
+describe("the memory ledger", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    rows = [
-      {
-        id: 7,
-        title: "周三下午有课",
-        description: null,
-        category: "anchor",
-        messageId: 11,
-      },
-    ];
   });
 
   it("renders nothing when there are none", () => {
-    rows = [];
-    const { container } = render(<MemoryReview personaId={5} />);
+    const { container } = render(
+      <ConfirmProvider>
+        <MemoryReview personaId={5} items={[]} />
+      </ConfirmProvider>,
+    );
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("keeps one by clearing its source line", async () => {
+  it("shows three groups, and confirming a said memory updates it", async () => {
     const user = userEvent.setup();
-    render(<MemoryReview personaId={5} />);
+    render(
+      <ConfirmProvider>
+        <MemoryReview personaId={5} items={items} />
+      </ConfirmProvider>,
+    );
 
-    expect(
-      screen.getByText(translate("zh", "chat.memory.fromPersona", { count: 1 })),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "关于 TA 的" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "关于我的" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "分身说过的" })).toBeInTheDocument();
+    expect(screen.getByText(translate("zh", "chat.memory.saidHint"))).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "留着" }));
-    expect(keep).toHaveBeenCalledWith({ id: 7 });
-    expect(remove).not.toHaveBeenCalled();
-  });
-
-  it("deletes one", async () => {
-    const user = userEvent.setup();
-    render(<MemoryReview personaId={5} />);
-
-    await user.click(screen.getByRole("button", { name: "删掉" }));
-    expect(remove).toHaveBeenCalledWith({ id: 7 });
-    expect(keep).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "这是真的" }));
+    expect(update).toHaveBeenCalledWith({ id: 3, subject: "them" });
   });
 });

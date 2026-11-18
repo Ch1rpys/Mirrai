@@ -549,11 +549,9 @@ export const memories = pgTable("memories", {
   /**
    * Whose memory this is.
    *
-   * "them" is about the persona; "me" is about the user. The two are
-   * different kinds of thing: one of them is the other person's life,
-   * and the other is the user's — and a persona that treats them the
-   * same ends up talking about the user's own life as if it were the
-   * persona's.
+   * "them" is about the persona; "me" is about the user; "said" is
+   * something the persona said inside the app, kept so later turns
+   * stay consistent, not as a fact from the records.
    */
   subject: varchar("subject", { length: 8 }).default("them").notNull(),
   /** The record this memory was taken from. */

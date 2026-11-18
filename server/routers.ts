@@ -36,7 +36,7 @@ import {
   updateUserProfile, updateUserPassword, deleteUserAccount, getAccountStats, exportUserData,
   getUserById, bumpUserTokenVersion, updateUserGraduationMode, updateUserTrajectoryAssessment,
   getUserTimezone,
-  createMemory, getMemoriesByPersonaId, getMemoriesFromPersona, countMemories, getMemoryTitles, deleteMemory, updateMemory,
+  createMemory, getMemoriesByPersonaId, getMemoriesFromPersona, getMemoryById, countMemories, getMemoryTitles, deleteMemory, updateMemory,
   createFidelityFeedback, listFidelityFeedbackForMessage, listFidelityFeedbackForPersona,
   listFidelityRewritePairs, setFidelityFeedbackRewrite,
   getMemoriesByFactKey, supersedeMemory, getMessageById,
@@ -4251,12 +4251,17 @@ export const appRouter = router({
         date: z.string().max(50).refine(isMemoryDate, { message: "Not a day." }).nullable().optional(),
         isPinned: z.boolean().optional(),
         importance: z.number().int().min(1).max(10).optional(),
-        /** Whose memory this is: "them" or "me". */
-        subject: z.enum(["them", "me"]).optional(),
+        /** Whose memory this is: "them", "me", or "said". */
+        subject: z.enum(["them", "me", "said"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const { id, ...data } = input;
-        const row = await updateMemory(id, ctx.user.id, data);
+        const current = await getMemoryById(id, ctx.user.id);
+        if (!current) throw new TRPCError({ code: "NOT_FOUND" });
+        const patch = current.subject === "said" && data.subject === "them"
+          ? { ...data, source: "manual" as const }
+          : data;
+        const row = await updateMemory(id, ctx.user.id, patch);
         if (!row) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true, memory: row };
       }),
