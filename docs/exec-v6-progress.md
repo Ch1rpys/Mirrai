@@ -59,7 +59,7 @@
 | B3.1 | ✅ | 00d6e7a (measure); e774ee2 (UI) | `shared/style-fingerprint.test.ts` 24 通过：`endingClassOf` 每类至少两个用例（含「好的。。。」ellipsis、「好的。」period、「好的」other、「好呀~」tilde、「好呀」particle）；夹具 `endings.period` 在 distant 占比×0.9 的 ±0.02 内；`laugh.haRuns[4]` 最大；`ellipsisForms.unicode === 0`；`emoji.rate === 0`；39 行返回 `null`；`perState.distant.endings.period` 在 0.9±0.05，`warm.endings.period === 0`，distant 有「陈树」、warm 没有；`perPeriod` p1/p2 中位字数 10±1 与 6±1。`FingerprintView.test.tsx` 2 通过：夹具渲染「几乎不以句号结尾」；句号占多数时该项不出现。闸门 `341 passed \| 4 skipped (345)` 文件，`3037 passed \| 18 skipped (3055)` 用例。`particles["呢"]` 与 `haRuns` 仅长度 4 见偏差 70、71。 |
 | B3.2 | ✅ | 2e05643 | `shared/style-fingerprint.test.ts`：`is small when the generated lines are the person's own` 通过（夹具 200 句 `total < 0.1`；末尾加「。」后 `endings > 0.5` 且 `total` 变大；80 字长句 `length === 1`）；`treats a period line as more surprising in warm than in distant` 通过。「哦。」对 warm 的 `lineSurprise` 大于 distant。`metrics.test.ts`：`fills styleDistance when a fingerprint is given` 通过；`leaves styleDistance null when there is no fingerprint` 通过，且 overlap / likelihoodGap / emotionAccuracy / cases / lengthDistance 与有指纹时相同。`compare-cli.test.ts`：`includes style in the comparison` 通过（源码含 `row("style"`、`[eval] style`、`tolerance-style`）。闸门 `341 passed \| 4 skipped (345)` 文件，`3042 passed \| 18 skipped (3060)` 用例，`all six steps passed`。 |
 | B3.3 | ⬜ |  |  |
-| B3.4 | ⬜ |  |  |
+| B3.4 | 🟡 | 16c888f (rules); 498033c (wire) | `shared/style-projection.test.ts` 27 通过：每条规则生效/不够/不该动；夹具 happy 把「知道了。哈哈」投成 `/^知道了哈{2,}$/`；distant「随便。」仍带句号；50 句同种子两次等于一次。`generate.test.ts`：层开着「好的。」→「好的」且 `projection` 含 `strip_period`；`--without projection` 原文不动、`layersUsed` 不含该层。`service.test.ts`：事件 `delta`→`replace`（「好的」）→`done`，落库「好的」；无指纹无 `replace`、落库「好的。」。`stream.test.ts` SSE 同序。`chat-stream-e2e.test.ts` `onReplace` 收到「好的」。`PersonaSwitches.test.tsx` 文案「按 小满 的标点习惯收尾」。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `359 passed \| 5 skipped (364)` 文件，`3185 passed \| 21 skipped (3206)` 用例。效果量见未验证清单。 |
 | B3.5 | ⬜ |  |  |
 | B3.6 | ⬜ |  |  |
 | B3.7 | ⬜ |  |  |
@@ -282,6 +282,10 @@
 | 78 | B2.7 | `replyBudget(fp, burstMax)` 只有两个参数 | 第三个参数 `options?: { userMaxTokens?; newlineRate? }` | 用户 `maxTokens` 和换行率手册写在函数体内，签名里没有。 |
 | 79 | B2.7 | `lengthCap` 进 `BUILT_LAYERS`，开关开着就出现在 `layersUsed` | 只在 `replyBudget` 非空时写入 `layersUsed` | 没有指纹时这一层改不了回复。消融表对老分身仍是五层（WP4 B8.5）。 |
 | 80 | B2.7 | `executePlan` 把 `TurnPlan.maxTokens` 交给 provider | 与 `io.options.maxTokens` 取较小值 | 评测默认 200，指纹预算更大时不该把评测自己的上限撑开。 |
+| 81 | B3.4 | `strip_period` 去掉每个气泡末尾的单个 `。` 或 `.` | 保护省略号之后去掉气泡内全部单个「。」；ASCII `.` 仍只剥行尾，数字和英文缩写后面的点不动 | 夹具验收句「知道了。哈哈」的句号不在行尾；只剥末尾则组合例过不了。 |
+| 82 | B3.4 | 夹具指纹对「知道了。哈哈」投影 | 用 `perState.happy`，不用整体 | 整体 `endings.period` 约 0.09，达不到 `< 0.03`；happy 态才符合「不带句号 + 哈哈连写」。 |
+| 83 | B3.4 | `punct_width` 条件写 `halfWidthRate ≥ 0.9` 或 `≤ 0.1`，相关标点不少于 30 | 指纹增加 `punctuation.markCount`，规则读它 | `halfWidthRate === 0` 分不清「没有标点」和「全是全角」。 |
+| 84 | B3.4 | `projection` 进 `layersUsed` 只要开关开着 | 只在 `fingerprintCoreForTurn` 非空时写入 | 没有指纹时这一层改不了回复。消融表对老分身仍是五层（WP4 B8.5）。 |
 
 ## 未验证清单
 
@@ -290,6 +294,7 @@
 | C1.1 | `wechat-html` 没有稳定静态 schema，未实现 | 若之后有静态 HTML 样本：对照样本写 `formats/wechat-html.ts`，再进注册表 | 有真实 WeChat HTML 导出的人 |
 | B8.1 | 判别器在真实评测对子上的 AUC。本机没有非 stub 的模型，合成「句末加句号」测的是算法，不是这个分身 | `corepack pnpm eval -- --persona <id> --user <id> --discriminator --k 3` | 配了真实模型、并且该分身已有分层标答的人 |
 | B2.7 | 长度上限有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare lengthCap --k 3` | 配了真实模型、并且该分身已有指纹和分层标答的人 |
+| B3.4 | 标点投影有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare projection --k 3` | 配了真实模型、并且该分身已有指纹和分层标答的人 |
 
 ## 待用户决定
 
@@ -788,3 +793,11 @@ B3.1、B3.2、B8.3、B8.4、B8.9、B8.10 维持 ✅。B8.1 改 🟡。B8.2、B8.
 - 闸门 `358 passed | 5 skipped (363)` 文件，`3151 passed | 21 skipped (3172)` 用例，`all six steps passed`。相对 WP4 收尾（356/5 文件、3137/21 用例）：通过文件 +2、通过用例 +14；跳过数不变。
 - 偏差 78–80。未验证清单新增 B2.7。待用户决定无新增。
 - B2.7 标 🟡。下一条 B3.4。
+
+### WP5 · 实现会话 · 2026-11-18 · B3.4
+
+- `16c888f`：八条幂等规则。笑字用 `LAUGH_CHAR` 常量，审计标 `i18n:allow-input`。
+- `498033c`：`planTurn` 在指纹够时把 `projection` 写入 `layersUsed`；`executePlan` 先投影再长度上限；流式路径在 `done` 前发 `replace`；气泡和落库都是投影后的文本。
+- 闸门 `359 passed | 5 skipped (364)` 文件，`3185 passed | 21 skipped (3206)` 用例，`all six steps passed`。相对 B2.7（358/5 文件、3151/21 用例）：通过文件 +1、通过用例 +34；跳过数不变。
+- 偏差 81–84。未验证清单新增 B3.4。待用户决定无新增。
+- B3.4 标 🟡。下一条 B3.3。
