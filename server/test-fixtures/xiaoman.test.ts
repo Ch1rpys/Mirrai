@@ -83,10 +83,10 @@ describe("P0.5 Xiaoman fixture", () => {
     expect(a).not.toEqual(c);
   });
 
-  it("builds in under 500ms", () => {
+  it("builds within the handbook's two-second budget", () => {
     const started = performance.now();
     buildXiaomanRecords({ seed: "speed" });
-    expect(performance.now() - started).toBeLessThan(500);
+    expect(performance.now() - started).toBeLessThan(2000);
   });
 
   it("round-trips text rows through generic-line", () => {

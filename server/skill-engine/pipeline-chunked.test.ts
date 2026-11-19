@@ -73,6 +73,13 @@ vi.mock("../db", () => ({
   getFilesByPersonaId: (...a: unknown[]) => getFilesByPersonaId(...a),
   createChatSummary: (...a: unknown[]) => createChatSummary(...a),
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
+  getRecordsVersion: vi.fn().mockResolvedValue("0:0"),
+  getPersonaStyleProfile: vi.fn().mockResolvedValue(null),
+  setPersonaStyleProfile: vi.fn().mockResolvedValue(true),
+  getUserById: vi.fn().mockResolvedValue({ id: 1, name: "阿树", timezone: "Asia/Shanghai" }),
+  getPersonaSettings: vi.fn().mockResolvedValue(undefined),
+  setPersonaSettings: vi.fn().mockResolvedValue(undefined),
+  listFidelityPairs: vi.fn().mockResolvedValue([]),
   claimMemoryExtraction: (...a: unknown[]) => claimMemoryExtraction(...a),
   releaseMemoryExtraction: vi.fn(),
   createDistillationChunk: (...a: unknown[]) => createDistillationChunk(...a),
@@ -475,6 +482,19 @@ describe("the layered distillation", () => {
         (call) => (call[2] as { analysisStatus?: string })?.analysisStatus === "ready",
       ),
     ).toHaveLength(0);
+  }, 30_000);
+
+  it("uses the old analysis path when there are no structured records", async () => {
+    await runSkillPipeline({
+      ...baseInput,
+      records: [],
+      chatContent: "小A：在吗\n我：在的呀\n小A：今天有点困",
+    });
+    expect(invoke.mock.calls.filter((call) => isMapCall(call[0]))).toHaveLength(0);
+    const analyzerCall = invoke.mock.calls.find((call) =>
+      String((call[0] as { messages?: Array<{ content?: unknown }> })?.messages?.[1]?.content ?? "").includes("小A：在吗"),
+    );
+    expect(analyzerCall).toBeTruthy();
   }, 30_000);
 
   it("does not put line-id citations in the exported skill package", async () => {
