@@ -74,7 +74,7 @@
 | B4.8 | 🟡 | 4ad35f6; d29d4b2 (routine) | `shared/in-session.test.ts`：构造 200 个场景中段轮次、30 个自起话头，`selfStartRate === 0.15`。`generate.test.ts`：`selfStartRate === 1` 且已确认生活事件时围栏外有 `prompt.inSessionShare` 和「下周要答辩」；无材料时不出现；同一种子两次提示词相同；`--without act` 不出现。B6.3 补上作息：`can add the window as the one thing of their own mid-chat` 周三 15:00 已确认「周三下午上课」时围栏外有 `prompt.inSessionShare`。`prompt-golden.test.ts` 10 通过、快照未改。闸门见 B6.3。效果量见未验证清单。 |
 | B5.1 | ⬜ |  |  |
 | B5.2 | ⬜ |  |  |
-| B5.3 | ⬜ |  |  |
+| B5.3 | ✅ | 59d801e | `shared/reply-delay.test.ts` 4 通过：夹具 `evening` 的 `exp(mu)` 在 32–48 秒、`afternoon` 在 95–145 秒，两档 `sigma` 在 0.65–0.95，`resolution` 为 `second`；细桶 n=5 时 `via` 为 `band|state|asking`；29 个样本 `null`；同一 `seededRandom` 种子两次相等，40 次抽样都在 1 秒到 6 小时。`service.test.ts`：`draws the delay from the measured bucket` 事件 `{ type: "delay", ms: 40000 }`，落库 `metadata.delay` 为 `{ ms: 40000, via: "band" }`；`keeps the old delay when nothing has been measured` 的毫秒数等于 `sampleReplyDelayMs` 的返回值且没有 `metadata.delay`；`does not delay a crisis, a weak signal, or someone saying they are sad` 对「我想死」「我好累」「我很难过」都没有 `delay` 事件。`DelayView.test.tsx` 渲染晚上「40 秒 / 20 次」、下午「2 分钟 / 12 次」，夜里和早上是「记录里没有」。闸门 `408 passed \| 6 skipped (414)` 文件，`3561 passed \| 23 skipped (3584)` 用例。 |
 | B5.4 | ⬜ |  |  |
 | B5.5 | ⬜ |  |  |
 | B5.6 | ⬜ |  |  |
@@ -356,6 +356,10 @@
 | 152 | C8.1 | `webpush.generateVAPIDKeys()` 这种默认导出 | 4.0.0 是 ESM，具名导入 `generateVAPIDKeys` / `setVapidDetails` / `sendNotification`；声明写在 `server/_core/web-push.d.ts` | 包没有 `.d.ts`。README 仍写 `require('web-push')`，以 `src/index.js` 为准。404/410 删订阅对照 [MDN Push API](https://developer.mozilla.org/en-US/docs/Web/API/Push_API)。 |
 | 153 | C8.1 | 只要求 endpoint 唯一 | 另加 `push_subscriptions_user_idx` | 列表按 userId 查。 |
 | 154 | C8.1 | `push.test` 没写用哪个分身 | 用该用户的第一个分身；没有分身则 `errors.pushNoPersona` | 测试通知的负载要有 personaId 才能拼 `/chat/<id>`。 |
+| 155 | B5.3 | 「对方在问」用 `shared/act-profile.ts` 里的函数 | 用 `shared/speech-acts.ts` 的 `isUserAsking` | `act-profile` 没有这个函数。生成路径抽动作时用的就是 `isUserAsking`。 |
+| 156 | B5.3 | 延迟和连发共用规划那只 `rng` | 延迟用 `seededRandom(seed + ":delay")` | 规划已经把 `plan.rng` 抽过了。再抽会改连发条数。同一种子两次仍相同。 |
+| 157 | B5.3 | 「难过的信号」没有点名函数 | 危机和 `weakSignal` 走 `detectCrisis`；难过走 `EMOTION_TRIGGER_PATTERNS` 的 melancholy（中文「难过\|伤心\|哭\|委屈\|不开心」，英文 sad 等） | 这三句都不延迟。手册没给第三类的词表。 |
+| 158 | B5.3 | 时段按哪一条的钟点没写 | 按用户那一轮最后一条的钟点，时区用分身时区，空则用户时区 | 延迟是从这句话算起的。回复只晚几十秒，换到回复时刻通常还在同一档。 |
 
 ## 未验证清单
 
@@ -1276,6 +1280,13 @@ B6.4 维持 🟡。B6.7 维持 ✅。B6.1、B6.2、B6.3、B6.5、B6.6、B6.8、B
 - 闸门 `406 passed | 6 skipped (412)` 文件，`3553 passed | 23 skipped (3576)` 用例，`all six steps passed`。相对 WP8 收尾（403/5 文件、3542/21 用例）：通过文件 +3、通过用例 +11；跳过文件 +1、跳过用例 +2，是 `db-push.test.ts` 的 `skipIf(!DATABASE_URL)`。
 - 偏差 151–154。未验证清单新增 C8.1。待用户决定无新增。
 - C8.1 标 🟡。接着做 B5.3。
+
+### WP9 · 实现会话 · 2026-11-19 · B5.3
+
+- `59d801e`：`measureReplyDelay` 写入 `styleProfile.replyDelay`。有画像时延迟从分桶抽，`metadata.delay` 记下毫秒和 `via`；没有时仍走原来的 `sampleReplyDelayMs`。危机、弱信号、难过不延迟。档案页四个时段各一行。
+- 闸门 `408 passed | 6 skipped (414)` 文件，`3561 passed | 23 skipped (3584)` 用例，`all six steps passed`。相对 C8.1（406/6 文件、3553/23 用例）：通过文件 +2、通过用例 +8；跳过数不变。
+- 偏差 155–158。未验证清单、待用户决定无新增。
+- B5.3 标 ✅。接着做 B5.4。
 
 
 
