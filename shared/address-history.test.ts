@@ -62,6 +62,31 @@ describe("mineAddressForms", () => {
     const mined = mineAddressForms(rows, ["陈树"], { timeZone: "Asia/Shanghai" });
     expect(mined[0]?.byQuarter).toEqual({ "2022Q2": 10 });
     expect(mined[0]?.byMonth).toEqual({ "2022-04": 10 });
+    expect(mined[0]?.byDay).toEqual({ "2022-04-01": 10 });
+  });
+
+  it("counts a whole-line name, and still refuses a bare reply", () => {
+    const name = Array.from({ length: 10 }, () => ({
+      role: "assistant" as const,
+      content: "小明",
+      timestamp: new Date("2022-03-12T04:00:00.000Z"),
+      kind: "text" as const,
+      emotion: "warm" as const,
+    }));
+    const mined = mineAddressForms(name, [], { timeZone: "Asia/Shanghai" });
+    expect(mined.map((entry) => entry.form)).toContain("小明");
+    expect(mined[0]?.byDay).toEqual({ "2022-03-12": 10 });
+
+    const reply = Array.from({ length: 10 }, () => ({
+      role: "assistant" as const,
+      content: "晚安",
+      timestamp: new Date("2022-03-12T04:00:00.000Z"),
+      kind: "text" as const,
+      emotion: "warm" as const,
+    }));
+    expect(
+      mineAddressForms(reply, [], { timeZone: "Asia/Shanghai" }).map((entry) => entry.form),
+    ).not.toContain("晚安");
   });
 });
 
@@ -161,7 +186,33 @@ describe("pickThemToMeAddress", () => {
     expect(pickThemToMeAddress([])).toBeNull();
   });
 
-  it("counts a period by the months inside it, not the whole quarter", () => {
+  it("counts a period by the days inside it, not the whole month", () => {
+    const history: AddressEntry[] = [
+      {
+        form: "三月初",
+        direction: "them_to_me" as const,
+        total: 9,
+        byQuarter: { "2022Q1": 9 },
+        byMonth: { "2022-03": 9 },
+        byDay: { "2022-03-01": 9 },
+        byState: {},
+      },
+      {
+        form: "三月中",
+        direction: "them_to_me" as const,
+        total: 3,
+        byQuarter: { "2022Q1": 3 },
+        byMonth: { "2022-03": 3 },
+        byDay: { "2022-03-15": 3 },
+        byState: {},
+      },
+    ];
+    expect(
+      pickThemToMeAddress(history, { period: { from: "2022-03-15", to: "2022-03-20" } }),
+    ).toBe("三月中");
+  });
+
+  it("falls back to months when an old entry has no day counts", () => {
     const history: AddressEntry[] = [
       {
         form: "一月",

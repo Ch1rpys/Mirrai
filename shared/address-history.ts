@@ -22,6 +22,8 @@ export interface AddressEntry {
   byQuarter: Record<string, number>;
   /** Calendar months in the measuring timezone, `YYYY-MM`. Period picks use this. */
   byMonth?: Record<string, number>;
+  /** Calendar days in the measuring timezone, `YYYY-MM-DD`. */
+  byDay?: Record<string, number>;
   byState: Partial<Record<EmotionalState, number>>;
   firstAt?: string;
   lastAt?: string;
@@ -42,6 +44,11 @@ const SURNAMES = new Set(
 
 // i18n:allow-input — laugh and backchannel sounds, not a repeated given name.
 const NOT_NAME_REDUP = new Set(["哈", "呵", "嘿", "啊", "嗯", "哦", "呃", "呀"]);
+
+// i18n:allow-input — short, common nickname openings such as 小明 / 阿树 / 老王.
+// A bare line that starts with one of these is treated as a name; a bare
+// "晚安" or "随便" has no such opening and stays out.
+const NICKNAME_PREFIXES = new Set(["小", "阿", "老"]);
 
 export function mineAddressForms(
   rows: FingerprintRow[],
@@ -78,6 +85,7 @@ export function normalizeAddressHistory(value: unknown): AddressEntry[] {
     const total = typeof (row as { total?: unknown }).total === "number" ? (row as { total: number }).total : 0;
     const byQuarter = quarterMap((row as { byQuarter?: unknown }).byQuarter);
     const byMonth = quarterMap((row as { byMonth?: unknown }).byMonth);
+    const byDay = quarterMap((row as { byDay?: unknown }).byDay);
     const byState = stateMap((row as { byState?: unknown }).byState);
     const firstAt = isoOf((row as { firstAt?: unknown }).firstAt);
     const lastAt = isoOf((row as { lastAt?: unknown }).lastAt);
@@ -87,6 +95,7 @@ export function normalizeAddressHistory(value: unknown): AddressEntry[] {
       total,
       byQuarter,
       ...(Object.keys(byMonth).length > 0 ? { byMonth } : {}),
+      ...(Object.keys(byDay).length > 0 ? { byDay } : {}),
       byState,
       ...(firstAt ? { firstAt } : {}),
       ...(lastAt ? { lastAt } : {}),
@@ -105,11 +114,15 @@ export function pickThemToMeAddress(
   const from = period?.from ? Date.parse(period.from) : Number.NaN;
   const to = period?.to ? Date.parse(period.to) : Number.NaN;
   if (Number.isFinite(from) && Number.isFinite(to)) {
-    return bestForm(them, (entry) =>
-      entry.byMonth && Object.keys(entry.byMonth).length > 0
-        ? sumMonths(entry.byMonth, from, to)
-        : sumOverlapping(entry.byQuarter, from, to),
-    );
+    const fromDay = dayKeyOf(period?.from);
+    const toDay = dayKeyOf(period?.to);
+    return bestForm(them, (entry) => {
+      if (entry.byDay && fromDay && toDay) return sumDays(entry.byDay, fromDay, toDay);
+      if (entry.byMonth && Object.keys(entry.byMonth).length > 0) {
+        return sumMonths(entry.byMonth, from, to);
+      }
+      return sumOverlapping(entry.byQuarter, from, to);
+    });
   }
   const latest = latestQuarter(them);
   if (!latest) return bestForm(them, (entry) => entry.total);
@@ -156,6 +169,7 @@ function collectDirection(
       total: stats.count,
       byQuarter: stats.byQuarter,
       byMonth: stats.byMonth,
+      byDay: stats.byDay,
       byState: stats.byState,
       ...(stats.firstAt ? { firstAt: stats.firstAt } : {}),
       ...(stats.lastAt ? { lastAt: stats.lastAt } : {}),
@@ -168,6 +182,7 @@ interface Stats {
   count: number;
   byQuarter: Record<string, number>;
   byMonth: Record<string, number>;
+  byDay: Record<string, number>;
   byState: Partial<Record<EmotionalState, number>>;
   firstAt?: string;
   lastAt?: string;
@@ -179,7 +194,7 @@ function bumpVocative(
   row: FingerprintRow,
   timeZone: string | null,
 ): void {
-  const current = map.get(form) ?? { count: 0, byQuarter: {}, byMonth: {}, byState: {} };
+  const current = map.get(form) ?? { count: 0, byQuarter: {}, byMonth: {}, byDay: {}, byState: {} };
   current.count += 1;
   const at = asDate(row.timestamp);
   if (at) {
@@ -187,6 +202,8 @@ function bumpVocative(
     current.byQuarter[key] = (current.byQuarter[key] ?? 0) + 1;
     const month = monthKey(at, timeZone);
     current.byMonth[month] = (current.byMonth[month] ?? 0) + 1;
+    const day = zonedDateKey(at, timeZone);
+    current.byDay[day] = (current.byDay[day] ?? 0) + 1;
     const iso = at.toISOString();
     if (!current.firstAt || iso < current.firstAt) current.firstAt = iso;
     if (!current.lastAt || iso > current.lastAt) current.lastAt = iso;
@@ -208,10 +225,11 @@ function vocativesIn(text: string, known: Set<string>): string[] {
   if (!bare && chars.length > 2 && isNameReduplication(chars.slice(0, 2).join(""))) {
     found.add(chars.slice(0, 2).join(""));
   }
-  for (let n = 1; n <= 4 && n < chars.length; n++) {
+  for (let n = 1; n <= 4 && n <= chars.length; n++) {
     const token = chars.slice(0, n).join("");
-    const next = chars[n]!;
-    if (!isVocativeToken(token) || !(START_AFTER.has(next) || /\s/.test(next))) continue;
+    const next = chars[n];
+    if (!isVocativeToken(token)) continue;
+    if (next !== undefined && !(START_AFTER.has(next) || /\s/.test(next))) continue;
     if (bare && !keepBare(token, known)) continue;
     found.add(token);
   }
@@ -251,6 +269,7 @@ function isNameLike(token: string): boolean {
   const chars = Array.from(token);
   if (!isVocativeToken(token) || chars.length < 2 || chars.length > 3) return false;
   if (isNameReduplication(token)) return true;
+  if (NICKNAME_PREFIXES.has(chars[0]!)) return true;
   return SURNAMES.has(chars[0]!);
 }
 
@@ -352,6 +371,25 @@ function sumMonths(byMonth: Record<string, number>, from: number, to: number): n
     const bounds = monthBounds(key);
     if (!bounds) continue;
     if (bounds.from < to && bounds.to > from) n += count;
+  }
+  return n;
+}
+
+/** `YYYY-MM-DD` from a period bound; date-only values keep their own day. */
+function dayKeyOf(value: string | undefined): string | null {
+  if (!value) return null;
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(value.trim());
+  if (match) return match[1] ?? null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+function sumDays(byDay: Record<string, number>, from: string, to: string): number {
+  let n = 0;
+  for (const [key, count] of Object.entries(byDay)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) continue;
+    if (key >= from && key <= to) n += count;
   }
   return n;
 }
