@@ -1006,6 +1006,32 @@ describe("writing to a persona", () => {
     registry.returning.personas = [];
     expect(await db.updatePersona(999999, 3, { name: "小B" })).toBe(false);
   });
+
+  it("starts the mood clock when the mood changes", async () => {
+    registry.select.personas = [{ id: 5, userId: 3, emotionalState: "warm" }];
+    registry.returning.personas = [{ id: 5 }];
+
+    await db.updatePersona(5, 3, { emotionalState: "happy" });
+
+    const write = queries.find(
+      (query) => query.operation === "update" && query.table === "personas",
+    );
+    expect(write?.values?.emotionalState).toBe("happy");
+    expect(write?.values?.emotionalStateSince).toBeInstanceOf(Date);
+  });
+
+  it("leaves the mood clock alone when the mood did not change", async () => {
+    registry.select.personas = [{ id: 5, userId: 3, emotionalState: "happy" }];
+    registry.returning.personas = [{ id: 5 }];
+
+    await db.updatePersona(5, 3, { emotionalState: "happy" });
+
+    const write = queries.find(
+      (query) => query.operation === "update" && query.table === "personas",
+    );
+    expect(write?.values?.emotionalState).toBe("happy");
+    expect(write?.values).not.toHaveProperty("emotionalStateSince");
+  });
 });
 
 describe("the distillation runs", () => {

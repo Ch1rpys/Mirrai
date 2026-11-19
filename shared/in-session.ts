@@ -44,12 +44,22 @@ export function countSelfStarts(turns: InSessionLine[][]): { samples: number; se
       seenAssistant = true;
       continue;
     }
+    /**
+     * A voice note or a sticker is not a line they said. `turnText`
+     * already ignores it; counting the empty string as a turn would
+     * turn "no words" into "a topic of their own", because an empty
+     * bigram set overlaps nothing.
+     */
+    const currentText = turnText(turn);
+    if (!currentText) continue;
     samples += 1;
     const previous = turns[i - 1];
     if (!previous || previous[0]?.role !== "user") continue;
-    if (isUserAsking(turnText(previous))) continue;
+    const previousText = turnText(previous);
+    if (!previousText) continue;
+    if (isUserAsking(previousText)) continue;
     const earlier = turns.slice(Math.max(0, i - 2), i).map(turnText).join("");
-    const overlap = jaccard(charBigrams(turnText(turn)), charBigrams(earlier));
+    const overlap = jaccard(charBigrams(currentText), charBigrams(earlier));
     if (overlap < IN_SESSION_OVERLAP_MAX) selfStarts += 1;
   }
   return { samples, selfStarts };

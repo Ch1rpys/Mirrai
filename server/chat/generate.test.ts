@@ -394,7 +394,12 @@ describe("the shared generation path", () => {
     const withActs = persona();
     withActs.personaData = {
       personality: "温柔",
-      actProfile: { samples: 80, unconditional: { tease: 80 }, buckets: [] },
+      actProfile: {
+        samples: 160,
+        unconditional: { tease: 80 },
+        buckets: [],
+        byUserAct: { ask: { answer: 80 } },
+      },
     };
     const planned = await planTurn({
       persona: withActs,
@@ -407,6 +412,9 @@ describe("the shared generation path", () => {
       exclude: { texts: [HELD_OUT] },
     });
     expect(planned.userAct).toBe("ask");
+    // The unconditional bag only holds tease. Seeing answer proves the
+    // sampler used byUserAct.ask, not just wrote userAct into metadata.
+    expect(planned.sampledAct).toBe("answer");
   });
 
   it("puts tease cluster lines in the fence after the act instruction", async () => {
@@ -2100,31 +2108,36 @@ describe("persona sampling on the reply", () => {
 
   it("picks the same freeze length twice for the same emotionalStateSince", async () => {
     const sinceMin = 250;
-    const first = await planTurn({
-      persona: personaWithConflict("distant", sinceMin),
-      userId: 1,
-      userMessage: "吃饭了吗",
-      history: CONTEXT,
-      now: NOW,
-      locale: "zh",
-      seed: "conflict:same-a",
-      exclude: { texts: [HELD_OUT] },
-    });
-    const second = await planTurn({
-      persona: personaWithConflict("distant", sinceMin),
-      userId: 1,
-      userMessage: "吃饭了吗",
-      history: CONTEXT,
-      now: NOW,
-      locale: "zh",
-      seed: "conflict:same-b",
-      exclude: { texts: [HELD_OUT] },
-    });
-    expect(first.sampledAct).toBe(second.sampledAct);
     const heading = copy("zh", "prompt.repairLinesHeading");
-    const firstPrompt = String(first.messages[0]?.content ?? "");
-    const secondPrompt = String(second.messages[0]?.content ?? "");
-    expect(firstPrompt.includes(heading)).toBe(secondPrompt.includes(heading));
+    const acts = new Set<string | null>();
+    const repairs = new Set<boolean>();
+    for (let i = 0; i < 20; i++) {
+      const row = personaWithConflict("distant", sinceMin);
+      // One duration is below the elapsed time and one is above it, so
+      // which one is drawn decides whether this turn is a repair. The
+      // input seed is the only thing that changes between calls.
+      row.styleProfile = {
+        ...row.styleProfile,
+        conflict: {
+          ...conflictProfile(),
+          durationMin: { median: 300, p25: 240, p75: 360, all: [180, 480] },
+        },
+      };
+      const plan = await planTurn({
+        persona: row,
+        userId: 1,
+        userMessage: "吃饭了吗",
+        history: CONTEXT,
+        now: NOW,
+        locale: "zh",
+        seed: `conflict:same-${i}`,
+        exclude: { texts: [HELD_OUT] },
+      });
+      acts.add(plan.sampledAct);
+      repairs.add(String(plan.messages[0]?.content ?? "").includes(heading));
+    }
+    expect(acts.size).toBe(1);
+    expect(repairs.size).toBe(1);
   });
 
   it("puts trigger lines in the fence when the table exists", async () => {
@@ -2223,6 +2236,38 @@ describe("persona sampling on the reply", () => {
     const unfenced = prompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "");
     expect(unfenced).toContain(overlay);
     expect(unfenced).not.toContain("晚安");
+  });
+
+  it("does not put a removed harmful line into the closing material", async () => {
+    getSessionStartAt.mockResolvedValue(new Date(NOW.getTime() - 70 * 60_000));
+    const row = personaWithSessions();
+    row.styleProfile.sessions.closers = [
+      { text: "去死", n: 20 },
+      { text: "晚安", n: 20 },
+      { text: "安", n: 8 },
+      { text: "睡啦", n: 5 },
+      { text: "我先睡了", n: 4 },
+    ];
+    row.personaData = {
+      personality: "温柔",
+      harmReport: {
+        decision: "remove",
+        categories: [{ kind: "insult", count: 1, examples: [1] }],
+      },
+    };
+    const plan = await planTurn({
+      persona: row,
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "closing:harm",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(prompt).not.toContain("去死");
+    expect(prompt).toContain("晚安");
   });
 
   it("does not close again in a session that already did", async () => {

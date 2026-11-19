@@ -885,12 +885,21 @@ async function closingForTurn(
     profile,
     closedThisSession,
   });
-  return {
-    closing,
-    closerLines: closing
-      ? profile.closers.slice(0, CLOSER_PROMPT_MAX).map((row) => row.text)
-      : [],
-  };
+  /**
+   * The closers are material, like the other lines measured from the
+   * records. A line the user asked to remove for harm must not come
+   * back through the closing block after the exemplar and conflict
+   * blocks have already filtered it.
+   */
+  const closers = closing
+    ? filterHarm(
+        profile.closers.map((row) => ({ content: row.text, role: "assistant" as const })),
+        input.persona.personaData as { harmReport?: never } | null,
+      )
+        .slice(0, CLOSER_PROMPT_MAX)
+        .map((row) => row.content)
+    : [];
+  return { closing, closerLines: closers };
 }
 
 function conflictMaterialForTurn(

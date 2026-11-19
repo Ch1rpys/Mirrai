@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { measureInSession, pickInSessionFact, type InSessionLine } from "./in-session";
+import { countSelfStarts, measureInSession, pickInSessionFact, type InSessionLine } from "./in-session";
 import { normalizeLifeEvents } from "./life-events";
 
 function turn(role: "user" | "assistant", content: string): InSessionLine[] {
@@ -25,6 +25,26 @@ describe("starting a topic in the middle of a chat", () => {
     }
     const measured = measureInSession(turns);
     expect(measured).toEqual({ samples: 200, selfStartRate: 0.15 });
+  });
+
+  it("does not count a turn without words as a chance", () => {
+    const voiceOnly: InSessionLine[][] = [
+      turn("user", "在吗"),
+      turn("assistant", "在"),
+      turn("user", "今天怎么样"),
+      [{ role: "assistant", content: "[voice:12]", kind: "voice" }],
+    ];
+    expect(countSelfStarts(voiceOnly)).toEqual({ samples: 0, selfStarts: 0 });
+
+    const stickerFromThem: InSessionLine[][] = [
+      turn("user", "在吗"),
+      turn("assistant", "在"),
+      [{ role: "user", content: "[sticker:狗狗探头]", kind: "sticker" }],
+      turn("assistant", "哈哈"),
+    ];
+    // The reply has words, so it is a chance; the previous turn has none,
+    // so it cannot be judged a topic of their own.
+    expect(countSelfStarts(stickerFromThem)).toEqual({ samples: 1, selfStarts: 0 });
   });
 
   it("picks an open loop before an in-progress life event", () => {
