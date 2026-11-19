@@ -22,13 +22,40 @@ describe("selectSeedExchanges", () => {
       records: xiaomanRows(),
     });
     const seeds = selectSeedExchanges({ exemplars: found });
-    expect(seeds).toHaveLength(3);
+    /*
+     * The fixture answers「在吗」with exactly two designed lines (在 and
+     * 咋啦), and exemplar retrieval hands back one exemplar per distinct
+     * line. Two seeds with different scenes is therefore all this log
+     * can supply; the cap at three is tested by the synthetic case below.
+     */
+    expect(seeds.length).toBe(Math.min(3, found.length));
+    expect(seeds.length).toBeGreaterThanOrEqual(2);
     const scenes = new Set(seeds.map((item) => item.sceneKey));
     expect(scenes.size).toBe(seeds.length);
     for (const item of seeds) {
       expect(item.user.join("").length + item.them.join("").length).toBeLessThanOrEqual(120);
       expect(item.user.every((line) => line.includes("在吗") || line === "在吗")).toBe(true);
     }
+  });
+
+  it("caps the seeds at three scenes even when more are available", () => {
+    const one = (n: number) => ({
+      id: n,
+      content: `在${n}`,
+      turn: [`在${n}`],
+      rawTurn: [`在${n}`],
+      turnIds: [n],
+      score: 1 - n / 10,
+      previousUser: "在吗",
+      previousUserTurn: ["在吗"],
+      previousUserIds: [n + 100],
+      at: null,
+      sceneKey: n,
+    });
+    const seeds = selectSeedExchanges({ exemplars: [one(1), one(2), one(3), one(4)] });
+    expect(seeds).toHaveLength(3);
+    expect(new Set(seeds.map((item) => item.sceneKey)).size).toBe(3);
+    expect(seeds.every((item) => item.user.join("").includes("在吗"))).toBe(true);
   });
 
   it("drops an exchange whose user side is instruction-shaped", () => {

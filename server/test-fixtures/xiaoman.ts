@@ -129,6 +129,8 @@ export const XIAOMAN_TRUTH = {
   activeDays: 160,
   roundsPerMainScene: 10,
   taLinesMin: 1400,
+  /** The handbook's "about 3200" counts TA lines (deviation 181). */
+  taLinesApprox: 3200,
   slotEvening: 0.7,
   slotNoon: 0.2,
   eveningStart: { fromHour: 20, fromMinute: 0, toHour: 23, toMinute: 20 },
@@ -202,6 +204,8 @@ export const XIAOMAN_TRUTH = {
   typos: 6,
   harm: { count: 5, lines: HARM_LINES },
   derive: deriveXiaomanTruth,
+  /** The handbook calls the derived figures `XIAOMAN_TRUTH.derived`. */
+  derived: deriveXiaomanTruth,
 };
 
 export interface XiaomanDerivedScene {
@@ -579,11 +583,34 @@ function burstCount(rng: Rng): 1 | 2 | 3 {
   return 3;
 }
 
+/**
+ * A reply delay, rounded to whole seconds.
+ *
+ * The design says every timestamp is precise to the second. Only a
+ * burst of several messages needs sub-second stamps, because the gap
+ * inside a burst is a message's character count times 200ms (design
+ * §3.5). Everything else — the first message of a turn, user lines,
+ * calls, repairs — lands on a whole second, so the deviation from
+ * "all timestamps to the second" is confined to the inside of a burst.
+ */
 function delayMs(rng: Rng, slot: FixtureSlot): number {
   const median =
     slot === "noon" || slot === "wednesday" ? XIAOMAN_TRUTH.replyMedianDaySec : XIAOMAN_TRUTH.replyMedianEveningSec;
   const sampled = logNormal(rng, median, XIAOMAN_TRUTH.replySigma);
-  return Math.round(Math.max(1, sampled) * 1000);
+  return Math.round(Math.max(1, sampled)) * 1000;
+}
+
+/**
+ * The delay between the messages of a fight's preamble.
+ *
+ * `conflictFits` chooses a noon scene on the assumption that the fight
+ * starts within twenty minutes; a long tail from the reply-delay draw
+ * can push「就嗯？」past that and make the repair miss the 15:00–21:00
+ * window for some seeds. The preamble is not a measured quantity, so it
+ * is capped.
+ */
+function conflictDelay(rng: Rng): number {
+  return Math.min(delayMs(rng, "noon"), 6 * 60_000);
 }
 
 /** An evening delay that would cross midnight is cut at 23:59:50. The distribution itself is not capped. */
@@ -626,6 +653,11 @@ function safeTaTime(date: Date): Date {
     return shanghaiDate(w.year, w.month, w.day, 16, 5, 0);
   }
   return shanghaiDate(w.year, w.month, w.day, 7, 30, 0);
+}
+
+/** A whole-second clock at or after `date`, used after a sub-second burst. */
+function nextSecond(date: Date): Date {
+  return new Date(Math.ceil(date.getTime() / 1000) * 1000);
 }
 
 /**
@@ -907,25 +939,54 @@ export function buildXiaomanRecords(options?: {
         burstIndex: i,
       });
     }
-    const last = drafts[drafts.length - 1]!;
+    /**
+     * Where the turn ends as far as the next designed event is concerned.
+     *
+     * A sticker that closes the turn is part of the burst, so it is
+     * ordered after the last text; but the next user message counts from
+     * the last text, not from the 400ms it takes the sticker to land.
+     */
+    const burstTextEnd = t;
+    const stickerExtra = {
+      ...extra,
+      state,
+      locked: true,
+      burstId,
+      burstIndex: size,
+      burstSize: size + 1,
+    };
     if (state === "happy" || state === "playful") {
       if (rng() < XIAOMAN_TRUTH.stickerHappyPlayful) {
-        t = addMs(last.timestamp, 400);
-        addTa(scene, t, XIAOMAN_TRUTH.stickerPeek, { ...extra, state, locked: true }, "sticker", {
-          stickerKey: "dog-peek",
-          label: "狗狗探头",
-        });
+        t = addMs(t, 400);
+        addTa(
+          scene,
+          t,
+          XIAOMAN_TRUTH.stickerPeek,
+          stickerExtra,
+          "sticker",
+          {
+            stickerKey: "dog-peek",
+            label: "狗狗探头",
+          },
+        );
       }
     } else if (state === "melancholy") {
       if (rng() < XIAOMAN_TRUTH.stickerMelancholy) {
-        t = addMs(last.timestamp, 400);
-        addTa(scene, t, XIAOMAN_TRUTH.stickerSigh, { ...extra, state, locked: true }, "sticker", {
-          stickerKey: "cat-sigh",
-          label: "猫猫叹气",
-        });
+        t = addMs(t, 400);
+        addTa(
+          scene,
+          t,
+          XIAOMAN_TRUTH.stickerSigh,
+          stickerExtra,
+          "sticker",
+          {
+            stickerKey: "cat-sigh",
+            label: "猫猫叹气",
+          },
+        );
       }
     }
-    return drafts[drafts.length - 1]!.timestamp;
+    return nextSecond(burstTextEnd);
   };
 
   const goodnightReplies = quota(rng, [
@@ -963,23 +1024,23 @@ export function buildXiaomanRecords(options?: {
         scene.startSecond,
       );
       addUser(scene, t, makeUserLine(rng, "generic"));
-      t = addMs(t, delayMs(rng, "noon"));
+      t = addMs(t, conflictDelay(rng));
       const preamble = scene.state === "distant" || scene.state === "melancholy" ? "warm" : scene.state;
       t = addTaBurst(scene, t, scene.state, {}, preamble);
       t = addMs(t, 25_000);
       addUser(scene, t, makeUserLine(rng, "generic"));
-      t = addMs(t, delayMs(rng, "noon"));
+      t = addMs(t, conflictDelay(rng));
       const first = "今天还好";
       const conflictBurst = burstSeq++;
       addTa(scene, t, first, { burstId: conflictBurst, burstSize: 2, burstIndex: 0, state: preamble });
       const second = "我跟你说";
       t = addMs(t, charCount(second) * XIAOMAN_TRUTH.burstGapMsPerChar);
       addTa(scene, t, second, { burstId: conflictBurst, burstSize: 2, burstIndex: 1, state: preamble });
-      t = addMs(t, 20_000);
+      t = addMs(nextSecond(t), 20_000);
       addUser(scene, t, XIAOMAN_TRUTH.conflicts.triggerUser, { userAct: "acknowledge", locked: true });
-      t = addMs(t, delayMs(rng, "noon"));
+      t = addMs(t, conflictDelay(rng));
       const flareAt = t;
-      addTa(scene, addMs(flareAt, -500), DISTANT_PERIOD[0]!, {
+      addTa(scene, addMs(flareAt, -1_000), DISTANT_PERIOD[0]!, {
         state: "distant",
         locked: true,
         act: "acknowledge",
@@ -1126,7 +1187,7 @@ export function buildXiaomanRecords(options?: {
     const incoming = i < Math.round(20 * 0.7);
     const minute = Math.floor(rng() * 20) - 10;
     const t = shanghaiDate(scene.date.year, scene.date.month, scene.date.day, 21, Math.max(0, minute), 0);
-    const callScene: ScenePlan = { ...scene, id: nextId++, slot: "call" };
+    const callScene: ScenePlan = { ...scene, id: nextId++, slot: "call", conflictEpisode: undefined };
     addTa(
       callScene,
       t,
@@ -1242,19 +1303,44 @@ export function buildXiaomanRecords(options?: {
     reply.truth = { ...reply.truth, locked: true, ritual: "stock", act: "deflect" };
   });
 
-  const multiUsers = genericUsers.slice(7, 47);
+  /**
+   * Forty messages that say three things, and the reply to each.
+   *
+   * The pair is only made when the message gets a real turn back: a
+   * cold distant answer or a line already spoken for is not a sample of
+   * "which of the three things they picked". The rate is taken over the
+   * forty messages, not over the pairs that happened to fit.
+   */
+  const MULTI_POINT_MESSAGES = 40;
   const multiPairs: Array<{ row: Draft; reply: Draft }> = [];
-  for (const row of multiUsers) {
+  for (const row of genericUsers.slice(7)) {
+    if (multiPairs.length >= MULTI_POINT_MESSAGES) break;
+    if (row.truth.state === "distant") continue;
+    const idx = drafts.indexOf(row);
+    const turn: Draft[] = [];
+    for (const candidate of drafts.slice(idx + 1)) {
+      if (candidate.role === "user" || candidate.truth.sceneId !== row.truth.sceneId) break;
+      turn.push(candidate);
+    }
+    /*
+     * The reply must be the whole turn: if the burst had more text lines,
+     * the generic filler would be counted alongside the one thing they
+     * picked, and the measured rate would stop being about the pick.
+     */
+    const turnText = turn.filter((candidate) => candidate.role === "assistant" && candidate.kind === "text");
+    const reply = turnText.length === 1 ? turnText[0] : undefined;
+    if (!reply || reply.truth.locked || reply.truth.state === "distant") continue;
     row.content = "晚上吃饭。然后去超市！还有记得带伞";
     row.truth = { ...row.truth, locked: true, userAct: "multi-point", ritual: "multi-point" };
-    const idx = drafts.indexOf(row);
-    const reply = drafts.slice(idx + 1).find((r) => r.role === "assistant" && r.kind === "text");
-    if (reply && !reply.truth.locked && reply.truth.state !== "distant") multiPairs.push({ row, reply });
+    multiPairs.push({ row, reply });
   }
-  const lastOnlyCount = Math.round(multiPairs.length * XIAOMAN_TRUTH.multiPoint.lastOnlyRate);
+  if (multiPairs.length !== MULTI_POINT_MESSAGES) {
+    throw new Error(`xiaoman: only ${multiPairs.length} multi-point messages got a reply`);
+  }
+  const lastOnlyCount = Math.round(MULTI_POINT_MESSAGES * XIAOMAN_TRUTH.multiPoint.lastOnlyRate);
   const lastOnlyFlags = quota(rng, [
     [true, lastOnlyCount],
-    [false, multiPairs.length - lastOnlyCount],
+    [false, MULTI_POINT_MESSAGES - lastOnlyCount],
   ]);
   multiPairs.forEach((pair, i) => {
     const lastOnly = lastOnlyFlags[i] ?? true;
@@ -1278,6 +1364,14 @@ export function buildXiaomanRecords(options?: {
       if (row.truth.burstIndex != null && row.truth.burstIndex !== 0) return false;
       if (row.truth.burstSize != null && row.truth.burstSize !== 1) return false;
       const fixAt = row.timestamp.getTime() + 30_000;
+      const nextTaText = drafts.find(
+        (other) =>
+          other.truth.sceneId === row.truth.sceneId &&
+          other.role === "assistant" &&
+          other.kind === "text" &&
+          other.timestamp.getTime() > row.timestamp.getTime(),
+      );
+      if (nextTaText && nextTaText.timestamp.getTime() < fixAt) return false;
       const goodnight = drafts.find(
         (other) =>
           other.truth.sceneId === row.truth.sceneId &&
@@ -1318,19 +1412,6 @@ export function buildXiaomanRecords(options?: {
     });
   });
 
-  if (options?.withHarm) {
-    const harmHosts = shuffle(
-      rng,
-      drafts.filter(
-        (row) => row.role === "assistant" && row.kind === "text" && !row.truth.locked && row.truth.state !== "distant",
-      ),
-    ).slice(0, HARM_LINES.length);
-    harmHosts.forEach((row, i) => {
-      row.content = HARM_LINES[i]!;
-      row.truth = { ...row.truth, locked: true, ritual: "harm", act: "tease" };
-    });
-  }
-
   retargetMedian(
     drafts.filter((row) => row.role === "assistant" && row.kind === "text" && row.truth.period === "p1"),
     XIAOMAN_TRUTH.taMedianP1,
@@ -1341,9 +1422,67 @@ export function buildXiaomanRecords(options?: {
     XIAOMAN_TRUTH.taMedianP2,
     rng,
   );
+
+  /**
+   * A laugh is exactly four 哈, and padding must not split the run.
+   *
+   * `fitLength` keeps whole tokens, but a run that was prefixed before the
+   * final length pass can still come out as「哈哈哈今天哈」; this pass
+   * rebuilds those rows around the token instead of cutting it.
+   */
+  for (const row of drafts) {
+    if (row.role !== "assistant" || row.kind !== "text" || row.truth.state === "distant") continue;
+    if (!/哈{3}/u.test(row.content) || row.content.includes("哈哈哈哈")) continue;
+    const target = charCount(row.content);
+    row.content = fitLength(`哈哈哈哈${row.content.replaceAll("哈", "")}`, target, ["哈哈哈哈"]);
+  }
+
+  /**
+   * One line uses the only ellipsis spelling the design allows, so the
+   * punctuation test has something to check instead of a vacuum.
+   */
+  const ellipsisHost = [...drafts]
+    .reverse()
+    .find(
+      (row) =>
+        row.role === "assistant" &&
+        row.kind === "text" &&
+        !row.truth.locked &&
+        row.truth.state !== "distant" &&
+        row.truth.slot !== "morning" &&
+        (row.truth.burstIndex == null || row.truth.burstIndex === 0),
+    );
+  if (ellipsisHost) {
+    ellipsisHost.content = "今天还好...";
+    ellipsisHost.truth = { ...ellipsisHost.truth, locked: true };
+  }
+
   fixBurstGaps(drafts);
   insertFollowUps();
   finalizeConflictClocks();
+
+  /**
+   * The harmful variant is an overlay, applied after every clock is
+   * final: replacing five lines must not move a single timestamp. It
+   * draws from its own stream so the default log stays identical too.
+   */
+  if (options?.withHarm) {
+    const harmRng = seededRandom(`${options.seed ?? XIAOMAN_DEFAULT_SEED}:harm`);
+    const harmHosts = shuffle(
+      harmRng,
+      drafts.filter(
+        (row) =>
+          row.role === "assistant" &&
+          row.kind === "text" &&
+          !row.truth.locked &&
+          row.truth.state !== "distant",
+      ),
+    ).slice(0, HARM_LINES.length);
+    harmHosts.forEach((row, i) => {
+      row.content = HARM_LINES[i]!;
+      row.truth = { ...row.truth, locked: true, ritual: "harm", act: "tease" };
+    });
+  }
 
   function insertFollowUps(): void {
     const replies = quota(rng, [
@@ -1373,7 +1512,19 @@ export function buildXiaomanRecords(options?: {
       if (added >= 30) break;
       const sceneId = target.truth.sceneId;
       if (used.has(sceneId)) continue;
-      const anchorAt = target.timestamp.getTime();
+      /**
+       * The follow-up lands after the whole turn, not just after its last
+       * line: a sticker that closes the burst belongs to what they said.
+       */
+      const burstId = target.truth.burstId;
+      const turnRows =
+        burstId == null
+          ? [target]
+          : drafts.filter((row) => row.truth.burstId === burstId && row.truth.sceneId === sceneId);
+      const anchorAt = turnRows.reduce(
+        (latest, row) => Math.max(latest, row.timestamp.getTime()),
+        target.timestamp.getTime(),
+      );
       const later = drafts.filter((row) => row.truth.sceneId === sceneId && row.timestamp.getTime() > anchorAt);
       if (target.truth.slot === "evening" && later.length === 0) continue;
       const minutes = 6 + Math.floor(rng() * 7);
@@ -1629,7 +1780,10 @@ function fixBurstGaps(rows: Draft[]): void {
     for (let i = 1; i < group.length; i++) {
       const prev = group[i - 1]!;
       const cur = group[i]!;
-      const gap = charCount(cur.content) * XIAOMAN_TRUTH.burstGapMsPerChar;
+      const gap =
+        cur.kind === "text"
+          ? charCount(cur.content) * XIAOMAN_TRUTH.burstGapMsPerChar
+          : 400;
       cur.timestamp = safeTaTime(addMs(prev.timestamp, gap));
     }
   }

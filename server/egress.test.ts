@@ -30,7 +30,7 @@ function walk(dir: string, files: string[] = []): string[] {
     const full = join(dir, name);
     const stats = statSync(full);
     if (stats.isDirectory()) walk(full, files);
-    else if (/\.(ts|js|mjs)$/.test(name) && !/\.(test|spec)\.tsx?$/.test(name)) {
+    else if (/\.(ts|tsx|js|mjs|mts|cts)$/.test(name) && !/\.(test|spec)\.(ts|tsx|mts|cts)$/.test(name)) {
       files.push(full);
     }
   }

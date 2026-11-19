@@ -6,6 +6,7 @@ import {
   buildXiaomanRecords,
   charCount,
   deriveXiaomanTruth,
+  formatShanghai,
   wallClock,
   XIAOMAN_DEFAULT_SEED,
   XIAOMAN_NAME,
@@ -114,14 +115,24 @@ describe("时间跨度", () => {
 });
 
 describe("规模", () => {
-  it("has about 160 active days and at least 1400 TA lines", () => {
+  it("has about 160 active days and about 3200 TA lines", () => {
     const mainDays = new Set(
       records
         .filter((row) => row.truth.slot === "evening" || row.truth.slot === "noon" || row.truth.slot === "afternoon")
         .map((row) => ymd(row)),
     );
     expect(mainDays.size).toBe(XIAOMAN_TRUTH.activeDays);
-    expect(records.filter((row) => row.role === "assistant").length).toBeGreaterThanOrEqual(XIAOMAN_TRUTH.taLinesMin);
+    const taRows = records.filter((row) => row.role === "assistant").length;
+    expect(taRows).toBeGreaterThanOrEqual(XIAOMAN_TRUTH.taLinesMin);
+    /*
+     * The handbook's "default size about 3200" is the TA side of the
+     * log: 160 active days times ten rounds times an average burst of
+     * about two lines. The total row count is larger by construction
+     * because the user writes once per round.
+     */
+    expect(XIAOMAN_TRUTH.taLinesApprox).toBe(3200);
+    expect(taRows).toBeGreaterThanOrEqual(Math.round(3200 * 0.95));
+    expect(taRows).toBeLessThanOrEqual(Math.round(3200 * 1.05));
     expect(records.length).toBeGreaterThan(2000);
     expect(records.length).toBeLessThan(8000);
     const ordinary = derived.scenes.filter(
@@ -201,13 +212,37 @@ describe("早晚的往来", () => {
 });
 
 describe("时间戳", () => {
-  it("formats every timestamp to the second in Asia/Shanghai", () => {
-    for (const row of records.slice(0, 20).concat(records.slice(-20))) {
+  /**
+   * Whole seconds everywhere except inside a burst.
+   *
+   * The design's "every timestamp is precise to the second" cannot hold
+   * for the second and third line of a burst: the designed gap is the
+   * message's length times 200ms. Deviation 180 confines the sub-second
+   * stamps to that case plus the two things timed off a burst close (a
+   * sticker, and a follow-up that lands 6–12 minutes after it), and
+   * renders every stamp to the second.
+   */
+  it("keeps every timestamp outside a burst on a whole second and renders to the second", () => {
+    const insideBurst = (row: FixtureRecord) => (row.truth.burstIndex ?? 0) >= 1;
+    const timedOffBurstClose = (row: FixtureRecord) =>
+      row.kind === "sticker" || row.truth.ritual === "follow-up";
+    const precise = records.filter((row) => !insideBurst(row) && !timedOffBurstClose(row));
+    expect(precise.length).toBeGreaterThan(3000);
+    expect(precise.filter((row) => row.timestamp.getMilliseconds() !== 0)).toEqual([]);
+    expect(records.some((row) => row.timestamp.getMilliseconds() !== 0)).toBe(true);
+    for (const row of records) {
+      expect(formatShanghai(row.timestamp)).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    }
+    for (const row of insideBurstPreciseSample()) {
       const w = wallClock(row.timestamp);
       expect(w.second).toBeGreaterThanOrEqual(0);
       expect(w.second).toBeLessThan(60);
     }
   });
+
+  function insideBurstPreciseSample(): FixtureRecord[] {
+    return records.filter((row) => (row.truth.burstIndex ?? 0) >= 1).slice(0, 20);
+  }
 });
 
 describe("场景情绪", () => {
@@ -269,11 +304,19 @@ describe("笑", () => {
 });
 
 describe("其他标点", () => {
-  it("only uses ... for ellipsis, never ～, never emoji", () => {
+  it("writes an ellipsis only as ... and never uses ～ or emoji", () => {
     expect(records.filter((row) => row.content.includes("…")).length).toBe(0);
     expect(records.filter((row) => row.content.includes("。。。")).length).toBe(0);
     expect(records.filter((row) => row.content.includes("～")).length).toBe(0);
     expect(records.filter((row) => /\p{Extended_Pictographic}/u.test(row.content)).length).toBe(0);
+    // The allowed form exists, so the rule above is not testing an empty set.
+    const ellipsisRows = records.filter((row) => row.content.includes("..."));
+    expect(ellipsisRows.length).toBeGreaterThan(0);
+    for (const row of ellipsisRows) {
+      for (const run of row.content.matchAll(/\.+/g)) {
+        expect(run[0]).toBe("...");
+      }
+    }
   });
 });
 
@@ -281,7 +324,9 @@ describe("称呼", () => {
   it("says 树树 on a fifth of TA lines and 陈树 when distant", () => {
     expectRate(taText().filter((row) => row.content.includes("树树")).length, taText().length, 0.2);
     const distant = taText().filter((row) => row.truth.state === "distant");
+    const nonDistant = taText().filter((row) => row.truth.state !== "distant");
     expect(distant.filter((row) => row.content.includes("树树")).length).toBe(0);
+    expect(nonDistant.filter((row) => row.content.includes("陈树")).length).toBe(0);
     expect(distant.filter((row) => row.content.includes("陈树")).length).toBeGreaterThan(0);
   });
 });
@@ -427,6 +472,21 @@ describe("冲突", () => {
       const repair = rows.find((row) => row.truth.ritual === "conflict-repair");
       expect(trigger).toBeTruthy();
       expect(repair).toBeTruthy();
+      // The handbook says every fight starts in a noon scene and starts
+      // because I answered a two-line burst with a single「嗯」.
+      expect(trigger!.truth.slot).toBe("noon");
+      const hmm = rows.find(
+        (row) => row.role === "user" && row.content === "嗯" && row.truth.conflictEpisode === episode,
+      );
+      expect(hmm).toBeTruthy();
+      const sameScene = records
+        .filter((row) => row.truth.sceneId === hmm!.truth.sceneId)
+        .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      const at = sameScene.findIndex((row) => row.id === hmm!.id);
+      const before = sameScene.slice(at - 2, at);
+      expect(before.map((row) => row.role)).toEqual(["assistant", "assistant"]);
+      expect(before[0]!.truth.burstId).toBe(before[1]!.truth.burstId);
+      expect(before.map((row) => row.truth.burstIndex)).toEqual([0, 1]);
       const gapMs = repair!.timestamp.getTime() - trigger!.timestamp.getTime();
       measuredHours.push(gapMs / 3_600_000);
       const between = records.filter(
@@ -440,43 +500,77 @@ describe("冲突", () => {
 });
 
 describe("表情包", () => {
-  it("uses peek/sigh stickers in happy-playful/melancholy rounds and never when distant", () => {
+  it("closes happy-playful/melancholy rounds with a sticker and never uses one when distant", () => {
     const sticker = (label: string) => records.filter((row) => row.kind === "sticker" && row.content === label);
     expect(sticker(XIAOMAN_TRUTH.stickerPeek).length).toBeGreaterThan(0);
     expect(sticker(XIAOMAN_TRUTH.stickerSigh).length).toBeGreaterThan(0);
     expect(records.filter((row) => row.kind === "sticker" && row.truth.state === "distant")).toHaveLength(0);
-    const burstRounds = (state: "happy" | "playful" | "melancholy") => {
-      const ids = new Set<number>();
-      for (const row of records) {
-        if (row.truth.state !== state || row.truth.burstId == null) continue;
-        ids.add(row.truth.burstId);
+
+    const bursts = new Map<number, FixtureRecord[]>();
+    for (const row of records) {
+      if (row.truth.burstId == null) continue;
+      const list = bursts.get(row.truth.burstId) ?? [];
+      list.push(row);
+      bursts.set(row.truth.burstId, list);
+    }
+    const lastOf = (group: FixtureRecord[]) =>
+      [...group].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()).at(-1);
+
+    let happyPlayfulRounds = 0;
+    let happyPlayfulClosed = 0;
+    let melancholyRounds = 0;
+    let melancholyClosed = 0;
+    const closing: FixtureRecord[] = [];
+    for (const group of bursts.values()) {
+      const state = group[0]!.truth.state;
+      const last = lastOf(group)!;
+      if (state === "happy" || state === "playful") {
+        happyPlayfulRounds++;
+        if (last.kind === "sticker" && last.content === XIAOMAN_TRUTH.stickerPeek) {
+          happyPlayfulClosed++;
+          closing.push(last);
+        }
       }
-      return ids.size;
-    };
-    const happyPlayfulRounds = burstRounds("happy") + burstRounds("playful");
-    expectRate(
-      sticker(XIAOMAN_TRUTH.stickerPeek).length,
-      happyPlayfulRounds,
-      XIAOMAN_TRUTH.stickerHappyPlayful,
-    );
-    expectRate(
-      sticker(XIAOMAN_TRUTH.stickerSigh).length,
-      burstRounds("melancholy"),
-      XIAOMAN_TRUTH.stickerMelancholy,
-    );
+      if (state === "melancholy") {
+        melancholyRounds++;
+        if (last.kind === "sticker" && last.content === XIAOMAN_TRUTH.stickerSigh) {
+          melancholyClosed++;
+          closing.push(last);
+        }
+      }
+    }
+    // "收尾" means the sticker is the last message of the round, not
+    // merely somewhere in it.
+    expectRate(happyPlayfulClosed, happyPlayfulRounds, XIAOMAN_TRUTH.stickerHappyPlayful);
+    expectRate(melancholyClosed, melancholyRounds, XIAOMAN_TRUTH.stickerMelancholy);
+    // Every sticker belongs to a burst and is its last row.
+    const stickerRows = records.filter((row) => row.kind === "sticker");
+    expect(stickerRows.every((row) => row.truth.burstId != null)).toBe(true);
+    for (const row of stickerRows) {
+      expect(lastOf(bursts.get(row.truth.burstId!)!)!.timestamp.getTime()).toBe(row.timestamp.getTime());
+    }
   });
 });
 
 describe("语音", () => {
   it("makes 5% of warm TA turns a 12-second voice note with a transcript", () => {
+    /*
+     * A voice note replaces the round's reply, so the denominator is the
+     * turns in the ordinary warm scenes where that branch can run.
+     * Morning, Wednesday and goodnight turns are not candidates and used
+     * to inflate the denominator.
+     */
     const warmTurns = records.filter(
       (row) =>
         row.role === "assistant" &&
         row.truth.state === "warm" &&
-        (row.truth.burstIndex === 0 || row.kind === "voice"),
+        (row.truth.slot === "evening" || row.truth.slot === "noon" || row.truth.slot === "afternoon") &&
+        (row.truth.burstIndex == null || row.truth.burstIndex === 0) &&
+        row.kind !== "sticker",
     );
     const voices = records.filter((row) => row.kind === "voice");
-    expectRate(voices.length, Math.max(warmTurns.length, 1), 0.05, 0.05);
+    expect(voices.every((row) => row.truth.state === "warm")).toBe(true);
+    expectRate(voices.length, Math.max(warmTurns.length, 1), 0.05, 0.03);
     for (const row of voices) {
       expect(row.content).toBe("[voice:12]");
       expect(typeof row.meta?.transcript).toBe("string");
@@ -497,16 +591,19 @@ describe("通话", () => {
       expect(duration).toBeLessThanOrEqual(3600);
     }
     expectRate(calls.filter((row) => row.meta?.direction === "in").length, calls.length, 0.7);
+    expect(calls.every((row) => row.truth.conflictEpisode == null)).toBe(true);
   });
 });
 
 describe("事实", () => {
-  it("records the birthday line and the cafe line on the designed days", () => {
+  it("records the birthday line and the cafe line on the designed days, in the right mouth", () => {
     const birthday = records.find((row) => row.content === XIAOMAN_TRUTH.factBirthday.text);
     expect(birthday).toBeTruthy();
+    expect(birthday!.role).toBe("assistant");
     expect(ymd(birthday!)).toBe(2022_04_02);
     const cafe = records.find((row) => row.content.includes("拾光咖啡"));
     expect(cafe).toBeTruthy();
+    expect(cafe!.role).toBe("user");
     expect(ymd(cafe!)).toBe(2022_03_12);
   });
 });
@@ -543,18 +640,24 @@ describe("不懂的事", () => {
 });
 
 describe("未结的事", () => {
-  it("leaves one noodle plan and one movie plan unfinished", () => {
-    expect(records.filter((row) => row.content === XIAOMAN_TRUTH.openLoopTa)).toHaveLength(1);
-    expect(records.filter((row) => row.content === XIAOMAN_TRUTH.openLoopUser)).toHaveLength(1);
+  it("leaves one noodle plan from them and one movie plan from me, both unfinished", () => {
+    const noodle = records.filter((row) => row.content === XIAOMAN_TRUTH.openLoopTa);
+    expect(noodle).toHaveLength(1);
+    expect(noodle[0]!.role).toBe("assistant");
+    const movie = records.filter((row) => row.content === XIAOMAN_TRUTH.openLoopUser);
+    expect(movie).toHaveLength(1);
+    expect(movie[0]!.role).toBe("user");
   });
 });
 
 describe("多点消息", () => {
-  it("has 40 three-thing user lines, and TA usually takes only the last", () => {
+  it("has 40 three-thing user lines, and TA answers 80% of them with only the last thing", () => {
     const multi = records.filter((row) => row.truth.ritual === "multi-point" && row.role === "user");
     expect(multi).toHaveLength(40);
     const replies = records.filter((row) => row.truth.ritual === "multi-point" && row.role === "assistant");
-    expectRate(replies.filter((row) => row.content.includes("伞") && !row.content.includes("吃饭")).length, replies.length, 0.8);
+    expect(replies).toHaveLength(40);
+    const lastOnly = replies.filter((row) => row.content.includes("伞") && !row.content.includes("吃饭"));
+    expectRate(lastOnly.length, multi.length, XIAOMAN_TRUTH.multiPoint.lastOnlyRate);
   });
 });
 
@@ -601,6 +704,152 @@ describe("伤人的话", () => {
       rows.filter((row) => XIAOMAN_TRUTH.harm.lines.some((line) => row.content === line));
     expect(harm(records)).toHaveLength(0);
     expect(harm(buildXiaomanRecords({ withHarm: true }))).toHaveLength(5);
+  });
+});
+
+describe("seed robustness", () => {
+  it("builds for any seed, including the ones whose conflict used to overflow", () => {
+    for (const seed of ["xiaoman", "alpha", "beta", "speed", "h98", "h186", "h439", "h476", "seed-37", "", "😀", "0", "1"]) {
+      expect(() => buildXiaomanRecords({ seed }), seed).not.toThrow();
+    }
+  });
+});
+
+describe("the harmful variant", () => {
+  it("adds five belittling lines without moving the clock", () => {
+    const harmful = buildXiaomanRecords({ withHarm: true });
+    expect(harmful).toHaveLength(records.length);
+    expect(harmful.filter((row) => XIAOMAN_TRUTH.harm.lines.includes(row.content))).toHaveLength(5);
+    const stamps = (rows: FixtureRecord[]) => rows.map((row) => row.timestamp.getTime()).sort((a, b) => a - b);
+    expect(stamps(harmful)).toEqual(stamps(records));
+    const count = (rows: FixtureRecord[]) => {
+      const map = new Map<string, number>();
+      for (const row of rows) map.set(row.content, (map.get(row.content) ?? 0) + 1);
+      return map;
+    };
+    const base = count(records);
+    const changedBase: string[] = [];
+    const added: string[] = [];
+    const withHarmCounts = count(harmful);
+    for (const [text, n] of withHarmCounts) {
+      const was = base.get(text) ?? 0;
+      if (n > was) added.push(...Array.from({ length: n - was }, () => text));
+      if (n < was) changedBase.push(...Array.from({ length: was - n }, () => text));
+    }
+    expect(added.sort()).toEqual([...XIAOMAN_TRUTH.harm.lines].sort());
+    expect(changedBase).toHaveLength(5);
+  });
+});
+
+describe("the design constants", () => {
+  it("are the handbook's numbers, not just the generator's own constants", () => {
+    expect({
+      span: XIAOMAN_TRUTH.span,
+      silence: XIAOMAN_TRUTH.silence,
+      activeDays: XIAOMAN_TRUTH.activeDays,
+      roundsPerMainScene: XIAOMAN_TRUTH.roundsPerMainScene,
+      taLinesMin: XIAOMAN_TRUTH.taLinesMin,
+      taLinesApprox: XIAOMAN_TRUTH.taLinesApprox,
+      slotEvening: XIAOMAN_TRUTH.slotEvening,
+      slotNoon: XIAOMAN_TRUTH.slotNoon,
+      states: XIAOMAN_TRUTH.states,
+      taMedianP1: XIAOMAN_TRUTH.taMedianP1,
+      taMedianP2: XIAOMAN_TRUTH.taMedianP2,
+      taP95Max: XIAOMAN_TRUTH.taP95Max,
+      distantPeriodEnd: XIAOMAN_TRUTH.distantPeriodEnd,
+      distantMaxChars: XIAOMAN_TRUTH.distantMaxChars,
+      particles: XIAOMAN_TRUTH.particles,
+      laughRate: XIAOMAN_TRUTH.laughRate,
+      addressRate: XIAOMAN_TRUTH.addressRate,
+      burst: XIAOMAN_TRUTH.burst,
+      burstGapMsPerChar: XIAOMAN_TRUTH.burstGapMsPerChar,
+      burstGapTolerance: XIAOMAN_TRUTH.burstGapTolerance,
+      replyMedianEveningSec: XIAOMAN_TRUTH.replyMedianEveningSec,
+      replyMedianDaySec: XIAOMAN_TRUTH.replyMedianDaySec,
+      replySigma: XIAOMAN_TRUTH.replySigma,
+      sleep: XIAOMAN_TRUTH.sleep,
+      wednesdayQuiet: XIAOMAN_TRUTH.wednesdayQuiet,
+      wednesdayWeeksMin: XIAOMAN_TRUTH.wednesdayWeeksMin,
+      goodnight: XIAOMAN_TRUTH.goodnight,
+      morning: XIAOMAN_TRUTH.morning,
+      zaime: XIAOMAN_TRUTH.zaime,
+      questionP1: XIAOMAN_TRUTH.questionP1,
+      questionP2: XIAOMAN_TRUTH.questionP2,
+      affectionP1: XIAOMAN_TRUTH.affectionP1,
+      acknowledgeP2: XIAOMAN_TRUTH.acknowledgeP2,
+      conflicts: XIAOMAN_TRUTH.conflicts,
+      stickerHappyPlayful: XIAOMAN_TRUTH.stickerHappyPlayful,
+      stickerMelancholy: XIAOMAN_TRUTH.stickerMelancholy,
+      voiceWarmRate: XIAOMAN_TRUTH.voiceWarmRate,
+      calls: XIAOMAN_TRUTH.calls,
+      people: XIAOMAN_TRUTH.people,
+      likes: XIAOMAN_TRUTH.likes,
+      wordGugu: XIAOMAN_TRUTH.wordGugu,
+      stockMentions: XIAOMAN_TRUTH.stockMentions,
+      multiPoint: XIAOMAN_TRUTH.multiPoint,
+      followUp: XIAOMAN_TRUTH.followUp,
+      typos: XIAOMAN_TRUTH.typos,
+      harmCount: XIAOMAN_TRUTH.harm.count,
+    }).toEqual({
+      span: { from: "2022-03-01", to: "2024-10-31" },
+      silence: { from: "2023-06-10", to: "2023-07-04", days: 25 },
+      activeDays: 160,
+      roundsPerMainScene: 10,
+      taLinesMin: 1400,
+      taLinesApprox: 3200,
+      slotEvening: 0.7,
+      slotNoon: 0.2,
+      states: { warm: 0.45, happy: 0.2, playful: 0.15, distant: 0.1, nostalgic: 0.05, melancholy: 0.05 },
+      taMedianP1: 10,
+      taMedianP2: 6,
+      taP95Max: 24,
+      distantPeriodEnd: 0.9,
+      distantMaxChars: 4,
+      particles: { 呀: 0.3, 啦: 0.2, 嘛: 0.1 },
+      laughRate: 0.12,
+      addressRate: 0.2,
+      burst: { 1: 0.4, 2: 0.4, 3: 0.2 },
+      burstGapMsPerChar: 200,
+      burstGapTolerance: 0.2,
+      replyMedianEveningSec: 40,
+      replyMedianDaySec: 120,
+      replySigma: 0.8,
+      sleep: { fromHour: 0, fromMinute: 0, toHour: 7, toMinute: 30 },
+      wednesdayQuiet: { fromHour: 14, toHour: 16 },
+      wednesdayWeeksMin: 20,
+      goodnight: { 晚安: 0.6, 安: 0.25, 睡啦: 0.15, min: 100 },
+      morning: { 早呀: 0.7, 早: 0.3, min: 40 },
+      zaime: { 在: 0.8, 咋啦: 0.2, min: 30 },
+      questionP1: 0.2,
+      questionP2: 0.03,
+      affectionP1: 0.25,
+      acknowledgeP2: 0.3,
+      conflicts: {
+        count: 6,
+        durationsHours: [3, 4, 5, 5, 6, 8],
+        taRepair: 4,
+        userRepair: 2,
+        triggerUser: "嗯",
+        triggerTa: "就嗯？",
+        taReconcile: "好啦 不气了",
+        userReconcile: "对不起嘛",
+        taAfterUser: "哼",
+        reconcileFromHour: 15,
+        reconcileToHour: 21,
+      },
+      stickerHappyPlayful: 0.25,
+      stickerMelancholy: 0.3,
+      voiceWarmRate: 0.05,
+      calls: { count: 20, minSec: 600, maxSec: 3600, incomingRate: 0.7, sundayHour: 21 },
+      people: { 琪琪: 12, 我妈: 9 },
+      likes: { 讨厌香菜: 3, 喜欢海: 4 },
+      wordGugu: 15,
+      stockMentions: 6,
+      multiPoint: { count: 40, lastOnlyRate: 0.8 },
+      followUp: { count: 30, 人呢: 0.7, "？": 0.3, minMin: 6, maxMin: 12 },
+      typos: 6,
+      harmCount: 5,
+    });
   });
 });
 

@@ -309,13 +309,22 @@ describe("the shared generation path", () => {
       { id: 2, role: "assistant", content: HELD_OUT, timestamp: NOW },
     ]);
 
+    // A sampled action makes the seed observable: both paths must draw
+    // the same action from the same seed.
+    const withActs = persona();
+    withActs.personaData = {
+      personality: "温柔",
+      actProfile: { samples: 80, unconditional: { tease: 80 }, buckets: [] },
+    };
+    const sharedSeed = "shared-turn-seed";
     for await (const _ of runConversation({
-      persona: persona(),
+      persona: withActs,
       userId: 1,
       message: "吃饭了吗",
       mode: "once",
       now: NOW,
       alreadyPersisted: true,
+      planSeed: sharedSeed,
     })) {
       // drain
     }
@@ -323,8 +332,9 @@ describe("the shared generation path", () => {
 
     invokeWithProvider.mockClear();
     await runEval({
-      persona: persona(),
+      persona: withActs,
       userId: 1,
+      seed: sharedSeed,
       cases: [
         {
           context: CONTEXT,

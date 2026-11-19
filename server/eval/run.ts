@@ -143,6 +143,14 @@ export interface EvalRunOptions {
   rerank?: boolean;
   /** Whether an action is sampled into the prompt. */
   sampleAct?: boolean;
+  /**
+   * Fixes the plan seed for every case.
+   *
+   * Evaluation normally seeds each case from the persona, the index and
+   * the held-out line. Tests that compare the chat path with this one
+   * pass the same seed to both.
+   */
+  seed?: string;
   /** The clock the turn is planned against. Defaults to now, per case. */
   now?: Date;
   /** How many lines to generate per case. Averaged; styleDistance uses all of them. */
@@ -219,8 +227,9 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
     const sampleTexts: string[] = [];
     for (let sample = 0; sample < samplesPerCase; sample++) {
       const seed =
-        `eval:${options.persona.id}:${i}:${caseData.expected.content}` +
-        (samplesPerCase === 1 ? "" : `:s${sample}`);
+        options.seed ??
+        (`eval:${options.persona.id}:${i}:${caseData.expected.content}` +
+          (samplesPerCase === 1 ? "" : `:s${sample}`));
       const turnInput = {
         persona: options.persona,
         userId: options.userId,

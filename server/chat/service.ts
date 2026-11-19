@@ -285,6 +285,14 @@ export interface ConversationOptions {
   replyToId?: number | null;
   /** Explicit provider override (from `persona.llmProvider`). */
   providerName?: string;
+  /**
+   * Fixes the random seed `planTurn` draws with.
+   *
+   * The conversation normally seeds from the persona, the clock and the
+   * message. Evaluation tests pass the same seed here and to `runEval`
+   * so the two paths can be compared draw for draw.
+   */
+  planSeed?: string;
   /** Channel the message arrived on. */
   channel?: "web" | "wechat" | "feishu";
   /** The conversation identifier on that channel. Empty on the web. */
@@ -1347,7 +1355,7 @@ async function* runConversationTurn(
     now,
     locale,
     periodId: options.periodId ?? null,
-    seed: `turn:${persona.id}:${now.getTime()}:${message.slice(0, 40)}`,
+    seed: options.planSeed ?? `turn:${persona.id}:${now.getTime()}:${message.slice(0, 40)}`,
     contextLimit,
     providerName: options.providerName,
     extraConfig,
