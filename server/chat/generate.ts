@@ -525,7 +525,10 @@ async function seedPlanForTurn(
   });
   const foundTexts = found.flatMap((item) => [...(item.rawTurn ?? item.turn), ...item.previousUserTurn]);
   if (!enabled) return { ...empty, foundTexts };
-  const exchanges = selectSeedExchanges({ exemplars: found });
+  const exchanges = selectSeedExchanges({
+    exemplars: found,
+    personaData: input.persona.personaData as { harmReport?: never } | null,
+  });
   return {
     exchanges,
     excludeIds: exchanges.flatMap((item) => item.recordIds),

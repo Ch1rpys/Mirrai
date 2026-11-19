@@ -5,6 +5,7 @@
  * cleaned so they can sit outside the fence as ordinary turns.
  */
 import { copy, type Locale } from "@shared/copy";
+import { filterHarm, type HarmReport } from "@shared/harm";
 import { isSafeSeedLine } from "@shared/seed-safety";
 import type { Exemplar } from "./exemplars";
 import type { LLMMessage } from "../llm/types";
@@ -31,10 +32,19 @@ function charCount(user: string[], them: string[]): number {
 export function selectSeedExchanges(params: {
   exemplars: Exemplar[];
   limit?: number;
+  personaData?: { harmReport?: HarmReport | null } | null;
 }): SeedExchange[] {
   const limit = params.limit ?? SEED_MAX_EXCHANGES;
   const usedScenes = new Set<number>();
   const out: SeedExchange[] = [];
+  /**
+   * The same decision the rest of the generation path reads.
+   *
+   * `keep` means the user asked to keep those lines. `pending` and
+   * `remove` mean they must not be copied into a real turn; `soften`
+   * keeps the voice but still filters the lines.
+   */
+  const allowHarm = params.personaData?.harmReport?.decision === "keep";
   for (const item of params.exemplars) {
     if (out.length >= limit) break;
     if (usedScenes.has(item.sceneKey)) continue;
@@ -47,7 +57,16 @@ export function selectSeedExchanges(params: {
       .filter(Boolean);
     if (!user.length || !them.length) continue;
     if (charCount(user, them) > SEED_MAX_EXCHANGE_CHARS) continue;
-    if ([...user, ...them].some((line) => !isSafeSeedLine(line))) continue;
+    // The other person's lines are the ones the replica would learn.
+    const keptThem = filterHarm(
+      them.map((content) => ({ content, role: "assistant" as const })),
+      params.personaData,
+    );
+    if (keptThem.length !== them.length) continue;
+    // A user line is context. The harm filter is about what the persona
+    // says; a line the user typed is not a line the replica learns.
+    if (user.some((line) => !isSafeSeedLine(line, { allowHarm: true }))) continue;
+    if (them.some((line) => !isSafeSeedLine(line, { allowHarm }))) continue;
     const recordIds = [
       ...(item.previousUserIds ?? []),
       ...(item.turnIds?.length ? item.turnIds : [item.id]),

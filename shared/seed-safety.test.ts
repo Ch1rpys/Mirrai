@@ -44,6 +44,11 @@ describe("isSafeSeedLine", () => {
     expect(isSafeSeedLine("你给我滚出这里")).toBe(false);
   });
 
+  it("can keep a harm cue when the user chose to keep the record", () => {
+    expect(isSafeSeedLine("你就是个废物", { allowHarm: true })).toBe(true);
+    expect(isSafeSeedLine("你就是个废物")).toBe(false);
+  });
+
   it("keeps ordinary spoken lines", () => {
     expect(isSafeSeedLine("在吗")).toBe(true);
     expect(isSafeSeedLine("今晚吃什么")).toBe(true);
