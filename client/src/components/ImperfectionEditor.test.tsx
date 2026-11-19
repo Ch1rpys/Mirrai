@@ -181,6 +181,10 @@ describe("the imperfection, per state", () => {
     };
     render(<ImperfectionEditor personaId={1} />);
     expect(screen.getByText(translate("zh", "imperfection.draftsTitle"))).toBeInTheDocument();
+    const evidence = screen.getByText(translate("zh", "imperfection.showEvidence"));
+    expect(evidence).toBeInTheDocument();
+    await userEvent.click(evidence);
+    expect(screen.getByText("#11 #12 #13")).toBeInTheDocument();
     await userEvent.click(screen.getByText(translate("zh", "imperfection.useThis")));
     expect(screen.getByDisplayValue("话很短，通常不超过 4 个字")).toBeInTheDocument();
     expect(save).not.toHaveBeenCalled();

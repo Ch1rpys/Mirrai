@@ -114,7 +114,7 @@ export async function measureStyleProfile(params: {
   }
   const locale = user?.locale === "en" ? "en" : "zh";
   const drafts = draftImperfection(
-    { fingerprint, doubleText: current?.doubleText, stickers: current?.stickers, replyDelay: current?.replyDelay },
+    { fingerprint, stickers: current?.stickers, replyDelay: current?.replyDelay },
     { locale, rows },
   );
   const minedRituals = mineRituals(turnsFromRecords(rows));

@@ -8,7 +8,10 @@
  */
 import { copy, type Locale } from "./copy";
 import { isTextRecord } from "./records";
+import { splitScenes, toTurns } from "./scenes";
+import { DELAY_BUCKET_MIN, type DelayBucket, type DelayBuckets } from "./reply-delay";
 import {
+  endingClassOf,
   FINGERPRINT_STATES,
   MIN_FINGERPRINT_STATE_SAMPLES,
   type EmotionalState,
@@ -24,7 +27,6 @@ export type ImperfectionDrafts = Partial<Record<EmotionalState, ImperfectionDraf
 
 export interface ImperfectionDraftSource {
   fingerprint?: StyleFingerprint | null;
-  doubleText?: unknown;
   stickers?: unknown;
   replyDelay?: unknown;
 }
@@ -39,6 +41,7 @@ export function draftImperfection(
   const locale = options.locale ?? "zh";
   const rows = options.rows ?? [];
   const out: ImperfectionDrafts = {};
+  const bursts = burstStats(rows);
 
   for (const state of FINGERPRINT_STATES) {
     // Warm is the baseline the other states are compared against, so it
@@ -51,19 +54,21 @@ export function draftImperfection(
     const drafts: ImperfectionDraft[] = [];
 
     if (core.length.median <= rest.lengthMedian * 0.6) {
+      const cutoff = Math.max(2, Math.round(core.length.median));
       drafts.push({
         text: copy(locale, "v6.imperfection.short", { n: String(Math.round(core.length.median)) }),
-        evidence: evidenceIds(rows, state, () => true),
+        evidence: evidenceIds(rows, state, (text) => charCount(text) <= cutoff),
       });
     } else if (core.length.median >= rest.lengthMedian * 1.5) {
+      const cutoff = Math.max(2, Math.round(core.length.median));
       drafts.push({
         text: copy(locale, "v6.imperfection.long", { n: String(Math.round(core.length.median)) }),
-        evidence: evidenceIds(rows, state, () => true),
+        evidence: evidenceIds(rows, state, (text) => charCount(text) >= cutoff),
       });
     }
 
-    const hereBurst = burstMean(styleProfile, state);
-    const restBurst = restBurstMean(styleProfile, state);
+    const hereBurst = bursts?.[state]?.mean ?? null;
+    const restBurst = bursts ? restBurstMean(bursts, state) : null;
     if (hereBurst != null && restBurst != null) {
       if (hereBurst >= restBurst * 1.4) {
         drafts.push({
@@ -112,7 +117,7 @@ export function draftImperfection(
     if (core.endings.period >= 0.5 && rest.periodRate <= 0.1) {
       drafts.push({
         text: copy(locale, "v6.imperfection.period"),
-        evidence: evidenceIds(rows, state, (text) => text.includes("。")),
+        evidence: evidenceIds(rows, state, (text) => endingClassOf(text) === "period"),
       });
     }
 
@@ -189,12 +194,62 @@ function evidenceIds(
   return out;
 }
 
-function burstMean(profile: { doubleText?: unknown }, state: EmotionalState): number | null {
-  return numericByState(profile.doubleText, state, ["mean", "avg", "perTurn"]);
+interface BurstStat {
+  /** How many messages they send in one go in this state. */
+  mean: number;
+  /** How many of their turns the mean was counted from. */
+  turns: number;
 }
 
-function restBurstMean(profile: { doubleText?: unknown }, skip: EmotionalState): number | null {
-  return restNumericByState(profile.doubleText, skip, ["mean", "avg", "perTurn"]);
+/**
+ * How many bubbles their turns have, per emotional state.
+ *
+ * This is read from the rows, not from the follow-up profile: "连发"
+ * means two or three lines in one turn, not a second thought after a
+ * silence. A turn is consecutive lines by the same person; the state is
+ * the mood the scene was labelled with.
+ */
+function burstStats(rows: FingerprintRow[]): Partial<Record<EmotionalState, BurstStat>> | null {
+  const textRows = rows.filter((row) => isTextRecord(row));
+  if (textRows.length === 0) return null;
+  const totals = new Map<EmotionalState, { messages: number; turns: number }>();
+  for (const scene of splitScenes(textRows)) {
+    for (const turn of toTurns(scene)) {
+      if ((turn[0]?.role ?? "assistant") !== "assistant") continue;
+      const state = turn.map((row) => row.emotion).find(isState);
+      if (!state) continue;
+      const messages = turn.filter(
+        (row) => (row.role ?? "assistant") === "assistant",
+      ).length;
+      if (messages === 0) continue;
+      const entry = totals.get(state) ?? { messages: 0, turns: 0 };
+      entry.messages += messages;
+      entry.turns += 1;
+      totals.set(state, entry);
+    }
+  }
+  const out: Partial<Record<EmotionalState, BurstStat>> = {};
+  for (const [state, entry] of totals) {
+    if (entry.turns > 0) out[state] = { mean: entry.messages / entry.turns, turns: entry.turns };
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+function restBurstMean(
+  stats: Partial<Record<EmotionalState, BurstStat>>,
+  skip: EmotionalState,
+): number | null {
+  let messages = 0;
+  let turns = 0;
+  for (const state of FINGERPRINT_STATES) {
+    if (state === skip) continue;
+    const stat = stats[state];
+    if (!stat) continue;
+    messages += stat.mean * stat.turns;
+    turns += stat.turns;
+  }
+  if (turns === 0) return null;
+  return messages / turns;
 }
 
 function stickerRate(profile: { stickers?: unknown }, state: EmotionalState): number | null {
@@ -205,17 +260,77 @@ function restStickerRate(profile: { stickers?: unknown }, skip: EmotionalState):
   return restNumericByState(profile.stickers, skip, ["rate", "share"]);
 }
 
+/**
+ * Their median reply delay in one state, in minutes.
+ *
+ * The measured shape is `DelayBuckets` (B5.3). Its keys are
+ * `band|state|asking|media` and `band|state|asking`; the three-part
+ * bucket already includes both media values, so using it alone avoids
+ * counting the same gap twice. The bucket's `mu` is the mean of
+ * `ln(seconds)`, so `exp(mu)` is the median.
+ */
 function replyMedianMinutes(profile: { replyDelay?: unknown }, state: EmotionalState): number | null {
-  const seconds = numericByState(profile.replyDelay, state, ["medianSec", "medianMinutes"]);
-  if (seconds == null) return null;
-  const source = asRecord(profile.replyDelay);
-  const byState = asRecord(source?.[state]);
-  if (byState && typeof byState.medianMinutes === "number") return byState.medianMinutes;
-  return seconds / 60;
+  const buckets = asDelayBuckets(profile.replyDelay);
+  if (!buckets) return null;
+  return medianMinutesForStates(buckets, new Set([state]));
 }
 
 function restReplyMedianMinutes(profile: { replyDelay?: unknown }, skip: EmotionalState): number | null {
-  return restNumericByState(profile.replyDelay, skip, ["medianMinutes", "medianSec"]);
+  const buckets = asDelayBuckets(profile.replyDelay);
+  if (!buckets) return null;
+  const states = new Set(FINGERPRINT_STATES.filter((state) => state !== skip));
+  return medianMinutesForStates(buckets, states);
+}
+
+function asDelayBuckets(value: unknown): DelayBuckets | null {
+  const source = asRecord(value);
+  const raw = asRecord(source?.buckets);
+  if (!raw) return null;
+  const buckets: Record<string, DelayBucket> = {};
+  for (const [key, entry] of Object.entries(raw)) {
+    const bucket = asRecord(entry);
+    if (!bucket) continue;
+    const n = bucket.n;
+    const mu = bucket.mu;
+    if (typeof n !== "number" || !Number.isFinite(n) || n <= 0) continue;
+    if (typeof mu !== "number" || !Number.isFinite(mu)) continue;
+    const sigma = typeof bucket.sigma === "number" && Number.isFinite(bucket.sigma) ? bucket.sigma : 0;
+    buckets[key] = { n, mu, sigma };
+  }
+  if (Object.keys(buckets).length === 0) return null;
+  const samples = typeof source?.samples === "number" ? source.samples : 0;
+  return {
+    buckets,
+    samples,
+    resolution: source?.resolution === "minute" ? "minute" : "second",
+  };
+}
+
+function medianMinutesForStates(
+  profile: DelayBuckets,
+  states: Set<string>,
+): number | null {
+  const chosen = new Map<string, DelayBucket>();
+  for (const state of states) {
+    const keys = Object.keys(profile.buckets).filter((key) => {
+      const parts = key.split("|");
+      return parts.length >= 2 && parts[1] === state;
+    });
+    const threePart = keys.filter((key) => key.split("|").length === 3);
+    const use = threePart.length > 0 ? threePart : keys.filter((key) => key.split("|").length === 4);
+    for (const key of use) {
+      const bucket = profile.buckets[key];
+      if (bucket) chosen.set(key, bucket);
+    }
+  }
+  let n = 0;
+  let mu = 0;
+  for (const bucket of chosen.values()) {
+    n += bucket.n;
+    mu += bucket.mu * bucket.n;
+  }
+  if (n < DELAY_BUCKET_MIN) return null;
+  return Math.exp(mu / n) / 60;
 }
 
 function numericByState(
@@ -250,6 +365,14 @@ function restNumericByState(
   }
   if (samples < 1) return null;
   return acc / samples;
+}
+
+function charCount(text: string): number {
+  return Array.from(text).length;
+}
+
+function isState(value: unknown): value is EmotionalState {
+  return typeof value === "string" && (FINGERPRINT_STATES as readonly string[]).includes(value);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

@@ -301,6 +301,26 @@ describe("the per-state imperfection", () => {
     expect(result.merged).toHaveLength(6);
   });
 
+  it("returns the counted drafts with the records they came from", async () => {
+    getPersonaById.mockResolvedValue(
+      persona({
+        styleProfile: {
+          version: 1,
+          measuredAt: "2026-01-01T00:00:00.000Z",
+          recordsVersion: "10:10",
+          imperfectionDrafts: {
+            distant: [{ text: "话很短，通常不超过 2 个字", evidence: [11, 12, 13] }],
+          },
+        },
+      }),
+    );
+    const caller = appRouter.createCaller(makeCtx());
+    const result = await caller.imperfection.get({ personaId: 1, locale: "zh" });
+    expect(result.drafts.distant).toEqual([
+      { text: "话很短，通常不超过 2 个字", evidence: [11, 12, 13] },
+    ]);
+  });
+
   it("writes it back", async () => {
     const caller = appRouter.createCaller(makeCtx());
     await caller.imperfection.save({

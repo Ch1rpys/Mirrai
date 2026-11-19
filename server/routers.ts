@@ -114,7 +114,7 @@ import {
   measureClarifyCountsFromRecords,
   pickClarifications,
 } from "@shared/clarify";
-import { draftImperfection } from "@shared/imperfection-draft";
+import { draftImperfection, normalizeImperfectionDrafts } from "@shared/imperfection-draft";
 import { normalizeStyleProfile } from "@shared/style-profile";
 import { collectEvidence } from "@shared/evidence-map";
 import type { PersonaData } from "./_core/persona-schema";
@@ -5599,7 +5599,13 @@ export const appRouter = router({
           input.locale,
         );
         const style = normalizeStyleProfile(persona.styleProfile);
-        const drafts = draftImperfection(style, { locale: input.locale });
+        // The stored drafts carry the record ids they were counted from.
+        // Recomputing here without the rows would show the user a sentence
+        // with no evidence behind it, so prefer what the measurement saved.
+        const storedDrafts = normalizeImperfectionDrafts(style.imperfectionDrafts);
+        const drafts = Object.keys(storedDrafts).length > 0
+          ? storedDrafts
+          : draftImperfection(style, { locale: input.locale });
         return {
           stored,
           merged: mergeImperfectionDefaults(stored, input.locale),
