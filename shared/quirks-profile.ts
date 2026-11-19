@@ -133,6 +133,28 @@ function countOccurrences(haystack: string, needle: string): number {
   return n;
 }
 
+/**
+ * Whether a stored chat row is one of the app's quirk placeholders.
+ *
+ * The placeholder is what the model and the database see; the interface
+ * renders a notice. It is not something the persona said, so it must not
+ * be fed back as context or sent to a memory-extraction model.
+ */
+export function quirkKindOf(row: {
+  content?: string | null;
+  metadata?: unknown;
+}): "recall" | "pat" | null {
+  const metadata = row.metadata;
+  if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+    const kind = (metadata as { kind?: unknown }).kind;
+    if (kind === "recall" || kind === "pat") return kind;
+  }
+  const content = typeof row.content === "string" ? row.content.trim() : "";
+  if (content === "[recall]") return "recall";
+  if (content === "[pat]") return "pat";
+  return null;
+}
+
 export function measureQuirks(rows: QuirkRow[]): QuirksProfile {
   const pairCounts = new Map<string, TypoFix>();
   for (let i = 1; i < rows.length; i++) {

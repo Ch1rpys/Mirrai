@@ -47,6 +47,7 @@ import { burstTypingMs, delayTypingMs, normalizeTyping } from "@shared/typing-pr
 import {
   applyTypoFix,
   normalizeQuirks,
+  quirkKindOf,
   recallShowMs,
   rejectedCandidate,
   shouldPat,
@@ -1185,18 +1186,6 @@ function quirksForTurn(
   return normalizeQuirks(effectiveStyleProfile(persona).quirks);
 }
 
-function quirkKindOf(row: { content?: string | null; metadata?: unknown }): "recall" | "pat" | null {
-  const metadata = row.metadata;
-  if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
-    const kind = (metadata as { kind?: unknown }).kind;
-    if (kind === "recall" || kind === "pat") return kind;
-  }
-  const content = typeof row.content === "string" ? row.content.trim() : "";
-  if (content === "[recall]") return "recall";
-  if (content === "[pat]") return "pat";
-  return null;
-}
-
 async function* runConversationTurn(
   options: ConversationOptions & { mode: ChatMode },
 ): AsyncGenerator<ChatEvent> {
@@ -1325,6 +1314,12 @@ async function* runConversationTurn(
 
   const timingEnabled = Boolean((persona as any).timingEnabled) && Boolean(loadBehaviorProfile(persona));
   const rerankEnabled = Boolean((persona as any).rerankEnabled);
+  const quirks = quirksForTurn(persona, options.channel);
+  // A recall has to be shown before the line it replaced. Rerank is what
+  // gives us the rejected candidate, and it arrives only after the model
+  // has finished; so a turn that may recall keeps its reply back until
+  // the recall decision is made.
+  const deferReplyForRecall = Boolean(quirks && rerankEnabled && !timingEnabled);
   const behavior = loadBehaviorProfile(persona);
   const inertia = emotionInertiaForTurn(persona, now, message);
   if (inertia) {
@@ -1516,7 +1511,7 @@ async function* runConversationTurn(
   if (plan.kind === "ritual") {
     replyText = plan.ritual?.reply ?? "";
     if (!timingEnabled && replyText) yield { type: "delta", text: replyText };
-  } else if (shouldOfferChoice(persona, options.channel ?? "web")) {
+  } else if (!options.fromReplyJob && shouldOfferChoice(persona, options.channel ?? "web")) {
     try {
       const first = (await collectPlanText(plan, turnInput, {
         provider: provider!,
@@ -1610,7 +1605,7 @@ async function* runConversationTurn(
       rerank: rerankEnabled,
       signal: options.signal,
       options: invokeOptions,
-      emitDeltas: !timingEnabled,
+      emitDeltas: !timingEnabled && !deferReplyForRecall,
     })) {
       if (event.type === "thinking") yield { type: "thinking" };
       if (event.type === "delta") {
@@ -1876,7 +1871,6 @@ async function* runConversationTurn(
     appended.push(worseningTrajectoryNote(locale));
   }
   const finalText = appended.length > 0 ? `${baseText}\n\n${appended.join("\n\n")}` : baseText;
-  const quirks = quirksForTurn(persona, options.channel);
   let spoken = finalText;
   let typoStar: string | null = null;
   if (quirks) {
@@ -2051,7 +2045,7 @@ async function* runConversationTurn(
       showMs: recallShowMs(seededRandom(`${turnInput.seed}:recall-show`)),
     };
   }
-  if (!timingEnabled && typoStar) {
+  if (!timingEnabled && (typoStar || deferReplyForRecall)) {
     yield { type: "burst", texts: parts };
   } else if (!timingEnabled && spoken !== finalText) {
     yield { type: "replace", text: spoken };

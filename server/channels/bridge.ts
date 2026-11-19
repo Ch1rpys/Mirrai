@@ -11,6 +11,7 @@ import * as db from "../db";
 import { runConversation, PersonaAsleepError } from "../chat/service";
 import { copy } from "@shared/copy";
 import { fallbackChannelGapMs, waitAbortable } from "../chat/inbox";
+import type { ChannelReply } from "./send-parts";
 import { claimSilenceNotice } from "../chat/silence-notice";
 import { zonedDateKey, localDateKey } from "@shared/timezone";
 
@@ -34,11 +35,6 @@ export interface ChannelChatParams {
   locale?: "zh" | "en";
 }
 
-export interface ChannelReply {
-  parts: string[];
-  gapsMs: number[];
-}
-
 function gapsFor(parts: string[], given?: number[]): number[] {
   if (parts.length <= 1) return [];
   const out: number[] = [];
@@ -46,23 +42,6 @@ function gapsFor(parts: string[], given?: number[]): number[] {
     out.push(given?.[i - 1] ?? fallbackChannelGapMs(parts[i]!));
   }
   return out;
-}
-
-/**
- * Sends each bubble, waiting the measured (or fallback) gap between them.
- */
-export async function sendChannelParts(
-  reply: ChannelReply | null,
-  send: (text: string) => Promise<unknown>,
-): Promise<void> {
-  if (!reply || reply.parts.length === 0) return;
-  for (let i = 0; i < reply.parts.length; i++) {
-    if (i > 0) {
-      const gap = reply.gapsMs[i - 1] ?? fallbackChannelGapMs(reply.parts[i]!);
-      if (gap > 0) await waitAbortable(gap);
-    }
-    await send(reply.parts[i]!);
-  }
 }
 
 /**
@@ -102,8 +81,11 @@ export async function handleChannelChat(params: ChannelChatParams): Promise<Chan
         const wait = Math.min(Math.max(0, event.ms), 90_000);
         if (wait > 0) await waitAbortable(wait);
       } else if (event.type === "silence") {
-        const zone = (persona as { timezone?: string | null }).timezone
-          || (await db.getUserTimezone(userId).catch(() => null))
+        // The day is the reader's day, not the persona's. Two clocks can
+        // be on different dates; "once a day" follows the person who is
+        // reading the channel.
+        const zone = (await db.getUserTimezone(userId).catch(() => null))
+          || (persona as { timezone?: string | null }).timezone
           || "UTC";
         const day = zonedDateKey(new Date(), zone) || localDateKey(new Date());
         if (!(await claimSilenceNotice(userId, persona.id, day))) return null;
@@ -173,3 +155,6 @@ export async function handleChannelChat(params: ChannelChatParams): Promise<Chan
 
   return { parts, gapsMs: gapsFor(parts, gapsMs) };
 }
+
+export { sendChannelParts } from "./send-parts";
+export type { ChannelReply } from "./send-parts";

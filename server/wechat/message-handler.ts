@@ -7,7 +7,7 @@
 import type { ParsedInbound } from "./ilink/parse";
 import { getActivePersonaId, handleCommand } from "./commands";
 import { handlePersonaChat } from "./persona-bridge";
-import { sendChannelParts } from "../channels/bridge";
+import { sendChannelParts } from "../channels/send-parts";
 import * as db from "../db";
 import { copy } from "@shared/copy";
 

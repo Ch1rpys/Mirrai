@@ -12,6 +12,7 @@ import { LocaleProvider } from "./contexts/LocaleContext";
 import HomePage from "./pages/HomePage";
 import TimezoneSync from "./components/TimezoneSync";
 import CommandPalette from "./components/CommandPalette";
+import NotificationNavigator from "./components/v6/NotificationNavigator";
 
 const Login = lazy(() => import("./pages/Login"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -41,26 +42,29 @@ function Router() {
   useRouteFocus(location);
 
   return (
-    <Suspense fallback={<PageLoader />}>
-      <Switch>
-        <Route path="/" component={HomePage} />
-        <Route path="/onboarding" component={Onboarding} />
-        <Route path="/persona/new/questionnaire" component={Questionnaire} />
-        <Route path="/login" component={Login} />
-        <Route path="/settings" component={Settings} />
-        <Route path="/analytics" component={Analytics} />
-        <Route path="/diary" component={Diary} />
-        <Route path="/persona/:id/edit" component={PersonaEdit} />
-        <Route path="/persona/:id/profile" component={PersonaProfile} />
-        <Route path="/persona/:id/blind-test" component={BlindTest} />
-        <Route path="/blind/:token" component={BlindGuest} />
-        <Route path="/persona/:id/graduation" component={Graduation} />
-        <Route path="/upload/:id" component={Upload} />
-        <Route path="/chat/:id" component={Chat} />
-        <Route path="/404" component={NotFound} />
-        <Route component={NotFound} />
-      </Switch>
-    </Suspense>
+    <>
+      <NotificationNavigator />
+      <Suspense fallback={<PageLoader />}>
+        <Switch>
+          <Route path="/" component={HomePage} />
+          <Route path="/onboarding" component={Onboarding} />
+          <Route path="/persona/new/questionnaire" component={Questionnaire} />
+          <Route path="/login" component={Login} />
+          <Route path="/settings" component={Settings} />
+          <Route path="/analytics" component={Analytics} />
+          <Route path="/diary" component={Diary} />
+          <Route path="/persona/:id/edit" component={PersonaEdit} />
+          <Route path="/persona/:id/profile" component={PersonaProfile} />
+          <Route path="/persona/:id/blind-test" component={BlindTest} />
+          <Route path="/blind/:token" component={BlindGuest} />
+          <Route path="/persona/:id/graduation" component={Graduation} />
+          <Route path="/upload/:id" component={Upload} />
+          <Route path="/chat/:id" component={Chat} />
+          <Route path="/404" component={NotFound} />
+          <Route component={NotFound} />
+        </Switch>
+      </Suspense>
+    </>
   );
 }
 

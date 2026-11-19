@@ -241,3 +241,22 @@ describe("the memory extraction", () => {
     );
   });
 });
+
+describe("quirk placeholders", () => {
+  it("does not send a recall or a pat notice to the extraction model", async () => {
+    getMessagesSince.mockResolvedValue([
+      { id: 1, role: "user", content: "在吗", createdAt: new Date(NOW.getTime() - 180_000), origin: null },
+      { id: 2, role: "assistant", content: "[recall]", createdAt: new Date(NOW.getTime() - 120_000), origin: null },
+      { id: 3, role: "assistant", content: "[pat]", createdAt: new Date(NOW.getTime() - 60_000), origin: null },
+      { id: 4, role: "user", content: "我生日是5月21号", createdAt: NOW, origin: null },
+    ]);
+    invoke.mockResolvedValue("[]");
+
+    await extractMemories({ persona, userId: 1, now: NOW });
+
+    const sent = JSON.stringify(invoke.mock.calls[0]?.[0]);
+    expect(sent).not.toContain("[recall]");
+    expect(sent).not.toContain("[pat]");
+    expect(sent).toContain("我生日是5月21号");
+  });
+});

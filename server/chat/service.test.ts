@@ -1964,8 +1964,13 @@ describe("runConversation", () => {
     }
     spy.mockRestore();
     const types = events.map((event) => event.type);
-    expect(types.indexOf("recall")).toBeGreaterThanOrEqual(0);
-    expect(types.indexOf("recall")).toBeLessThan(types.lastIndexOf("done"));
+    const recallIndex = types.indexOf("recall");
+    expect(recallIndex).toBeGreaterThanOrEqual(0);
+    const replyIndex = types.findIndex(
+      (type, index) => index > recallIndex
+        && (type === "delta" || type === "burst" || type === "replace"),
+    );
+    expect(replyIndex).toBeGreaterThan(recallIndex);
     const recall = events.find((event) => event.type === "recall");
     expect(typeof recall?.text).toBe("string");
     expect(recall?.text).toBeTruthy();

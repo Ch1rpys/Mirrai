@@ -673,6 +673,26 @@ describe("queued replies", () => {
     expect(jobs[0]?.status).toBe("failed");
   });
 
+  it("writes one reply rather than a choice when a deferred turn comes due", async () => {
+    const chooser = persona({
+      chatCount: 8,
+      settings: {
+        timing: { asyncDelivery: true, maxDelayMinutes: 30, sleep: false },
+        layers: { abPairs: true },
+      },
+    });
+    getPersonaById.mockImplementation(async () => chooser);
+    const events = await drain(chooser, "在吗");
+    expect(events[0]?.type).toBe("deferred");
+    expect(jobs).toHaveLength(1);
+    vi.setSystemTime(jobs[0]!.dueAt);
+    await runReplyJob(jobs[0]!.id, 1);
+    expect(jobs[0]?.status).toBe("done");
+    const assistant = stored.filter((row) => row.role === "assistant");
+    expect(assistant).toHaveLength(1);
+    expect(assistant[0]?.content).toBe("在的。");
+  });
+
 function doubleTextProfile(rate = 1) {
   return {
     samples: 30,

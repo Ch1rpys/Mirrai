@@ -18,7 +18,8 @@
  */
 import { decryptSecret, encryptSecret } from "../_core/crypto";
 import * as db from "../db";
-import { handleChannelChat, sendChannelParts } from "./bridge";
+import { handleChannelChat } from "./bridge";
+import { sendChannelParts } from "./send-parts";
 import { clearAllActivePersonas, getActivePersonaId, handleCommand } from "./commands";
 import type { ChannelAdapter, ChannelId, ChannelStatus } from "./types";
 import { copy, detectLocale, type Locale } from "@shared/copy";
@@ -88,21 +89,6 @@ export function extractMessageText(message: {
  *
  * Exported so the behaviour can be tested without a live Feishu connection.
  */
-/**
- * The conversations that are running, per chat.
- *
- * A message started a conversation and returned immediately, so a burst
- * of messages — or a bot echoing itself back — started an unbounded
- * number of conversations at once. Each one is a model call that writes
- * to the same persona, so the replies interleaved and the bill grew
- * without limit.
- *
- * One conversation per chat at a time: the next message waits for the
- * one before it, and the order the user wrote them in is the order they
- * are answered in.
- */
-const conversationChains = new Map<string, Promise<unknown>>();
-
 /**
  * The events that have been handled.
  *
@@ -335,7 +321,16 @@ export async function handleFeishuEvent(params: {
   // It used to be appended twice — once by the bridge and once here —
   // so the user received two instructions to type "/毕业" at the end of
   // one message.
-  await sendChannelParts(reply, (part) => sendText(chatId, part));
+  try {
+    await sendChannelParts(reply, (part) => sendText(chatId, part));
+  } catch (error) {
+    console.warn("[Feishu] Could not send the reply:", (error as Error).message);
+    // The reply is already in the conversation, but it never reached the
+    // reader. Say so; the WeChat path already did.
+    await sendText(chatId, copy(locale, "channels.messageFailed", {
+      reason: copy(locale, "channels.deliveryFailed"),
+    })).catch(() => undefined);
+  }
 }
 
 /**
@@ -507,21 +502,17 @@ export class FeishuAdapter implements ChannelAdapter {
         // Feishu expects a reply within three seconds. The conversation takes
         // far longer than that, so it is started in the background and the
         // callback returns immediately.
-        const chatId = data?.event?.chat_id;
         /**
-         * The chain is keyed by the user as well as the chat.
+         * The burst is kept together by the conversation inbox, not by
+         * waiting for the previous message here. A later line has to
+         * reach `arrive` while the earlier turn is still in its channel
+         * read window, or the four-second window only adds a delay.
          *
-         * The chat id alone was the key — so two users whose chats
-         * shared an id waited on each other's conversation. The ids
-         * come from the other side of the platform, and the map is
-         * shared by every user of this process.
+         * `waitForRoom` still caps how many conversations one user has
+         * running at once, and `takeTurn` still serializes the actual
+         * generation for one persona.
          */
-        const chainKey = chatId ? `${userId}:${chatId}` : null;
-        const previous = chainKey ? conversationChains.get(chainKey) : undefined;
-        const run = (async () => {
-          // The previous message in this chat is answered first.
-          if (previous) await previous.catch(() => undefined);
-          // And there is room for this one.
+        void (async () => {
           const giveTheRoomBack = await waitForRoom(userId);
           try {
             await handleFeishuEvent({
@@ -534,15 +525,6 @@ export class FeishuAdapter implements ChannelAdapter {
             giveTheRoomBack();
           }
         })().catch((e) => console.error("[Feishu] Failed to handle event:", e));
-
-        if (chainKey) {
-          conversationChains.set(chainKey, run);
-          // The chain is let go of once it has settled, so the map does
-          // not grow for the life of the process.
-          void run.finally(() => {
-            if (conversationChains.get(chainKey) === run) conversationChains.delete(chainKey);
-          });
-        }
       },
     });
 

@@ -874,10 +874,12 @@ async function runMonitor(userId: number, signal: AbortSignal): Promise<void> {
               if (idx >= 0) pendingWork.splice(idx, 1);
             });
           pendingWork.push(work);
-          // The next message of the same conversation waits for this
-          // one — the answers have to be in the order the messages
-          // were sent.
-          await work;
+          // Do not wait for this message before starting the next one.
+          // The conversation inbox is what keeps a burst together: a
+          // later line reaches `arrive` while the first turn is still in
+          // its channel read window, and then one turn answers all of
+          // them. Waiting here would make `CHANNEL_READ_WINDOW_MS` a
+          // delay instead of a merge window.
         }
       }
     } catch (err) {

@@ -186,6 +186,40 @@ describe("the bridge", () => {
     expect(reply?.parts[0]).not.toContain(note);
   });
 
+  it("claims the silence notice on the reader's day, not the persona's", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2024-06-01T17:00:00.000Z")); // 01:00 on June 2 in Shanghai
+      getPersonaById.mockResolvedValue({
+        id: 7,
+        name: "小A",
+        analysisStatus: "ready",
+        timezone: "UTC",
+        graduationStatus: null,
+      });
+      getUserTimezone.mockResolvedValue("Asia/Shanghai");
+      async function* silent() {
+        yield { type: "silence", notice: "这次先不回了。" };
+        yield { type: "done", messageId: 1, graduationSuggested: false };
+      }
+      runConversation.mockImplementation(() => silent());
+
+      const reply = await handleChannelChat({
+        userId: 1,
+        conversationKey: "oc_abc",
+        personaId: 7,
+        messageText: "在吗",
+        channel: "feishu",
+        locale: "zh",
+      });
+
+      expect(reply?.parts).toEqual(["这次先不回了。"]);
+      expect(claimSilenceNotice).toHaveBeenCalledWith(1, 7, "2024-06-02");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("sends a silence notice once a day", async () => {
     async function* silent() {
       yield { type: "silence", notice: "这次先不回了。" };

@@ -18,18 +18,6 @@ vi.mock("../db", () => ({
 
 vi.mock("./bridge", () => ({
   handleChannelChat: (...a: unknown[]) => handleChannelChat(...a),
-  sendChannelParts: async (
-    reply: { parts: string[]; gapsMs: number[] },
-    send: (part: string) => Promise<void>,
-  ) => {
-    for (let i = 0; i < reply.parts.length; i++) {
-      if (i > 0) {
-        const gap = reply.gapsMs[i - 1] ?? 0;
-        if (gap > 0) await new Promise((resolve) => setTimeout(resolve, gap));
-      }
-      await send(reply.parts[i]!);
-    }
-  },
 }));
 
 vi.mock("./commands", () => ({
@@ -212,6 +200,29 @@ describe("handleFeishuEvent", () => {
 
     expect(handleChannelChat).toHaveBeenCalled();
     expect(sent).toContain("在的。");
+  });
+
+  it("tells the reader when the reply could not be delivered", async () => {
+    // The real `sendChannelParts` is used here: the first send throws, and
+    // the entry must still tell the reader that nothing arrived.
+    const sendText = vi.fn()
+      .mockRejectedValueOnce(new Error("the platform refused it"))
+      .mockResolvedValue(undefined);
+
+    await handleFeishuEvent({
+      userId: 1,
+      event: {
+        chat_id: "oc_abc",
+        chat_type: "p2p",
+        message: { message_type: "text", content: JSON.stringify({ text: "在吗" }) },
+      },
+      sendText,
+    });
+
+    expect(sendText).toHaveBeenCalledTimes(2);
+    expect(sendText.mock.calls[0]?.[1]).toBe("在的。");
+    expect(sendText.mock.calls[1]?.[1]).toContain("消息没有发出去");
+    expect(sendText.mock.calls[1]?.[1]).toContain("通道没有把这条消息送达");
   });
 
   it("ignores a group conversation", async () => {

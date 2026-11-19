@@ -132,13 +132,38 @@ export function parseCommandLine(text: string): { command: string; args: string 
   return { command, args };
 }
 
+/** One command per user at a time. A burst of normal messages can run at
+ * once, but two `/毕业` messages must not race each other into two
+ * graduations. */
+const commandChains = new Map<number, Promise<unknown>>();
+
+function runCommandSerially<T>(userId: number, work: () => Promise<T>): Promise<T> {
+  const previous = commandChains.get(userId) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(work);
+  const tail = next.then(() => undefined, () => undefined);
+  commandChains.set(userId, tail);
+  void tail.finally(() => {
+    if (commandChains.get(userId) === tail) commandChains.delete(userId);
+  });
+  return next;
+}
+
+/** @internal for tests */
+export function resetCommandChains(): void {
+  commandChains.clear();
+}
+
 /**
  * Handles a slash command.
  *
  * `defaultPersonaId` is the account's bound default persona; the session
  * override takes precedence when present.
  */
-export async function handleCommand(params: {
+export async function handleCommand(params: Parameters<typeof handleCommandNow>[0]): Promise<CommandResult> {
+  return runCommandSerially(params.userId, () => handleCommandNow(params));
+}
+
+async function handleCommandNow(params: {
   userId: number;
   /** Conversation identifier — the counterpart id on the channel. */
   conversationKey: string;

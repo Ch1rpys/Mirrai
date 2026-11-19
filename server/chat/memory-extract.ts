@@ -12,6 +12,7 @@
 import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { llmService } from "../llm";
+import { quirkKindOf } from "@shared/quirks-profile";
 import { resolveProviderForPurposeWithOwnership } from "../llm/user-provider";
 import { copy } from "@shared/copy";
 import { asMaterial } from "../_core/material";
@@ -163,6 +164,7 @@ export async function extractMemories(params: {
     content: string;
     createdAt: Date;
     origin?: string | null;
+    metadata?: unknown;
   }>;
 }): Promise<ExtractResult> {
   const { persona, userId } = params;
@@ -225,6 +227,7 @@ async function runExtraction(params: {
     content: string;
     createdAt: Date;
     origin?: string | null;
+    metadata?: unknown;
   }>;
 }): Promise<ExtractResult> {
   const { persona, userId } = params;
@@ -283,7 +286,7 @@ async function runExtraction(params: {
   const coveredAt = batch[batch.length - 1]?.createdAt ?? null;
   // A system notice is the app talking. It is not something they said,
   // so it is not a fact to store.
-  const spoken = batch.filter((row) => row.origin !== "system-notice");
+  const spoken = batch.filter((row) => row.origin !== "system-notice" && !quirkKindOf(row));
   if (spoken.length === 0) {
     if (!fromUpload) {
       await db.markMemoryExtracted(
