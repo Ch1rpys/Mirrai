@@ -23,6 +23,14 @@ describe("the offline page", () => {
     expect(source).toContain("navigator");
   });
 
+  it("has a generic notification in both languages", () => {
+    const source = readFileSync(path.join(ROOT, "client/public/sw.js"), "utf-8");
+    expect(source).toContain("有一条新消息");
+    expect(source).toContain("There is a new message");
+    expect(source).toContain("function notificationCopy");
+    expect(source).toContain("navigator");
+  });
+
   it("says the app's name, not the page's", () => {
     const source = readFileSync(path.join(ROOT, "client/public/sw.js"), "utf-8");
     // The English page said "This page needs the app to be running" —

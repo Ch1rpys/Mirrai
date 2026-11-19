@@ -228,6 +228,20 @@ describe("the service worker", () => {
     expect(source).not.toMatch(/catch\(\(\)\s*=>\s*caches\.match\(/);
   });
 
+  it("does not touch the cache while showing or opening a notification", () => {
+    const source = readFileSync(SW_PATH, "utf-8");
+    for (const name of ["push", "notificationclick"]) {
+      const start = source.indexOf(`addEventListener("${name}"`);
+      expect(start, name).toBeGreaterThan(-1);
+      const next = source.indexOf("addEventListener(", start + 20);
+      const body = source.slice(start, next === -1 ? source.length : next);
+      expect(body, name).not.toMatch(/caches\./);
+    }
+    const copyStart = source.indexOf("function notificationCopy");
+    const copyEnd = source.indexOf('addEventListener("push"');
+    expect(source.slice(copyStart, copyEnd)).not.toMatch(/\$\{/);
+  });
+
   it("does not try to cache a failed response", async () => {
     // `cache.put` rejects for a response that is not 2xx, and the put
     // was not awaited, so every 404 produced an unhandled rejection.

@@ -184,3 +184,55 @@ self.addEventListener("fetch", (event) => {
     }),
   );
 });
+
+/**
+ * The words on a notification that did not bring its own.
+ *
+ * Same rule as the offline page: the worker cannot read the app's
+ * language setting, so it uses the browser's language. The two
+ * sentences are fixed. Nothing from the payload is interpolated into
+ * them.
+ */
+function notificationCopy() {
+  const chinese = String(self.navigator?.language ?? "").toLowerCase().startsWith("zh");
+  if (chinese) return { title: "Mirrai", body: "有一条新消息" };
+  return { title: "Mirrai", body: "There is a new message" };
+}
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = {};
+  }
+  const fallback = notificationCopy();
+  const title = typeof payload.title === "string" && payload.title ? payload.title : fallback.title;
+  const body = typeof payload.body === "string" && payload.body ? payload.body : fallback.body;
+  const tag = payload.personaId != null ? "persona-" + payload.personaId : "mirrai";
+  const url = typeof payload.url === "string" && payload.url.startsWith("/") ? payload.url : "/";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      tag,
+      data: { url },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification && event.notification.data && event.notification.data.url
+    ? event.notification.data.url
+    : "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+      const open = windowClients.find((client) => client.url && client.url.indexOf(self.location.origin) === 0);
+      if (open) {
+        open.postMessage({ type: "navigate", url });
+        return open.focus();
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
+});
