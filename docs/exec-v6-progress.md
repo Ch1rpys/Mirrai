@@ -1661,12 +1661,14 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 
 ### WP5 · 实现会话 · 2026-11-19 · 独立验收修复
 
-`f231fef`、`c4ca7a9`、`4271806` 修独立验收的五项，只改实现和测试；验收段的 `- [ ]` 已改成 `- [x]`。
+`f231fef`、`c4ca7a9`、`4271806`、`b833c9d` 修独立验收的五项，只改实现和测试；验收段的 `- [ ]` 已改成 `- [x]`。
 
-- B3.6（`f231fef`）：`imperfection.get` 先读已存的 `styleProfile.imperfectionDrafts`（`normalizeImperfectionDrafts`），保住记录 id；没有存盘草稿才回退到现场重算。`draftImperfection` 的「连发」改成从记录行按场景/轮（`splitScenes` / `toTurns`）量每个状态的平均轮大小，「回复间隔」改成读 B5.3 的 `DelayBuckets`（三段的 `band|state|asking`，按 n 加权 `mu`，`exp(mu)/60` 分钟）；长度草稿的证据只取不超过/不低于中位字数的行，句号草稿只取以句号结尾的行。测试：`shared/imperfection-draft.test.ts` 3 条（合成轮、合成 bucket）、`server/routers.fidelity.test.ts` 存盘草稿证据、`ImperfectionEditor.test.tsx` 展开证据。
+- B3.6（`f231fef`）：`imperfection.get` 只读已存的 `styleProfile.imperfectionDrafts`（`normalizeImperfectionDrafts`），保住记录 id；没有存盘草稿就不显示，不再凭空重算一条没有证据的句子（`b833c9d`）。`draftImperfection` 的「连发」改成从记录行按场景/轮（`splitScenes` / `toTurns`）量每个状态的平均轮大小，「回复间隔」改成读 B5.3 的 `DelayBuckets`（三段的 `band|state|asking`，按 n 加权 `mu`，`exp(mu)/60` 分钟）；长度草稿的证据只取不超过/不低于中位字数的行，句号草稿只取以句号结尾的行。测试：`shared/imperfection-draft.test.ts` 3 条（合成轮、合成 bucket）、`server/routers.fidelity.test.ts` 存盘草稿证据、`ImperfectionEditor.test.tsx` 展开证据。
 - B3.8（`c4ca7a9`）：`AddressEntry` 增加 `byDay`（`YYYY-MM-DD`，按测量时区）；选时期时优先按天精确计数，旧条目没有 `byDay` 时回退到月/季。整行称呼在行首即行尾时也进入候选；`isNameLike` 认「小/阿/老」开头的 2–3 字称呼，`晚安`/`随便` 这类裸回复仍排除。测试：`shared/address-history.test.ts` 10 条。
 - B3.4（`4271806`）：`strip_period` 保护常见英文缩写（`Mr.`/`Mrs.`/`Dr.`/`etc.`/`Jan.` 等）的句点，普通句末点仍去掉；`shared/style-projection.test.ts` 28 条。
 - B3.3（`4271806`）：补一条「加判别器后名次翻转」的用例；`getRerankModel` 的测试标题改成「不重读记录」，并显式断言 `getRecordsVersion` 仍每次查一次（这是发现记录变化的办法）。
 - 未改的两处：B2.7 的 `userMaxTokens: 0` 在生产路由先 `clampMaxTokens(0)` 到 16，走不到；B3.4 气泡内单个「。」仍按偏差 81 去掉，只保护数字/省略号/网址/缩写。
 
 `corepack pnpm gate`（无 `--fast`、无 `DATABASE_URL`，Node v24.14.1）退出码 0：`Test Files  421 passed | 5 skipped (426)`，`Tests  3707 passed | 23 skipped (3730)`，`all six steps passed`。通过用例比验收时 3701 多 6 条；跳过数不变；WP5 相关 27 个测试文件 419 条全过。没有新迁移；没有改 `package.json` / `pnpm-lock.yaml` / `drizzle/` / `server/wechat/ilink`；黄金快照未改。状态：B3.4、B3.8 改回 🟡（效果仍待真实模型），B3.6 改回 ✅；B2.7、B3.3、B3.7 维持 🟡，B3.5 维持 ✅。
+
+另：本次全量闸门有一次在 `server/importers/roundtrip.test.ts` 的两条 5 秒超时（该文件单跑 15 条 4.7 秒通过，重跑整闸门全绿）；是并行负载下的既有超时，不是本包改动，未动该测试。
