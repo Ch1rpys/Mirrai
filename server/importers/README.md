@@ -253,3 +253,17 @@ not a static table
 ([HTML Export](https://deepwiki.com/amtech/tool-WeChatMsg/5.1-html-export)).
 There is no stable static schema, so it is not in the registry and the
 wizard does not offer it.
+
+## Voice files
+
+Voice notes come out of an export as they were stored: WeChat uses
+AMR in older exports and SILK in newer ones, and SILK is a proprietary
+codec bundled with the WeChat client rather than a format ffmpeg can
+decode. A `.silk` file is unpacked and registered like any other media
+file, but transcription of it fails with "could not hear that" rather
+than guessing.
+
+Convert it first, outside the app, to something ffmpeg reads — for
+example with `silk-v3-decoder` (`silk` → `pcm` → `wav`) or the online
+converter the project documents, then transcribe the WAV. The same
+applies to any other container the local ffmpeg build does not know.

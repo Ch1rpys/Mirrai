@@ -67,6 +67,27 @@ export const EGRESS_ITEMS: EgressItem[] = [
     },
   },
   {
+    id: "stt-local-http",
+    side: "server",
+    destination: {
+      zh: "你自己起的语音识别服务（STT_HTTP_URL，默认必须是本机或局域网地址）",
+      en: "The speech-to-text service you run yourself (STT_HTTP_URL; on this machine or the LAN by default)",
+    },
+    payload: {
+      zh: "语音文件的字节。导入记录里的录音只走本机引擎，不会发到别处",
+      en: "The bytes of the recording. Voice notes in an imported record only ever go to a local engine",
+    },
+    when: {
+      zh: "STT_ENGINE=http 时转写一条语音，或转写导入记录里的语音条",
+      en: "With STT_ENGINE=http: a voice message, or a voice note in an imported record",
+    },
+    defaultOn: false,
+    offHow: {
+      zh: "不设 STT_ENGINE=http，或把它设成 off；也可以停掉那个服务",
+      en: "Leave STT_ENGINE at provider, set it to off, or stop the service",
+    },
+  },
+  {
     id: "llm-claude",
     side: "server",
     destination: {

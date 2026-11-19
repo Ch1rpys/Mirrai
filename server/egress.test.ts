@@ -16,6 +16,7 @@ const CALL_PATTERN = /fetch\s*\(|new WebSocket\s*\(|https\.request\s*\(|http\.re
  */
 const CALL_SITES: Array<{ file: string; purpose: string }> = [
   { file: "server/llm/providers/openai.ts", purpose: "OpenAI-compatible chat and speech-to-text" },
+  { file: "server/_core/stt.ts", purpose: "A local OpenAI-compatible speech-to-text service (STT_HTTP_URL)" },
   { file: "server/llm/providers/claude.ts", purpose: "Anthropic Messages API" },
   { file: "server/llm/providers/ollama.ts", purpose: "Ollama /api/chat" },
   { file: "server/chat/embeddings.ts", purpose: "Ollama /api/embed for local exemplar retrieval" },

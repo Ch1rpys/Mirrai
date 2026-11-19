@@ -121,6 +121,7 @@ import type { PersonaData } from "./_core/persona-schema";
 import { isChatImportFileType, startImport } from "./importers";
 import { importUnpackRelKey } from "./importers/archive";
 import { afterRecordsRemoved } from "./_core/style-profile";
+import { transcribeAudio } from "./_core/stt";
 import { asMaterial } from "./_core/material";
 import { buildEvalCases, buildFeedbackEvalCases, casesFromRows, trainingTexts } from "./eval/dataset";
 import type { EvalCaseData, EvalSourceMessage } from "./eval/dataset";
@@ -2725,15 +2726,19 @@ export const appRouter = router({
          *
          * So a failure is a failure: it is said so, and no reply is
          * composed.
+         *
+         * Which engine does the listening depends on the environment
+         * (B7.2): the provider, a local whisper.cpp, or a local
+         * OpenAI-compatible service. A local engine means a persona
+         * configured against a local model can hear a recording too.
          */
-        const transcription = voiceProvider
-          ? await llmService
-              .transcribeWithProvider(voiceProvider, buffer, safeName)
-              .catch((e) => {
-                console.warn("[Chat] The recording could not be transcribed:", (e as Error).message);
-                return "";
-              })
-          : "";
+        const heard = await transcribeAudio({
+          buffer,
+          fileName: safeName,
+          purpose: "chat",
+          provider: voiceProvider ?? undefined,
+        });
+        const transcription = heard?.text ?? "";
         if (!transcription) {
           return {
             reply: "",
