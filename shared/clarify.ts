@@ -144,6 +144,25 @@ function confirmCandidates(rules: MicroRule[] | undefined): MicroRule[] {
   ).slice(0, CLARIFY_CONFIRM_MAX);
 }
 
+/**
+ * How many conflicts the persona has actually shown.
+ *
+ * Once the conflict profile has been measured (B4.4), it is the truth:
+ * a repair-act count is only a stand-in for a log that has not been
+ * through the conflict miner yet. Counting `act === "repair"` alone
+ * asked "who speaks first after a fight" of a persona with six
+ * measured fights whose repair lines were labelled as something else.
+ */
+function measuredConflictCount(
+  style: StyleProfile | null | undefined,
+  counts: ClarifyCounts,
+): number {
+  const measured = style?.conflict?.episodes;
+  return typeof measured === "number" && measured >= 0
+    ? measured
+    : counts.conflictCount;
+}
+
 function choice(locale: Locale, key: Parameters<typeof copy>[1], value: string): ClarifyChoice {
   return { value, label: copy(locale, key) };
 }
@@ -261,7 +280,7 @@ export function pickClarifications(params: {
       ],
     });
   }
-  if (params.counts.conflictCount < 3) {
+  if (measuredConflictCount(style, params.counts) < 3) {
     push({
       id: "conflict_first",
       kind: "conflict_first",

@@ -108,6 +108,24 @@ describe("when each question is asked", () => {
     ).toBe(false);
   });
 
+  it("prefers the measured conflict profile over the repair-act count", () => {
+    const measured = normalizeStyleProfile({
+      conflict: {
+        episodes: 6,
+        durationMin: { median: 300, p25: 240, p75: 360, all: [180, 240, 300, 300, 360, 480] },
+        repairBy: { them: 4, me: 2 },
+        repairAcceptRate: 1,
+        repairLines: ["好啦 不气了"],
+        coldLines: ["哦。", "随便。"],
+      },
+    });
+    const ids = pick({
+      counts: { conflictCount: 0 },
+      styleProfile: measured,
+    }).map((row) => row.id);
+    expect(ids).not.toContain("conflict_first");
+  });
+
   it("asks about stickers only when none were counted", () => {
     expect(pick().some((row) => row.id === "sticker_habit")).toBe(true);
     expect(
