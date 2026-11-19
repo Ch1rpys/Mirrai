@@ -33,6 +33,7 @@ export default function PersonaSwitches(props: { personaId: number; name: string
   const twoStage = Boolean(settings.data?.layers?.twoStage);
   const factRewrite = Boolean(settings.data?.layers?.factRewrite);
   const asyncDelivery = Boolean(settings.data?.timing?.asyncDelivery);
+  const maxDelayMinutes = settings.data?.timing?.maxDelayMinutes ?? 30;
   const asleep = Boolean(settings.data?.timing?.sleep);
   const style = trpc.style.get.useQuery(
     { personaId: props.personaId },
@@ -288,6 +289,51 @@ export default function PersonaSwitches(props: { personaId: number; name: string
             {t("personaEdit.factRewriteNote")}
           </span>
         </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={asyncDelivery}
+          disabled={busy}
+          onChange={(event) =>
+            update.mutate({
+              id: props.personaId,
+              patch: { timing: { asyncDelivery: event.target.checked } },
+            })
+          }
+          className="mt-0.5"
+        />
+        <span>
+          <span className="block">{t("personaEdit.asyncDelivery", { name: props.name })}</span>
+          <span className="block text-xs text-muted-foreground leading-relaxed">
+            {t("personaEdit.asyncDeliveryNote", { name: props.name })}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <span className="flex-1">
+          <span className="block">{t("personaEdit.maxDelayMinutes")}</span>
+          <span className="block text-xs text-muted-foreground leading-relaxed">
+            {t("personaEdit.maxDelayMinutesNote")}
+          </span>
+        </span>
+        <input
+          type="number"
+          min={1}
+          max={360}
+          value={maxDelayMinutes}
+          disabled={busy || !asyncDelivery}
+          aria-label={t("personaEdit.maxDelayMinutes")}
+          onChange={(event) => {
+            const n = Number.parseInt(event.target.value, 10);
+            if (!Number.isFinite(n)) return;
+            update.mutate({
+              id: props.personaId,
+              patch: { timing: { maxDelayMinutes: n } },
+            });
+          }}
+          className="mt-0.5 w-16 rounded-md border border-input bg-background px-2 py-1 text-sm"
+        />
       </label>
       <label className="flex items-start gap-2 text-sm">
         <input

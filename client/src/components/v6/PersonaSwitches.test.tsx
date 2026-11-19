@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
@@ -73,6 +73,8 @@ describe("the persona switches section", () => {
     expect(screen.getByText("偶尔让我二选一")).toBeInTheDocument();
     expect(screen.getByText("先想好说什么，再用 小满 的话说")).toBeInTheDocument();
     expect(screen.getByText("提到了记录里没有的往事，就让它重说")).toBeInTheDocument();
+    expect(screen.getByText("小满 可以晚点回")).toBeInTheDocument();
+    expect(screen.getByText("最多等多久")).toBeInTheDocument();
   });
 
   it("turns the A/B pair on", async () => {
@@ -113,6 +115,33 @@ describe("the persona switches section", () => {
       id: 5,
       patch: { layers: { factRewrite: true } },
     });
+  });
+
+  it("turns late replies on and saves the wait cap", async () => {
+    const user = userEvent.setup();
+    settingsState.data = { layers: { abPairs: false } };
+    const { unmount } = render(<PersonaSwitches personaId={5} name="小满" />);
+    await user.click(screen.getByRole("checkbox", { name: /小满 可以晚点回/ }));
+    expect(mutate).toHaveBeenCalledWith({
+      id: 5,
+      patch: { timing: { asyncDelivery: true } },
+    });
+    expect(screen.getByRole("spinbutton", { name: "最多等多久" })).toBeDisabled();
+    unmount();
+
+    settingsState.data = {
+      layers: {},
+      timing: { asyncDelivery: true, maxDelayMinutes: 30 },
+    };
+    render(<PersonaSwitches personaId={5} name="小满" />);
+    const cap = screen.getByRole("spinbutton", { name: "最多等多久" });
+    expect(cap).not.toBeDisabled();
+    fireEvent.change(cap, { target: { value: "45" } });
+    expect(mutate).toHaveBeenCalledWith({
+      id: 5,
+      patch: { timing: { maxDelayMinutes: 45 } },
+    });
+    settingsState.data = { layers: { abPairs: false } };
   });
 
   it("keeps sleep off until late replies are on, then saves the switch", async () => {

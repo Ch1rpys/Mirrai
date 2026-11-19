@@ -63,6 +63,15 @@ vi.mock("@/lib/trpc", () => ({
       tts: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
       voices: { useQuery: () => ({ data: { voices: [] } }) },
       search: { useQuery: () => ({ data: [] }) },
+      pendingReply: {
+        useQuery: () => ({
+          data: null,
+          isError: false,
+          isLoading: false,
+          refetch: vi.fn(),
+        }),
+      },
+      replyNow: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     scene: {
       list: { useQuery: () => ({ data: [] }) },
@@ -87,7 +96,10 @@ vi.mock("@/lib/trpc", () => ({
         get: { invalidate: vi.fn() },
         checkGraduation: { invalidate: vi.fn() },
       },
-      chat: { getHistory: { invalidate: vi.fn() } },
+      chat: {
+        getHistory: { invalidate: vi.fn() },
+        pendingReply: { invalidate: vi.fn() },
+      },
       client: { mutation: vi.fn() },
     }),
   },

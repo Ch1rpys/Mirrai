@@ -30,6 +30,7 @@ import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionKey } from "@/lib/emo
 import { useConfirm } from "@/components/ConfirmDialog";
 import MemoryReview from "@/components/v6/MemoryReview";
 import ChoiceBubble from "@/components/v6/ChoiceBubble";
+import PendingReply from "@/components/v6/PendingReply";
 
 /**
  * The largest picture the chat will send.
@@ -878,6 +879,10 @@ export default function Chat() {
             onSuperseded: () => {
               setMessages((prev) => prev.filter((m) => m.id !== streamId));
             },
+            onDeferred: () => {
+              setMessages((prev) => prev.filter((m) => m.id !== streamId));
+              void utils.chat.pendingReply.invalidate({ personaId });
+            },
           },
         });
       } catch (err) {
@@ -918,8 +923,9 @@ export default function Chat() {
           setMessages(prev => prev.map(m => (m.id === streamId ? { ...m, isStreaming: false } : m)));
           return;
         }
-        if (result.superseded) {
+        if (result.superseded || result.deferred) {
           setMessages((prev) => prev.filter((m) => m.id !== streamId));
+          if (result.deferred) void utils.chat.pendingReply.invalidate({ personaId });
           return;
         }
         if (result.choice?.options?.length >= 2 && typeof result.choice.replyToMessageId === "number") {
@@ -1308,8 +1314,9 @@ export default function Chat() {
           },
           controller.signal,
         );
-        if (result.superseded) {
+        if (result.superseded || result.deferred) {
           setMessages((prev) => prev.filter((m) => m.id !== streamId));
+          if (result.deferred) void utils.chat.pendingReply.invalidate({ personaId });
         } else {
           setMessages(prev => prev.map(m => m.id === streamId
             ? { id: `ai-${Date.now()}`, role: "assistant", content: result.reply, emotionalState: result.emotionalState, createdAt: new Date(), isStreaming: false }
@@ -1414,8 +1421,9 @@ export default function Chat() {
               toast.error(t("chat.voiceNotUnderstood"));
               return;
             }
-            if (result.superseded) {
+            if (result.superseded || result.deferred) {
               setMessages((prev) => prev.filter((m) => m.id !== streamId));
+              if (result.deferred) void utils.chat.pendingReply.invalidate({ personaId });
               return;
             }
             setMessages(prev => prev.map(m => {
@@ -2068,6 +2076,11 @@ export default function Chat() {
             );
             });
           })()}
+          <PendingReply
+            personaId={personaId}
+            name={persona?.name || "?"}
+            onArrived={() => { void refetchHistory(); }}
+          />
           <div ref={messagesEndRef} />
         </div>
       </div>
