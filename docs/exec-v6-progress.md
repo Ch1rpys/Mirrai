@@ -1463,7 +1463,7 @@ A1、A2、A3、A4、C1.2、C1.3、C1.4、C1.5、C1.6、C1.7 维持 ✅。C1.1 �
 
 ### WP1 · 实现会话 · 2026-11-19 · 独立验收修复
 
-- `076c7af` 修 C1.1：`meta-json` 的 `parse` 不再用 `cleanText` 过的 `source.text`，改从 `source.bytes` 重新解码（`decodeImportBytes`），让 mojibake 在 `cleanText` 吞掉 U+00A0/U+00AD 之前还原；样本测试改走 `importSourceFrom` 的真实入口，并断言 speakers 为小满/阿树、正文含「他说：先这样」「中午吃面吗」。先红后绿（亲自跑过）：修前同一测试红在 `speaker: 'é\u0098¿æ \u0091'`，修后 `meta-json`/`roundtrip`/`detect` 3 文件 34 通过。
+- `076c7af` 修 C1.1：`meta-json` 的 `parse` 不再用 `cleanText` 过的 `source.text`，改从 `source.bytes` 重新解码（`decodeImportBytes`），让 mojibake 在 `cleanText` 吞掉 U+00A0/U+00AD 之前还原；样本测试改走 `importSourceFrom` 的真实入口，并断言 speakers 为小满/阿树、正文含「他说：先这样」「中午吃面吗」。先红后绿（亲自跑过）：修前同一测试红在 `speaker: 'é\u0098¿æ \u0091'`，修后 `meta-json`/`roundtrip`/`detect` 3 文件 34 通过；并在桩模型/临时库实机上复验：上传该样本后 `needs_roles` 的 speakers 为 `小满 7 / 阿树 6`，confirm 写入 13 行（assistant 7 / user 6），库里 0 行乱码，库已 `dropdb`。
 - `214d5bc` 补这次验收的存疑项：`ImportWizard.test.tsx` 加 `needs_chat` 一条，断言列出两个会话、选中前「继续」禁用、选中后 `import.resume` 收到 `chatId: "b.txt"`；该文件 8 通过。
 - 更新 A1、A4 两行的验收证据（A1 的四列落库断言在 `server/collectors/db-store.test.ts:526`、上传停在 `needs_roles`；A4 的时期边界改为 `2023-07-04T23:47:05.000Z`，上海 2023-07-05）。
 - 闸门 `419 passed | 6 skipped (425)` 文件，`3684 passed | 23 skipped (3707)` 用例，`all six steps passed`（相对验收时的 3683 条 +1，是新增的 `needs_chat` 用例；跳过数不变）。这次没有新增偏差。
