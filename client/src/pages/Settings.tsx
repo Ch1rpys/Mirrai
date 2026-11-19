@@ -33,6 +33,7 @@ import DistillationModePicker from "@/components/DistillationModePicker";
 import { useLocale } from "@/contexts/LocaleContext";
 import SafetyTransparency from "@/components/SafetyTransparency";
 import EgressList from "@/components/v6/EgressList";
+import PushSettings from "@/components/v6/PushSettings";
 import EmbedStatus from "@/components/v6/EmbedStatus";
 import ExtraBodyEditor from "@/components/v6/ExtraBodyEditor";
 import LlmRoles from "@/components/v6/LlmRoles";
@@ -1472,6 +1473,8 @@ export function DataManagementTab() {
           </div>
         </section>
       )}
+
+      <PushSettings />
 
       <EgressList />
 

@@ -22,6 +22,18 @@ vi.mock("@/lib/trpc", () => ({
     chat: {
       exportAll: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    push: {
+      publicKey: {
+        useQuery: () => ({ data: undefined, isError: false, isLoading: false, refetch: vi.fn() }),
+      },
+      list: {
+        useQuery: () => ({ data: [], isError: false, isLoading: false, refetch: vi.fn() }),
+      },
+      subscribe: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      unsubscribe: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      setPreview: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      test: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
   },
 }));
 
