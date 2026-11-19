@@ -110,6 +110,29 @@ describe("the import wizard", () => {
     expect(screen.getByRole("button", { name: translate("zh", "importWizard.columnMap") })).toBeTruthy();
   });
 
+  it("lists the conversations in a multi-chat file and resumes with the chosen one", async () => {
+    const user = userEvent.setup();
+    status = fileStatus("needs_chat", {
+      chats: [
+        { id: "a.txt", title: "a.txt", count: 2 },
+        { id: "b.txt", title: "b.txt", count: 1 },
+      ],
+    });
+    render(<ImportWizard fileId={11} personaName="小满" timezone="Asia/Shanghai" />);
+    expect(screen.getByText(translate("zh", "importWizard.chatPrompt"))).toBeTruthy();
+    const choices = screen.getAllByRole("radio");
+    expect(choices).toHaveLength(2);
+    const continueButton = screen.getByRole("button", { name: translate("zh", "importWizard.continue") });
+    expect(continueButton).toBeDisabled();
+
+    await user.click(choices[1]);
+    expect(continueButton).not.toBeDisabled();
+    await user.click(continueButton);
+
+    expect(apply).toHaveBeenCalledWith(expect.objectContaining({ fileId: 11, chatId: "b.txt" }));
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
   it("disables continue until both sides are named, then confirms them", async () => {
     const user = userEvent.setup();
     status = fileStatus("needs_roles", {
