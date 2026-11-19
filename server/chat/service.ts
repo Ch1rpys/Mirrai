@@ -21,7 +21,7 @@ import * as db from "../db";
 import { computeIntimacy, getEmotionalStateDesc } from "../_core/persona-utils";
 import { inferEmotionalState, isEmotionalState } from "../_core/emotion";
 import { applyInertia, decayState, normalizeEmotionDynamics } from "@shared/emotion-dynamics";
-import { labelUserActByRule } from "@shared/speech-acts";
+import { isUserAsking, labelUserActByRule } from "@shared/speech-acts";
 import { layersFromSettings } from "@shared/layers";
 import { effectiveStyleProfile } from "@shared/style-profile";
 import { retrieveMemories } from "./retrieval";
@@ -36,11 +36,13 @@ import { normalizePersonaSettings } from "@shared/persona-settings";
 import { asMaterial } from "../_core/material";
 import { buildPromptBundleForPersona } from "./prompt";
 import { splitBurst } from "./burst";
-import { loadBehaviorProfile } from "../_core/behavior-profile";
+import { loadBehaviorProfile, seededRandom } from "../_core/behavior-profile";
 import { planTurn, executePlan } from "./generate";
 import { extractClaims, verifyClaims } from "./fact-check";
 import type { ReanchorIssue } from "@shared/style-reminder";
 import { sampleBurstSize, sampleReplyDelayMs } from "@shared/behavior-profile";
+import { bandOf, pickDelayBucket, sampleDelayMs } from "@shared/reply-delay";
+import { EMOTION_TRIGGER_PATTERNS } from "@shared/emotion-triggers";
 import { localDateKey, zonedDateKey, zonedDayStart } from "@shared/timezone";
 import { extractMemories, isExtractionDue } from "./memory-extract";
 import { storageToDataUrl } from "../storage";
@@ -1589,8 +1591,31 @@ async function* runConversationTurn(
   }
   const finalText = appended.length > 0 ? `${baseText}\n\n${appended.join("\n\n")}` : baseText;
 
-  if (timingEnabled && behavior) {
-    const delayMs = sampleReplyDelayMs(behavior, rng);
+  // A crisis already returned. Weak distress and "I'm sad" do not wait.
+  const melancholy = EMOTION_TRIGGER_PATTERNS.zh.melancholy.test(message)
+    || EMOTION_TRIGGER_PATTERNS.en.melancholy.test(message);
+  const immediate = crisis.weakSignal || melancholy;
+  let delayMeta: { ms: number; via: string } | null = null;
+  if (timingEnabled && behavior && !immediate) {
+    const measured = effectiveStyleProfile(persona).replyDelay;
+    const zone = (persona as { timezone?: string | null }).timezone
+      || (await db.getUserTimezone(userId).catch(() => null))
+      || "UTC";
+    let delayMs: number;
+    if (measured) {
+      const picked = pickDelayBucket(measured, {
+        band: bandOf(now, zone),
+        state: persona.emotionalState ?? undefined,
+        asking: isUserAsking(message),
+        media: Boolean(options.media),
+      });
+      // The plan rng has already been drawn on. A second seed keeps
+      // this draw repeatable without moving the burst sample.
+      delayMs = sampleDelayMs(picked.bucket, seededRandom(`${turnInput.seed}:delay`));
+      delayMeta = { ms: delayMs, via: picked.via };
+    } else {
+      delayMs = sampleReplyDelayMs(behavior, rng);
+    }
     yield { type: "delay", ms: delayMs };
   }
 
@@ -1666,6 +1691,7 @@ async function* runConversationTurn(
     ...(emotionMeta ? { emotion: emotionMeta } : {}),
     ...(plan.closing ? { closing: true } : {}),
     ...(plan.routine ? { routine: plan.routine } : {}),
+    ...(delayMeta ? { delay: delayMeta } : {}),
   };
   let parts = [finalText];
   if (timingEnabled && behavior) {

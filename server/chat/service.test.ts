@@ -123,6 +123,7 @@ vi.mock("../_core/emotion", () => ({
 }));
 
 import { copy } from "@shared/copy";
+import * as behaviorProfile from "@shared/behavior-profile";
 import {
   runConversation,
   commitPendingChoice,
@@ -1205,6 +1206,89 @@ describe("runConversation", () => {
       messageId: result.messageId,
     }));
     expect(clearMessagePendingChoice).toHaveBeenCalledWith(7, 1, 1);
+  });
+
+  function timedPersona(extra: Record<string, unknown> = {}) {
+    return persona({
+      timingEnabled: true,
+      timezone: "Asia/Shanghai",
+      behaviorProfile: {
+        samples: 20,
+        replyGapMedianSec: 90,
+        replyGapLogSigma: 0.8,
+        burstSizes: [1],
+        measuredAt: "2026-01-01T00:00:00.000Z",
+      },
+      ...extra,
+    });
+  }
+
+  const eveningDelay = {
+    version: 1,
+    measuredAt: "2026-01-01T00:00:00.000Z",
+    recordsVersion: "40:40",
+    replyDelay: {
+      samples: 40,
+      resolution: "second",
+      buckets: {
+        evening: { n: 20, mu: Math.log(40), sigma: 0 },
+        all: { n: 40, mu: Math.log(40), sigma: 0 },
+      },
+    },
+  };
+
+  it("draws the delay from the measured bucket", async () => {
+    const events = [];
+    for await (const event of runConversation({
+      persona: timedPersona({ styleProfile: eveningDelay }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      now: new Date("2024-06-01T12:00:00.000Z"),
+    })) {
+      events.push(event);
+    }
+    const delay = events.find((event) => event.type === "delay");
+    expect(delay).toEqual({ type: "delay", ms: 40_000 });
+    const stored = createMessage.mock.calls.find((call) => call[0].role === "assistant");
+    expect(stored?.[0].metadata.delay).toEqual({ ms: 40_000, via: "band" });
+  });
+
+  it("keeps the old delay when nothing has been measured", async () => {
+    const spy = vi.spyOn(behaviorProfile, "sampleReplyDelayMs");
+    const events = [];
+    for await (const event of runConversation({
+      persona: timedPersona(),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      now: new Date("2024-06-01T12:00:00.000Z"),
+    })) {
+      events.push(event);
+    }
+    const delay = events.find((event) => event.type === "delay");
+    expect(spy).toHaveBeenCalled();
+    expect(delay?.ms).toBe(spy.mock.results.at(-1)?.value);
+    const stored = createMessage.mock.calls.find((call) => call[0].role === "assistant");
+    expect(stored?.[0].metadata.delay).toBeUndefined();
+    spy.mockRestore();
+  });
+
+  it("does not delay a crisis, a weak signal, or someone saying they are sad", async () => {
+    for (const message of ["我想死", "我好累", "我很难过"]) {
+      createMessage.mockClear();
+      const events = [];
+      for await (const event of runConversation({
+        persona: timedPersona({ styleProfile: eveningDelay }),
+        userId: 1,
+        message,
+        mode: "once",
+        now: new Date("2024-06-01T12:00:00.000Z"),
+      })) {
+        events.push(event);
+      }
+      expect(events.some((event) => event.type === "delay"), message).toBe(false);
+    }
   });
 });
 

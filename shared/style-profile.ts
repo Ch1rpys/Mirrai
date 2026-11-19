@@ -19,6 +19,7 @@ import { normalizeMultiPoint, type MultiPointProfile } from "./multi-point";
 import { normalizeInSession, type InSessionProfile } from "./in-session";
 import { normalizeEmotionDynamics, type EmotionDynamics } from "./emotion-dynamics";
 import { normalizeSamplePool, type SamplePool } from "./sample-pool";
+import { normalizeReplyDelay, type DelayBuckets } from "./reply-delay";
 import type { StyleFingerprint } from "./style-fingerprint";
 import type { ImperfectionDrafts } from "./imperfection-draft";
 import { normalizeRituals, type RitualEntry } from "./ritual-table";
@@ -68,7 +69,7 @@ export interface StyleProfile {
   samplePool?: SamplePool;
   imperfectionDrafts?: ImperfectionDrafts;
   discriminator?: unknown; // 由 B8.1 填
-  replyDelay?: unknown; // 由 B5.3 填
+  replyDelay?: DelayBuckets;
   routine?: unknown; // 由 B5.4 填
   typing?: unknown; // 由 B5.5 填
   quirks?: unknown; // 由 B5.6 填
@@ -153,6 +154,11 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
       if (key === "inSession") {
         const inSession = normalizeInSession(source.inSession);
         if (inSession) profile.inSession = inSession;
+        continue;
+      }
+      if (key === "replyDelay") {
+        const replyDelay = normalizeReplyDelay(source.replyDelay);
+        if (replyDelay) profile.replyDelay = replyDelay;
         continue;
       }
       (profile as unknown as Record<string, unknown>)[key] = source[key];
