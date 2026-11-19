@@ -73,7 +73,7 @@
 | B4.7 | 🟡 | 62acc48 | `shared/multi-point.test.ts` 3 通过：`splitPoints("到家了。今天好累！你吃了吗")` 得到 3 段；夹具 `samples === 40`、`coverageMedian === 1/3`、`preferLast === 1`；`mineMultiPoint` 一条 `multi_point` 候选，`pattern`「通常接最后一件」，3 条证据、`verified: false`。`fidelity-prompt.test.ts`：未确认提示词没有「只接其中一件」；确认后有、在减法围栏内。`suppressions.test.ts`、`copy.test.ts` 通过。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `390 passed \| 5 skipped (395)` 文件，`3430 passed \| 21 skipped (3451)` 用例。效果量见未验证清单。 |
 | B4.8 | 🟡 | 4ad35f6; d29d4b2 (routine) | `shared/in-session.test.ts`：构造 200 个场景中段轮次、30 个自起话头，`selfStartRate === 0.15`。`generate.test.ts`：`selfStartRate === 1` 且已确认生活事件时围栏外有 `prompt.inSessionShare` 和「下周要答辩」；无材料时不出现；同一种子两次提示词相同；`--without act` 不出现。B6.3 补上作息：`can add the window as the one thing of their own mid-chat` 周三 15:00 已确认「周三下午上课」时围栏外有 `prompt.inSessionShare`。`prompt-golden.test.ts` 10 通过、快照未改。闸门见 B6.3。效果量见未验证清单。 |
 | B5.1 | ✅ | b7f507c (inbox/server); bdab495 (client); 4e62c84 (channel) | `inbox.test.ts` 5 通过：`generating` 时 `arrive` abort、`reason` 为 `superseded`；`committing` 时不 abort；`isLatest` 三种情况；`leave` 旧 generation 不擦掉新的。`service.test.ts`：`answers a burst of three as one turn` — 前两次事件以 `superseded` 结束，第三次 `done`，`Promise.allSettled` 后 fulfilled 的模型调用 1 次，该次 `messages` 用户行 `["一","二","三"]`，库里 1 条 assistant，`incrementChatCount` 1 次；`does not store a half reply when a later message takes the turn away` — 半截「在」不落库，只有后一次的「在的。」；对照 `keeps a half reply when the user stops the turn` 半截「在」落库且无 `superseded`；`answers a crisis immediately and drops the ordinary reply` — 危机 `done.crisis` 为真、正文含 `12356`、普通回复被 `superseded`、assistant 1 条；`does not wait for a read window when timing is off` 假定时器 0ms 后已调用模型；`waits the read window when timing is on` 推进 `READ_WINDOW_MS - 1` 仍未调用，再 1ms 后调用。`Chat.test.tsx` 2 通过：回复途中输入框可用、可再发；`superseded` 后「在」消失、「一」还在。`chat-stream-e2e.test.ts` `hands a superseded event…` 调用 `onSuperseded`、不走 `onError`。`bridge.test.ts` `says nothing when a later message took the turn away` 返回 `null`。闸门 `411 passed \| 6 skipped (417)` 文件，`3582 passed \| 23 skipped (3605)` 用例，`all six steps passed`。 |
-| B5.2 | ⬜ |  |  |
+| B5.2 | 🟡 | 632d2f1 (table); c8c75e8 (execute); 161a3ef (routes); 203fe68 (UI); 96afe3c (crisis/sad) | 临时库 `mirrai_v6_scratch` 0055 四步+升级路径：push 后 migrate 应用到 `0055_reply_jobs`；`--replay` `replayed 53 migration(s)`；`--rollback 1` 后 `to_regclass` 为空；再 migrate 表回来。升级路径 DROP 表和两个索引并删 journal 的 `0055_reply_jobs` 后再 migrate，`reply_jobs_due_idx` 与 `reply_jobs_one_pending_reply_idx` 出现。库已 `dropdb`。`db-isolation`、`db-delete-coverage` 通过。`reply-jobs.test.ts` 13 通过：20 分钟 `deferred`、模型 0 次、一条 `pending`；到点 `runReplyJob` 模型 1 次、`metadata.deferred`、`pushToUser`、任务 `done`；排队期间再发两条仍一条任务，到点用户行 `["一","二","三"]`；40 秒不建任务；`maxDelayMinutes: 5` 抽 3 小时 `dueAt` 是 5 分钟后；睡时 `dueAt` 为 `nextWake`+延迟且超过上限，关 sleep 受上限；`weakSignal` / 「我想死」/「我很难过」不排队；并发两次 `runReplyJob` 模型 1 次；三次失败任务 `failed` 且有 `origin: "system-notice"`；`replyNow` 立刻执行；清掉定时器后 `sweepReplyJobs` 捞到到期任务；忙碌 `computeReplyDue` 为窗结束+D 且封顶。`routers.pending-reply.test.ts` 4 通过：别人的分身 `NOT_FOUND`、busy 带 title、空为 null、`replyNow` 调执行。`PendingReply.test.tsx` 3 通过：三种 `reason` 文案；点「现在就回」走 `replyNow({ personaId: 5 })`。`PersonaSwitches.test.tsx`：开「可以晚点回」写入 `asyncDelivery: true`；关着时上限输入禁用，开着改成 45 写入 `maxDelayMinutes: 45`。`stream.test.ts` / `chat-stream-e2e.test.ts` 转发 `deferred` 且不走 `onError`。闸门 `414 passed \| 6 skipped (420)` 文件，`3607 passed \| 23 skipped (3630)` 用例，`all six steps passed`。真实多小时等待见未验证清单。 |
 | B5.3 | ✅ | 59d801e | `shared/reply-delay.test.ts` 4 通过：夹具 `evening` 的 `exp(mu)` 在 32–48 秒、`afternoon` 在 95–145 秒，两档 `sigma` 在 0.65–0.95，`resolution` 为 `second`；细桶 n=5 时 `via` 为 `band|state|asking`；29 个样本 `null`；同一 `seededRandom` 种子两次相等，40 次抽样都在 1 秒到 6 小时。`service.test.ts`：`draws the delay from the measured bucket` 事件 `{ type: "delay", ms: 40000 }`，落库 `metadata.delay` 为 `{ ms: 40000, via: "band" }`；`keeps the old delay when nothing has been measured` 的毫秒数等于 `sampleReplyDelayMs` 的返回值且没有 `metadata.delay`；`does not delay a crisis, a weak signal, or someone saying they are sad` 对「我想死」「我好累」「我很难过」都没有 `delay` 事件。`DelayView.test.tsx` 渲染晚上「40 秒 / 20 次」、下午「2 分钟 / 12 次」，夜里和早上是「记录里没有」。闸门 `408 passed \| 6 skipped (414)` 文件，`3561 passed \| 23 skipped (3584)` 用例。 |
 | B5.4 | ✅ | 182da75 | `shared/routine-profile.test.ts` 5 通过：夹具睡眠窗盖住 01:00–07:00，`endMin` 在 450–480；59 天返回 `null`；全天有消息时 `sleep` 为 `undefined`。跨零点：上海 00:30 `isAsleep` 为真、21:00 为假，`nextWake` 等于 `parseZoneless("2024-06-02 07:00", "Asia/Shanghai")`。夏令时：纽约 `2024-03-10T06:30:00Z`（01:30 EST）在睡，`nextWake` 等于 `parseZoneless("2024-03-10 08:00", "America/New_York")`，08:30 已醒。`DelayView.test.tsx` 渲染「小满 一般 00:00 到 07:30 不在线」。`PersonaSwitches.test.tsx`：`asyncDelivery` 关着时「睡觉的时候不回」禁用；开着时可点，`updateSettings` 收到 `timing.sleep: true`，说明里有 00:00 和 07:30。排队行为按手册留在 B5.2。闸门 `409 passed \| 6 skipped (415)` 文件，`3568 passed \| 23 skipped (3591)` 用例。 |
 | B5.5 | ⬜ |  |  |
@@ -365,6 +365,13 @@
 | 161 | B5.1 | 「同一分身的轮次排队、连发三条依次三次回答」那条测试不改就过 | 换成「连发三条答一轮」；原先「runs the turns of one persona one after the other」删了 | 重叠的两次现在是后一次打断前一次，不再串行两次完整生成。 |
 | 162 | B5.1 | 「Chat 的组件测试」没给文件名 | `client/src/pages/Chat.test.tsx` | 仓库里原来只有 `Chat-failed-send` / `Chat-period` / `Chat-report`，没有整页 Chat 测试。 |
 | 163 | B5.1 | 生成中止只写 `signal` | `invokeAbortable` 的 `invokeWithProvider` 参数里显式写 `purpose: params.options?.purpose ?? "reply"` | `purpose.test.ts` 扫源码要有 `purpose:`。调用方本来就传了 `purpose: "reply"`。 |
+| 164 | B5.2 | 只要部分唯一索引 | 另加 `reply_jobs_due_idx`（`dueAt` WHERE pending） | 调度按到期捞。 |
+| 165 | B5.2 | 认领超过 5 分钟视为失效 | `REPLY_JOB_CLAIM_STALE_MS = 15 * 60_000` | 手册写「照 letters.claimedAt 的做法，超过 5 分钟」。letters 实际已改成 15 分钟，因为 5 分钟会在一次模型调用还没结束时过期。回复任务走同一条模型调用。 |
+| 166 | B5.2 | `runReplyJob` 直接调 `runConversation` | `await import("./service")` | 顶层互引：service 要 `maybeDeferReply`，reply-jobs 要跑完整一轮。 |
+| 167 | B5.2 | 到点用 `alreadyPersisted: true` 再生成 | 另传 `fromReplyJob: { jobId, reason }`，到点那一轮不再排队、延迟，落库 `metadata.deferred` | 没有这面旗会再抽一次延迟又建任务。 |
+| 168 | B5.2 | `pendingReply` 只返回 `{ jobId, dueAt, reason }` | 忙碌时另带 `title` | 等待文案「一般在{{title}}」要从 payload 读。 |
+| 169 | B5.2 | 忙碌时段没有点名数据源 | 用已确认的 `currentRoutines`（B6.3），窗结束用 `routineWindowEnd` | 手册写「落在已确认的忙碌时段」。 |
+| 170 | B5.2 | 认领只从 `pending` 抢 | 过期的 `running` 也可以再认领 | 任务变成 running 之后进程死了，只认 pending 就捞不回来。letters 一直停在 waiting。 |
 
 ## 未验证清单
 
@@ -401,6 +408,7 @@
 | B6.6 | 事实核查标注和重写有没有让生成更像 TA、少编往事。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare factRewrite --k 3` | 配了真实模型、并且该分身已打开事实重写或标注、已有分层标答的人 |
 | B6.9 | 账本标记有没有让分身前后说法一致。本机没有非 stub 的模型。不是单独的层 | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身在应用里说过可核对的话、已有分层标答的人 |
 | C8.1 | 真机没有收到通知。需要 HTTPS 或 localhost 上的真实浏览器，本机这次没有做订阅 | 在 localhost 打开设置，点「应用关着的时候也提醒我」，允许通知，再点「发一条试试」 | 有图形浏览器、并且服务以 localhost 或 HTTPS 跑着的人 |
+| B5.2 | 真实的多小时等待。本机单元测试用假定时器，没有把页面开着等到点 | 打开 `asyncDelivery`，发一条会抽到 >90 秒延迟的消息，关掉页面，等到 `dueAt` 之后看对话里是否出现回复，开了推送的话是否收到 `kind: "reply"` | 有真模型、并且该分身已打开「可以晚点回」的人 |
 
 ## 待用户决定
 
@@ -1309,6 +1317,19 @@ B6.4 维持 🟡。B6.7 维持 ✅。B6.1、B6.2、B6.3、B6.5、B6.6、B6.8、B
 - 闸门 `411 passed | 6 skipped (417)` 文件，`3582 passed | 23 skipped (3605)` 用例，`all six steps passed`。相对 B5.4（409/6 文件、3568/23 用例）：通过文件 +2、通过用例 +14；跳过数不变。
 - 偏差 160–163。未验证清单、待用户决定无新增。
 - B5.1 标 ✅。接着做 B5.2。
+
+### WP9 · 实现会话 · 2026-11-19 · B5.2
+
+- 分支 `exec/v6`。独立验收留下的 `- [ ]` 无。没有「等 xxx」且依赖已完成的推后项。B5.4 写明的睡眠排队在本条落地。
+- `632d2f1`：表 `reply_jobs`、部分唯一索引（一个分身同时最多一条 pending/running 的 reply）、到期索引、db helper、删账号/删分身/休眠/毕业时取消。
+- `c8c75e8`：抽到的延迟超过 90 秒才建任务；任务含义是到点才看手机，排队期间再发不新建。到点认领、生成、web 推送或通道 send；失败两次后第三次落系统提示。进程内 `setTimeout` 加调度器 `sweepReplyJobs`。
+- `161a3ef`：`chat.pendingReply` / `chat.replyNow`；send/图片/语音把 `deferred` 交回客户端；SSE `deferred` 不算断流。
+- `203fe68`：聊天页底部 `PendingReply` 15 秒轮询和「现在就回」；开关「可以晚点回」和「最多等多久」。
+- `96afe3c`：危机和难过也不排队，与 WP9 总规矩对齐。
+- 临时库四步见进度表。`mirrai_live` 未碰。
+- 闸门 `414 passed | 6 skipped (420)` 文件，`3607 passed | 23 skipped (3630)` 用例，`all six steps passed`。相对 B5.1（411/6 文件、3582/23 用例）：通过文件 +3、通过用例 +25；跳过数不变。
+- 偏差 164–170。未验证清单新增 B5.2。待用户决定无新增。
+- B5.2 标 🟡。接着做 B5.5。
 
 
 
