@@ -78,7 +78,7 @@
 | B5.4 | ✅ | 182da75 | `shared/routine-profile.test.ts` 5 通过：夹具睡眠窗盖住 01:00–07:00，`endMin` 在 450–480；59 天返回 `null`；全天有消息时 `sleep` 为 `undefined`。跨零点：上海 00:30 `isAsleep` 为真、21:00 为假，`nextWake` 等于 `parseZoneless("2024-06-02 07:00", "Asia/Shanghai")`。夏令时：纽约 `2024-03-10T06:30:00Z`（01:30 EST）在睡，`nextWake` 等于 `parseZoneless("2024-03-10 08:00", "America/New_York")`，08:30 已醒。`DelayView.test.tsx` 渲染「小满 一般 00:00 到 07:30 不在线」。`PersonaSwitches.test.tsx`：`asyncDelivery` 关着时「睡觉的时候不回」禁用；开着时可点，`updateSettings` 收到 `timing.sleep: true`，说明里有 00:00 和 07:30。排队行为按手册留在 B5.2。闸门 `409 passed \| 6 skipped (415)` 文件，`3568 passed \| 23 skipped (3591)` 用例。 |
 | B5.5 | ✅ | 32f5c75 (measure); be30d51 (UI) | `shared/typing-profile.test.ts` 5 通过：32 对按 200 毫秒每字设计的连发 `msPerChar` 在 160–240；小满夹具同样在 200±40；时间戳只到分钟返回 `null`。`style-profile.test.ts` 夹具写入 `typing.msPerChar` 160–240、`pairs ≥ 30`。`service.test.ts`：三条件成立时 delay `{ ms: 40000, typingMs }` 且 `typingMs ≤ ms`，burst texts `["嗯","好","在"]`，`gapsMs`/`typingMs` 各长 2 且每个 `typingMs[i] ≤ gapsMs[i]`；`timing.typing: false` 时事件与没有 typing 画像 `toEqual`，delay 仍是 `{ type: "delay", ms: 40000 }`，burst 仍是 `{ type: "burst", texts: ["嗯","好","在"] }`。`useTypingReveal.test.ts` 3 通过：`ms=10000` `typingMs=3000` 前 7 秒无点、后 3 秒有、然后出字；连发三条三个点出现三次；中止后状态不再变。`chat-stream-e2e.test.ts` 转发 `typingMs`/`gapsMs`。`MessageBubble.test.tsx` `isTyping: false` 时没有 `.typing-dot`。闸门 `416 passed \| 6 skipped (422)` 文件，`3619 passed \| 23 skipped (3642)` 用例，`all six steps passed`。 |
 | B5.6 | ✅ | 78fc095 (measure); c374b6f (runtime/UI) | `shared/quirks-profile.test.ts` 3 通过：夹具 6 次改错对应的若干对，每对 `wrong` 都在前一句里；自造 10 轮 6 条 recall → `recallRate === 0.6`，4 条 → 0；6 次拍一拍填 `patAfter.ask`，4 次为空。`server/_core/style-profile.test.ts` 夹具 `quirks.typoFixes` 的 `n` 之和为 6。`service.test.ts`：rng 必中且回复含「累」→ 落库 `["今天好雷","*累"]`；回复「在的。」不发生；重排关着无 `recall` 事件且 `invokeWithProvider` 1 次；重排开着且必中 → 事件有 `recall` 再 `done`，库里有 `[recall]`、JSON 不含落选原文；`composeMessages` 下一轮不含 `[recall]`；`channel: "wechat"` 三样都不发生；拍一拍落库第一条 `[pat]`。`MessageBubble.test.tsx` 两种提示「小A 撤回了一条消息」「小A 拍了拍你」，没有 `[recall]`/`[pat]`。`PersonaSwitches.test.tsx` 勾上写入 `timing.recall: true`。`chat-stream-e2e.test.ts` / `stream.test.ts` 转发 `recall`/`pat`。闸门 `417 passed \| 6 skipped (423)` 文件，`3636 passed \| 23 skipped (3659)` 用例，`all six steps passed`。 |
-| B5.7 | ⬜ |  |  |
+| B5.7 | ✅ | bf8d483 (measure); 9baa217 (runtime/UI) | `shared/double-text.test.ts` 2 通过：`recovers the fixture's thirty follow-ups` — `samples === 30`，`lines` 前两项「人呢」「？」次数比约 7:3，`waitSec.median` 在 540±90；`returns null when there are only seven follow-ups` — 7 次 `null`、8 次 `samples === 8`。`server/_core/style-profile.test.ts` 夹具 `doubleText.samples === 30`，`lines` 前两项 `["人呢","？"]`。`reply-jobs.test.ts`：开关开着且 40 秒不排队 → 建 `kind: "followup"` 任务，到点落一条 `origin: "followup"` 且文本在 `["人呢","？"]`，`invokeWithProvider` 仍是 1 次，`pushToUser` `kind: "followup"`，`origin: "proactive"` 为 0。开关关着、危机/弱信号/难过不建任务。到点取消且不落新消息：用户已回、上一条用户超过 30 分钟、告别、危机、弱信号、难过、本会话已追、当天已追 2 次、免打扰、睡着、presence 不是 active、减量、悼念、抽不中、到点开关已关。`PersonaSwitches.test.tsx`：`asyncDelivery` 关着时「聊到一半我不回了，小满 可以追一句」禁用；开着可点，写入 `timing.followUp: true`，说明里有「人呢」。`MessageBubble.test.tsx` 渲染「照 小A 以前的习惯追的一句」，没有「TA 先开口了」。闸门 `418 passed \| 6 skipped (424)` 文件，`3658 passed \| 23 skipped (3681)` 用例，`all six steps passed`。 |
 | B5.8 | ⬜ |  |  |
 | B6.1 | 🟡 | 9e6dcc0 (count); d82a6ee (prompt/UI) | `shared/people.test.ts` 8 通过：夹具 mock 卡「琪琪/室友」「我妈/妈妈」得到两人，`mentions` 分别为 12 和 9；出现 2 次的「路过的人」不产出；「阿强」与「强」归并。`generate.test.ts`：用户消息含「琪琪」且已确认 → 提示词有 `prompt.peopleHeading` 和「琪琪：你的室友」、在围栏内、`layersUsed` 含 `people`；消息不含人名 → 无该段；未确认 → 无；`--without people` 无。`prompt-fences.test.ts` `a person's relation`：敌意 relation 只在围栏内。`pipeline-decisions.test.ts` `keeps a confirmed person and does not revive a rejected one`：重跑保住「琪琪」室友、`people:路过的人` 不再出现。`WorldEditors.test.tsx` 确认/拒绝/手写/合并各调 `people.save`。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `394 passed \| 5 skipped (399)` 文件，`3466 passed \| 21 skipped (3487)` 用例。效果量见未验证清单。 |
 | B6.2 | 🟡 | 7d942a8 | `shared/stances.test.ts` 5 通过：夹具「香菜 / dislike」3 条证据、「海 / like」4 条证据；只有 1 条证据的「咖啡」不产出；同一 topic 的 like 与 dislike 都留。`generate.test.ts`：用户消息含「香菜」且已确认 → 提示词有 `prompt.stancesHeading` 和「讨厌香菜」、在围栏内、`layersUsed` 含 `people`；消息不含 topic → 无该段；未确认 → 无；`--without people` 无。`prompt-fences.test.ts` `a stance they hold`：敌意 statement 只在围栏内。`pipeline-decisions.test.ts` `keeps a confirmed stance and does not revive a rejected one`：重跑保住「香菜」dislike、`stance:咖啡:like` 不再出现。`WorldEditors.test.tsx` 确认/手写各调 `stance.save`。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `395 passed \| 5 skipped (400)` 文件，`3481 passed \| 21 skipped (3502)` 用例。效果量见未验证清单。 |
@@ -374,6 +374,9 @@
 | 170 | B5.2 | 认领只从 `pending` 抢 | 过期的 `running` 也可以再认领 | 任务变成 running 之后进程死了，只认 pending 就捞不回来。letters 一直停在 waiting。 |
 | 171 | B5.5 | burst 的 `typingMs` 是「每一条」 | `gapsMs` 与 `typingMs` 都是 n−1（第 2 条起）；第一条的 `typingMs` 在 delay 事件上 | 验收写「每个 `typingMs[i] ≤ gapsMs[i]`」，等长才能逐项比。第一条前面没有间隔，打字时间是 delay 的安静段之后。 |
 | 172 | B5.6 | 没有写现场撤回气泡的 content 要不要改成占位符 | 现场 `showMs` 之后把 content 换成提示文案、`origin: "recall"`；历史仍是 `content: "[recall]"`，`MessageBubble` 两种都渲染同一句提示 | 手册只要求显示气泡再换成居中小字。占位符是给模型和库用的，界面上不应露出 `[recall]`。 |
+| 173 | B5.7 | 用户上一条是告别：`labelUserActByRule` 得到 `farewell` | `isFarewellUserLine`：整句匹配再见/拜拜/晚安/bye 等 | `USER_ACTS` 没有 `farewell`。加一个会改掉邻接和拍一拍已经算进别的类的句子。追一句只需要认出告别本身。 |
+| 174 | B5.7 | 追一句的样本是 TA 一轮后 3–60 分钟内 ≤8 字 | 上一轮最后一条是 `^\*` 改错补句时，后面那条不算追一句 | 夹具在 `*累` 之后 4.9 分钟有「今天还今天好」，会被算成第 31 次。改错补句不是一轮说完。 |
+| 175 | B5.7 | `rate = samples ÷ opportunities`，机会只计「我 10 分钟以上没回」 | 追成功的那次也计入 opportunities，rate 钳到 1 | 夹具里追一句的等待中位约 9 分钟，短于 10 分钟。若不把样本算进机会，rate 会大于 1。 |
 
 ## 未验证清单
 
@@ -1348,6 +1351,14 @@ B6.4 维持 🟡。B6.7 维持 ✅。B6.1、B6.2、B6.3、B6.5、B6.6、B6.8、B
 - 闸门 `417 passed | 6 skipped (423)` 文件，`3636 passed | 23 skipped (3659)` 用例，`all six steps passed`。相对 B5.5（416/6 文件、3619/23 用例）：通过文件 +1、通过用例 +17；跳过数不变。
 - 偏差 172。未验证清单、待用户决定无新增。
 - B5.6 标 ✅。接着做 B5.7。
+
+### WP9 · 实现会话 · 2026-11-19 · B5.7
+
+- `bf8d483`：`measureDoubleText` 写入 `styleProfile.doubleText`。少于 8 次返回 `null`。TA 一轮说完后 3–60 分钟、不超过 8 字、且不是改错补句，才算追一句。
+- `9baa217`：开关 `timing.followUp` 默认关，要 `asyncDelivery`。回复送达后建 `kind: "followup"` 的 `reply_jobs`，到点重检全部条件，通过则落 `origin: "followup"` 的原话，不调模型。网页推送 `kind: "followup"`。气泡下标记「照 {{name}} 以前的习惯追的一句」。危机、弱信号、难过不建任务。
+- 闸门 `418 passed | 6 skipped (424)` 文件，`3658 passed | 23 skipped (3681)` 用例，`all six steps passed`。相对 B5.6（417/6 文件、3636/23 用例）：通过文件 +1、通过用例 +22；跳过数不变。
+- 偏差 173–175。未验证清单、待用户决定无新增。
+- B5.7 标 ✅。接着做 B5.8。
 
 
 
