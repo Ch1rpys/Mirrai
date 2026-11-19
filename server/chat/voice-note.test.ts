@@ -107,13 +107,38 @@ describe("choosing a voice note", () => {
 
   it("makes the note and reports its estimated length", async () => {
     const stats = profile({}).voice;
-    const note = await makeVoiceNote({ text: "在的呀", userId: 1, stats });
+    const note = await makeVoiceNote({ text: "在的呀", userId: 1, stats, locale: "zh" });
     expect(note).toEqual({ url: "/uploads/tts/1/abc.mp3", durationSec: 1 });
     expect(generateTTS).toHaveBeenCalledWith(
       "在的呀",
       "zh-CN-XiaoxiaoNeural",
       1,
+      {},
     );
+  });
+
+  it("reads at the measured pace, with the pauses prepared", async () => {
+    const stats = profile({}).voice;
+    await makeVoiceNote({
+      text: "在吗 我到家了...",
+      userId: 1,
+      stats,
+      locale: "zh",
+      styleProfile: {
+        version: 1,
+        measuredAt: "2026-01-01T00:00:00.000Z",
+        recordsVersion: "100:100",
+        voice: { ...stats, prosody: { charsPerSec: 5.04, pauseRatio: 0.3, samples: 12 } },
+      },
+    });
+    const [text, , , options] = generateTTS.mock.calls[0]! as [
+      string,
+      string,
+      number,
+      { ratePercent?: number },
+    ];
+    expect(text).toBe("在吗，我到家了……");
+    expect(options.ratePercent).toBe(20);
   });
 
   it("does not read a line that is far longer than their notes", async () => {
@@ -122,6 +147,7 @@ describe("choosing a voice note", () => {
       text: "好".repeat(120),
       userId: 1,
       stats,
+      locale: "zh",
     });
     expect(note).toBeNull();
     expect(generateTTS).not.toHaveBeenCalled();
@@ -130,6 +156,6 @@ describe("choosing a voice note", () => {
   it("falls back to text when synthesis fails", async () => {
     generateTTS.mockRejectedValue(new Error("no engine"));
     const stats = profile({}).voice;
-    expect(await makeVoiceNote({ text: "在的呀", userId: 1, stats })).toBeNull();
+    expect(await makeVoiceNote({ text: "在的呀", userId: 1, stats, locale: "zh" })).toBeNull();
   });
 });

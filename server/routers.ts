@@ -2926,10 +2926,39 @@ export const appRouter = router({
       }),
 
     tts: protectedProcedure.use(rateLimit(RATE_LIMITS.tts))
-      .input(z.object({ text: z.string().min(1).max(500), voice: z.string().max(64).optional() }))
+      .input(z.object({
+        text: z.string().min(1).max(500),
+        voice: z.string().max(64).optional(),
+        /**
+         * Whose prosody to read with. Missing means a neutral pace —
+         * the picker on its own has no measurement behind it.
+         */
+        personaId: z.number().optional(),
+        locale: z.enum(["zh", "en"]).default("zh"),
+      }))
       .mutation(async ({ ctx, input }) => {
         const { generateTTS } = await import("./_core/tts");
-        const audioUrl = await generateTTS(input.text, input.voice, ctx.user.id);
+        let text = input.text;
+        let ratePercent: number | undefined;
+        if (input.personaId) {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const { prosodyDirection } = await import("./chat/voice-note");
+          const direction = prosodyDirection(
+            (persona as { styleProfile?: unknown }).styleProfile,
+            input.locale,
+          );
+          if (direction) {
+            text = direction.prepare(text);
+            ratePercent = direction.ratePercent;
+          }
+        }
+        const audioUrl = await generateTTS(
+          text,
+          input.voice,
+          ctx.user.id,
+          ratePercent == null ? {} : { ratePercent },
+        );
         return { audioUrl };
       }),
 

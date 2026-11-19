@@ -11,6 +11,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getPersonaById, listVoices } from "../db";
 import { startMediaTranscription, transcriptionStatus } from "../media/transcribe";
 import { sttEngine } from "../_core/stt";
+import { measureProsody } from "../_core/prosody";
 
 function urlOf(fileKey: string): string {
   return `/uploads/${fileKey}`;
@@ -68,6 +69,24 @@ export const mediaRouter = router({
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
       return transcriptionStatus(input.personaId);
+    }),
+
+  /**
+   * Measures how the person speaks from the transcribed recordings.
+   *
+   * Needs at least eight transcribed voice notes; the rate is measured
+   * without ffmpeg, the pauses are not.
+   */
+  measureProsody: protectedProcedure
+    .input(z.object({ personaId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      const prosody = await measureProsody({
+        personaId: input.personaId,
+        userId: ctx.user.id,
+      });
+      return { prosody };
     }),
 
   /** What this machine can do, for the upload and soundtrack pages. */

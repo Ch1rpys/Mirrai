@@ -19,6 +19,7 @@ import { normalizeStyleProfile } from "@shared/style-profile";
 import AddressHistoryView from "@/components/v6/AddressHistoryView";
 import DelayView, { SleepWindow } from "@/components/v6/DelayView";
 import TriggersView from "@/components/v6/TriggersView";
+import ProsodyView from "@/components/v6/ProsodyView";
 import { Button } from "@/components/ui/button";
 import { resolveRelationshipPhase } from "@shared/user-side";
 
@@ -290,6 +291,17 @@ export default function PersonaProfile() {
             <SleepWindow name={persona.name} routine={styleProfile.routine} />
           </motion.section>
         ) : null}
+
+        <motion.section
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.113 }}
+          className="surface p-5 sm:p-6"
+        >
+          <ProsodyView
+            personaId={personaId}
+            name={persona.name}
+            prosody={styleProfile.voice?.prosody}
+          />
+        </motion.section>
 
         {triggers.length > 0 && (
           <motion.section

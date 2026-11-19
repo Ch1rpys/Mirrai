@@ -125,7 +125,7 @@ function VoicePlayer({ url, duration }: { url: string; duration?: number | null 
     </button>
   );
 }
-function TTSButton({ text }: { text: string }) {
+function TTSButton({ text, personaId }: { text: string; personaId?: number }) {
   const { t, locale } = useLocale();
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -212,6 +212,8 @@ function TTSButton({ text }: { text: string }) {
       const result = await ttsMutation.mutateAsync({
         text: text.slice(0, 500),
         voice: voice ?? undefined,
+        ...(personaId ? { personaId } : {}),
+        locale: locale === "en" ? "en" : "zh",
       });
       setAudioUrl(result.audioUrl);
       const audio = new Audio(result.audioUrl);
@@ -735,7 +737,7 @@ export function MessageBubble({
              */}
             {formatTimeInZone(msg.createdAt, locale, timezone)}
             {msg.channel === "wechat" && <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-mood-happy/10 text-mood-happy">{t("chat.channelWechat")}</span>}
-            {!isUser && msg.messageType !== "voice" && !isSticker && <TTSButton text={msg.content} />}
+            {!isUser && msg.messageType !== "voice" && !isSticker && <TTSButton text={msg.content} personaId={personaId} />}
             {/* A message is the user's own. Being able to fix, repeat or
                 remove one is what makes it a conversation rather than a
                 transcript. */}

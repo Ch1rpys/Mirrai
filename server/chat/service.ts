@@ -1980,6 +1980,8 @@ async function* runConversationTurn(
       text: spoken,
       userId,
       stats: voiceNoteDecision.stats,
+      styleProfile: (persona as { styleProfile?: unknown }).styleProfile,
+      locale,
     }).catch((error) => {
       console.warn("[Chat] The voice note could not be made:", error);
       return null;

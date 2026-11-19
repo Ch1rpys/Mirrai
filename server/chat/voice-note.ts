@@ -18,9 +18,22 @@ import {
   type VoiceStats,
 } from "@shared/voice-stats";
 import { seededRandom } from "../_core/behavior-profile";
+import { normalizeProsody, prosodyToTts, type TtsDirection } from "@shared/prosody";
+import type { Locale } from "@shared/copy";
 
 export interface VoiceNoteDecision {
   stats: VoiceStats;
+}
+
+/** How this persona's speech should be read, when it was measured. */
+export function prosodyDirection(
+  styleProfile: unknown,
+  locale: Locale,
+): TtsDirection | null {
+  const prosody = normalizeProsody(
+    normalizeStyleProfile(styleProfile).voice?.prosody,
+  );
+  return prosody ? prosodyToTts(prosody, locale) : null;
 }
 
 export function pickVoiceNoteForTurn(params: {
@@ -56,11 +69,24 @@ export async function makeVoiceNote(params: {
   text: string;
   userId: number;
   stats: VoiceStats;
+  styleProfile?: unknown;
+  locale: Locale;
 }): Promise<{ url: string; durationSec: number } | null> {
+  /**
+   * The bound is measured on what was typed, not on the prepared text:
+   * the commas added for the pauses are the synthesiser's, not theirs.
+   */
   const durationSec = estimateSpeechSeconds(params.text);
   if (durationSec <= 0) return null;
   if (durationSec > params.stats.durationSec.p90) return null;
-  const url = await generateTTS(params.text, DEFAULT_VOICE, params.userId).catch(() => null);
+
+  const direction = prosodyDirection(params.styleProfile, params.locale);
+  const url = await generateTTS(
+    direction ? direction.prepare(params.text) : params.text,
+    DEFAULT_VOICE,
+    params.userId,
+    direction ? { ratePercent: direction.ratePercent } : {},
+  ).catch(() => null);
   if (!url) return null;
   return { url, durationSec };
 }

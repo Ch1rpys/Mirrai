@@ -51,6 +51,12 @@ vi.mock("@/lib/trpc", () => ({
         }),
       },
     },
+    media: {
+      measureProsody: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    useUtils: () => ({
+      persona: { get: { invalidate: vi.fn() } },
+    }),
     memory: { list: { useQuery: () => ({ data: { items: memoryItems, total: memoryTotal } }) } },
     relationship: { list: { useQuery: () => ({ data: { events: [] } }) } },
   },
