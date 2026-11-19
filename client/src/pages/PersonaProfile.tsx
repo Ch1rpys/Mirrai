@@ -400,6 +400,27 @@ export default function PersonaProfile() {
             what the measurement says: whether the rebuild still sounds
             like them, and whether the waiting between their messages is
             theirs or the app's. */}
+        {/* Everything else about this persona that is a page of its own.
+            The list grows as the later work packages land here. */}
+        <motion.section
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+          className="surface p-5 sm:p-6 space-y-3"
+        >
+          <h2 className="section-title">{t("profile.moreTitle")}</h2>
+          <button
+            type="button"
+            onClick={() => navigate(`/persona/${personaId}/voices`)}
+            className="w-full rounded-lg border border-border/70 p-3 text-left transition-colors hover:bg-muted/30"
+          >
+            <span className="block text-sm text-foreground">
+              {t("profile.voicesEntry", { name: persona.name })}
+            </span>
+            <span className="block text-xs text-muted-foreground leading-relaxed">
+              {t("profile.voicesEntryNote")}
+            </span>
+          </button>
+        </motion.section>
+
         <motion.section
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
           className="surface p-5 sm:p-6"
