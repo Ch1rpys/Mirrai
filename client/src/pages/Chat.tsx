@@ -119,6 +119,7 @@ function originFromHistory(m: {
     || m.origin === "system-notice"
     || m.origin === "recall"
     || m.origin === "pat"
+    || m.origin === "followup"
   ) {
     return m.origin;
   }

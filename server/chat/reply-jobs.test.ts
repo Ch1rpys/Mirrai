@@ -29,7 +29,7 @@ let nextJobId = 1;
 
 const createMessage = vi.fn(async (row: Record<string, unknown>) => {
   const id = nextMessageId++;
-  stored.push({ id, ...row });
+  stored.push({ createdAt: new Date(), ...row, id });
   return id;
 });
 const getMessagesByPersonaId = vi.fn(async () => stored.slice());
@@ -253,6 +253,7 @@ vi.mock("../channels", () => ({
   ),
 }));
 
+import { ENV } from "../_core/env";
 import { runConversation } from "./service";
 import {
   clearReplyJobTimers,
@@ -579,4 +580,300 @@ describe("queued replies", () => {
     expect(due.reason).toBe("busy");
     expect(due.dueAt.getTime()).toBe(now.getTime() + 30 * 60_000);
   });
+
+function doubleTextProfile(rate = 1) {
+  return {
+    samples: 30,
+    opportunities: 40,
+    rate,
+    waitSec: { p25: 480, median: 540, p75: 600 },
+    lines: [{ text: "人呢", n: 21 }, { text: "？", n: 9 }],
+  };
+}
+
+function followPersona(extra: Record<string, unknown> = {}) {
+  const { settings, styleProfile, ...rest } = extra;
+  return persona({
+    settings: settings ?? { timing: { asyncDelivery: true, followUp: true, sleep: false } },
+    styleProfile: styleProfile ?? { ...delayProfile(40), doubleText: doubleTextProfile() },
+    ...rest,
+  });
+}
+
+describe("a follow-up after they go quiet", () => {
+  const quietHours = ENV.reminderQuietHours;
+
+  beforeEach(() => {
+    invokeWithProvider.mockClear();
+    pushToUser.mockClear();
+    incrementChatCount.mockClear();
+    createMessage.mockClear();
+    getPersonaById.mockImplementation(async () => followPersona());
+  });
+
+  afterEach(() => {
+    ENV.reminderQuietHours = quietHours;
+  });
+
+  async function seedFollowUp(opts?: {
+    persona?: ReturnType<typeof followPersona>;
+    userText?: string;
+    extra?: Array<Record<string, unknown>>;
+    payload?: Record<string, unknown>;
+  }) {
+    const row = opts?.persona ?? followPersona();
+    getPersonaById.mockImplementation(async () => row);
+    stored.push(
+      {
+        id: 1,
+        role: "user",
+        content: opts?.userText ?? "在吗",
+        createdAt: new Date(NOW.getTime() - 120_000),
+      },
+      {
+        id: 2,
+        role: "assistant",
+        content: "在的。",
+        createdAt: NOW,
+      },
+      ...(opts?.extra ?? []),
+    );
+    nextMessageId = Math.max(3, ...stored.map((item) => Number(item.id) + 1));
+    return createReplyJob({
+      userId: 1,
+      personaId: 1,
+      kind: "followup",
+      status: "pending",
+      reason: "followup",
+      dueAt: NOW,
+      channel: "web",
+      targetId: null,
+      locale: "zh",
+      periodId: null,
+      attempts: 0,
+      payload: opts?.payload ?? { afterMessageId: 2 },
+    });
+  }
+
+  async function expectCancelled() {
+    const job = jobs[0]!;
+    await runReplyJob(job.id, 1);
+    expect(job.status).toBe("cancelled");
+    expect(createMessage).not.toHaveBeenCalled();
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+  }
+
+  it("sends a stored line without calling the model", async () => {
+    const events = await drain(followPersona(), "在吗");
+    expect(events.some((event) => event.type === "deferred")).toBe(false);
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.kind).toBe("followup");
+    expect(jobs[0]?.reason).toBe("followup");
+    expect(jobs[0]!.dueAt.getTime()).toBeGreaterThanOrEqual(NOW.getTime() + 3 * 60_000);
+    expect(jobs[0]!.dueAt.getTime()).toBeLessThanOrEqual(NOW.getTime() + 60 * 60_000);
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(jobs[0]!.dueAt);
+    await runReplyJob(jobs[0]!.id, 1);
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+    const follow = stored.filter((row) => row.origin === "followup");
+    expect(follow).toHaveLength(1);
+    expect(["人呢", "？"]).toContain(follow[0]?.content);
+    expect(jobs[0]?.status).toBe("done");
+    expect(pushToUser).toHaveBeenCalledWith(1, expect.objectContaining({
+      kind: "followup",
+      personaId: 1,
+      personaName: "小A",
+    }));
+    expect(stored.filter((row) => row.origin === "proactive")).toHaveLength(0);
+    expect(pushToUser).not.toHaveBeenCalledWith(1, expect.objectContaining({ kind: "proactive" }));
+  });
+
+  it("does not queue when the switch is off", async () => {
+    await drain(followPersona({
+      settings: { timing: { asyncDelivery: true, followUp: false, sleep: false } },
+    }), "在吗");
+    expect(jobs).toHaveLength(0);
+  });
+
+  it("does not queue a crisis, a weak signal, or someone saying they are sad", async () => {
+    for (const message of ["我想死", "我好累", "我很难过"]) {
+      resetInbox();
+      stored.length = 0;
+      nextMessageId = 1;
+      jobs = [];
+      nextJobId = 1;
+      invokeWithProvider.mockClear();
+      await drain(followPersona(), message);
+      expect(jobs, message).toHaveLength(0);
+    }
+  });
+
+  it("cancels when the user has already replied", async () => {
+    await seedFollowUp({
+      extra: [{ id: 3, role: "user", content: "在", createdAt: NOW }],
+    });
+    await expectCancelled();
+  });
+
+  it("cancels when the last user line is older than thirty minutes", async () => {
+    stored.push(
+      {
+        id: 1,
+        role: "user",
+        content: "在吗",
+        createdAt: new Date(NOW.getTime() - 31 * 60_000),
+      },
+      {
+        id: 2,
+        role: "assistant",
+        content: "在的。",
+        createdAt: NOW,
+      },
+    );
+    nextMessageId = 3;
+    getPersonaById.mockImplementation(async () => followPersona());
+    await createReplyJob({
+      userId: 1,
+      personaId: 1,
+      kind: "followup",
+      status: "pending",
+      reason: "followup",
+      dueAt: NOW,
+      channel: "web",
+      targetId: null,
+      locale: "zh",
+      periodId: null,
+      attempts: 0,
+      payload: { afterMessageId: 2 },
+    });
+    await expectCancelled();
+  });
+
+  it("cancels a farewell", async () => {
+    await seedFollowUp({ userText: "晚安" });
+    await expectCancelled();
+  });
+
+  it("cancels a crisis line", async () => {
+    await seedFollowUp({ userText: "我想死" });
+    await expectCancelled();
+  });
+
+  it("cancels a weak signal", async () => {
+    await seedFollowUp({ userText: "我好累" });
+    await expectCancelled();
+  });
+
+  it("cancels when they said they are sad", async () => {
+    await seedFollowUp({ userText: "我很难过" });
+    await expectCancelled();
+  });
+
+  it("cancels when this chat already had a follow-up", async () => {
+    getSessionStartAt.mockResolvedValue(new Date(NOW.getTime() - 10 * 60_000));
+    await seedFollowUp({
+      extra: [{
+        id: 3,
+        role: "assistant",
+        origin: "followup",
+        content: "人呢",
+        createdAt: new Date(NOW.getTime() - 60_000),
+      }],
+    });
+    await expectCancelled();
+  });
+
+  it("cancels when they were already followed up twice today", async () => {
+    await seedFollowUp({
+      extra: [
+        {
+          id: 3,
+          role: "assistant",
+          origin: "followup",
+          content: "人呢",
+          createdAt: new Date(NOW.getTime() - 3 * 3600_000),
+        },
+        {
+          id: 4,
+          role: "assistant",
+          origin: "followup",
+          content: "？",
+          createdAt: new Date(NOW.getTime() - 2 * 3600_000),
+        },
+      ],
+    });
+    await expectCancelled();
+  });
+
+  it("cancels in quiet hours", async () => {
+    await seedFollowUp();
+    vi.setSystemTime(parseZoneless("2024-06-02 00:30", "Asia/Shanghai")!);
+    await expectCancelled();
+  });
+
+  it("cancels when they are asleep", async () => {
+    ENV.reminderQuietHours = "00:00-00:01";
+    const afternoon = parseZoneless("2024-06-01 13:00", "Asia/Shanghai")!;
+    vi.setSystemTime(afternoon);
+    await seedFollowUp({
+      persona: followPersona({
+        settings: { timing: { asyncDelivery: true, followUp: true, sleep: true } },
+        styleProfile: {
+          ...delayProfile(40),
+          doubleText: doubleTextProfile(),
+          routine: { days: 80, sleep: { startMin: 12 * 60, endMin: 14 * 60 } },
+        },
+      }),
+    });
+    await expectCancelled();
+  });
+
+  it("cancels when they are not present", async () => {
+    await seedFollowUp({ persona: followPersona({ presence: "quiet" }) });
+    await expectCancelled();
+  });
+
+  it("cancels during taper", async () => {
+    await seedFollowUp({
+      persona: followPersona({
+        settings: {
+          timing: { asyncDelivery: true, followUp: true, sleep: false },
+          taper: { stage: 1 },
+        },
+      }),
+    });
+    await expectCancelled();
+  });
+
+  it("cancels in memorial mode", async () => {
+    await seedFollowUp({
+      persona: followPersona({
+        settings: {
+          timing: { asyncDelivery: true, followUp: true, sleep: false },
+          mode: "memorial",
+        },
+      }),
+    });
+    await expectCancelled();
+  });
+
+  it("cancels when the draw misses", async () => {
+    await seedFollowUp({
+      persona: followPersona({
+        styleProfile: { ...delayProfile(40), doubleText: doubleTextProfile(0) },
+      }),
+    });
+    await expectCancelled();
+  });
+
+  it("cancels when the switch is off at fire time", async () => {
+    await seedFollowUp({
+      persona: followPersona({
+        settings: { timing: { asyncDelivery: true, followUp: false, sleep: false } },
+      }),
+    });
+    await expectCancelled();
+  });
+});
 });

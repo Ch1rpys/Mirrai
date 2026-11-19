@@ -2,6 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { toast } from "sonner";
 import { formatMinuteOfDay, normalizeRoutine } from "@shared/routine-profile";
+import { normalizeDoubleText } from "@shared/double-text";
 
 /**
  * The per-persona switches for the sixth stage.
@@ -35,6 +36,7 @@ export default function PersonaSwitches(props: { personaId: number; name: string
   const asyncDelivery = Boolean(settings.data?.timing?.asyncDelivery);
   const maxDelayMinutes = settings.data?.timing?.maxDelayMinutes ?? 30;
   const asleep = Boolean(settings.data?.timing?.sleep);
+  const followUp = Boolean(settings.data?.timing?.followUp);
   const recall = Boolean(settings.data?.timing?.recall);
   const style = trpc.style.get.useQuery(
     { personaId: props.personaId },
@@ -43,6 +45,10 @@ export default function PersonaSwitches(props: { personaId: number; name: string
   const sleepWindow = normalizeRoutine(style.data?.profile?.routine)?.sleep;
   const sleepStart = sleepWindow ? formatMinuteOfDay(sleepWindow.startMin) : "—";
   const sleepEnd = sleepWindow ? formatMinuteOfDay(sleepWindow.endMin) : "—";
+  const doubleText = normalizeDoubleText(style.data?.profile?.doubleText);
+  const followExample = doubleText?.lines[0]?.text ?? "—";
+  const followSamples = doubleText?.samples ?? 0;
+  const followOpportunities = doubleText?.opportunities ?? 0;
   const busy = settings.isLoading || update.isPending;
 
   return (
@@ -353,6 +359,31 @@ export default function PersonaSwitches(props: { personaId: number; name: string
           <span className="block">{t("personaEdit.sleep", { name: props.name })}</span>
           <span className="block text-xs text-muted-foreground leading-relaxed">
             {t("personaEdit.sleepNote", { name: props.name, start: sleepStart, end: sleepEnd })}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={followUp}
+          disabled={busy || !asyncDelivery}
+          onChange={(event) =>
+            update.mutate({
+              id: props.personaId,
+              patch: { timing: { followUp: event.target.checked } },
+            })
+          }
+          className="mt-0.5"
+        />
+        <span>
+          <span className="block">{t("personaEdit.followUp", { name: props.name })}</span>
+          <span className="block text-xs text-muted-foreground leading-relaxed">
+            {t("personaEdit.followUpNote", {
+              name: props.name,
+              opportunities: followOpportunities,
+              samples: followSamples,
+              example: followExample,
+            })}
           </span>
         </span>
       </label>

@@ -30,6 +30,13 @@ vi.mock("@/lib/trpc", () => ({
           data: {
             profile: {
               routine: { days: 80, sleep: { startMin: 0, endMin: 450 } },
+              doubleText: {
+                samples: 30,
+                opportunities: 40,
+                rate: 0.75,
+                waitSec: { p25: 480, median: 540, p75: 600 },
+                lines: [{ text: "人呢", n: 21 }, { text: "？", n: 9 }],
+              },
             },
           },
           isLoading: false,
@@ -76,6 +83,7 @@ describe("the persona switches section", () => {
     expect(screen.getByText("小满 可以晚点回")).toBeInTheDocument();
     expect(screen.getByText("最多等多久")).toBeInTheDocument();
     expect(screen.getByText("小满 偶尔会打错字再补一句、撤回、拍一拍")).toBeInTheDocument();
+    expect(screen.getByText("聊到一半我不回了，小满 可以追一句")).toBeInTheDocument();
   });
 
   it("turns the A/B pair on", async () => {
@@ -165,6 +173,29 @@ describe("the persona switches section", () => {
     expect(mutate).toHaveBeenCalledWith({
       id: 5,
       patch: { timing: { sleep: true } },
+    });
+    settingsState.data = { layers: { abPairs: false } };
+  });
+
+  it("keeps follow-up off until late replies are on, then saves the switch", async () => {
+    const user = userEvent.setup();
+    settingsState.data = { layers: { abPairs: false } };
+    const { unmount } = render(<PersonaSwitches personaId={5} name="小满" />);
+    expect(screen.getByRole("checkbox", { name: /聊到一半我不回了，小满 可以追一句/ })).toBeDisabled();
+    expect(screen.getByText(/人呢/)).toBeInTheDocument();
+    unmount();
+
+    settingsState.data = {
+      layers: {},
+      timing: { asyncDelivery: true, followUp: false },
+    };
+    render(<PersonaSwitches personaId={5} name="小满" />);
+    const box = screen.getByRole("checkbox", { name: /聊到一半我不回了，小满 可以追一句/ });
+    expect(box).not.toBeDisabled();
+    await user.click(box);
+    expect(mutate).toHaveBeenCalledWith({
+      id: 5,
+      patch: { timing: { followUp: true } },
     });
     settingsState.data = { layers: { abPairs: false } };
   });

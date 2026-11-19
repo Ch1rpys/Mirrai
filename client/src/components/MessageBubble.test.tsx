@@ -546,6 +546,20 @@ describe("the message bubble", () => {
     expect(screen.queryByLabelText(translate("zh", "chat.regenerate"))).toBeNull();
   });
 
+  it("marks a follow-up as one they used to send", () => {
+    render(
+      <MessageBubble
+        msg={makeMessage({ origin: "followup", content: "人呢" })}
+        personaName="小A"
+        showMood={false}
+        personaId={3}
+      />,
+    );
+    expect(screen.getByText("人呢")).toBeInTheDocument();
+    expect(screen.getByText("照 小A 以前的习惯追的一句")).toBeInTheDocument();
+    expect(screen.queryByText("TA 先开口了")).toBeNull();
+  });
+
   it("renders a tap as a small notice, not as something they said", () => {
     render(
       <MessageBubble

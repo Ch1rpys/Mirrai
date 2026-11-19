@@ -54,7 +54,7 @@ export interface Message {
    * "letter" — the answer to a letter the user wrote.
    * "proactive" — the persona spoke first.
    */
-  origin?: "letter" | "proactive" | "system-notice" | "recall" | "pat" | null;
+  origin?: "letter" | "proactive" | "system-notice" | "recall" | "pat" | "followup" | null;
   /**
    * A confirmed routine window this reply used.
    *
@@ -555,7 +555,7 @@ export function MessageBubble({
             <Mail className="w-3 h-3" /> {t("chat.letterSent")}
           </span>
         )}
-        {!isUser && msg.origin && (
+        {!isUser && (msg.origin === "letter" || msg.origin === "proactive") && (
           <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border border-border/70 text-muted-foreground">
             {msg.origin === "letter" ? <Mail className="w-3 h-3" /> : <Sparkles className="w-3 h-3" />}
             {t(msg.origin === "letter" ? "chat.answerToLetter" : "chat.spokeFirst")}
@@ -565,6 +565,9 @@ export function MessageBubble({
             The retrieval used to be entirely invisible, so the persona
             could bring up something from three months ago and there was
             no way to know it had been recalled rather than invented. */}
+        {!isUser && msg.origin === "followup" && (
+          <span className="text-[11px] text-muted-subtle">{t("chat.followUpMarker", { name: personaName })}</span>
+        )}
         {!isUser && msg.routine && (
           <span className="text-[11px] text-muted-subtle">{t("chat.routineMarker")}</span>
         )}

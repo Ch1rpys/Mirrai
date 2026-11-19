@@ -77,6 +77,7 @@ import {
 import {
   cancelPendingReplyJobs,
   maybeDeferReply,
+  maybeScheduleFollowUp,
 } from "./reply-jobs";
 
 export type ChatMode = "stream" | "once";
@@ -2065,6 +2066,18 @@ async function* runConversationTurn(
       recalledMemoryIds: recalled.length > 0 ? JSON.stringify(recalled.map((m) => m.id)) : null,
       metadata: storedTurnMeta,
     });
+  }
+  if (messageId && !immediate) {
+    await maybeScheduleFollowUp({
+      persona,
+      userId,
+      afterMessageId: messageId,
+      now,
+      channel: options.channel,
+      targetId: options.conversationKey,
+      locale,
+      periodId: options.periodId ?? null,
+    }).catch(() => {});
   }
 
   yield { type: "emotion", state: newEmotionalState, reason: emotion.reason };

@@ -14,6 +14,17 @@ import { normalizePersonaSettings } from "@shared/persona-settings";
 import { effectiveStyleProfile } from "@shared/style-profile";
 import { isAsleep, nextWake, normalizeRoutine } from "@shared/routine-profile";
 import {
+  isFarewellUserLine,
+  normalizeDoubleText,
+  pickFollowUpLine,
+  sampleFollowUpWaitMs,
+} from "@shared/double-text";
+import { loadBehaviorProfile, seededRandom } from "../_core/behavior-profile";
+import { detectCrisis } from "../safety/crisis";
+import { EMOTION_TRIGGER_PATTERNS } from "@shared/emotion-triggers";
+import { isQuietHour } from "../scheduler/reminders";
+import { ENV } from "../_core/env";
+import {
   currentRoutines,
   normalizeLifeEvents,
   type LifeEvent,
@@ -237,6 +248,7 @@ async function deliverReply(
   job: ReplyJob,
   persona: Persona,
   text: string,
+  kind: "reply" | "followup" = "reply",
 ): Promise<void> {
   if (!text) return;
   const channel = job.channel || "web";
@@ -257,7 +269,7 @@ async function deliverReply(
   }
   try {
     await pushToUser(job.userId, {
-      kind: "reply",
+      kind,
       personaId: persona.id,
       personaName: persona.name,
       text,
@@ -265,6 +277,149 @@ async function deliverReply(
   } catch (error) {
     console.warn("[ReplyJobs] The push could not be sent:", error);
   }
+}
+
+function melancholyLine(text: string): boolean {
+  return EMOTION_TRIGGER_PATTERNS.zh.melancholy.test(text)
+    || EMOTION_TRIGGER_PATTERNS.en.melancholy.test(text);
+}
+
+function createdAtMs(row: { createdAt?: Date | string | null }): number | null {
+  if (!row.createdAt) return null;
+  const date = row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt);
+  return Number.isNaN(date.getTime()) ? null : date.getTime();
+}
+
+export async function maybeScheduleFollowUp(params: {
+  persona: Persona;
+  userId: number;
+  afterMessageId: number;
+  now: Date;
+  channel?: string;
+  targetId?: string;
+  locale: Locale;
+  periodId?: string | null;
+}): Promise<void> {
+  if (params.afterMessageId <= 0) return;
+  const settings = normalizePersonaSettings(params.persona.settings);
+  if (!settings.timing.followUp) return;
+  if (!Boolean((params.persona as { timingEnabled?: boolean }).timingEnabled)) return;
+  if (!loadBehaviorProfile(params.persona)) return;
+  const profile = normalizeDoubleText(effectiveStyleProfile(params.persona).doubleText);
+  if (!profile) return;
+
+  const existing = await db.getPendingReplyJob(params.persona.id, params.userId, "followup");
+  if (existing) {
+    const timer = timers.get(existing.id);
+    if (timer) {
+      clearTimeout(timer);
+      timers.delete(existing.id);
+    }
+    await db.finishReplyJob(existing.id, params.userId, "cancelled");
+  }
+
+  const waitMs = sampleFollowUpWaitMs(profile, seededRandom(`followup-wait:${params.afterMessageId}`));
+  const row = await db.createReplyJob({
+    userId: params.userId,
+    personaId: params.persona.id,
+    kind: "followup",
+    status: "pending",
+    reason: "followup",
+    dueAt: new Date(params.now.getTime() + waitMs),
+    channel: params.channel || "web",
+    targetId: params.targetId || null,
+    locale: params.locale,
+    periodId: params.periodId ?? null,
+    attempts: 0,
+    payload: { afterMessageId: params.afterMessageId },
+  } as InsertReplyJob);
+  scheduleReplyJob(row);
+}
+
+async function runFollowUpJob(job: ReplyJob, userId: number): Promise<boolean> {
+  const cancel = async () => {
+    await db.finishReplyJob(job.id, userId, "cancelled");
+    return false;
+  };
+  const persona = await db.getPersonaById(job.personaId, userId);
+  if (!persona) return cancel();
+  const settings = normalizePersonaSettings(persona.settings);
+  if (!settings.timing.followUp) return cancel();
+  if (!Boolean((persona as { timingEnabled?: boolean }).timingEnabled)) return cancel();
+  if (!loadBehaviorProfile(persona)) return cancel();
+  const profile = normalizeDoubleText(effectiveStyleProfile(persona).doubleText);
+  if (!profile) return cancel();
+
+  const presence = getEffectivePresence({
+    personaPresence: persona.presence,
+    graduationStatus: persona.graduationStatus,
+  });
+  if (presence !== "active") return cancel();
+  if ((settings.taper?.stage ?? 0) !== 0) return cancel();
+  if (settings.mode === "memorial") return cancel();
+
+  const now = new Date();
+  const zone = (persona as { timezone?: string | null }).timezone || "UTC";
+  const userZone = (await db.getUserTimezone(userId).catch(() => null)) || zone;
+  if (isQuietHour(now, ENV.reminderQuietHours, userZone)) return cancel();
+  const routine = normalizeRoutine(effectiveStyleProfile(persona).routine);
+  if (settings.timing.sleep && routine && isAsleep(now, routine, zone)) return cancel();
+
+  const payload = job.payload && typeof job.payload === "object" && !Array.isArray(job.payload)
+    ? job.payload as { afterMessageId?: unknown }
+    : {};
+  const afterMessageId = typeof payload.afterMessageId === "number" ? payload.afterMessageId : 0;
+  if (afterMessageId <= 0) return cancel();
+
+  const history = await db.getMessagesByPersonaId(job.personaId, userId, 200).catch(() => []);
+  const after = history.find((row) => row.id === afterMessageId);
+  if (!after) return cancel();
+  const afterAt = createdAtMs(after) ?? now.getTime();
+  if (history.some((row) => row.role === "user" && row.id > afterMessageId)) return cancel();
+
+  const lastUser = [...history].reverse().find((row) => row.role === "user" && row.id < afterMessageId);
+  if (!lastUser) return cancel();
+  const userAt = createdAtMs(lastUser) ?? afterAt;
+  if (afterAt - userAt > 30 * 60_000) return cancel();
+  const userText = String(lastUser.content ?? "");
+  if (isFarewellUserLine(userText)) return cancel();
+  const crisis = detectCrisis(userText);
+  if (crisis.crisis || crisis.weakSignal || melancholyLine(userText)) return cancel();
+
+  const sessionStart = await db.getSessionStartAt(job.personaId, userId).catch(() => null);
+  const sessionStartMs = sessionStart ? sessionStart.getTime() : afterAt - 30 * 60_000;
+  const followUps = history.filter((row) => {
+    if (row.origin !== "followup" || row.role !== "assistant") return false;
+    const at = createdAtMs(row);
+    return at == null || at >= sessionStartMs;
+  });
+  if (followUps.length > 0) return cancel();
+
+  const today = zonedDateKey(now, userZone);
+  const todayCount = history.filter((row) => {
+    if (row.origin !== "followup" || row.role !== "assistant") return false;
+    const at = createdAtMs(row);
+    if (at == null) return true;
+    return zonedDateKey(new Date(at), userZone) === today;
+  }).length;
+  if (todayCount >= 2) return cancel();
+
+  if (seededRandom(String(afterMessageId))() >= profile.rate) return cancel();
+  const text = pickFollowUpLine(profile, seededRandom(`followup-line:${afterMessageId}`));
+  if (!text) return cancel();
+
+  await db.createMessage({
+    personaId: persona.id,
+    userId,
+    role: "assistant",
+    content: text,
+    emotionalState: persona.emotionalState,
+    channel: job.channel === "wechat" || job.channel === "feishu" ? job.channel : "web",
+    origin: "followup",
+  });
+  await deliverReply(job, persona, text, "followup");
+  await db.finishReplyJob(job.id, userId, "done");
+  return true;
 }
 
 async function failWithNotice(job: ReplyJob): Promise<void> {
@@ -286,6 +441,9 @@ export async function runReplyJob(jobId: number, userId: number): Promise<boolea
   const job = await db.getReplyJobById(jobId, userId);
   if (!job) return false;
 
+  if (job.kind === "followup") {
+    return runFollowUpJob(job, userId);
+  }
   if (job.kind !== "reply") {
     await db.finishReplyJob(jobId, userId, "cancelled");
     return false;
