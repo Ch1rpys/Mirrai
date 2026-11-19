@@ -98,7 +98,7 @@
 | B7.7 | ⛔ |  |  |
 | B7.8 | 🟡 | 0eac981; d53a429 (exifr); 3e080e2 (face-api) | 临时库 `mirrai_v6_scratch` 0058 四步+升级路径：`push --force` 后 `migrate` 到 `0058_memory_media`；`--replay` 全部重跑；`--rollback 1` 后 `to_regclass` 为空；再 `migrate` 表回来。升级路径 DROP `memory_media` 并删 `schema_migrations` 的 0058 后再 `migrate`，表出现。`db-memory-media.test.ts` 3 通过：同一对链接两次只一行、别人的 `userId` 看不到也删不掉、删来源文件与删分身都会带走链接。`db-media`、`db-stickers`、`db-records`、`db-delete-coverage` 通过。`image-exif.test.ts` 4 通过：样本 JPEG 的 `DateTimeOriginal` 在 `Asia/Shanghai` 读成 `2022-04-02T04:00:00.000Z`、GPS 31.2303/121.4739、4×4；无 EXIF 的图四项全空；非图片不抛错。`media.test.ts` 新增 3 条：导入图片读 EXIF；无 EXIF 退回消息时间；单独上传的图片按内容 hash 登记 `photo`（`recordId`/`fileId` 为空）。`persona-image.test.ts` 4 通过：PNG/JPEG/WebP 按 magic 认，SVG 与 GIF 拒绝，data URL 与裸 base64 都能解，空值和超限拒绝。`routers.avatar.test.ts` 6 通过：PNG 写 `personas/1/5/avatar-*.png`、别人 404、SVG 与 >1 MB 拒绝、换头像后删旧文件、`clearAvatar` 清字段并删文件。`face-models.test.ts` 2 通过：三个模型包内的六个文件都在，`../package.json` 与未列入的模型被拒。`face-clusters.test.ts` 5 通过：距离、0.5 阈值聚类、按簇大小排序、脸部方框外扩 40% 并夹在照片内。`AvatarPicker.test.tsx` 6 通过：当前头像与相册、无权重时不显示人脸按钮、渲染本身不加载 face-api、点相册照片进入裁剪、清除头像、相册失败给重试。`PhotoTimeline.test.tsx` 3 通过：按月分组、空状态、失败重试。`MemoryReview.test.tsx` 新增 2 条：挂着的照片可拿下来、按日期建议并挂上一张。`MessageBubble.test.tsx` 新增 1 条：召回记忆的真照片出现在「想起了什么」里。`client/src/egress.test.ts` 1 通过：client 里的 `https://` 只有两处用户输入占位符。`memory-date.test` 相关的新函数并入 `routers.memory-media.test.ts` 7 通过：同分身才可挂、非照片拒绝、记忆不存在不删、±3 天建议（6 号不出现、5 号出现）、无日期不猜、`memory.list` 带 `media`。`PersonaEdit`/`PersonaProfile`/`MessageBubble`/`MemoryReview`/`AvatarPicker` 的既有测试全过。闸门 `454 passed \| 8 skipped (462)` 文件，`3934 passed \| 31 skipped (3965)` 用例，`all six steps passed`。真实照片的 EXIF 与人脸聚类见未验证清单。 |
 | B7.9 | 🟡 | 36fd07f | `shared/photo-stats.test.ts` 3 通过：夹具 10 个含图 TA 轮 / 20 个 TA 轮 → `samples 10`、`rate 0.5`、`byState.happy.turns 10` 且 `rate 0.5`；9 个含图轮 `null`；`normalizePhotoStats` 读回、`samples 9` 与 `rate 2` 丢掉。`server/chat/photo-turn.test.ts` 6 通过：选召回记忆挂的照片（`mediaId 11`、URL）；开关关/渠道 `wechat` 不查库；`distant` 0 率不发；没有挂照片不发；30 天内发过的跳过（`listRecentlySentPhotoMediaIds` 收到 `2025-12-16T12:00:00Z`）；同种子两次相同。`server/chat/service.test.ts` 新增 5 条：happy 必中 → 落库一条 `content: "[image]"`、`messageType: "image"`、`mediaUrl`、`metadata.kind: "photo"`、`mediaId 11`、`photoAt`，`done.extra` 带同一条；没有挂照片不发；30 天内发过不发；开关关与 `channel: "wechat"` 不发；`composeMessages` 对分身发的图片只给「［图片］」，序列化里没有 `image_url` 也没有图片地址。`PersonaSwitches.test.tsx` 新增 1 条：勾「小满 聊到某件事时可以发那张照片」写 `layers.photos: true`，说明是「只发你上传过、并且挂在记忆上的真照片」。`MessageBubble.test.tsx` 新增 1 条：图片气泡下有「这是你上传的真照片」。`shared/style-profile.test.ts` 读写回与坏形状。闸门 `456 passed \| 8 skipped (464)` 文件，`3951 passed \| 31 skipped (3982)` 用例，`all six steps passed`。效果量见未验证清单。 |
-| B7.10 | ⬜ |  |  |
+| B7.10 | 🟡 | 835e76e | `system-capabilities.test.ts` 1 通过：`ffmpeg`、`sttLocal`、`sttEngine`、`ttsEngine`、`visionProviders` 都从各自的模块读，只有已配置且能看图的 provider 进 `visionProviders`。`video.test.ts` 4 通过：5 个视频只读前 4 个、`skipped 1`、`extractKeyframes` 4 次、12 帧 data URL、转写写入 `media.transcript`、`setMediaVideoMeta` 写 10 秒/640/360；没有本机引擎时保留画面、`transcripts` 为空、不写 transcript；取帧抛错时临时目录仍被 `rm`（`/tmp/mirrai-video-test`）；`hasFfmpeg` 假时直接返回空。`video-materials.test.ts` 3 通过：转写带「视频里说的话：」标题且在 `MATERIAL>>>:` 围栏里；跳过数写「还有 1 个视频没有读」；没有材料时原文不动。`describe-images.test.ts` 新增 1 条：13 个帧 data URL 只送前 12 个。`Upload.test.tsx` 新增 1 条：`ffmpeg: false` 且有视频文件时显示「这台机器上没有 ffmpeg，视频目前只存不读」。真视频实测（见批次日志）：5 秒 640×360 的测试视频得到 3 帧 data URL、`durationSec 5`、`width 640`、`height 360`。`routers.skill-engine.test.ts` 11 通过（mock 掉视频准备）。闸门 `459 passed \| 8 skipped (467)` 文件，`3961 passed \| 31 skipped (3992)` 用例，`all six steps passed`。真实视觉描述与转写见未验证清单。 |
 | B7.11 | ⬜ |  |  |
 | B7.12 | ⬜ |  |  |
 | B7.13 | 🟡 | 7de23a6 | `shared/call-stats.test.ts` 4 通过：夹具 `samples === 20`、`byDirection.in` 14（±3）、`answerSlots[0]` 周日 21 点且 `n >= 16`、`durationSec.median` 600–3600、`first <= last`、`perWeekMedian >= 1`；4 条 `null`、5 条非空；缺 `meta.direction` 的旧行按角色读成 in/out、missed 不进时长；`normalizeCallStats` 原样读回、`samples: 4` 与缺字段的丢掉。`server/_core/style-profile.test.ts` `writes the call table from the fixture`：`measureStyleProfile` 写回 `calls.samples 20`、`in >= 11`、周日 21 点。`shared/style-profile.test.ts` 读写回与坏形状。`CallsView.test.tsx` 2 通过：四句陈述（谁打来、一般打多久、通常接在周日 21 点与周三 20 点）、无测量时不渲染。`PersonaProfile.tsx` 把电话一栏放进节奏区；`PersonaProfile.test.tsx` 10 通过。空库/无迁移。闸门 `445 passed \| 7 skipped (452)` 文件，`3888 passed \| 28 skipped (3916)` 用例，`all six steps passed`。效果量见未验证清单。 |
@@ -435,6 +435,11 @@
 | 229 | B7.9 | 「按比率抽一次」没有写随机源 | 用 `${seed}:photo` 另开一只 `seededRandom` | 与 B7.1 的贴纸、B4.8 的起话头同一做法；主 rng 已被动作、连发、延迟抽过，再抽会改已有结果。 |
 | 230 | B7.9 | 「最近 30 天没发过」未写怎么记 | 查 `messages.metadata->>'kind' = 'photo'` 且 `createdAt >= now - 30d` 的 `mediaId` | 不给 `media` 加一次性列；消息本身就是发送记录。 |
 
+| 231 | B7.10 | 视频转写「作为一段材料交给蒸馏」 | 在分析结果之后、structurer 之前由 `appendVideoMaterial` 追加，不写进 `chatContent` | 分块分析读的是记录表而不是 `chatContent`；放在分析结果后面，两种分析路径都到得了 structurer。代价是分块的分析阶段本身不读这段转写。 |
+| 232 | B7.10 | 帧「并入现有的 describeImages 流程」，每次蒸馏最多 4 个视频、共 12 帧 | 单独调一次 `describeImages(name, frames, provider, 12, ...)`，与照片那次分开 | 照片用 `preset.maxImages`，视频帧有独立配额；分两次调用，帧不会挤掉照片名额。 |
+| 233 | B7.10 | 「probe 取时长，登记 media」 | 单独上传的视频文件也按内容 hash 登记 `media`（`recordId` 为空、`fileId` 指向上传文件），导入记录里的视频沿用 B7.3 的行 | 上传页的 `video` 类型没有记录行；不登记的话它们不会出现在视频清单里。 |
+| 234 | B7.10 | 上传页「在文件旁显示一行说明」 | 视频行下方显示；上传中的视频在列表上方显示同一句 | 上传完成的文件会从「正在上传」里移走，说明要跟着持久列表走。 |
+
 ## 未验证清单
 
 | 条目 | 缺什么 | 该跑的命令 | 谁来跑 |
@@ -488,6 +493,7 @@
 | B7.13 | 真实记录上的电话习惯（谁打得多、一般打多久、通常什么钟点接）是否与本人一致。夹具只证明算法 | 在真实分身上执行 `style.measure` 后查看 `styleProfile.calls`，或与手机通话记录人工对照 | 有真实通话记录的人 |
 | B7.8 | 真实手机照片的 EXIF（拍摄时间、GPS、方向）与真实人脸的聚类效果。本机只用一张生成的 4×4 样本验证了标签读取，没有真实照片，也没有在浏览器里跑过 face-api | 在有真实照片的分身上打开编辑页，选一张照片裁剪成头像；再点「帮我找出 {{name}} 的脸」，看分组是否把人认成同一组 | 有真实照片、有图形浏览器的人 |
 | B7.9 | 真实记录上「聊到这件事时会不会发照片」的时机、以及 30 天不重发是否符合这个人的习惯。夹具没有图片，服务端测试用合成记忆与照片 | 在真实记录上执行 `style.measure`，给几条记忆挂照片，打开开关聊 20 轮，看落点与频次 | 有真实带图记录、并愿意挂照片的人 |
+| B7.10 | 真实视频的画面描述与声音转写。本机用 ffmpeg 跑过 5 秒 640×360 的测试视频（3 帧 data URL、时长与尺寸正确），但没有视觉模型描述画面，也没有本机转写引擎听声音 | 配一个能看图的模型并（可选）装 whisper.cpp 后，上传一段真实视频再蒸馏，看「视频里的画面」和「视频里说的话」两段材料 | 有真实视频、配了视觉模型的人 |
 
 ## 待用户决定
 
@@ -1950,7 +1956,7 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 - B7.4 语音条习惯 `9f6fa4c`：`shared/voice-stats.ts`、`server/chat/voice-note.ts`、服务端「先决定、后生成、不流式」、落库 `messageType: "voice"` + `metadata.kind: "voice-note"`、`done.voice`、气泡「转文字」与「合成的声音」、开关与说明。状态 🟡（真实语音与听感未验）。
 - B7.5 韵律参数 `36a6c0f`：`shared/prosody.ts`（`prosodyToTts`、文本整理、±30% 钳位）、`server/_core/prosody.ts`（charsPerSec/pauseRatio/tailSec，至少 8 条）、`chat.tts` 带 `personaId` 时按测量读、`ProsodyView` 档案页三项数与「量一下」。状态 🟡（听感未验）。
 
-**没有做**：B7.7 按第 1.2 节 ⛔；B7.10、B7.11、B7.12、B7.14、B7.15 仍是 ⬜（B7.13 在 `7de23a6`、B7.8 在 `0eac981`、B7.9 在 `36fd07f` 完成）。下一个会话从 B7.10 开始，B7.14 依赖 B7.2/B7.6/B7.13，工作量大。
+**没有做**：B7.7 按第 1.2 节 ⛔；B7.11、B7.12、B7.14、B7.15 仍是 ⬜（B7.13 在 `7de23a6`、B7.8 在 `0eac981`、B7.9 在 `36fd07f`、B7.10 在 `835e76e` 完成）。下一个会话从 B7.11 开始，B7.14 依赖 B7.2/B7.6/B7.13，工作量大。
 
 **闸门**（无 `--fast`、无 `DATABASE_URL`，Node v24.14.1）：`corepack pnpm gate` 退出码 0，`Test Files  443 passed | 7 skipped (450)`，`Tests  3880 passed | 28 skipped (3908)`，`all six steps passed`。相对开工基线（423/5 文件、3741/23 用例）：通过文件 +20、通过用例 +139；跳过文件 +2、跳过用例 +5，全部是 `db-stickers.test.ts`（2）与 `db-media.test.ts`（3）按 2.3 写的 `skipIf`，见偏差 221。`audit-cn.ts` 为 `0 Chinese strings without an English counterpart, in 0 files.`；`fidelity-gate.ts` 7 条 ✓；P0.3 黄金快照未改（`prompt-golden.test.ts` 10 通过）。
 
@@ -1984,6 +1990,14 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 - 服务端：happy 必中时在文字之后另存一条 `messageType: "image"`、`content: "[image]"`、`metadata.kind = "photo"` 的消息，`done.extra` 回传 `photoAt`；`composeMessages` 对分身的图片只给「［图片］」，不再把字节发给模型（用户的图片仍内联）。
 - 客户端：`Chat.tsx` 把 `extra` 里的照片画成图片气泡，历史从 `metadata.photoAt` 读日期；`MessageBubble` 显示「这是你上传的真照片」；`PersonaSwitches` 加照片开关。
 - 测试与闸门见进度表 B7.9 行。闸门 `456 passed | 8 skipped (464)` 文件，`3951 passed | 31 skipped (3982)` 用例，`all six steps passed`。
+
+### WP10 · 实现会话 · 2026-11-20 · B7.10 视频
+
+- `system.capabilities` 增加 `ffmpeg`、`sttLocal`、`sttEngine`、`ttsEngine`、`visionProviders`；上传页在 `ffmpeg` 为假时对视频显示说明。
+- `server/skill-engine/video.ts`：只读前 4 个视频，每个取 3 帧（宽 768，data URL），音轨转 16k WAV 后只走本机转写；写回 `media.durationSec/width/height/transcript`；临时目录在 `finally` 删。
+- `pipeline.ts`：视频帧单独走一次 `describeImages`（最多 12 帧），描述并入 `memories` 的「视频里的画面」；视频转写在 structurer 之前追加，带「视频里说的话：」标题并包在围栏里，跳过的视频数写进报告。
+- 真实视频：用 ffmpeg 生成 5 秒 640×360 测试视频，走 `prepareVideoMaterial` 得到 3 帧 data URL、`durationSec 5`、`width 640`、`height 360`；没有本机 STT，所以 `transcripts` 为空。临时文件与临时库都已清理。
+- 测试与闸门见进度表 B7.10 行。闸门 `459 passed | 8 skipped (467)` 文件，`3961 passed | 31 skipped (3992)` 用例，`all six steps passed`。
 
 **遗留 / 下一次要注意**：
 - 表达式 `styleProfile.voice.prosody` 的测量目前要手动点「量一下」；转写任务完成后没有自动接上（偏差 215）。
