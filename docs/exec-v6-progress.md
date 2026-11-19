@@ -163,7 +163,7 @@
 | C7.2 | ⬜ |  |  |
 | C7.3 | ⬜ |  |  |
 | C7.4 | ⬜ |  |  |
-| C8.1 | ⬜ |  |  |
+| C8.1 | 🟡 | 1c094f6 (web-push); cbc794c (server); 986b225 (sw); 09566af (UI) | `push.test.ts` 4 通过：默认负载不含「名字不该出现」和「正文不该出现」；预览含名字且 body 40 字；410 调 `deletePushSubscription`；`sendNotification` 抛错时 `pushToUser` resolve。`routers.push.test.ts` 2 通过：list/unsubscribe 用调用者的 userId；同一 endpoint 两次走 `upsertPushSubscription`，源码含 `onConflictDoUpdate` 和 `pushSubscriptions.endpoint`。`sw-privacy.test.ts`：`push` / `notificationclick` 处理器无 `caches.`，`notificationCopy` 无 `${`。`pwa-copy.test.ts` 含「有一条新消息」和 `There is a new message`。`PushSettings.test.tsx`：无 `PushManager` 时「不支持」、无 switch、`requestPermission` 0 次。`egress.test.ts` 4 通过，表含 `push-browser`。临时库 `mirrai_v6_scratch` 0054 四步+升级路径：push 后 migrate 应用到 `0054_push_subscriptions`；`--replay` `replayed 52 migration(s)`；`--rollback 1` 后 `to_regclass` 为空；再 migrate 表回来。升级路径 DROP 表和两个索引并删 journal 的 `0054_push_subscriptions` 后再 migrate，索引 `push_subscriptions_endpoint_idx` 与 `push_subscriptions_user_idx` 出现。带 `DATABASE_URL` 的 `db-push.test.ts` 2 通过（同一 endpoint 仍 1 行且 p256dh 为 second；别人 list 为空、delete 为 false）。库已 `dropdb`。闸门 `406 passed \| 6 skipped (412)` 文件，`3553 passed \| 23 skipped (3576)` 用例。真机通知见未验证清单。 |
 | C8.2 | ⬜ |  |  |
 | C8.3 | ⬜ |  |  |
 | C8.4 | ⬜ |  |  |
@@ -352,6 +352,10 @@
 | 148 | B6.7 | 一跳还加上用户消息里命中的人物名和地点 | 用户消息里出现的、已选记忆或池里记忆的任意实体（含 things）都会当种子 | 手册没写物品；实体已经过原话子串校验，不另开白名单。 |
 | 149 | B6.8 | 分母是 `1 + mentionCount` | 分母是 `mentionCount`，没数过的按 1 次。四年前提过一次是 0.4，带模糊标记；提过 10 次约 0.95，不带 | 做法那条公式在提过一次时最低是 0.7，到不了验收要求的 0.6。 |
 | 150 | B6.8 | 年头用 date，没有就用 recordId 对应的时间 | date 只认完整 `YYYY-MM-DD`；`05-21` 这种周年没有年份，落到 record 的 `timestamp`/`createdAt`。一年按 365.25 天 | 周年日期不能换成「多少年前」。 |
+| 151 | C8.1 | 新依赖许可证须是 MIT / Apache-2.0 / BSD / ISC | 用了白名单里的 `web-push@4.0.0`，许可证是 MPL-2.0 | 2026-11-19 核对 npm 与 [LICENSE](https://github.com/web-push-libs/web-push/blob/v3.6.7/LICENSE)：3.6.7 和 4.0.0 都是 MPL-2.0，没有 MIT 版本。直接依赖的 asn1.js、http_ece、jws、https-proxy-agent 是 MIT。白名单点名了这个包。 |
+| 152 | C8.1 | `webpush.generateVAPIDKeys()` 这种默认导出 | 4.0.0 是 ESM，具名导入 `generateVAPIDKeys` / `setVapidDetails` / `sendNotification`；声明写在 `server/_core/web-push.d.ts` | 包没有 `.d.ts`。README 仍写 `require('web-push')`，以 `src/index.js` 为准。404/410 删订阅对照 [MDN Push API](https://developer.mozilla.org/en-US/docs/Web/API/Push_API)。 |
+| 153 | C8.1 | 只要求 endpoint 唯一 | 另加 `push_subscriptions_user_idx` | 列表按 userId 查。 |
+| 154 | C8.1 | `push.test` 没写用哪个分身 | 用该用户的第一个分身；没有分身则 `errors.pushNoPersona` | 测试通知的负载要有 personaId 才能拼 `/chat/<id>`。 |
 
 ## 未验证清单
 
@@ -387,6 +391,7 @@
 | B6.5 | 选了时期之后提示词只知道那段时间。本机没有非 stub 的模型。时期不是单独的层 | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身已切出时期、已有带 `periodId` 的分层标答的人 |
 | B6.6 | 事实核查标注和重写有没有让生成更像 TA、少编往事。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare factRewrite --k 3` | 配了真实模型、并且该分身已打开事实重写或标注、已有分层标答的人 |
 | B6.9 | 账本标记有没有让分身前后说法一致。本机没有非 stub 的模型。不是单独的层 | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身在应用里说过可核对的话、已有分层标答的人 |
+| C8.1 | 真机没有收到通知。需要 HTTPS 或 localhost 上的真实浏览器，本机这次没有做订阅 | 在 localhost 打开设置，点「应用关着的时候也提醒我」，允许通知，再点「发一条试试」 | 有图形浏览器、并且服务以 localhost 或 HTTPS 跑着的人 |
 
 ## 待用户决定
 
@@ -1259,6 +1264,18 @@ B6.4 维持 🟡。B6.7 维持 ✅。B6.1、B6.2、B6.3、B6.5、B6.6、B6.8、B
 - 「坚强」不再把别名「强」写进提示词。「我喜欢海」仍命中，「上海」「海鲜」不命中。
 - 闸门 `403 passed | 5 skipped (408)` 文件，`3542 passed | 21 skipped (3563)` 用例，`all six steps passed`。相对验收时（401/5 文件、3529/21 用例）：通过文件 +2、通过用例 +13；跳过数不变。
 - B6.1、B6.2、B6.3、B6.5、B6.6 改回 🟡。B6.8 改回 ✅。B6.9 改为 🟡，未验证清单新增一行。B6.4、B6.7 维持。偏差 149 更新。待用户决定无新增。
+
+### WP9 · 实现会话 · 2026-11-19 · C8.1
+
+- 分支 `exec/v6`。独立验收留下的 `- [ ]` 无。没有「等 xxx」且依赖已完成的推后项。
+- `1c094f6`：依赖 `web-push@4.0.0`。许可证是 MPL-2.0，见偏差 151。
+- `cbc794c`：`push_subscriptions`、`pushToUser` 默认负载不含名字和正文；410/404 删订阅，其它错误只加 `failCount` 且不抛。主动开口落到 web、回信写好、提醒渠道是 web 时各发一次。
+- `986b225`：service worker 的 `push` / `notificationclick` 不碰 cache。通用文案按浏览器语言，中文「有一条新消息」，英文 `There is a new message`。
+- `09566af`：设置页数据页挂 `PushSettings`。没有 `PushManager` 时显示「不支持」且没有开关。渲染不调用 `Notification.requestPermission`。
+- 临时库 `mirrai_v6_scratch` 上 0054 四步和升级路径见进度表。`db-push.test.ts` 带 `DATABASE_URL` 2 通过。库已 `dropdb`。`mirrai_live` 未碰。
+- 闸门 `406 passed | 6 skipped (412)` 文件，`3553 passed | 23 skipped (3576)` 用例，`all six steps passed`。相对 WP8 收尾（403/5 文件、3542/21 用例）：通过文件 +3、通过用例 +11；跳过文件 +1、跳过用例 +2，是 `db-push.test.ts` 的 `skipIf(!DATABASE_URL)`。
+- 偏差 151–154。未验证清单新增 C8.1。待用户决定无新增。
+- C8.1 标 🟡。接着做 B5.3。
 
 
 
