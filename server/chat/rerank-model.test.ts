@@ -35,7 +35,7 @@ describe("getRerankModel", () => {
     expect(await getRerankModel(7, 1)).toBeNull();
   });
 
-  it("does not read the database a second time for the same version", async () => {
+  it("does not re-read the records for the same version", async () => {
     yieldTexts(Array.from({ length: 40 }, (_, i) => `嗯${i}`));
     const first = await getRerankModel(7, 1);
     expect(first?.texts).toHaveLength(40);
@@ -44,6 +44,9 @@ describe("getRerankModel", () => {
     const second = await getRerankModel(7, 1);
     expect(second).toBe(first);
     expect(iterateRecords).not.toHaveBeenCalled();
+    // The version itself is still asked for: that is how a changed
+    // record set is noticed without reading every line again.
+    expect(getRecordsVersion).toHaveBeenCalledTimes(2);
   });
 
   it("rebuilds after the records version changes", async () => {

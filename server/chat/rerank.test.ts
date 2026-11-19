@@ -1,8 +1,53 @@
 import { describe, expect, it } from "vitest";
-import { measureFingerprint, type FingerprintRow } from "@shared/style-fingerprint";
+import {
+  measureFingerprint,
+  type FingerprintRow,
+  type StyleFingerprintCore,
+} from "@shared/style-fingerprint";
 import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
 import type { SparseModel } from "../eval/discriminator";
 import { pickRerankWinner } from "./rerank";
+
+/**
+ * A counted profile with a period habit and short lines, for the
+ * discriminator ranking test. The fixture itself is period-less.
+ */
+function flatFingerprint(overrides: Partial<StyleFingerprintCore> = {}): StyleFingerprintCore {
+  return {
+    samples: 200,
+    length: { median: 3, p90: 4, p95: 8, histogram: [] },
+    turnChars: { median: 3, p95: 8 },
+    endings: {
+      period: 0.2,
+      ellipsis: 0,
+      question: 0,
+      exclaim: 0,
+      tilde: 0,
+      emoji: 0,
+      particle: 0,
+      other: 0.8,
+    },
+    particles: {},
+    punctuation: {
+      commaPerChar: 0.01,
+      spaceAsComma: 0,
+      ellipsisForms: { unicode: 0, dots: 0, cjkDots: 0 },
+      exclaimRuns: [],
+      questionRuns: [],
+      halfWidthRate: 0.5,
+      markCount: 0,
+    },
+    laugh: { rate: 0, forms: {}, haRuns: [] },
+    reduplication: {},
+    emoji: { rate: 0, perLine: 0, top: [] },
+    kaomoji: { rate: 0 },
+    latin: { rate: 0, abbreviations: {} },
+    typoFix: { starRate: 0 },
+    script: { traditionalRate: 0 },
+    address: {},
+    ...overrides,
+  };
+}
 
 function fixtureFingerprint() {
   const rows: FingerprintRow[] = buildXiaomanRecords().map((row) => ({
@@ -123,6 +168,42 @@ describe("fingerprint rerank", () => {
     const period = result?.scores.find((row) => row.text === "好的。");
     const winner = result?.scores.find((row) => row.index === result.index);
     expect(result?.text).not.toBe("好的。");
+    expect(winner?.real ?? 0).toBeGreaterThan(period?.real ?? 1);
+  });
+
+  it("moves a real line above the period line the score prefers", () => {
+    const fingerprint = flatFingerprint();
+    const candidates = [
+      { text: "行的。" },
+      { text: "行" },
+      { text: "好的呀" },
+      { text: "在的" },
+    ];
+    const trainingTexts = ["好的。", "好的。", "好的。", "嗯", "在", "哦", "好", "行", "随便", "还行", "嗯嗯", "在的", "好的呀"];
+    const without = pickRerankWinner({
+      candidates,
+      trainingTexts,
+      fingerprint,
+      fingerprintRerank: true,
+    });
+    const discriminator: SparseModel = {
+      bias: 0,
+      dense: { "ending.period": -8 },
+      ngrams: [],
+    };
+    const withDiscriminator = pickRerankWinner({
+      candidates,
+      trainingTexts,
+      fingerprint,
+      fingerprintRerank: true,
+      discriminator,
+    });
+    // The period line wins on the counted features alone; the
+    // discriminator's "a period is fake" call pushes it below.
+    expect(without?.text).toBe("行的。");
+    expect(withDiscriminator?.text).not.toBe("行的。");
+    const period = withDiscriminator?.scores.find((row) => row.text === "行的。");
+    const winner = withDiscriminator?.scores.find((row) => row.index === withDiscriminator.index);
     expect(winner?.real ?? 0).toBeGreaterThan(period?.real ?? 1);
   });
 });

@@ -86,6 +86,10 @@ describe("strip_period", () => {
     expect(apply("3.5", ready).text).toBe("3.5");
     expect(apply("3。5", ready).text).toBe("3。5");
     expect(apply("e.g.", ready).text).toBe("e.g.");
+    expect(apply("Mr.", ready).text).toBe("Mr.");
+    expect(apply("Dr.", ready).text).toBe("Dr.");
+    expect(apply("etc.", ready).text).toBe("etc.");
+    expect(apply("Jan.", ready).text).toBe("Jan.");
     expect(apply("See you.", ready).text).toBe("See you");
     expect(apply("https://a.b/c.", ready).text).toBe("https://a.b/c.");
   });

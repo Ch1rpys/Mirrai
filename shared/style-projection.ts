@@ -43,6 +43,50 @@ const ELLIPSIS_PROTECT_RE = /。{2,}|\.{3,}|…+|⋯+/g;
 const FULL_TO_HALF: Record<string, string> = { "？": "?", "！": "!", "，": "," };
 const HALF_TO_FULL: Record<string, string> = { "?": "？", "!": "！", ",": "，" };
 
+// i18n:allow-input — English abbreviations whose trailing period is not a
+// sentence end; matched against the model's own line, not shown as copy.
+const COMMON_ABBREVIATIONS = new Set([
+  "mr",
+  "mrs",
+  "ms",
+  "dr",
+  "prof",
+  "sr",
+  "jr",
+  "st",
+  "mt",
+  "vs",
+  "etc",
+  "no",
+  "vol",
+  "fig",
+  "pp",
+  "inc",
+  "ltd",
+  "co",
+  "corp",
+  "bros",
+  "jan",
+  "feb",
+  "mar",
+  "apr",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "sept",
+  "oct",
+  "nov",
+  "dec",
+  "mon",
+  "tue",
+  "wed",
+  "thu",
+  "fri",
+  "sat",
+  "sun",
+]);
+
 export function projectStyle(
   text: string,
   fp: StyleFingerprintCore,
@@ -147,6 +191,7 @@ function stripTrailingAsciiDot(line: string): string {
   const tail = before.match(/[A-Za-z.]+$/)?.[0] ?? "";
   if (tail.includes(".")) return line;
   if (/^[A-Z]{1,3}$/.test(tail)) return line;
+  if (COMMON_ABBREVIATIONS.has(tail.toLowerCase())) return line;
   return before;
 }
 
