@@ -7,7 +7,7 @@
 import { readFile } from "node:fs/promises";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { isUnparsedChatUpload } from "@shared/records";
+import { isUnparsedChatUpload, RECORD_KINDS, type RecordKind } from "@shared/records";
 import { copy } from "@shared/copy";
 import { protectedProcedure, rateLimit, router } from "../_core/trpc";
 import { RATE_LIMITS } from "../_core/rate-limit";
@@ -21,6 +21,11 @@ import {
   type ImportFormatId,
 } from "../importers";
 import { resolveStoredPath } from "../storage";
+import { resolveProviderForPurpose } from "../llm/user-provider";
+import { importRecords } from "../collectors/db-store";
+import { afterRecordsChanged } from "../_core/style-profile";
+import { readScreenshotPages } from "../importers/screenshot";
+import { mergeScreenshotPages } from "../importers/screenshot-merge";
 
 const formatIds = IMPORTERS.map((row) => row.id) as [ImportFormatId, ...ImportFormatId[]];
 const formatId = z.enum(formatIds);
@@ -159,6 +164,119 @@ export const importRouter = router({
       const result = await cancelImport(input.fileId, ctx.user.id, ctx.locale);
       if (!result) throw new TRPCError({ code: "NOT_FOUND" });
       return result;
+    }),
+
+  /**
+   * Reads a batch of screenshots and returns rows to correct (B7.11).
+   *
+   * Nothing is written here. The model's reading is a draft; the user
+   * sees every row and confirms it before it becomes a record.
+   */
+  screenshotPreview: protectedProcedure
+    .use(rateLimit(RATE_LIMITS.upload))
+    .input(z.object({
+      personaId: z.number(),
+      date: z.string().max(20).optional(),
+      images: z.array(z.object({
+        name: z.string().min(1).max(200),
+        base64: z.string().min(1).max(14_000_000),
+      })).min(1).max(30),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      const provider = await resolveProviderForPurpose({
+        userId: ctx.user.id,
+        purpose: "extract",
+      });
+      if (!provider || !provider.capabilities.vision) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: copy(ctx.locale, "errors.screenshotNoVision"),
+        });
+      }
+      for (const image of input.images) {
+        const bytes = Buffer.from(
+          image.base64.startsWith("data:") ? image.base64.split(",")[1] ?? "" : image.base64,
+          "base64",
+        );
+        if (bytes.length > 10 * 1024 * 1024) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: copy(ctx.locale, "errors.screenshotTooLarge"),
+          });
+        }
+      }
+      const read = await readScreenshotPages({
+        images: input.images,
+        provider,
+        name: persona.name,
+        locale: ctx.locale,
+      });
+      const merged = mergeScreenshotPages(read.pages, {
+        date: input.date ?? null,
+        timeZone: ctx.user.timezone ?? null,
+      });
+      return {
+        rows: merged.rows.map((row) => ({
+          ...row,
+          at: row.at ? row.at.toISOString() : null,
+        })),
+        timeApprox: merged.timeApprox,
+        needsDate: merged.needsDate,
+        failures: read.failures,
+        providerName: provider.name,
+      };
+    }),
+
+  /**
+   * Writes the rows the user confirmed (B7.11).
+   *
+   * The source is `screenshot`, so the records can be found and removed
+   * as one import later.
+   */
+  screenshotConfirm: protectedProcedure
+    .input(z.object({
+      personaId: z.number(),
+      rows: z.array(z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().max(20000),
+        kind: z.enum(RECORD_KINDS),
+        at: z.string().nullable(),
+        unclear: z.boolean().optional(),
+      })).min(1).max(2000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      const records = input.rows.map((row, index) => ({
+        speaker: row.role === "user" ? "me" : "them",
+        role: row.role,
+        content: row.content,
+        timestamp: row.at ? new Date(row.at) : null,
+        kind: row.kind as RecordKind,
+        lineNo: index + 1,
+      }));
+      let written = 0;
+      try {
+        written = await importRecords({
+          personaId: input.personaId,
+          userId: ctx.user.id,
+          source: "screenshot",
+          records,
+        });
+      } catch {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: copy(ctx.locale, "errors.importFailed"),
+        });
+      }
+      await afterRecordsChanged({
+        personaId: input.personaId,
+        userId: ctx.user.id,
+        added: written,
+      }).catch(() => {});
+      return { written };
     }),
 
   /**
