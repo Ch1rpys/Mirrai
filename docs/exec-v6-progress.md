@@ -1735,7 +1735,7 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 
 逐条结论：B4.1 没过（验收第 3 条的测试不测条件）；B4.2 过（🟡，效果未量）；B4.3 过（🟡，效果未量）；B4.4 没过（验收第 5 条的测试不测时长）；B4.5 过（🟡）；B4.6 过（🟡）；B4.7 过（🟡，表里证据是旧口径）；B4.8 没过（非文本 TA 轮被算作起话头）。
 
-- [x] B4.8 `measureInSession` 把没有文字的 TA 轮次也算成一次机会和一次自起话头。`shared/in-session.ts:47-53` 在检查 `turnText(turn)` 是否为空之前就 `samples += 1`；空文本的 `charBigrams` 和前面的话做 `jaccard` 得到 0，于是纯语音/纯贴纸轮被算成「自己起了个头」。复现：`countSelfStarts` 输入 `[[用户「在吗」],[TA「在」],[用户「今天怎么样」],[TA「[voice:12]」kind:voice]]` 返回 `{ samples: 1, selfStarts: 1 }`；夹具上 33 个纯语音 TA 轮把 `measureInSessionFromScenes` 的 `selfStartRate` 从 0.2344 抬到 0.2653。`shared/in-session.test.ts` 只造纯文本轮，盖不到。状态改回 ⬜。
+- [x] B4.8 `measureInSession` 把没有文字的 TA 轮次也算成一次机会和一次自起话头。`shared/in-session.ts:47-53` 在检查 `turnText(turn)` 是否为空之前就 `samples += 1`；空文本的 `charBigrams` 和前面的话做 `jaccard` 得到 0，于是纯语音/纯贴纸轮被算成「自己起了个头」。复现：`countSelfStarts` 输入 `[[用户「在吗」],[TA「在」],[用户「今天怎么样」],[TA「[voice:12]」kind:voice]]` 返回 `{ samples: 1, selfStarts: 1 }`；夹具上非文本行全部过滤后是 0.2344，旧实现量到 0.2653（其中 33 个纯语音 TA 轮被直接计为机会/自起话头；修复后是 0.2524）。`shared/in-session.test.ts` 只造纯文本轮，盖不到。状态改回 ⬜。
 - [x] B4.1 验收第 3 条没有真的测「`planTurn` 用的条件带 `userAct: "ask"`」。`server/chat/generate.test.ts:393-409` 的画像只有 `unconditional: { tease: 80 }`，最后只断言 `planned.userAct === "ask"`；这个字段是 `actMeta` 无条件写进去的（`server/chat/generate.ts:234-237`），即使 `sampleAct` 没收到 `userAct` 也会绿。复现：把 `server/chat/generate.ts:223` 的 `userAct` 从条件里删掉，这条测试仍通过。要改成用 `byUserAct.ask` 与无条件分布不同的画像断言 `sampledAct`，或直接 spy `sampleAct`。状态改回 ⬜。
 - [x] B4.4 验收第 5 条没有真的测「同一个 `emotionalStateSince` 两次抽到同一个时长」。`server/chat/generate.test.ts:2101-2128` 用 `sinceMin = 250`，只比较两次的 `sampledAct` 和和好标题是否存在；`durationMin.all` 是 `[180, 240, 300, 300, 360, 480]`，两次分别抽到 300 和 360 也会都强制 `repair`、标题都在，测试仍绿。`server/skill-engine/conflicts.test.ts` 的「同一 seed」用例传的是同一个常量函数两次，也没有测 `seededRandom(personaId + ":" + since)`。改成断言实际选中的时长（例如把 `durationMin.all` 设成单值，或比较 `shouldForceRepair` 的边界）后重跑。状态改回 ⬜。
 - [x] B4.3 手动切换的持久化没有测试：`server/routers.persona-update.test.ts:83-91` 把 `updatePersona` 整个 mock 掉，只断言路由传了 `emotionalState: "happy"`；`server/db.ts:1436-1440` 的「值变化时写 `emotionalStateSince`」没有任何测试覆盖。补一个带库的 `updatePersona` 用例（值变化写 since、值不变不写）或把这段逻辑抽成纯函数。
@@ -1755,7 +1755,7 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 
 `7cc254b` 修本轮验收的代码和测试；上面的七个 `- [ ]` 已改成 `- [x]`，表里的 B4.1、B4.4、B4.8 改回 🟡。
 
-- B4.8：`shared/in-session.ts` 不再把没有文字的 TA 轮计成机会；`shared/in-session.test.ts` 新增纯语音轮和用户贴纸后的文字轮两个断言。夹具上 `selfStartRate` 从 0.2653 回到 0.2344。
+- B4.8：`shared/in-session.ts` 不再把没有文字的 TA 轮计成机会；`shared/in-session.test.ts` 新增纯语音轮和用户贴纸后的文字轮两个断言。夹具上 33 个纯语音 TA 轮不再计入，`selfStartRate` 从 0.2653 降到 0.2524（纯文本对照 0.2344）。
 - B4.1：`server/chat/generate.test.ts` 的画像改成 `byUserAct.ask = { answer: 80 }`、无条件分布 `tease: 80`，同时断言 `sampledAct === "answer"`；如果没把 `userAct` 传给抽样条件，会得到 `tease`，测试就红。
 - B4.4：同一个 `emotionalStateSince` 用 20 个不同的 `input.seed` 跑，`durationMin.all = [180, 480]`，断言 `sampledAct` 和是否和好都一致；时长仍只由 `personaId:since` 决定。
 - B4.3：`server/db-behaviour.test.ts` 新增 `starts the mood clock when the mood changes` / `leaves the mood clock alone when the mood did not change`，覆盖 `db.updatePersona` 值变化写 `emotionalStateSince`、值不变不写。
