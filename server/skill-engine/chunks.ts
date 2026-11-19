@@ -9,7 +9,7 @@
 import { createHash } from "node:crypto";
 import { asMaterial } from "./material";
 import { copy, type Locale } from "@shared/copy";
-import { isTextRecord, renderRecordContent } from "@shared/records";
+import { isTextRecord, recordText, renderRecordContent } from "@shared/records";
 import { splitScenes, toTurns } from "@shared/scenes";
 import { findPeriodSplits, periodsFromSplits } from "@shared/periods";
 import { zonedDateKey, zonedHour, zonedMinute } from "@shared/timezone";
@@ -69,6 +69,19 @@ function asDate(value: Date | string | null | undefined): Date | null {
 
 function lineBody(row: RecordLine, locale: Locale): string {
   if (isTextRecord(row)) return row.content;
+  /**
+   * A voice note is read as its transcript, marked as a voice note.
+   *
+   * The words are what the distillation is looking for; the marker
+   * says they were spoken rather than typed, which is a different
+   * thing to know about a line.
+   */
+  if ((row.kind ?? "text") === "voice") {
+    const text = recordText(row).trim();
+    if (text && text !== row.content) {
+      return copy(locale, "record.kind.voiceWithText", { text });
+    }
+  }
   return renderRecordContent(row, locale);
 }
 

@@ -152,6 +152,10 @@ export const V6 = {
     zh: "［语音］",
     en: "[voice]",
   },
+  "record.kind.voiceWithText": {
+    zh: "［语音］{{text}}",
+    en: "[voice] {{text}}",
+  },
   "record.kind.video": {
     zh: "［视频 {{duration}}］",
     en: "[video {{duration}}]",

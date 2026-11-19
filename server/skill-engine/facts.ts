@@ -236,7 +236,7 @@ function mentionCountFor(title: string, rows: RecordLine[]): number {
      * the other order divides by the line's length and a normal
      * sentence almost never reaches 0.5.
      */
-    if (keywordCoverage(row.content, titleTokens) >= MENTION_COVERAGE) count += 1;
+    if (keywordCoverage(recordText(row), titleTokens) >= MENTION_COVERAGE) count += 1;
   }
   return count;
 }

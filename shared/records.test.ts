@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import {
   isTextRecord,
   isUnparsedChatUpload,
@@ -137,5 +139,29 @@ describe("isUnparsedChatUpload", () => {
     expect(isUnparsedChatUpload({ fileType: "archive" })).toBe(true);
     expect(isUnparsedChatUpload({ fileType: "chat_txt", parseStatus: "done" })).toBe(false);
     expect(isUnparsedChatUpload({ fileType: "image", parseStatus: null })).toBe(false);
+  });
+});
+
+describe("reading a voice transcript", () => {
+  /**
+   * Tone and content read differently.
+   *
+   * A voice note's transcript is good evidence of what was said and bad
+   * evidence of how the person types. The modules that measure tone
+   * (fingerprint, n-gram rerank, exemplars, fixed replies) read text
+   * rows only, so none of them may reach for `recordText`.
+   */
+  it("keeps recordText out of the modules that measure tone", () => {
+    const root = path.resolve(__dirname, "..");
+    const files = [
+      "shared/style-fingerprint.ts",
+      "server/chat/rerank-model.ts",
+      "server/chat/exemplars.ts",
+      "shared/ritual-table.ts",
+    ];
+    for (const file of files) {
+      const source = readFileSync(path.join(root, file), "utf8");
+      expect(source, `${file} must read text rows only`).not.toContain("recordText");
+    }
   });
 });

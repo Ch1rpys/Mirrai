@@ -141,6 +141,7 @@ import { blindRouter } from "./routers-v6/blind";
 import { materialRouter } from "./routers-v6/material";
 import { pushRouter } from "./routers-v6/push";
 import { stickerRouter } from "./routers-v6/sticker";
+import { mediaRouter } from "./routers-v6/media";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { stateRulesFromTranscript } from "./skill-engine/state-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
@@ -6613,6 +6614,7 @@ export const appRouter = router({
   material: materialRouter,
   push: pushRouter,
   sticker: stickerRouter,
+  media: mediaRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {
