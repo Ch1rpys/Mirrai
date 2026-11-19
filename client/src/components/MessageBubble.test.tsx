@@ -512,6 +512,24 @@ describe("the message bubble", () => {
     expect(image).not.toBeNull();
   });
 
+  it("says a photo is the real one the user uploaded, with its date", () => {
+    render(
+      <MessageBubble
+        msg={makeMessage({
+          content: "[image]",
+          messageType: "image",
+          mediaUrl: "/uploads/personas/1/5/imports/1/a.jpg",
+          kind: "photo",
+          photoAt: "2022-04-02T04:00:00.000Z",
+        })}
+        personaName="小A"
+        showMood={false}
+      />,
+    );
+    expect(screen.getByText(/这是你上传的真照片/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: translate("zh", "chat.imageAlt") })).toBeInTheDocument();
+  });
+
   it("marks a supported claim and an unsupported one", () => {
     render(
       <MessageBubble

@@ -179,6 +179,24 @@ describe("the style profile", () => {
     expect(empty.inSession).toBeUndefined();
   });
 
+  it("keeps a photo table and drops a broken one", () => {
+    const profile = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      photos: { samples: 20, rate: 0.5, byState: { happy: { rate: 0.5, turns: 40 } } },
+    });
+    expect(profile.photos?.samples).toBe(20);
+    expect(profile.photos?.byState.happy?.rate).toBe(0.5);
+    const empty = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      photos: { samples: 9, rate: 0.5, byState: {} },
+    });
+    expect(empty.photos).toBeUndefined();
+  });
+
   it("keeps a call table and drops a broken one", () => {
     const calls = {
       samples: 20,

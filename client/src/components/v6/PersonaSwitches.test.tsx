@@ -89,6 +89,7 @@ describe("the persona switches section", () => {
     expect(screen.getByText("小满 的情绪按 小满 的节奏变")).toBeInTheDocument();
     expect(screen.getByText("小满 会自己说「我先睡了」")).toBeInTheDocument();
     expect(screen.getByText("小满 可以发 小满 用过的表情")).toBeInTheDocument();
+    expect(screen.getByText("小满 聊到某件事时可以发那张照片")).toBeInTheDocument();
     expect(screen.getByText("小满 有时候发语音")).toBeInTheDocument();
     expect(screen.getByText("分身提到往事时，标出记录里有没有")).toBeInTheDocument();
     expect(screen.getByText("偶尔让我二选一")).toBeInTheDocument();
@@ -130,6 +131,21 @@ describe("the persona switches section", () => {
       id: 5,
       patch: { layers: { stickers: false } },
     });
+  });
+
+  it("turns real photos on", async () => {
+    const user = userEvent.setup();
+    render(<PersonaSwitches personaId={5} name="小满" />);
+    await user.click(
+      screen.getByRole("checkbox", { name: /小满 聊到某件事时可以发那张照片/ }),
+    );
+    expect(mutate).toHaveBeenCalledWith({
+      id: 5,
+      patch: { layers: { photos: true } },
+    });
+    expect(
+      screen.getByText("只发你上传过、并且挂在记忆上的真照片。不生成任何图片。"),
+    ).toBeInTheDocument();
   });
 
   it("turns two-stage generation on", async () => {

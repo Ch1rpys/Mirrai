@@ -3003,6 +3003,37 @@ export interface VoicePage {
 }
 
 /**
+ * The photos sent into the conversation since a moment (B7.9).
+ *
+ * The same picture is not sent twice within a month. The message's
+ * metadata carries the media id, so the check is a query rather than a
+ * column added to `media` for one feature.
+ */
+export async function listRecentlySentPhotoMediaIds(
+  personaId: number,
+  userId: number,
+  since: Date,
+): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({ mediaId: sql<string | null>`${messages.metadata}->>'mediaId'` })
+    .from(messages)
+    .where(
+      and(
+        eq(messages.personaId, personaId),
+        eq(messages.userId, userId),
+        eq(messages.role, "assistant"),
+        gte(messages.createdAt, since),
+        sql`${messages.metadata}->>'kind' = 'photo'`,
+      ),
+    );
+  return rows
+    .map((row) => Number(row.mediaId))
+    .filter((id) => Number.isInteger(id) && id > 0);
+}
+
+/**
  * The voice notes of a persona, newest first.
  *
  * The cursor is the last id of the previous page. Registration walks

@@ -34,7 +34,13 @@ import PendingReply from "@/components/v6/PendingReply";
 import { useTypingReveal, waitMs } from "@/components/v6/useTypingReveal";
 
 /** A message the reply carried besides its words (B7.1). */
-type ExtraMessage = { messageId: number; kind: string; content: string; mediaUrl?: string | null };
+type ExtraMessage = {
+  messageId: number;
+  kind: string;
+  content: string;
+  mediaUrl?: string | null;
+  photoAt?: string | null;
+};
 
 function extraBubbles(extra: ExtraMessage[] | undefined, emotionalState: string): Message[] {
   return (extra ?? []).map((row) => ({
@@ -42,7 +48,10 @@ function extraBubbles(extra: ExtraMessage[] | undefined, emotionalState: string)
     role: "assistant" as const,
     content: row.kind === "sticker" ? `[sticker:${row.content}]` : row.content,
     kind: row.kind,
+    /** A photo is drawn by the same picture bubble as an upload (B7.9). */
+    messageType: row.kind === "photo" ? ("image" as const) : undefined,
     mediaUrl: row.mediaUrl ?? null,
+    photoAt: row.photoAt ?? null,
     emotionalState,
     createdAt: new Date(),
     isStreaming: false,
@@ -148,6 +157,12 @@ function originFromHistory(m: {
   if (m.content === "[recall]") return "recall";
   if (m.content === "[pat]") return "pat";
   return typeof m.origin === "string" ? (m.origin as Message["origin"]) : null;
+}
+
+function photoAtFromMetadata(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const value = (metadata as { photoAt?: unknown }).photoAt;
+  return typeof value === "string" ? value : null;
 }
 
 function pendingChoiceFromMetadata(metadata: unknown): { options: [string, string] } | null {
@@ -657,6 +672,7 @@ export default function Chat() {
       pendingChoice: pendingChoiceFromMetadata(m.metadata),
       routine: routineFromMetadata(m.metadata),
       claims: claimsFromMetadata(m.metadata),
+      photoAt: photoAtFromMetadata(m.metadata),
     }));
 
     // The history is polled, so it can arrive while a reply is still

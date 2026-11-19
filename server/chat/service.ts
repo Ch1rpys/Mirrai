@@ -35,6 +35,7 @@ import { copy, localizeScene } from "@shared/copy";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import { renderRecordContent } from "@shared/records";
 import { pickStickerForTurn } from "./sticker-turn";
+import { pickPhotoForTurn } from "./photo-turn";
 import { makeVoiceNote, pickVoiceNoteForTurn } from "./voice-note";
 import { asMaterial } from "../_core/material";
 import { buildPromptBundleForPersona } from "./prompt";
@@ -524,6 +525,23 @@ async function toLLMMessage(
     return {
       role,
       content: renderRecordContent({ kind: "sticker", content: message.content }, locale),
+    };
+  }
+  if (message.messageType === "image" && role === "assistant") {
+    /**
+     * A picture the persona sent is named, not sent to the model (B7.9).
+     *
+     * It is the user's own photograph, attached to a memory. The model
+     * already knows what it is — it was recalled through that memory —
+     * and the app does not need to send the bytes to a provider again.
+     * The same is true of a picture the persona sent in the records.
+     */
+    return {
+      role,
+      content: renderRecordContent(
+        { kind: "image", content: message.content || "[image]" },
+        locale,
+      ),
     };
   }
   if (message.messageType === "image" && message.mediaUrl) {
@@ -2193,7 +2211,59 @@ async function* runConversationTurn(
     kind: string;
     content: string;
     mediaUrl?: string | null;
+    /** When the real photo was taken, for the caption (B7.9). */
+    photoAt?: string | null;
   }> = [];
+
+  /**
+   * A real photo after the words, when this reply recalled a memory
+   * with one attached (B7.9).
+   *
+   * The same picture is not sent twice within a month. If nothing is
+   * attached, nothing is sent — this layer does not generate images.
+   */
+  const photosEnabled = normalizePersonaSettings(persona.settings).layers.photos === true;
+  if (photosEnabled && !immediate) {
+    const photo = await pickPhotoForTurn({
+      personaId: persona.id,
+      userId,
+      styleProfile: (persona as { styleProfile?: unknown }).styleProfile,
+      state: newEmotionalState,
+      seed: turnInput.seed,
+      channel: options.channel ?? "web",
+      enabled: true,
+      memoryIds: recalled.map((memory) => memory.id),
+      now,
+    }).catch((error) => {
+      console.warn("[Chat] The photo could not be chosen:", error);
+      return null;
+    });
+    if (photo) {
+      try {
+        const photoAt = photo.at ? photo.at.toISOString() : null;
+        const photoMessageId = await db.createMessage({
+          personaId: persona.id,
+          userId,
+          role: "assistant",
+          content: "[image]",
+          messageType: "image",
+          emotionalState: newEmotionalState,
+          channel: "web",
+          mediaUrl: photo.url,
+          metadata: { kind: "photo", mediaId: photo.mediaId, photoAt },
+        });
+        extra.push({
+          messageId: photoMessageId,
+          kind: "photo",
+          content: "[image]",
+          mediaUrl: photo.url,
+          photoAt,
+        });
+      } catch (error) {
+        console.warn("[Chat] The photo could not be stored:", error);
+      }
+    }
+  }
   const stickersEnabled = normalizePersonaSettings(persona.settings).layers.stickers !== false;
   if (stickersEnabled && !immediate) {
     const sticker = await pickStickerForTurn({

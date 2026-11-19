@@ -12,7 +12,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
 import { EMOTIONS, type EmotionDefinition } from "@/lib/emotions";
 import { SAFE_REHYPE_PLUGINS } from "@/lib/safe-markdown";
-import { formatTimeInZone } from "@/lib/dates";
+import { formatInstantInZone, formatTimeInZone } from "@/lib/dates";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { FEEDBACK_REASONS } from "@shared/speech-acts";
 import { renderRecordContent } from "@shared/records";
@@ -82,6 +82,8 @@ export interface Message {
    * they sent (B7.9), a voice note.
    */
   kind?: "sticker" | "photo" | "voice-note" | string | null;
+  /** When the real photo was taken (B7.9); the caption says so. */
+  photoAt?: string | null;
 }
 /** The state of a message, or `null` when it is not a known state. */
 export function emotionOf(state: string | null | undefined): EmotionDefinition | null {
@@ -485,6 +487,15 @@ export function MessageBubble({
             <img src={msg.mediaUrl} alt={t("chat.imageAlt")}
               className="max-w-[200px] max-h-[200px] rounded-md" />
           </button>
+          {msg.kind === "photo" && (
+            <span className="text-[11px] text-muted-subtle mt-1">
+              {msg.photoAt
+                ? t("chat.photoProvenance", {
+                    date: formatInstantInZone(msg.photoAt, locale),
+                  })
+                : t("chat.photoProvenanceUnknown")}
+            </span>
+          )}
           {/**
            * The caption under the picture.
            *

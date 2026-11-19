@@ -52,6 +52,7 @@ import { measureQuirks } from "@shared/quirks-profile";
 import { measureStickers } from "@shared/sticker-stats";
 import { measureVoice } from "@shared/voice-stats";
 import { measureCalls } from "@shared/call-stats";
+import { measurePhotos } from "@shared/photo-stats";
 import { measureDoubleText } from "@shared/double-text";
 import { toTurns } from "@shared/scenes";
 import { splitScenes } from "@shared/scenes";
@@ -152,10 +153,16 @@ export async function measureStyleProfile(params: {
   const stickers = measureStickers(rows) ?? undefined;
   const voice = measureVoice(rows) ?? undefined;
   const calls = measureCalls(rows, sessionZone) ?? undefined;
+  const photos = measurePhotos(rows) ?? undefined;
   const multiPoint = measureMultiPoint(labelledScenes.flatMap((scene) => toTurns(scene)));
   const inSession = measureInSessionFromScenes(labelledScenes);
-  const next = normalizeStyleProfile({
-    ...(current ?? {}),
+  /**
+   * Built as one record rather than a literal full of conditional
+   * spreads: the type checker drops the whole expression when the
+   * union of twenty optional measurements gets too large.
+   */
+  const nextRaw: Record<string, unknown> = { ...(current ?? {}) };
+  Object.assign(nextRaw, {
     version: 1,
     measuredAt: now.toISOString(),
     recordsVersion,
@@ -163,24 +170,26 @@ export async function measureStyleProfile(params: {
     userSide: userSide ?? undefined,
     imperfectionDrafts: drafts,
     addressHistory,
-    ...(rituals.length > 0 ? { rituals } : { rituals: undefined }),
-    ...(samplePool ? { samplePool } : { samplePool: undefined }),
-    ...(actClusters ? { actClusters } : { actClusters: undefined }),
-    ...(emotionDynamics ? { emotionDynamics } : { emotionDynamics: undefined }),
-    ...(conflict ? { conflict } : { conflict: undefined }),
-    ...(triggers && triggers.length > 0 ? { triggers } : { triggers: undefined }),
-    ...(sessions ? { sessions } : { sessions: undefined }),
-    ...(replyDelay ? { replyDelay } : { replyDelay: undefined }),
-    ...(routine ? { routine } : { routine: undefined }),
-    ...(typing ? { typing } : { typing: undefined }),
+    rituals: rituals.length > 0 ? rituals : undefined,
+    samplePool,
+    actClusters,
+    emotionDynamics,
+    conflict,
+    triggers: triggers && triggers.length > 0 ? triggers : undefined,
+    sessions,
+    replyDelay,
+    routine,
+    typing,
     quirks,
-    ...(doubleText ? { doubleText } : { doubleText: undefined }),
-    ...(stickers ? { stickers } : { stickers: undefined }),
-    ...(voice ? { voice } : { voice: undefined }),
-    ...(calls ? { calls } : { calls: undefined }),
-    ...(multiPoint ? { multiPoint } : { multiPoint: undefined }),
-    ...(inSession ? { inSession } : { inSession: undefined }),
+    doubleText,
+    stickers,
+    voice,
+    calls,
+    photos,
+    multiPoint,
+    inSession,
   });
+  const next = normalizeStyleProfile(nextRaw);
   return applyRerankWeightsFromPairs(personaId, userId, next, { persistAlways: true });
 }
 

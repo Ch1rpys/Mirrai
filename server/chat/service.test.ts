@@ -45,6 +45,8 @@ const updateEmotionSnapshot = vi.fn();
 const deleteMessage = vi.fn();
 const iterateRecords = vi.fn();
 const listEnabledStickers = vi.fn();
+const listMemoryMediaForMemories = vi.fn();
+const listRecentlySentPhotoMediaIds = vi.fn();
 const generateTTS = vi.fn();
 const ttsEngineMock = vi.fn();
 const getLastExtractionAttemptAt = vi.fn();
@@ -103,6 +105,8 @@ vi.mock("../db", () => ({
   deleteMessage: (...a: unknown[]) => deleteMessage(...a),
   iterateRecords: (...a: unknown[]) => iterateRecords(...a),
   listEnabledStickers: (...a: unknown[]) => listEnabledStickers(...a),
+  listMemoryMediaForMemories: (...a: unknown[]) => listMemoryMediaForMemories(...a),
+  listRecentlySentPhotoMediaIds: (...a: unknown[]) => listRecentlySentPhotoMediaIds(...a),
   getLastExtractionAttemptAt: (...a: unknown[]) => getLastExtractionAttemptAt(...a),
   getLastExtractionAt: (...a: unknown[]) => getLastExtractionAt(...a),
   getRecordsVersion: (...a: unknown[]) => getRecordsVersion(...a),
@@ -203,6 +207,7 @@ describe("runConversation", () => {
       incrementChatCount, updateMessageMetadata, createFidelityPair, clearMessagePendingChoice,
       getMessageById, updateEmotionSnapshot, searchRecordsLexical, deleteMessage,
       iterateRecords, getRecordsVersion, getCollectedMessagesForPersona, listEnabledStickers,
+      listMemoryMediaForMemories, listRecentlySentPhotoMediaIds,
       getLastExtractionAttemptAt, getLastExtractionAt, generateTTS, ttsEngineMock,
       invoke, invokeWithProvider,
       streamWithProvider, resolveProviderForUser, resolveProviderForPurpose, inferEmotionalState,
@@ -218,6 +223,8 @@ describe("runConversation", () => {
     });
     getMessagesByPersonaId.mockResolvedValue([]);
     getMemoriesByPersonaId.mockResolvedValue([]);
+    listMemoryMediaForMemories.mockResolvedValue([]);
+    listRecentlySentPhotoMediaIds.mockResolvedValue([]);
     getFilesByPersonaId.mockResolvedValue([]);
     getSceneById.mockResolvedValue(null);
     getLatestChatSummary.mockResolvedValue(undefined);
@@ -672,6 +679,219 @@ describe("runConversation", () => {
     expect(done.extra).toEqual([
       { messageId: 99, kind: "sticker", content: "狗狗探头" },
     ]);
+  });
+
+  /**
+   * The photo, after the words (B7.9).
+   *
+   * It is only the real picture attached to a memory the reply
+   * recalled, never a generated image, and never the same one twice
+   * within a month.
+   */
+  const PHOTO_PROFILE = {
+    version: 1,
+    measuredAt: "2026-01-15T12:00:00.000Z",
+    recordsVersion: "100:100",
+    photos: {
+      samples: 20,
+      rate: 1,
+      byState: {
+        happy: { rate: 1, turns: 40 },
+        distant: { rate: 0, turns: 40 },
+      },
+    },
+  };
+
+  const RECALLED_MEMORY = {
+    id: 42,
+    personaId: 1,
+    userId: 1,
+    title: "第一次见面",
+    description: "在拾光咖啡",
+    category: "memory",
+    date: "2022-04-02",
+    messageId: null,
+    importance: 1,
+    isPinned: false,
+    lastRecalledAt: null,
+    factKey: null,
+    createdAt: new Date(),
+  };
+
+  function recalledPhoto() {
+    return [
+      {
+        memoryId: 42,
+        mediaId: 11,
+        kind: "photo",
+        fileKey: "personas/1/1/imports/1/a.jpg",
+        at: new Date("2022-04-02T04:00:00.000Z"),
+        width: 4,
+        height: 4,
+      },
+    ];
+  }
+
+  it("sends the real photo attached to a recalled memory", async () => {
+    inferEmotionalState.mockResolvedValue({ state: "happy", source: "heuristic" });
+    invokeWithProvider.mockResolvedValue("在的。");
+    getMemoriesByPersonaId.mockResolvedValue([RECALLED_MEMORY]);
+    listMemoryMediaForMemories.mockResolvedValue(recalledPhoto());
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona({
+        styleProfile: PHOTO_PROFILE,
+        settings: { layers: { photos: true } },
+      }),
+      userId: 1,
+      message: "还记得我们第一次见面吗",
+      mode: "once",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      events.push(event);
+    }
+
+    const stored = createMessage.mock.calls
+      .map((call: unknown[]) => call[0] as Record<string, any>)
+      .filter((data) => data?.metadata?.kind === "photo");
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({
+      content: "[image]",
+      role: "assistant",
+      messageType: "image",
+      mediaUrl: "/uploads/personas/1/1/imports/1/a.jpg",
+      metadata: {
+        kind: "photo",
+        mediaId: 11,
+        photoAt: "2022-04-02T04:00:00.000Z",
+      },
+    });
+    const done = events.find((event) => event.type === "done") as any;
+    expect(done.extra).toContainEqual({
+      messageId: 99,
+      kind: "photo",
+      content: "[image]",
+      mediaUrl: "/uploads/personas/1/1/imports/1/a.jpg",
+      photoAt: "2022-04-02T04:00:00.000Z",
+    });
+  });
+
+  it("does not send a photo when nothing is attached to the recalled memories", async () => {
+    inferEmotionalState.mockResolvedValue({ state: "happy", source: "heuristic" });
+    invokeWithProvider.mockResolvedValue("在的。");
+    getMemoriesByPersonaId.mockResolvedValue([RECALLED_MEMORY]);
+    for await (const _event of runConversation({
+      persona: persona({
+        styleProfile: PHOTO_PROFILE,
+        settings: { layers: { photos: true } },
+      }),
+      userId: 1,
+      message: "还记得我们第一次见面吗",
+      mode: "once",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      // drained
+    }
+    expect(
+      createMessage.mock.calls
+        .map((call: unknown[]) => call[0] as Record<string, any>)
+        .filter((data) => data?.metadata?.kind === "photo"),
+    ).toHaveLength(0);
+  });
+
+  it("does not send the same photo twice within thirty days", async () => {
+    inferEmotionalState.mockResolvedValue({ state: "happy", source: "heuristic" });
+    invokeWithProvider.mockResolvedValue("在的。");
+    getMemoriesByPersonaId.mockResolvedValue([RECALLED_MEMORY]);
+    listMemoryMediaForMemories.mockResolvedValue(recalledPhoto());
+    listRecentlySentPhotoMediaIds.mockResolvedValue([11]);
+    for await (const _event of runConversation({
+      persona: persona({
+        styleProfile: PHOTO_PROFILE,
+        settings: { layers: { photos: true } },
+      }),
+      userId: 1,
+      message: "还记得我们第一次见面吗",
+      mode: "once",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      // drained
+    }
+    expect(listRecentlySentPhotoMediaIds).toHaveBeenCalled();
+    expect(
+      createMessage.mock.calls
+        .map((call: unknown[]) => call[0] as Record<string, any>)
+        .filter((data) => data?.metadata?.kind === "photo"),
+    ).toHaveLength(0);
+  });
+
+  it("does not send a photo when the switch is off or on a channel", async () => {
+    inferEmotionalState.mockResolvedValue({ state: "happy", source: "heuristic" });
+    invokeWithProvider.mockResolvedValue("在的。");
+    getMemoriesByPersonaId.mockResolvedValue([RECALLED_MEMORY]);
+    listMemoryMediaForMemories.mockResolvedValue(recalledPhoto());
+    for await (const _event of runConversation({
+      persona: persona({ styleProfile: PHOTO_PROFILE }),
+      userId: 1,
+      message: "还记得我们第一次见面吗",
+      mode: "once",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      // drained
+    }
+    for await (const _event of runConversation({
+      persona: persona({
+        styleProfile: PHOTO_PROFILE,
+        settings: { layers: { photos: true } },
+      }),
+      userId: 1,
+      message: "还记得我们第一次见面吗",
+      mode: "once",
+      channel: "wechat",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      // drained
+    }
+    expect(
+      createMessage.mock.calls
+        .map((call: unknown[]) => call[0] as Record<string, any>)
+        .filter((data) => data?.metadata?.kind === "photo"),
+    ).toHaveLength(0);
+  });
+
+  it("does not put the photo itself into the next model request", async () => {
+    getMessagesByPersonaId.mockResolvedValue([
+      {
+        id: 1,
+        personaId: 1,
+        userId: 1,
+        role: "user",
+        content: "还记得我们第一次见面吗",
+        messageType: "text",
+        createdAt: new Date(),
+      },
+      {
+        id: 2,
+        personaId: 1,
+        userId: 1,
+        role: "assistant",
+        content: "[image]",
+        messageType: "image",
+        mediaUrl: "/uploads/personas/1/1/imports/1/a.jpg",
+        metadata: { kind: "photo", mediaId: 11 },
+        createdAt: new Date(),
+      },
+    ]);
+    const { messages } = await composeMessages({
+      persona: persona(),
+      userId: 1,
+      userMessage: "在吗",
+      contextLimit: 20,
+    });
+    const sent = JSON.stringify(messages);
+    expect(sent).not.toContain("image_url");
+    expect(sent).not.toContain("/imports/1/a.jpg");
+    expect(sent).toContain("［图片］");
   });
 
   it("shows a sticker to the model as words, not as the token or a picture", async () => {
@@ -2338,6 +2558,8 @@ describe("composeMessages", () => {
     getDefaultLlmConfig.mockResolvedValue(null);
     getMessagesByPersonaId.mockResolvedValue([]);
     getMemoriesByPersonaId.mockResolvedValue([]);
+    listMemoryMediaForMemories.mockResolvedValue([]);
+    listRecentlySentPhotoMediaIds.mockResolvedValue([]);
     getFilesByPersonaId.mockResolvedValue([]);
     getSceneById.mockResolvedValue(null);
     getLatestChatSummary.mockResolvedValue(undefined);
