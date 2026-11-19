@@ -47,6 +47,7 @@ import { measureMultiPoint } from "@shared/multi-point";
 import { measureInSessionFromScenes } from "@shared/in-session";
 import { measureReplyDelay } from "@shared/reply-delay";
 import { measureRoutine } from "@shared/routine-profile";
+import { measureTyping } from "@shared/typing-profile";
 import { toTurns } from "@shared/scenes";
 import { splitScenes } from "@shared/scenes";
 import { schedulePersonaEmbeddings } from "../chat/embeddings";
@@ -136,6 +137,7 @@ export async function measureStyleProfile(params: {
   const sessions = measureSessions(labelledScenes, sessionZone);
   const replyDelay = measureReplyDelay(rows, sessionZone ?? "UTC") ?? undefined;
   const routine = measureRoutine(rows, sessionZone ?? "UTC") ?? undefined;
+  const typing = measureTyping(rows) ?? undefined;
   const multiPoint = measureMultiPoint(labelledScenes.flatMap((scene) => toTurns(scene)));
   const inSession = measureInSessionFromScenes(labelledScenes);
   const next = normalizeStyleProfile({
@@ -156,6 +158,7 @@ export async function measureStyleProfile(params: {
     ...(sessions ? { sessions } : { sessions: undefined }),
     ...(replyDelay ? { replyDelay } : { replyDelay: undefined }),
     ...(routine ? { routine } : { routine: undefined }),
+    ...(typing ? { typing } : { typing: undefined }),
     ...(multiPoint ? { multiPoint } : { multiPoint: undefined }),
     ...(inSession ? { inSession } : { inSession: undefined }),
   });

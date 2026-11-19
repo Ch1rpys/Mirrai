@@ -268,6 +268,9 @@ describe("measureStyleProfile", () => {
     expect(measured.multiPoint?.coverageMedian).toBeGreaterThan(0.25);
     expect(measured.multiPoint?.coverageMedian).toBeLessThan(0.42);
     expect(measured.inSession?.samples).toBeGreaterThanOrEqual(100);
+    expect(measured.typing?.msPerChar).toBeGreaterThanOrEqual(160);
+    expect(measured.typing?.msPerChar).toBeLessThanOrEqual(240);
+    expect(measured.typing?.pairs).toBeGreaterThanOrEqual(30);
   });
 
   it("remakes the sample pool from labelled rows even when the records version is unchanged", async () => {

@@ -1617,6 +1617,102 @@ describe("runConversation", () => {
       vi.useRealTimers();
     }
   });
+
+  const typingProfile = {
+    msPerChar: 200,
+    burstGapMs: { p10: 400, p25: 600, p50: 800, p75: 1_200, p90: 2_000 },
+    pairs: 40,
+  };
+
+  const timedWithTyping = (extra: Record<string, unknown> = {}) =>
+    timedPersona({
+      behaviorProfile: {
+        samples: 20,
+        replyGapMedianSec: 90,
+        replyGapLogSigma: 0.8,
+        burstSizes: [3],
+        measuredAt: "2026-01-01T00:00:00.000Z",
+      },
+      styleProfile: {
+        ...eveningDelay,
+        typing: typingProfile,
+      },
+      ...extra,
+    });
+
+  async function collectTimedEvents(personaArg: ReturnType<typeof timedPersona>, message = "在吗") {
+    const events: Array<{
+      type: string;
+      ms?: number;
+      typingMs?: number | number[];
+      texts?: string[];
+      gapsMs?: number[];
+    }> = [];
+    const running = (async () => {
+      for await (const event of runConversation({
+        persona: personaArg,
+        userId: 1,
+        message,
+        mode: "once",
+        now: new Date("2024-06-01T12:00:00.000Z"),
+      })) {
+        events.push(event);
+      }
+    })();
+    await vi.advanceTimersByTimeAsync(READ_WINDOW_MS);
+    await running;
+    return events;
+  }
+
+  it("puts a typing duration on the delay and burst when the three conditions hold", async () => {
+    vi.useFakeTimers();
+    try {
+      invokeWithProvider.mockResolvedValue("嗯\n好\n在");
+      const events = await collectTimedEvents(timedWithTyping());
+      const delay = events.find((event) => event.type === "delay");
+      expect(delay?.ms).toBe(40_000);
+      expect(typeof delay?.typingMs).toBe("number");
+      expect(delay!.typingMs as number).toBeGreaterThan(0);
+      expect(delay!.typingMs as number).toBeLessThanOrEqual(delay!.ms!);
+      const burst = events.find((event) => event.type === "burst");
+      expect(burst?.texts).toEqual(["嗯", "好", "在"]);
+      expect(burst?.gapsMs).toHaveLength(2);
+      expect(burst?.typingMs).toHaveLength(2);
+      (burst!.typingMs as number[]).forEach((ms, i) => {
+        expect(ms).toBeLessThanOrEqual(burst!.gapsMs![i]!);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("emits the same delay and burst events when typing is switched off", async () => {
+    vi.useFakeTimers();
+    try {
+      invokeWithProvider.mockResolvedValue("嗯\n好\n在");
+      const withoutProfile = await collectTimedEvents(timedPersona({
+        behaviorProfile: {
+          samples: 20,
+          replyGapMedianSec: 90,
+          replyGapLogSigma: 0.8,
+          burstSizes: [3],
+          measuredAt: "2026-01-01T00:00:00.000Z",
+        },
+        styleProfile: eveningDelay,
+      }));
+      const switchedOff = await collectTimedEvents(timedWithTyping({
+        settings: { timing: { typing: false } },
+      }));
+      expect(switchedOff).toEqual(withoutProfile);
+      expect(withoutProfile.find((event) => event.type === "delay")).toEqual({ type: "delay", ms: 40_000 });
+      expect(withoutProfile.find((event) => event.type === "burst")).toEqual({
+        type: "burst",
+        texts: ["嗯", "好", "在"],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("composeMessages", () => {

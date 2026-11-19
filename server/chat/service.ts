@@ -42,6 +42,7 @@ import { extractClaims, verifyClaims } from "./fact-check";
 import type { ReanchorIssue } from "@shared/style-reminder";
 import { sampleBurstSize, sampleReplyDelayMs } from "@shared/behavior-profile";
 import { bandOf, pickDelayBucket, sampleDelayMs } from "@shared/reply-delay";
+import { burstTypingMs, delayTypingMs, normalizeTyping } from "@shared/typing-profile";
 import { EMOTION_TRIGGER_PATTERNS } from "@shared/emotion-triggers";
 import { localDateKey, zonedDateKey, zonedDayStart } from "@shared/timezone";
 import { extractMemories, isExtractionDue } from "./memory-extract";
@@ -1145,6 +1146,11 @@ function melancholyOf(text: string): boolean {
     || EMOTION_TRIGGER_PATTERNS.en.melancholy.test(text);
 }
 
+function typingForTurn(persona: Persona) {
+  if (!normalizePersonaSettings(persona.settings).timing.typing) return null;
+  return normalizeTyping(effectiveStyleProfile(persona).typing);
+}
+
 async function* runConversationTurn(
   options: ConversationOptions & { mode: ChatMode },
 ): AsyncGenerator<ChatEvent> {
@@ -1826,9 +1832,10 @@ async function* runConversationTurn(
   const finalText = appended.length > 0 ? `${baseText}\n\n${appended.join("\n\n")}` : baseText;
 
   // A crisis already returned. Weak distress and "I'm sad" do not wait.
+  let delayMsForEvent: number | null = null;
   if (timingEnabled && behavior && !immediate && !options.fromReplyJob) {
     if (queuedDelayMs != null) {
-      yield { type: "delay", ms: queuedDelayMs };
+      delayMsForEvent = queuedDelayMs;
     } else {
       const measured = effectiveStyleProfile(persona).replyDelay;
       const zone = (persona as { timezone?: string | null }).timezone
@@ -1849,8 +1856,23 @@ async function* runConversationTurn(
       } else {
         delayMs = sampleReplyDelayMs(behavior, rng);
       }
-      yield { type: "delay", ms: delayMs };
+      delayMsForEvent = delayMs;
     }
+  }
+
+  let parts = [finalText];
+  if (timingEnabled && behavior) {
+    parts = splitBurst(finalText, sampleBurstSize(behavior, rng));
+  }
+
+  if (delayMsForEvent != null) {
+    const typing = typingForTurn(persona);
+    const typingMs = typing
+      ? delayTypingMs(parts[0] ?? finalText, typing, delayMsForEvent)
+      : undefined;
+    yield typingMs != null
+      ? { type: "delay", ms: delayMsForEvent, typingMs }
+      : { type: "delay", ms: delayMsForEvent };
   }
 
   // The emotional state is inferred *before* the reply is stored. It used
@@ -1934,11 +1956,16 @@ async function* runConversationTurn(
     yield { type: "superseded" };
     return;
   }
-  let parts = [finalText];
   if (timingEnabled && behavior) {
-    parts = splitBurst(finalText, sampleBurstSize(behavior, rng));
-    if (parts.length > 1) yield { type: "burst", texts: parts };
-    else if (parts[0]) yield { type: "delta", text: parts[0] };
+    if (parts.length > 1) {
+      const typing = typingForTurn(persona);
+      if (typing) {
+        const timing = burstTypingMs(parts, typing, seededRandom(`${turnInput.seed}:typing`));
+        yield { type: "burst", texts: parts, gapsMs: timing.gapsMs, typingMs: timing.typingMs };
+      } else {
+        yield { type: "burst", texts: parts };
+      }
+    } else if (parts[0]) yield { type: "delta", text: parts[0] };
   }
   let messageId = 0;
   for (const part of parts) {

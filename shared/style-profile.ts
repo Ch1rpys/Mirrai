@@ -21,6 +21,7 @@ import { normalizeEmotionDynamics, type EmotionDynamics } from "./emotion-dynami
 import { normalizeSamplePool, type SamplePool } from "./sample-pool";
 import { normalizeReplyDelay, type DelayBuckets } from "./reply-delay";
 import { normalizeRoutine, type RoutineProfile } from "./routine-profile";
+import { normalizeTyping, type TypingProfile } from "./typing-profile";
 import type { StyleFingerprint } from "./style-fingerprint";
 import type { ImperfectionDrafts } from "./imperfection-draft";
 import { normalizeRituals, type RitualEntry } from "./ritual-table";
@@ -72,7 +73,7 @@ export interface StyleProfile {
   discriminator?: unknown; // 由 B8.1 填
   replyDelay?: DelayBuckets;
   routine?: RoutineProfile;
-  typing?: unknown; // 由 B5.5 填
+  typing?: TypingProfile;
   quirks?: unknown; // 由 B5.6 填
   doubleText?: unknown; // 由 B5.7 填
   sessions?: SessionProfile;
@@ -165,6 +166,11 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
       if (key === "routine") {
         const routine = normalizeRoutine(source.routine);
         if (routine) profile.routine = routine;
+        continue;
+      }
+      if (key === "typing") {
+        const typing = normalizeTyping(source.typing);
+        if (typing) profile.typing = typing;
         continue;
       }
       (profile as unknown as Record<string, unknown>)[key] = source[key];
