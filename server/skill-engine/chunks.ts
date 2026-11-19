@@ -179,6 +179,33 @@ function periodIdFor(
   return periods[periods.length - 1]?.id ?? null;
 }
 
+/**
+ * Cuts one line that is longer than a whole block.
+ *
+ * A single message can be longer than `maxChars` — a pasted letter, a
+ * long note. It cannot be cut at a turn or even a bubble boundary, so
+ * the text is split into consecutive segments that keep the record's
+ * own id: a citation still points at the original line, and the whole
+ * text is read instead of being dropped or allowed to overflow the
+ * block. Only text rows are split; the other kinds render to a short
+ * token.
+ */
+function splitOversizedRow(
+  row: RecordLine,
+  maxChars: number,
+  options: ChunkRecordsOptions,
+): RecordLine[] {
+  if (!isTextRecord(row) || lineChars(row, options) <= maxChars) return [row];
+  const overhead = lineChars({ ...row, content: "" }, options);
+  const budget = Math.max(1, maxChars - overhead);
+  const content = row.content;
+  const parts: RecordLine[] = [];
+  for (let start = 0; start < content.length; start += budget) {
+    parts.push({ ...row, content: content.slice(start, start + budget) });
+  }
+  return parts.length > 0 ? parts : [row];
+}
+
 function splitOversizedScene(
   scene: RecordLine[],
   maxChars: number,
@@ -190,17 +217,41 @@ function splitOversizedScene(
   const parts: RecordLine[][] = [];
   let current: RecordLine[] = [];
   let currentChars = 0;
+
+  const flush = () => {
+    if (current.length === 0) return;
+    parts.push(current);
+    current = [];
+    currentChars = 0;
+  };
+
+  const addRow = (row: RecordLine) => {
+    for (const segment of splitOversizedRow(row, maxChars, options)) {
+      const length = lineChars(segment, options);
+      if (current.length > 0 && currentChars + length > maxChars) flush();
+      current.push(segment);
+      currentChars += length;
+      if (currentChars >= maxChars) flush();
+    }
+  };
+
   for (const turn of turns) {
     const turnChars = turn.reduce((sum, row) => sum + lineChars(row, options), 0);
-    if (current.length > 0 && currentChars + turnChars > maxChars) {
-      parts.push(current);
-      current = [];
-      currentChars = 0;
+    if (turnChars <= maxChars) {
+      if (current.length > 0 && currentChars + turnChars > maxChars) flush();
+      current.push(...turn);
+      currentChars += turnChars;
+      continue;
     }
-    current.push(...turn);
-    currentChars += turnChars;
+    /**
+     * The turn itself is too long. Its bubbles are the next boundary:
+     * a burst of long messages can be packed a bubble at a time, and a
+     * single bubble that is still too long is split by `addRow`.
+     */
+    flush();
+    for (const row of turn) addRow(row);
   }
-  if (current.length) parts.push(current);
+  flush();
   return parts.length ? parts : [scene];
 }
 

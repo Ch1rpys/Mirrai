@@ -34,20 +34,45 @@ describe("chunkRecords", () => {
     }
   });
 
+  it("splits a single message longer than a whole block instead of overflowing it", () => {
+    const content = "长".repeat(20_000);
+    const rows = [
+      { id: 1, role: "user" as const, content: "在吗", timestamp: new Date("2024-01-01T12:00:00Z"), kind: "text" },
+      { id: 2, role: "assistant" as const, content, timestamp: new Date("2024-01-01T12:01:00Z"), kind: "text" },
+      { id: 3, role: "user" as const, content: "嗯", timestamp: new Date("2024-01-01T12:02:00Z"), kind: "text" },
+    ];
+    const cut = chunkRecords(rows, { timeZone: TIME_ZONE });
+    expect(cut.length).toBeGreaterThan(1);
+    for (const chunk of cut) {
+      expect(chunk.chars).toBeLessThanOrEqual(CHUNK_MAX_CHARS);
+    }
+    const segments = cut.flatMap((chunk) => chunk.rows).filter((row) => row.id === 2);
+    expect(segments.length).toBeGreaterThan(1);
+    expect(segments.every((row) => row.role === "assistant")).toBe(true);
+    expect(segments.map((row) => row.content).join("")).toBe(content);
+  });
+
   it("hashes the same blocks the same way twice", () => {
     const second = chunkRecords(rows, { timeZone: TIME_ZONE });
     expect(second.map((chunk) => chunk.hash)).toEqual(chunks.map((chunk) => chunk.hash));
     expect(new Set(chunks.map((chunk) => chunk.hash)).size).toBe(chunks.length);
   });
 
-  it("puts every spoken line into exactly one block", () => {
+  it("puts every spoken line into the cut at least once", () => {
     const spoken = rows.filter((row) => row.role === "user" || row.role === "assistant");
-    const packed = chunks.reduce((sum, chunk) => sum + chunk.rows.length, 0);
-    expect(packed).toBe(spoken.length);
+    const packedIds = new Set(chunks.flatMap((chunk) => chunk.rows.map((row) => row.id)));
+    expect(packedIds.size).toBe(new Set(spoken.map((row) => row.id)).size);
     // The handbook's "文本行" is the spoken record. Non-text lines are
     // in the blocks too, rendered, so the sum is the spoken count, not
     // only kind === "text".
-    expect(spoken.filter((row) => isTextRecord(row)).length).toBeLessThan(packed);
+    const textIds = new Set(spoken.filter((row) => isTextRecord(row)).map((row) => row.id));
+    expect(textIds.size).toBeLessThan(packedIds.size);
+    // A line longer than one block is cut into segments that keep its id.
+    // A segmented line therefore contributes more than one row; the set
+    // of ids is what must stay complete.
+    expect(chunks.reduce((sum, chunk) => sum + chunk.rows.length, 0)).toBeGreaterThanOrEqual(
+      packedIds.size,
+    );
   });
 });
 
