@@ -485,18 +485,30 @@ describe("the lobby", () => {
   });
 
   it("says on the card how many days since the user last spoke", () => {
-    const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000).toISOString();
-    personas = [
-      makePersona({
-        id: 3,
-        name: "小A",
-        lastUserMessageAt: threeDaysAgo,
-      }),
-    ];
+    /**
+     * A fixed clock.
+     *
+     * The page reads the real clock, so a fixture computed from
+     * `Date.now()` makes "3 days" only as true as the runner happens to
+     * be. Pinning both ends makes the number mean the day it names.
+     */
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-03-14T12:00:00Z"));
+    try {
+      personas = [
+        makePersona({
+          id: 3,
+          name: "小A",
+          lastUserMessageAt: "2026-03-11T12:00:00.000Z",
+        }),
+      ];
 
-    render(<Lobby />);
+      render(<Lobby />);
 
-    expect(screen.getByText("上次联系 3 天前")).toBeInTheDocument();
+      expect(screen.getByText("上次联系 3 天前")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not keep a streak, achievement badges, or a conversation ranking", () => {
