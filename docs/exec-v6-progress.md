@@ -1703,7 +1703,7 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 
 未验证清单（本机没有非 stub 的模型和真实 Ollama，所以下面这些没有数字）：
 
-- B2.1、B2.2、B2.3、B2.5、B2.6、B2.8、B2.9 的真实模型效果（`pnpm eval -- --persona <id> --user <id> --k 3` 及各自的 `--compare`）没有跑；本机没有配置任何 LLM provider。B2.1、B2.3、B2.5 维持 🟡 的原因就是效果未量。
+- B2.1、B2.2、B2.3、B2.4、B2.5、B2.6、B2.8、B2.9 的真实模型效果（`pnpm eval -- --persona <id> --user <id> --k 3` 及各自的 `--compare`）没有跑；本机没有配置任何 LLM provider。B2.1、B2.3、B2.5 维持 🟡 的原因就是效果未量。
 - 本机没有 Ollama / `bge-m3`，B2.3 的真实嵌入检索只验了 mock 的 `fetch` 和 DB 存取；真实 Ollama 的 `/api/embed`、`/api/tags` 没有连过。
 - 微信、飞书通道没有实机，B2.1/B2.2 的通道路径只按代码确认走同一个 `planTurn`。
 - B2.9 的 Claude `cache_control` 只验了请求体构造；没有真实 Claude 账号。
