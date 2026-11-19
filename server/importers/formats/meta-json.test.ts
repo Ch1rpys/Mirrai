@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { detectFormat } from "../detect";
 import { importSourceFrom } from "../normalize";
-import { parseMetaJson } from "./meta-json";
+import { metaJsonImporter } from "./meta-json";
 
 const SAMPLE = readFileSync(
   path.resolve(import.meta.dirname, "../../test-fixtures/exports/meta-json/sample.json"),
@@ -11,12 +11,20 @@ const SAMPLE = readFileSync(
 );
 
 describe("meta-json", () => {
-  it("repairs latin1 mojibake, sorts oldest first, and keeps a photo path", async () => {
-    const parsed = await parseMetaJson(SAMPLE);
+  it("repairs latin1 mojibake through the importer's own entry, sorts oldest first, and keeps a photo path", async () => {
+    // The app hands importers bytes; the test does the same. Reading the
+    // sample as UTF-8 text and calling the parser directly would skip the
+    // decode step, which is where the mojibake bytes are still intact.
+    const parsed = await metaJsonImporter.parse(
+      importSourceFrom("message_1.json", Buffer.from(SAMPLE, "utf8")),
+      { timeZone: "Asia/Shanghai" },
+    );
     expect(parsed.records[0]).toMatchObject({ speaker: "小满", content: "在吗" });
     expect(parsed.records[0].timestamp?.toISOString()).toBe("2022-03-01T12:00:00.000Z");
-    expect(parsed.records[1].content).toBe("在的呀\n还没睡");
+    expect(parsed.records[1]).toMatchObject({ speaker: "阿树", content: "在的呀\n还没睡" });
+    expect(parsed.speakers.map((row) => row.name)).toEqual(["小满", "阿树"]);
     expect(parsed.records.find((row) => row.content === "他说：先这样")).toBeTruthy();
+    expect(parsed.records.find((row) => row.content === "中午吃面吗")).toBeTruthy();
     expect(parsed.records.at(-1)?.kind).toBe("image");
     expect(parsed.records.at(-1)?.meta).toEqual({ path: "messages/inbox/photos/1.jpg" });
   });

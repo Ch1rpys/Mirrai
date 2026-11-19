@@ -14,6 +14,7 @@ import {
   applyTextPlaceholder,
   cappedWarnings,
   collectSpeakers,
+  decodeImportBytes,
   looksLikeSqlite,
   looksLikeXml,
   looksLikeZip,
@@ -22,6 +23,21 @@ import {
 } from "../normalize";
 import type { DetectResult, Importer, ImportSource, ParseOptions, ParseResult, ParseWarning } from "../types";
 import { asArray, asObject, parseJsonDocument } from "./json-fields";
+
+/**
+ * The JSON as it was decoded, before `cleanText`.
+ *
+ * A Messenger export stores UTF-8 bytes as latin1 characters. Those
+ * characters are U+0080-U+00FF, and two of them — the no-break space
+ * (0xA0) and the soft hyphen (0xAD) — are exactly what `cleanText`
+ * rewrites or strips. Repairing the mojibake after that cleaning would
+ * lose those bytes and leave a name like `阿树` as mojibake. So this
+ * importer reads the raw decode, not the cleaned `source.text`.
+ */
+function rawSourceText(source: ImportSource): string {
+  if (source.bytes.length > 0) return decodeImportBytes(source.bytes);
+  return source.text;
+}
 
 function fixMojibake(value: string): string {
   if (/[一-鿿]/.test(value)) return value;
@@ -146,6 +162,6 @@ export const metaJsonImporter: Importer = {
   source: "meta",
   detect: detectMetaJson,
   parse(source, options) {
-    return parseMetaJson(source.text, options);
+    return parseMetaJson(rawSourceText(source), options);
   },
 };
