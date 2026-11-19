@@ -1471,7 +1471,7 @@ A1、A2、A3、A4、C1.2、C1.3、C1.4、C1.5、C1.6、C1.7 维持 ✅。C1.1 �
 
 ### WP2 · 独立验收 · 2026-11-19
 
-对照 `docs/exec-v6.md` 的 A5–A9 从头重跑，不沿用上面的证据；代码和测试一行未改（临时改动都用 `git checkout HEAD -- <文件>` 还原，未提交，`git status` 干净）。`corepack pnpm gate`（无 `--fast`、无 `DATABASE_URL`，Node v24.14.1）退出码 0：`Test Files  419 passed | 6 skipped (425)`，`Tests  3684 passed | 23 skipped (3707)`，`all six steps passed`，与本文件最新的 WP1 修复行一致。通过数 3684 高于手册 2.2 基线 2486；跳过数 23，比本包收尾的 16 多 7，全部来自后面工作包按手册 2.3 加的 `describe.skipIf(!DATABASE_URL)`（`db-persona-versions` +2、`material` +3、`db-push` +2），本包内 16→16 没有增加。本包各行记的闸门数字（315/3 文件、2863/16 用例）是 WP2 收尾时的历史快照，之后 WP3–WP18 加了测试，不能拿来对当前总数；当前总数与本文件最后一行一致。
+对照 `docs/exec-v6.md` 的 A5–A9 从头重跑，不沿用上面的证据；代码和测试一行未改（临时改动都用 `git checkout HEAD -- <文件>` 还原，未提交，`git status` 干净）。`corepack pnpm gate`（无 `--fast`、无 `DATABASE_URL`，Node v24.14.1）退出码 0：`Test Files  419 passed | 6 skipped (425)`，`Tests  3684 passed | 23 skipped (3707)`，`all six steps passed`，与本文件最新的 WP1 修复行一致。通过数 3684 高于手册 2.2 基线 2486；跳过数 23，比本包收尾的 16 多 7，全部来自后面工作包按手册 2.3 加的 `describe.skipIf(!DATABASE_URL)`（`db-persona-versions` +2、`material` +3、`db-push` +2），本包内 16→16 没有增加。临时库 `mirrai_v6_verify` 上这 6 个 `skipIf` 文件 23 条全过（`push --force` 建 schema，用完已 `dropdb`，`mirrai_live` 未碰）。本包各行记的闸门数字（315/3 文件、2863/16 用例）是 WP2 收尾时的历史快照，之后 WP3–WP18 加了测试，不能拿来对当前总数；当前总数与本文件最后一行一致。
 
 WP2 点名的 13 个测试文件 148 条全过：`Lobby.test.tsx` 16、`lobby-eligibility.test.ts` 5、`Analytics.test.tsx` 5、`Milestones.test.tsx` 3、`routers.milestones.test.ts` 2、`MemoryReview.test.tsx` 2、`memory-extract-source.test.ts` 5、`chat/memory-extract.test.ts` 11、`memory-extract.test.ts` 10、`resources.test.ts` 7、`egress.test.ts` 4、`i18n.test.ts` 15、`db-behaviour.test.ts` 63。
 
