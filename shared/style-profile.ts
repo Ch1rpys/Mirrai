@@ -23,6 +23,7 @@ import { normalizeReplyDelay, type DelayBuckets } from "./reply-delay";
 import { normalizeRoutine, type RoutineProfile } from "./routine-profile";
 import { normalizeTyping, type TypingProfile } from "./typing-profile";
 import { normalizeQuirks, type QuirksProfile } from "./quirks-profile";
+import { normalizeDoubleText, type DoubleTextProfile } from "./double-text";
 import type { StyleFingerprint } from "./style-fingerprint";
 import type { ImperfectionDrafts } from "./imperfection-draft";
 import { normalizeRituals, type RitualEntry } from "./ritual-table";
@@ -76,7 +77,7 @@ export interface StyleProfile {
   routine?: RoutineProfile;
   typing?: TypingProfile;
   quirks?: QuirksProfile;
-  doubleText?: unknown; // 由 B5.7 填
+  doubleText?: DoubleTextProfile;
   sessions?: SessionProfile;
   inSession?: InSessionProfile;
   multiPoint?: MultiPointProfile;
@@ -177,6 +178,11 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
       if (key === "quirks") {
         const quirks = normalizeQuirks(source.quirks);
         if (quirks) profile.quirks = quirks;
+        continue;
+      }
+      if (key === "doubleText") {
+        const doubleText = normalizeDoubleText(source.doubleText);
+        if (doubleText) profile.doubleText = doubleText;
         continue;
       }
       (profile as unknown as Record<string, unknown>)[key] = source[key];
