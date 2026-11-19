@@ -405,14 +405,38 @@ export function formatMemoriesForPrompt(
 }
 
 /**
+ * The anchor memories and the ordinary ones.
+ *
+ * Something the persona said in the app is not a fact from the records.
+ * It must never sit in the anchor block — the block whose whole point
+ * is that the facts in it must hold — even when it was stored with the
+ * wrong category.
+ */
+export function splitMemorySections<T extends { category: string; subject?: string }>(
+  memories: T[],
+): { anchors: T[]; ordinary: T[] } {
+  const said = (row: { subject?: string }) => row.subject === "said";
+  return {
+    anchors: memories.filter((row) => row.category === "anchor" && !said(row)),
+    ordinary: memories.filter((row) => row.category !== "anchor" || said(row)),
+  };
+}
+
+/**
  * Renders anchor memories as a prompt section with a no-hallucination rule.
  */
 export function formatAnchorsForPrompt(
   anchors: ScoredMemory[],
   locale: "zh" | "en" = "zh",
 ): string {
-  if (anchors.length === 0) return "";
-  const lines = anchors.map((m) => {
+  /**
+   * The guard lives here as well as at the callers. The anchor block is
+   * the one that says these facts must hold; a line the persona said in
+   * the app must never enter it, whichever prompt path built the list.
+   */
+  const facts = anchors.filter((m) => m.subject !== "said");
+  if (facts.length === 0) return "";
+  const lines = facts.map((m) => {
     const description = m.description
       ? `${descriptionSeparator(locale)}${m.description}`
       : "";

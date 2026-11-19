@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { memoryKnownBy, periodToInstant } from "./period-boundary";
+import { eventKnownBy, memoryKnownBy, periodToInstant } from "./period-boundary";
 
 describe("the end of a selected stretch", () => {
   it("closes the calendar day in the persona's zone", () => {
@@ -21,5 +21,14 @@ describe("the end of a selected stretch", () => {
 
   it("uses the UTC end of the day when nobody's zone is known", () => {
     expect(periodToInstant("2022-06-01")?.toISOString()).toBe("2022-06-01T23:59:59.999Z");
+  });
+});
+
+describe("an event with no day", () => {
+  const cut = periodToInstant("2022-06-01", "Asia/Shanghai");
+  it("is not part of a selected stretch, and stays when no stretch is selected", () => {
+    expect(eventKnownBy(null, cut)).toBe(false);
+    expect(eventKnownBy(undefined, cut)).toBe(false);
+    expect(eventKnownBy(null, null)).toBe(true);
   });
 });

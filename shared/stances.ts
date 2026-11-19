@@ -7,6 +7,7 @@
  * that mentions the topic.
  */
 import { copy, type Locale } from "./copy";
+import { recordText, type RecordContentRow } from "./records";
 import { containsTerm } from "./term-match";
 
 export const STANCE_MIN_EVIDENCE = 2;
@@ -35,6 +36,30 @@ export interface Stance {
 export interface StanceCard {
   claim?: string | null;
   payload?: unknown;
+}
+
+/** A record line, so the cited quote can be resolved to the words said. */
+export type StanceRecordLine = RecordContentRow & {
+  id?: number;
+  timestamp?: Date | string | null;
+};
+
+function stampOf(value: Date | string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+  }
+  const date = new Date(value);
+  if (!Number.isNaN(date.getTime())) return date.toISOString();
+  const text = String(value).trim();
+  return text || undefined;
+}
+
+function quoteOf(card: StanceCard): number | null {
+  if (!card.payload || typeof card.payload !== "object") return null;
+  const value = (card.payload as Record<string, unknown>).quote;
+  const quote = typeof value === "number" ? value : Number(value);
+  return Number.isInteger(quote) && quote > 0 ? quote : null;
 }
 
 function toText(value: unknown): string {
@@ -133,7 +158,10 @@ export function normalizeStances(value: unknown): Stance[] {
  * actually hold. Like and dislike of the same topic both stay, so
  * the user can pick.
  */
-export function aggregateStances(cards: StanceCard[]): Stance[] {
+export function aggregateStances(
+  cards: StanceCard[],
+  rows: StanceRecordLine[] = [],
+): Stance[] {
   const groups = new Map<string, StanceCard[]>();
   for (const card of cards) {
     const topic = payloadField(card.payload, "topic").slice(0, STANCE_TOPIC_MAX);
@@ -144,14 +172,36 @@ export function aggregateStances(cards: StanceCard[]): Stance[] {
     list.push(card);
     groups.set(key, list);
   }
+  const rowsById = new Map<number, StanceRecordLine>();
+  for (const row of rows) {
+    if (typeof row.id === "number") rowsById.set(row.id, row);
+  }
   const stances: Stance[] = [];
   for (const [key, group] of groups) {
-    const evidence = group
-      .map((card) => {
-        const snippet = toText(card.claim) || payloadField(card.payload, "topic");
-        return snippet ? { snippet } : null;
-      })
-      .filter((row): row is StanceEvidence => Boolean(row));
+    const evidence: StanceEvidence[] = [];
+    const seenQuotes = new Set<number>();
+    for (const card of group) {
+      const quote = quoteOf(card);
+      let snippet = "";
+      let at: string | undefined;
+      if (quote != null && rows.length > 0) {
+        /**
+         * The card cites a line by id. The words in the prompt have to be
+         * that line, not the model's paraphrase of it, or the person
+         * confirming the candidate cannot see what they are confirming.
+         */
+        const cited = rowsById.get(quote);
+        if (!cited) continue;
+        snippet = recordText(cited).trim();
+        at = stampOf(cited.timestamp);
+        if (seenQuotes.has(quote)) continue;
+        seenQuotes.add(quote);
+      } else {
+        // Cards written before the quote was carried through.
+        snippet = toText(card.claim) || payloadField(card.payload, "topic");
+      }
+      if (snippet) evidence.push(at ? { snippet, at } : { snippet });
+    }
     if (evidence.length < STANCE_MIN_EVIDENCE) continue;
     const colon = key.lastIndexOf(":");
     const topic = key.slice(0, colon);

@@ -15,7 +15,9 @@ describe("mining a weekly window from what they used to say", () => {
     expect(lesson?.title).toBe("周三下午上课");
     expect(lesson?.source).toBe("auto");
     expect(lesson?.verified).toBe(false);
-    expect(lesson?.evidence.some((row) => row.snippet.includes("刚下课"))).toBe(true);
+    expect(lesson?.evidence).toHaveLength(3);
+    expect(lesson?.evidence.every((row) => row.snippet.includes("刚下课"))).toBe(true);
+    expect(lesson?.evidence.every((row) => Boolean(row.at))).toBe(true);
 
     const threeWeeks = [0, 1, 2].map((week) => ({
       role: "assistant" as const,

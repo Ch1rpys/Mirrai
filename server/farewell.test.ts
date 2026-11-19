@@ -20,6 +20,10 @@ vi.mock("./chat/retrieval", () => ({
     memories.map((m) => `【相关记忆】${m.title}`).join("\n"),
   formatAnchorsForPrompt: (memories: any[]) =>
     memories.map((m) => `【锚点记忆】${m.title}`).join("\n"),
+  splitMemorySections: (memories: any[]) => ({
+    anchors: memories.filter((m) => m.category === "anchor" && m.subject !== "said"),
+    ordinary: memories.filter((m) => m.category !== "anchor" || m.subject === "said"),
+  }),
 }));
 
 vi.mock("./llm/user-provider", () => ({

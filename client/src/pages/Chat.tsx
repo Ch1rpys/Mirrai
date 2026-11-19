@@ -66,19 +66,20 @@ export function failedSendKeepsTheMessage(result: unknown): boolean {
   return Boolean((result as { failed?: boolean } | null | undefined)?.failed);
 }
 
+export type SelectedPeriod = { from: string; to: string } | null;
+
 export function ChatPeriodHint({
-  from,
-  to,
+  period,
   name,
 }: {
-  from: string;
-  to: string;
+  period: SelectedPeriod;
   name: string;
 }) {
   const { t } = useLocale();
+  if (!period) return null;
   return (
     <p className="text-[0.625rem] text-muted-subtle leading-snug">
-      {t("chat.periodBoundary", { from, to, name })}
+      {t("chat.periodBoundary", { from: period.from, to: period.to, name })}
     </p>
   );
 }
@@ -1743,13 +1744,7 @@ export default function Chat() {
               {/* "TA" is a Chinese internet abbreviation. The dictionary
                   already has the right word for it. */}
               <p className="app-nav-subtitle truncate">{persona?.relationshipDesc || t("common.them")}</p>
-              {selectedPeriod ? (
-                <ChatPeriodHint
-                  from={selectedPeriod.from}
-                  to={selectedPeriod.to}
-                  name={persona?.name || ""}
-                />
-              ) : null}
+              <ChatPeriodHint period={selectedPeriod} name={persona?.name || ""} />
             </div>
           </div>
 

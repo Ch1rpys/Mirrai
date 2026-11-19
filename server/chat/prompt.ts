@@ -9,7 +9,7 @@
 import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { buildSystemPromptParts } from "../_core/persona-utils";
-import { retrieveMemories, formatMemoriesForPrompt, formatAnchorsForPrompt } from "./retrieval";
+import { retrieveMemories, formatMemoriesForPrompt, formatAnchorsForPrompt, splitMemorySections } from "./retrieval";
 import { buildUserContextBlock, buildRelationshipSection, resolveRelationshipPhase, isUserMood } from "@shared/user-side";
 import { copy } from "@shared/copy";
 import type { MicroRule } from "@shared/micro-rules";
@@ -223,9 +223,7 @@ export async function buildPromptBundleForPersona(
   }).catch(() => []);
   const recordTimes = await recordTimesFor(memories, userId);
   const knownMemories = memories.filter((row) => memoryKnownBy(row, periodEnd, recordTimes));
-  const said = (row: { subject?: string }) => row.subject === "said";
-  const anchors = knownMemories.filter((row) => row.category === "anchor" && !said(row));
-  const ordinary = knownMemories.filter((row) => row.category !== "anchor" || said(row));
+  const { anchors, ordinary } = splitMemorySections(knownMemories);
 
   const summary = periodEnd
     ? null

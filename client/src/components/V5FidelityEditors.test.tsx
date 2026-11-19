@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
@@ -18,6 +18,7 @@ const fixtures = vi.hoisted(() => ({
   confirm: vi.fn(),
   reject: vi.fn(),
   invalidate: vi.fn(),
+  saveEvent: vi.fn(),
 }));
 
 vi.mock("@/lib/trpc", () => ({
@@ -33,7 +34,7 @@ vi.mock("@/lib/trpc", () => ({
     },
     lifeEvent: {
       list: { useQuery: () => ({ data: { events: fixtures.events, hint: "empty" } }) },
-      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      save: { useMutation: () => ({ mutate: fixtures.saveEvent, isPending: false }) },
       mine: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     actProfile: {
@@ -138,7 +139,7 @@ describe("the fifth-stage editors", () => {
       closed: false,
       source: "auto",
       verified: false,
-      evidence: [],
+      evidence: [{ at: "2022-03-02T08:11:23.000Z", snippet: "刚下课" }],
       schedule: { weekdays: [3], startHour: 14, endHour: 16 },
     }];
     render(<V5FidelityEditors personaId={1} />);
@@ -146,5 +147,12 @@ describe("the fifth-stage editors", () => {
     expect(screen.getByDisplayValue("14")).toBeInTheDocument();
     expect(screen.getByDisplayValue("16")).toBeInTheDocument();
     expect(screen.getByText(translate("zh", "v5.routineHint"))).toBeInTheDocument();
+    expect(screen.getByText(/刚下课/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(translate("zh", "v5.scheduleStart")), { target: { value: "15" } });
+    expect(fixtures.saveEvent).toHaveBeenCalledWith(expect.objectContaining({
+      events: expect.arrayContaining([
+        expect.objectContaining({ id: "r1", schedule: expect.objectContaining({ startHour: 15 }) }),
+      ]),
+    }));
   });
 });

@@ -155,7 +155,131 @@ const PLACE_STOP = new Set(Array.from("我你他她们的了在到从去和与�
 const QUOTED_RE = /[「『“"]([^」』”"]{1,12})[」』”"]/g;
 const EVENT_RE = /上次|那次|那天|那年|第一次|还记得/g;
 const EN_EVENT_RE = /\b(?:last time|that time|that day|the first time|remember when)\b/gi;
-const EN_PLACE_RE = /\b([A-Za-z][A-Za-z'’\-]*(?:\s+[A-Za-z][A-Za-z'’\-]*){0,3}\s+(?:cafe|café|street|road|park|school|hospital|airport|station|restaurant))\b/gi;
+// i18n:allow-input — place-name endings in English lines, not copy
+const EN_PLACE_SUFFIXES = [
+  "cafe",
+  "café",
+  "street",
+  "road",
+  "park",
+  "school",
+  "hospital",
+  "airport",
+  "station",
+  "restaurant",
+];
+// i18n:allow-input — determiners that can start a place name, and stop the walk
+const EN_DETERMINERS = new Set([
+  "the",
+  "a",
+  "an",
+  "that",
+  "this",
+  "these",
+  "those",
+  "my",
+  "your",
+  "his",
+  "her",
+  "their",
+  "our",
+  "its",
+]);
+// i18n:allow-input — English words that sit in front of a place name, not inside it
+const EN_PLACE_STOP = new Set([
+  "in",
+  "on",
+  "at",
+  "to",
+  "from",
+  "by",
+  "with",
+  "for",
+  "of",
+  "and",
+  "or",
+  "but",
+  "was",
+  "were",
+  "is",
+  "are",
+  "am",
+  "be",
+  "been",
+  "being",
+  "go",
+  "went",
+  "gone",
+  "walk",
+  "walked",
+  "run",
+  "ran",
+  "drive",
+  "drove",
+  "take",
+  "took",
+  "get",
+  "got",
+  "meet",
+  "met",
+  "see",
+  "saw",
+  "visit",
+  "visited",
+  "stay",
+  "stayed",
+  "live",
+  "lives",
+  "lived",
+  "work",
+  "works",
+  "worked",
+  "study",
+  "studied",
+  "eat",
+  "ate",
+  "drink",
+  "drank",
+  "buy",
+  "bought",
+  "leave",
+  "left",
+  "return",
+  "returned",
+  "came",
+  "come",
+  "arrive",
+  "arrived",
+  "move",
+  "moved",
+  "pass",
+  "passed",
+  "stop",
+  "stopped",
+  "wait",
+  "waited",
+  "look",
+  "looked",
+  "find",
+  "found",
+  "spend",
+  "spent",
+  "us",
+  "me",
+  "him",
+  "them",
+  "you",
+  "we",
+  "i",
+  "he",
+  "she",
+  "they",
+  "it",
+]);
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 function extractDates(clause: string, start: number, locale: "zh" | "en"): Claim[] {
   const patterns = [
@@ -197,6 +321,62 @@ function placeFromSuffix(clause: string, suffixAt: number, suffix: string): stri
   return text;
 }
 
+/**
+ * The place phrase, not the sentence that led to it.
+ *
+ * The old regex took up to three words before the suffix, so
+ * «He works at the hospital» became one place claim. Walk back from
+ * the suffix, stop at a verb or a preposition, and let a determiner
+ * in only as the first word («the park»).
+ */
+function placeFromEnglishSuffix(
+  clause: string,
+  suffixAt: number,
+  suffix: string,
+): { text: string; start: number } | null {
+  const end = suffixAt + suffix.length;
+  let start = suffixAt;
+  let cursor = suffixAt;
+  let words = 0;
+  while (cursor > 0 && words < 4) {
+    let index = cursor - 1;
+    while (index >= 0 && /\s/.test(clause.charAt(index))) index--;
+    if (index < 0) break;
+    if (!/[A-Za-z'’\-]/.test(clause.charAt(index))) break;
+    let wordStart = index;
+    while (wordStart >= 0 && /[A-Za-z'’\-]/.test(clause.charAt(wordStart))) wordStart--;
+    const word = clause.slice(wordStart + 1, index + 1);
+    const lower = word.toLowerCase();
+    if (EN_PLACE_STOP.has(lower)) break;
+    const determiner = EN_DETERMINERS.has(lower);
+    start = wordStart + 1;
+    cursor = wordStart + 1;
+    words += 1;
+    if (determiner) break;
+  }
+  const text = clause.slice(start, end).trim();
+  if (text.length < 2 || !/[A-Za-z]/.test(text)) return null;
+  return { text, start };
+}
+
+function extractEnglishPlaces(clause: string, start: number): Claim[] {
+  const out: Claim[] = [];
+  const pattern = new RegExp(`(?:${EN_PLACE_SUFFIXES.map(escapeRegExp).join("|")})(?![A-Za-z])`, "gi");
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(clause))) {
+    if (match.index > 0 && /[A-Za-z]/.test(clause.charAt(match.index - 1))) continue;
+    const place = placeFromEnglishSuffix(clause, match.index, match[0]);
+    if (!place) continue;
+    pushClaim(out, {
+      text: place.text,
+      kind: "place",
+      start: start + place.start,
+      end: start + match.index + match[0].length,
+    });
+  }
+  return out;
+}
+
 function extractPlaces(clause: string, start: number, locale: "zh" | "en"): Claim[] {
   const out: Claim[] = [];
   QUOTED_RE.lastIndex = 0;
@@ -232,18 +412,7 @@ function extractPlaces(clause: string, start: number, locale: "zh" | "en"): Clai
     }
   }
   if (locale === "en" || hasLatin(clause)) {
-    EN_PLACE_RE.lastIndex = 0;
-    let en: RegExpExecArray | null;
-    while ((en = EN_PLACE_RE.exec(clause))) {
-      const text = en[1]!.trim();
-      if (!text) continue;
-      pushClaim(out, {
-        text,
-        kind: "place",
-        start: start + en.index,
-        end: start + en.index + text.length,
-      });
-    }
+    for (const claim of extractEnglishPlaces(clause, start)) pushClaim(out, claim);
   }
   return out.filter((claim, _, all) =>
     !all.some((other) => other !== claim && other.kind === "place" && other.text.includes(claim.text) && other.text !== claim.text),

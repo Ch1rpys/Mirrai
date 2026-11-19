@@ -196,6 +196,18 @@ describe("the prompt the persona is given", () => {
 });
 
 describe("a stretch of the same person", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    retrieveMemories.mockResolvedValue([]);
+    getLatestChatSummary.mockResolvedValue(null);
+    getUserById.mockResolvedValue({ name: "小李", timezone: "Asia/Shanghai" });
+    getRecentUserMood.mockResolvedValue(null);
+    getRelationshipEvents.mockResolvedValue([]);
+    getMemoriesByPersonaId.mockResolvedValue([]);
+    getCollectedMessagesForPersona.mockResolvedValue([]);
+    getRecordsByIds.mockResolvedValue([]);
+  });
+
   it("uses that stretch's action counts, not the current ones", () => {
     const early = { samples: 40, unconditional: { acknowledge: 30 }, buckets: [] };
     const late = { samples: 40, unconditional: { logistics: 30 }, buckets: [] };

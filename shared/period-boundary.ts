@@ -130,7 +130,9 @@ export function eventKnownBy(
   to: Date | null,
 ): boolean {
   if (!to) return true;
-  if (!happenedAt) return true;
+  // 「只取 happenedAt ≤ to 的」: an event with no day is not known to
+  // be before the cut, so it does not belong to that stretch.
+  if (!happenedAt) return false;
   return isOnOrBefore(happenedAt, to);
 }
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
@@ -75,5 +75,19 @@ describe("the memory ledger", () => {
 
     await user.click(screen.getByRole("button", { name: "这是真的" }));
     expect(update).toHaveBeenCalledWith({ id: 3, subject: "them" });
+  });
+
+  it("deletes a memory after the confirmation", async () => {
+    const user = userEvent.setup();
+    render(
+      <ConfirmProvider>
+        <MemoryReview personaId={5} items={items} />
+      </ConfirmProvider>,
+    );
+
+    await user.click(screen.getAllByRole("button", { name: "删除记忆" })[0]!);
+    await user.click(screen.getByRole("button", { name: "确定" }));
+
+    await waitFor(() => expect(remove).toHaveBeenCalledWith({ id: 1 }));
   });
 });

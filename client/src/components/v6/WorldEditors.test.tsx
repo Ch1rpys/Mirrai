@@ -59,12 +59,13 @@ describe("the people editor", () => {
         relation: "室友",
         side: "them",
         mentions: 12,
-        evidence: [],
+        evidence: [{ at: "2022-03-01T04:00:00.000Z", snippet: "琪琪今天也在" }],
         source: "auto",
         verified: false,
       },
     ];
     render(<WorldEditors personaId={1} />);
+    expect(screen.getByText(/琪琪今天也在/)).toBeInTheDocument();
     await userEvent.click(screen.getByText(translate("zh", "people.confirm")));
     await waitFor(() => expect(save).toHaveBeenCalled());
     expect(save.mock.calls[0][0].people[0].verified).toBe(true);
@@ -147,12 +148,13 @@ describe("the stances editor", () => {
         topic: "香菜",
         polarity: "dislike",
         statement: "讨厌香菜",
-        evidence: [],
+        evidence: [{ at: "2022-03-02T04:00:00.000Z", snippet: "我讨厌香菜" }],
         source: "auto",
         verified: false,
       },
     ];
     render(<WorldEditors personaId={1} />);
+    expect(screen.getByText(/我讨厌香菜/)).toBeInTheDocument();
     await userEvent.click(screen.getByText(translate("zh", "stances.confirm")));
     await waitFor(() => expect(saveStance).toHaveBeenCalled());
     expect(saveStance.mock.calls[0][0].stances[0].verified).toBe(true);

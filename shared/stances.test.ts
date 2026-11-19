@@ -42,6 +42,37 @@ describe("counting stances off the fact cards", () => {
     expect(stances.find((row) => row.topic === "咖啡")).toBeUndefined();
   });
 
+  it("takes the evidence from the cited record line, with its day", () => {
+    const cards = [
+      { claim: "讨厌香菜", payload: { topic: "香菜", polarity: "dislike", quote: 41 } },
+      { claim: "讨厌香菜", payload: { topic: "香菜", polarity: "dislike", quote: 42 } },
+      { claim: "讨厌香菜", payload: { topic: "香菜", polarity: "dislike", quote: 43 } },
+    ];
+    const rows = [
+      { id: 41, content: "我讨厌香菜", kind: "text", timestamp: new Date("2022-03-01T04:00:00Z") },
+      { id: 42, content: "香菜不行", kind: "text", timestamp: new Date("2022-03-02T04:00:00Z") },
+      { id: 43, content: "别放香菜", kind: "text", timestamp: new Date("2022-03-03T04:00:00Z") },
+    ];
+    const [stance] = aggregateStances(cards, rows);
+    expect(stance?.statement).toBe("讨厌香菜");
+    expect(stance?.evidence).toEqual([
+      { snippet: "我讨厌香菜", at: "2022-03-01T04:00:00.000Z" },
+      { snippet: "香菜不行", at: "2022-03-02T04:00:00.000Z" },
+      { snippet: "别放香菜", at: "2022-03-03T04:00:00.000Z" },
+    ]);
+  });
+
+  it("does not count a quote that is not in the records", () => {
+    const cards = [
+      { claim: "讨厌香菜", payload: { topic: "香菜", polarity: "dislike", quote: 41 } },
+      { claim: "讨厌香菜", payload: { topic: "香菜", polarity: "dislike", quote: 99 } },
+    ];
+    const rows = [
+      { id: 41, content: "我讨厌香菜", kind: "text", timestamp: new Date("2022-03-01T04:00:00Z") },
+    ];
+    expect(aggregateStances(cards, rows)).toEqual([]);
+  });
+
   it("keeps both likes and dislikes of the same topic", () => {
     const stances = aggregateStances([
       card("香菜", "dislike", "讨厌香菜"),

@@ -206,6 +206,18 @@ function LifeEventsEditor({ personaId }: { personaId: number }) {
                 </span>
               </div>
             ) : null}
+            {event.evidence.length > 0 ? (
+              <details className="text-[11px] text-muted-foreground">
+                <summary className="cursor-pointer">{t("common.evidence")}</summary>
+                <ul className="mt-1 space-y-0.5">
+                  {event.evidence.map((row, index) => (
+                    <li key={`${row.at ?? ""}:${index}`} className="leading-relaxed">
+                      {row.at ? `${row.at.slice(0, 10)} ` : ""}{row.snippet}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               {!event.verified ? (
                 <Button size="sm" variant="outline" onClick={() => persist(events.map((row) => row.id === event.id ? { ...row, verified: true } : row))}>

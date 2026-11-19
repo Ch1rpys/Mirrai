@@ -20,6 +20,7 @@ import {
   selectMemories,
   formatMemoriesForPrompt,
   formatAnchorsForPrompt,
+  splitMemorySections,
   fileSummaryCandidates,
   retrieveMemories,
   type MemoryCandidate,
@@ -193,6 +194,23 @@ describe("forgetWeight", () => {
       tokens,
     ) + 0.25 * recency + 0.2 * 0.5;
     expect(scoreMemory(memory, tokens, now)).toBeCloseTo(expected, 10);
+  });
+});
+
+describe("splitting the memory sections", () => {
+  it("keeps a said anchor out of the anchor block and in the ordinary one", () => {
+    const { anchors, ordinary } = splitMemorySections([
+      candidate({ id: 1, category: "anchor", subject: "said", title: "周三下午有课" }),
+      candidate({ id: 2, category: "anchor", subject: "them", title: "生日" }),
+      candidate({ id: 3, category: "memory", subject: "them", title: "火锅" }),
+    ]);
+    expect(anchors.map((row) => row.id)).toEqual([2]);
+    expect(ordinary.map((row) => row.id)).toEqual([1, 3]);
+    const scored = (rows: typeof anchors) => rows.map((row) => ({ ...row, score: 1 }));
+    expect(formatAnchorsForPrompt(scored(anchors))).not.toContain("周三下午有课");
+    expect(formatAnchorsForPrompt([{ ...candidate({ category: "anchor", subject: "said" }), score: 1 }])).toBe("");
+    expect(formatMemoriesForPrompt(scored(ordinary))).toContain("周三下午有课");
+    expect(formatMemoriesForPrompt(scored(ordinary))).toContain("这是你在这里说过的话");
   });
 });
 

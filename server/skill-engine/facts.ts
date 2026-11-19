@@ -13,6 +13,7 @@ import { chunkHasFactCue } from "@shared/fact-cues";
 import { isMemoryDate } from "@shared/memory-date";
 import { factKeyFromTitle, normalizeMemoryTitle } from "../chat/memory-extract";
 import { sanitizeEntities, type MemoryEntities } from "@shared/memory-entities";
+import { recordText } from "@shared/records";
 import { keywordCoverage, tokenize } from "../chat/retrieval";
 import type { LLMMessage } from "../llm/types";
 import { renderChunkForModel, type RecordChunk, type RecordLine } from "./chunks";
@@ -127,7 +128,7 @@ export function parseFactCards(
       quote,
       chunkHash: chunk.hash,
       periodId: chunk.periodId,
-      entities: sanitizeEntities(record.entities, cited?.content ?? ""),
+      entities: sanitizeEntities(record.entities, cited ? recordText(cited) : ""),
     });
   }
 

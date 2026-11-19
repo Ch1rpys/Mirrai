@@ -689,6 +689,23 @@ describe("the stances they hold", () => {
     await expect(caller.stance.list({ personaId: 1 })).rejects.toThrow();
   });
 
+  it("mines a stance with the words and day of the cited line", async () => {
+    listDistillationCards.mockResolvedValue([
+      { claim: "讨厌香菜", payload: { topic: "香菜", polarity: "dislike", quote: 3 } },
+      { claim: "讨厌香菜", payload: { topic: "香菜", polarity: "dislike", quote: 4 } },
+    ]);
+    iterateRecords.mockImplementation(async function* () {
+      yield { id: 3, content: "我讨厌香菜", kind: "text", timestamp: new Date("2022-03-01T04:00:00Z") };
+      yield { id: 4, content: "别放香菜", kind: "text", timestamp: new Date("2022-03-02T04:00:00Z") };
+    });
+    const caller = appRouter.createCaller(makeCtx());
+    const result = await caller.stance.mine({ personaId: 1, locale: "zh" });
+    expect(result.stances[0]?.evidence).toEqual([
+      { snippet: "我讨厌香菜", at: "2022-03-01T04:00:00.000Z" },
+      { snippet: "别放香菜", at: "2022-03-02T04:00:00.000Z" },
+    ]);
+  });
+
   it("writes confirmed stances into the persona's own data", async () => {
     const caller = appRouter.createCaller(makeCtx());
     await caller.stance.save({

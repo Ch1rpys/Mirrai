@@ -14,6 +14,15 @@ const getPersonaById = vi.fn();
 const getUserById = vi.fn();
 const getMemoriesByPersonaId = vi.fn();
 const getUserLocale = vi.fn();
+const retrieveMemories = vi.fn();
+
+vi.mock("./retrieval", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./retrieval")>();
+  return {
+    ...actual,
+    retrieveMemories: (...a: unknown[]) => retrieveMemories(...a),
+  };
+});
 
 vi.mock("../db", () => ({
   createLetter: (...a: unknown[]) => createLetter(...a),
@@ -63,8 +72,13 @@ vi.mock("../llm/user-provider", () => ({
   }),
 }));
 
-import { writeLetter, answerDueLetters } from "./letters";
+import { writeLetter, answerDueLetters, composeLetterReply } from "./letters";
 import { resolveReplyAt, earliestAnswerAt, REPLY_DELAY_HOURS } from "@shared/letters";
+
+beforeEach(() => {
+  retrieveMemories.mockReset();
+  retrieveMemories.mockResolvedValue([]);
+});
 
 const persona = {
   id: 1,
@@ -358,5 +372,36 @@ describe("answering the letters that are due", () => {
 
     expect(answered).toBe(0);
     expect(markLetterUnanswered).toHaveBeenCalled();
+  });
+});
+
+describe("a letter that mentions something the persona said in the app", () => {
+  it("does not put it in the anchor block", async () => {
+    getUserById.mockResolvedValue({ name: "阿树", timezone: "Asia/Shanghai" });
+    retrieveMemories.mockResolvedValue([{
+      id: 1,
+      title: "周三下午有课",
+      description: "我周三下午有课",
+      category: "anchor",
+      subject: "said",
+      date: null,
+      isPinned: false,
+      importance: 1,
+      lastRecalledAt: null,
+      createdAt: new Date("2022-03-01T00:00:00Z"),
+      recordId: null,
+      mentionCount: 1,
+    }]);
+
+    await composeLetterReply({
+      persona: { ...persona, userId: 1, timezone: "Asia/Shanghai" },
+      letterBody: "你周三下午有课吗",
+    });
+
+    expect(invokeWithProvider).toHaveBeenCalled();
+    const messages = invokeWithProvider.mock.calls[0][0].messages;
+    const system = messages.find((m: any) => m.role === "system").content as string;
+    expect(system).not.toContain("【事实锚点（不得违背）】");
+    expect(system).toContain("这是你在这里说过的话");
   });
 });

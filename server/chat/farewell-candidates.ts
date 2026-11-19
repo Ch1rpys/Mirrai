@@ -30,6 +30,7 @@ import {
   retrieveMemories,
   formatMemoriesForPrompt,
   formatAnchorsForPrompt,
+  splitMemorySections,
 } from "./retrieval";
 import { resolveProviderForUser } from "../llm/user-provider";
 import { llmService } from "../llm";
@@ -196,8 +197,7 @@ export async function assembleFarewellContext(params: {
    * rule that these are facts that must hold. A loosely-matched memory
    * was presented to the model as an immutable truth.
    */
-  const anchors = memories.filter((m) => m.category === "anchor");
-  const ordinary = memories.filter((m) => m.category !== "anchor");
+  const { anchors, ordinary } = splitMemorySections(memories);
 
   return {
     anchorSection: formatAnchorsForPrompt(anchors, locale),

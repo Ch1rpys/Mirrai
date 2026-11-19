@@ -132,6 +132,7 @@ export const en = {
     deleting: "Deleting…",
     me: "Me",
     them: "Them",
+    evidence: "From the records",
   },
 
   auth: {

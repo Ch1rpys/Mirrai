@@ -89,6 +89,28 @@ describe("parseFactCards", () => {
     expect(parsed.facts).toEqual([]);
   });
 
+  it("reads the transcript of a voice line when checking entities", () => {
+    const voiceChunk = {
+      ...chunkWith([{ id: 11, role: "user" as const, content: "[voice:12]" }]),
+      rows: [{ id: 11, role: "user" as const, content: "[voice:12]", kind: "voice", timestamp: new Date("2023-07-12T08:16:09.000Z"), meta: { transcript: "我生日是5月21号" } }],
+    };
+    const parsed = parseFactCards(
+      JSON.stringify({
+        facts: [{
+          title: "生日",
+          description: "5月21号",
+          category: "anchor",
+          subject: "me",
+          date: "05-21",
+          quote: 11,
+          entities: { people: [], places: ["5月21号"], things: [] },
+        }],
+      }),
+      voiceChunk as never,
+    );
+    expect(parsed.facts[0]?.entities.places).toEqual(["5月21号"]);
+  });
+
   it("drops entities that are not in the cited line", () => {
     const parsed = parseFactCards(
       JSON.stringify({

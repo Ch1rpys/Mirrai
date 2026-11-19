@@ -124,6 +124,7 @@ export const zh = {
     deleting: "删除中...",
     me: "我",
     them: "TA",
+    evidence: "记录里的原话",
   },
 
   auth: {

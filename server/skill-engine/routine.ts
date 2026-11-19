@@ -208,14 +208,20 @@ export function mineRoutines(
     for (const range of mergeRanges([...hourMap.keys()])) {
       const weeks = new Set<string>();
       const evidence: LifeEventEvidence[] = [];
-      const seenSnippet = new Set<string>();
+      const seenOccurrence = new Set<string>();
       for (const hour of range.hours) {
         const hit = hourMap.get(hour);
         if (!hit) continue;
         for (const week of hit.weeks) weeks.add(week);
         for (const row of hit.evidence) {
-          if (seenSnippet.has(row.snippet)) continue;
-          seenSnippet.add(row.snippet);
+          /**
+           * The same words can be said in twenty different weeks. They
+           * are twenty pieces of evidence, not one; the day is what
+           * makes them distinct.
+           */
+          const key = `${row.at ?? ""}|${row.snippet}`;
+          if (seenOccurrence.has(key)) continue;
+          seenOccurrence.add(key);
           evidence.push(row);
         }
       }

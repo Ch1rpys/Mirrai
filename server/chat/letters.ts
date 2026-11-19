@@ -7,7 +7,7 @@
 import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { buildSystemPrompt } from "../_core/persona-utils";
-import { retrieveMemories, formatMemoriesForPrompt, formatAnchorsForPrompt } from "./retrieval";
+import { retrieveMemories, formatMemoriesForPrompt, formatAnchorsForPrompt, splitMemorySections } from "./retrieval";
 import { llmService, type LLMProvider } from "../llm";
 import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 import {
@@ -332,8 +332,7 @@ export async function composeLetterReply(params: {
     userMessage: params.letterBody,
     locale,
   }).catch(() => []);
-  const anchors = memories.filter((m) => m.category === "anchor");
-  const ordinary = memories.filter((m) => m.category !== "anchor");
+  const { anchors, ordinary } = splitMemorySections(memories);
 
   const user = await db.getUserById((persona as any).userId).catch(() => null);
   const userContext = buildUserContextBlock(

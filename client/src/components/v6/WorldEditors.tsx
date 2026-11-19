@@ -43,6 +43,23 @@ const POLARITY_LABEL: Record<StancePolarity, TranslationKey> = {
   opinion: "stances.opinion",
 };
 
+function EvidenceLines({ evidence }: { evidence: Array<{ at?: string; snippet: string }> }) {
+  const { t } = useLocale();
+  if (evidence.length === 0) return null;
+  return (
+    <details className="text-[11px] text-muted-foreground">
+      <summary className="cursor-pointer">{t("common.evidence")}</summary>
+      <ul className="mt-1 space-y-0.5">
+        {evidence.map((row, index) => (
+          <li key={`${row.at ?? ""}:${index}`} className="leading-relaxed">
+            {row.at ? `${row.at.slice(0, 10)} ` : ""}{row.snippet}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 export default function WorldEditors({ personaId }: { personaId: number }) {
   return (
     <div className="space-y-8">
@@ -104,6 +121,7 @@ function PeopleEditor({ personaId }: { personaId: number }) {
                 maxLength={20}
                 aria-label={t("people.relation")}
               />
+              <EvidenceLines evidence={row.evidence} />
               <div className="flex flex-wrap gap-2">
                 {!row.verified ? (
                   <>
@@ -239,6 +257,7 @@ function StancesEditor({ personaId }: { personaId: number }) {
                 <span className="text-muted-foreground"> · {String(t(POLARITY_LABEL[row.polarity]))}</span>
               </p>
               <p className="text-xs text-muted-foreground">{row.statement}</p>
+              <EvidenceLines evidence={row.evidence} />
               <div className="flex flex-wrap gap-2">
                 {!row.verified ? (
                   <>

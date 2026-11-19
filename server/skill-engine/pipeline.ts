@@ -1886,7 +1886,7 @@ async function runSkillPipelineOnce(
       if (!listCards) return [];
       try {
         const cards = await listCards(personaId, userId, { kind: "stance" });
-        return aggregateStances(cards ?? []);
+        return aggregateStances(cards ?? [], transcriptRows);
       } catch (e) {
         console.warn(
           "[SkillEngine] The stances could not be aggregated:",

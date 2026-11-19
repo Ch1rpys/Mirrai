@@ -63,6 +63,7 @@ import {
   parseFarewellEdit,
   introducesNewContent,
   describePersonaForCandidates,
+  assembleFarewellContext,
   cleanCandidateText,
   extractBalanced,
   FAREWELL_TWO_PASS_TIMEOUT_MS,
@@ -211,6 +212,29 @@ describe("the first pass", () => {
     expect(
       invokeWithProvider.mock.calls[0][1].options.temperature,
     ).toBeGreaterThanOrEqual(1);
+  });
+
+  it("keeps a said anchor out of the anchor section", async () => {
+    retrieveMemories.mockResolvedValue([{
+      id: 1,
+      title: "周三下午有课",
+      description: "我周三下午有课",
+      category: "anchor",
+      subject: "said",
+      date: null,
+      isPinned: false,
+      importance: 1,
+      lastRecalledAt: null,
+      createdAt: new Date("2022-03-01T00:00:00Z"),
+      recordId: null,
+      mentionCount: 1,
+    }]);
+
+    const context = await assembleFarewellContext({ persona, userId: 1 });
+
+    expect(context.anchorSection).not.toContain("周三下午有课");
+    expect(context.memorySection).toContain("周三下午有课");
+    expect(context.memorySection).toContain("这是你在这里说过的话");
   });
 
   it("reads the same sentence twice as one sentence", () => {

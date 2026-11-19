@@ -176,6 +176,7 @@ import {
   mergeStances,
   normalizeStances,
   stanceRejectedKey,
+  type StanceRecordLine,
 } from "@shared/stances";
 import { mineOpenLoops } from "./skill-engine/open-loops";
 import { mineRoutines } from "./skill-engine/routine";
@@ -6144,7 +6145,17 @@ export const appRouter = router({
           const persona = await getPersonaById(input.personaId, ctx.user.id);
           if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
           const cards = await listDistillationCards(input.personaId, ctx.user.id, { kind: "stance" });
-          const mined = aggregateStances(cards);
+          const rows: StanceRecordLine[] = [];
+          for await (const row of iterateRecords(input.personaId, ctx.user.id)) {
+            rows.push({
+              id: row.id,
+              content: row.content,
+              kind: row.kind,
+              meta: (row as { meta?: Record<string, unknown> | null }).meta ?? null,
+              timestamp: row.timestamp,
+            });
+          }
+          const mined = aggregateStances(cards, rows);
           const data = (persona.personaData as Record<string, unknown>) || {};
           const rejected = Array.isArray(data.rejectedFeedbackKeys)
             ? data.rejectedFeedbackKeys.filter((key: unknown): key is string => typeof key === "string")

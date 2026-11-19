@@ -24,6 +24,26 @@ describe("extractClaims", () => {
     expect(extractClaims("我喝咖啡", "zh").filter((row) => row.kind === "place")).toEqual([]);
   });
 
+  it("keeps the English place phrase, not the sentence that led to it", () => {
+    const park = extractClaims("She was in the park yesterday.", "en");
+    expect(park).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "place", text: "the park" }),
+    ]));
+    const hospital = extractClaims("He works at the hospital.", "en");
+    expect(hospital).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "place", text: "the hospital" }),
+    ]));
+    const cafe = extractClaims("We went to the Blue Lake Cafe last week.", "en");
+    expect(cafe).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "place", text: "the Blue Lake Cafe" }),
+    ]));
+    expect(cafe.some((row) => row.text === "We went to the Blue Lake Cafe")).toBe(false);
+    const generic = extractClaims("We went to that cafe.", "en");
+    expect(generic).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "place", text: "that cafe" }),
+    ]));
+  });
+
   it("still reads a Chinese place when the interface is English", () => {
     const claims = extractClaims("上次去拾光咖啡那天你迟到了", "en");
     expect(claims.some((row) => row.kind === "place" && row.text === "拾光咖啡")).toBe(true);
