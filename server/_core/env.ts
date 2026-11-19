@@ -2,9 +2,30 @@ import { existsSync, readFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-function resolveJwtSecret(): string {
-  const secret = process.env.JWT_SECRET;
-  if (secret && secret.trim().length > 0) return secret;
+export const INSECURE_JWT_PLACEHOLDERS = new Set([
+  "dev-secret-change-me",
+  "your-secret-key-change-me",
+]);
+
+export function resolveJwtSecret(): string {
+  const raw = process.env.JWT_SECRET;
+  const secret = raw?.trim() ?? "";
+  if (secret) {
+    if (process.env.NODE_ENV === "production") {
+      if (INSECURE_JWT_PLACEHOLDERS.has(secret)) {
+        throw new Error(
+          "JWT_SECRET must not be a known placeholder in production. Generate a strong key with: " +
+            'node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+        );
+      }
+      if (secret.length < 16) {
+        throw new Error(
+          "JWT_SECRET is too short for production use (minimum 16 characters required)."
+        );
+      }
+    }
+    return secret;
+  }
   if (process.env.NODE_ENV === "production") {
     throw new Error(
       "JWT_SECRET is required in production. Generate one with: " +
@@ -192,6 +213,14 @@ export const ENV = {
   deepseekApiKey: process.env.DEEPSEEK_API_KEY ?? "",
   deepseekBaseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
   deepseekModel: process.env.DEEPSEEK_MODEL ?? "deepseek-chat",
+
+  groqApiKey: process.env.GROQ_API_KEY ?? "",
+  groqBaseUrl: process.env.GROQ_BASE_URL ?? "https://api.groq.com/openai/v1",
+  groqModel: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
+
+  mistralApiKey: process.env.MISTRAL_API_KEY ?? "",
+  mistralBaseUrl: process.env.MISTRAL_BASE_URL ?? "https://api.mistral.ai/v1",
+  mistralModel: process.env.MISTRAL_MODEL ?? "mistral-large-latest",
 
   kimiApiKey: process.env.KIMI_API_KEY ?? "",
   kimiBaseUrl: process.env.KIMI_BASE_URL ?? "https://api.moonshot.cn/v1",

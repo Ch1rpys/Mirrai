@@ -142,9 +142,8 @@ async function main() {
   }
 
   const client = new Client({ connectionString: databaseUrl });
-  await client.connect();
-
   try {
+    await client.connect();
     await client.query(`
       CREATE TABLE IF NOT EXISTS "schema_migrations" (
         "version" varchar(64) PRIMARY KEY NOT NULL,
@@ -228,11 +227,11 @@ async function main() {
     else if (replay) log(`replayed ${applicable.length} migration(s) — all of them ran again`);
     else log("all migrations applied");
   } finally {
-    await client.end();
+    await client.end().catch(() => {});
   }
 }
 
 main().catch((e) => {
   console.error("[migrate] failed:", e.message);
-  process.exitCode = 1;
+  process.exit(1);
 });

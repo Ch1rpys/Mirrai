@@ -119,6 +119,40 @@ registry.registerFactory(
   },
 );
 
+registry.registerFactory(
+  "Groq",
+  (cfg) =>
+    new OpenAIProvider(
+      "Groq",
+      cfg.apiKey ?? "",
+      cfg.baseUrl ?? "https://api.groq.com/openai/v1",
+      cfg.model ?? "llama-3.3-70b-versatile",
+      cfg.systemMessage,
+    ),
+  {
+    apiKey: ENV.groqApiKey,
+    baseUrl: ENV.groqBaseUrl,
+    model: ENV.groqModel,
+  },
+);
+
+registry.registerFactory(
+  "Mistral",
+  (cfg) =>
+    new OpenAIProvider(
+      "Mistral",
+      cfg.apiKey ?? "",
+      cfg.baseUrl ?? "https://api.mistral.ai/v1",
+      cfg.model ?? "mistral-large-latest",
+      cfg.systemMessage,
+    ),
+  {
+    apiKey: ENV.mistralApiKey,
+    baseUrl: ENV.mistralBaseUrl,
+    model: ENV.mistralModel,
+  },
+);
+
 /** Volcengine's Ark endpoint — Doubao's official home. */
 const DEFAULT_DOUBAO_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
 
