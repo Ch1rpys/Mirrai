@@ -79,7 +79,7 @@
 | B5.5 | ✅ | 32f5c75 (measure); be30d51 (UI) | `shared/typing-profile.test.ts` 5 通过：32 对按 200 毫秒每字设计的连发 `msPerChar` 在 160–240；小满夹具同样在 200±40；时间戳只到分钟返回 `null`。`style-profile.test.ts` 夹具写入 `typing.msPerChar` 160–240、`pairs ≥ 30`。`service.test.ts`：三条件成立时 delay `{ ms: 40000, typingMs }` 且 `typingMs ≤ ms`，burst texts `["嗯","好","在"]`，`gapsMs`/`typingMs` 各长 2 且每个 `typingMs[i] ≤ gapsMs[i]`；`timing.typing: false` 时事件与没有 typing 画像 `toEqual`，delay 仍是 `{ type: "delay", ms: 40000 }`，burst 仍是 `{ type: "burst", texts: ["嗯","好","在"] }`。`useTypingReveal.test.ts` 3 通过：`ms=10000` `typingMs=3000` 前 7 秒无点、后 3 秒有、然后出字；连发三条三个点出现三次；中止后状态不再变。`chat-stream-e2e.test.ts` 转发 `typingMs`/`gapsMs`。`MessageBubble.test.tsx` `isTyping: false` 时没有 `.typing-dot`。闸门 `416 passed \| 6 skipped (422)` 文件，`3619 passed \| 23 skipped (3642)` 用例，`all six steps passed`。 |
 | B5.6 | ✅ | 78fc095 (measure); c374b6f (runtime/UI) | `shared/quirks-profile.test.ts` 3 通过：夹具 6 次改错对应的若干对，每对 `wrong` 都在前一句里；自造 10 轮 6 条 recall → `recallRate === 0.6`，4 条 → 0；6 次拍一拍填 `patAfter.ask`，4 次为空。`server/_core/style-profile.test.ts` 夹具 `quirks.typoFixes` 的 `n` 之和为 6。`service.test.ts`：rng 必中且回复含「累」→ 落库 `["今天好雷","*累"]`；回复「在的。」不发生；重排关着无 `recall` 事件且 `invokeWithProvider` 1 次；重排开着且必中 → 事件有 `recall` 再 `done`，库里有 `[recall]`、JSON 不含落选原文；`composeMessages` 下一轮不含 `[recall]`；`channel: "wechat"` 三样都不发生；拍一拍落库第一条 `[pat]`。`MessageBubble.test.tsx` 两种提示「小A 撤回了一条消息」「小A 拍了拍你」，没有 `[recall]`/`[pat]`。`PersonaSwitches.test.tsx` 勾上写入 `timing.recall: true`。`chat-stream-e2e.test.ts` / `stream.test.ts` 转发 `recall`/`pat`。闸门 `417 passed \| 6 skipped (423)` 文件，`3636 passed \| 23 skipped (3659)` 用例，`all six steps passed`。 |
 | B5.7 | ✅ | bf8d483 (measure); 9baa217 (runtime/UI) | `shared/double-text.test.ts` 2 通过：`recovers the fixture's thirty follow-ups` — `samples === 30`，`lines` 前两项「人呢」「？」次数比约 7:3，`waitSec.median` 在 540±90；`returns null when there are only seven follow-ups` — 7 次 `null`、8 次 `samples === 8`。`server/_core/style-profile.test.ts` 夹具 `doubleText.samples === 30`，`lines` 前两项 `["人呢","？"]`。`reply-jobs.test.ts`：开关开着且 40 秒不排队 → 建 `kind: "followup"` 任务，到点落一条 `origin: "followup"` 且文本在 `["人呢","？"]`，`invokeWithProvider` 仍是 1 次，`pushToUser` `kind: "followup"`，`origin: "proactive"` 为 0。开关关着、危机/弱信号/难过不建任务。到点取消且不落新消息：用户已回、上一条用户超过 30 分钟、告别、危机、弱信号、难过、本会话已追、当天已追 2 次、免打扰、睡着、presence 不是 active、减量、悼念、抽不中、到点开关已关。`PersonaSwitches.test.tsx`：`asyncDelivery` 关着时「聊到一半我不回了，小满 可以追一句」禁用；开着可点，写入 `timing.followUp: true`，说明里有「人呢」。`MessageBubble.test.tsx` 渲染「照 小A 以前的习惯追的一句」，没有「TA 先开口了」。闸门 `418 passed \| 6 skipped (424)` 文件，`3658 passed \| 23 skipped (3681)` 用例，`all six steps passed`。 |
-| B5.8 | ⬜ |  |  |
+| B5.8 | 🟡 | dc21aab (window/silence/bridge); 32ed6d5 (deferred/follow-up send) | `inbox.test.ts`：`fallbackChannelGapMs("嗯") === 600`、40 个 `a` 为 8000、「你好呀」750。`silence-notice.test.ts` 2 通过：同一天第二次 `false`，第二天和另一个用户 `true`；Redis `SET` 键 `silence-notice:1:7:2024-06-01`，`NX`/`PX` 48h。`bridge.test.ts`：连发 `parts` `["嗯","好","在"]` 且 `gapsMs` 长 2；单条 `parts` `["在的。"]`、`gapsMs` `[]`；毕业提示只在第三条；同一天第二次沉默返回 `null`。`feishu.test.ts`：`sendText` 三次顺序「嗯」「好」「在。…毕业」，前两条不含「毕业」，假定时器条间 600/800 ms；第二次沉默 `sendText` 1 次。`service.test.ts`：`timingEnabled` 关着推进 `CHANNEL_READ_WINDOW_MS - 1` 仍未调模型，再 1ms 后调用；通道上 2 秒间隔三条只生成一次、assistant 1 条。`reply-jobs.test.ts`：飞书延迟任务到点 `adapter.send` `["嗯","好","在"]`；追一句 `send(1, "oc_1", 人呢\|？)` 且模型 0 次。闸门 `419 passed \| 6 skipped (425)` 文件，`3672 passed \| 23 skipped (3695)` 用例，`all six steps passed`。真实微信/飞书见未验证清单。 |
 | B6.1 | 🟡 | 9e6dcc0 (count); d82a6ee (prompt/UI) | `shared/people.test.ts` 8 通过：夹具 mock 卡「琪琪/室友」「我妈/妈妈」得到两人，`mentions` 分别为 12 和 9；出现 2 次的「路过的人」不产出；「阿强」与「强」归并。`generate.test.ts`：用户消息含「琪琪」且已确认 → 提示词有 `prompt.peopleHeading` 和「琪琪：你的室友」、在围栏内、`layersUsed` 含 `people`；消息不含人名 → 无该段；未确认 → 无；`--without people` 无。`prompt-fences.test.ts` `a person's relation`：敌意 relation 只在围栏内。`pipeline-decisions.test.ts` `keeps a confirmed person and does not revive a rejected one`：重跑保住「琪琪」室友、`people:路过的人` 不再出现。`WorldEditors.test.tsx` 确认/拒绝/手写/合并各调 `people.save`。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `394 passed \| 5 skipped (399)` 文件，`3466 passed \| 21 skipped (3487)` 用例。效果量见未验证清单。 |
 | B6.2 | 🟡 | 7d942a8 | `shared/stances.test.ts` 5 通过：夹具「香菜 / dislike」3 条证据、「海 / like」4 条证据；只有 1 条证据的「咖啡」不产出；同一 topic 的 like 与 dislike 都留。`generate.test.ts`：用户消息含「香菜」且已确认 → 提示词有 `prompt.stancesHeading` 和「讨厌香菜」、在围栏内、`layersUsed` 含 `people`；消息不含 topic → 无该段；未确认 → 无；`--without people` 无。`prompt-fences.test.ts` `a stance they hold`：敌意 statement 只在围栏内。`pipeline-decisions.test.ts` `keeps a confirmed stance and does not revive a rejected one`：重跑保住「香菜」dislike、`stance:咖啡:like` 不再出现。`WorldEditors.test.tsx` 确认/手写各调 `stance.save`。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `395 passed \| 5 skipped (400)` 文件，`3481 passed \| 21 skipped (3502)` 用例。效果量见未验证清单。 |
 | B6.3 | 🟡 | 46fc165 (mine); d29d4b2 (prompt/UI) | `server/skill-engine/routine.test.ts`：小满夹具产出周三 14–16、title「周三下午上课」、证据含「刚下课」；3 个不同周的「刚下课」不产出。`shared/life-events.test.ts`：老数据 `kind: "life"`/`open_loop` 无 schedule、`inProgressLife` 仍只有 life；无 schedule 的 routine 丢掉。`generate.test.ts`：已确认、`now` 周三 15:00 Asia/Shanghai → `prompt.timeRoutine`「这个钟点你通常在周三下午上课。」、`plan.routine === "r1"`；周四 15:00 无；未确认无。`proactive-context.test.ts`：此刻在窗内且 opening 全是 share → `opening === "share"`。`in-session.test.ts`：窗内拾到「周三下午上课」，窗外 null。`V5FidelityEditors.test.tsx` 显示 14/16 和 `v5.routineHint`。`MessageBubble.test.tsx` 渲染「按以前的作息推的」。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `397 passed \| 5 skipped (402)` 文件，`3494 passed \| 21 skipped (3515)` 用例。效果量见未验证清单。 |
@@ -377,6 +377,9 @@
 | 173 | B5.7 | 用户上一条是告别：`labelUserActByRule` 得到 `farewell` | `isFarewellUserLine`：整句匹配再见/拜拜/晚安/bye 等 | `USER_ACTS` 没有 `farewell`。加一个会改掉邻接和拍一拍已经算进别的类的句子。追一句只需要认出告别本身。 |
 | 174 | B5.7 | 追一句的样本是 TA 一轮后 3–60 分钟内 ≤8 字 | 上一轮最后一条是 `^\*` 改错补句时，后面那条不算追一句 | 夹具在 `*累` 之后 4.9 分钟有「今天还今天好」，会被算成第 31 次。改错补句不是一轮说完。 |
 | 175 | B5.7 | `rate = samples ÷ opportunities`，机会只计「我 10 分钟以上没回」 | 追成功的那次也计入 opportunities，rate 钳到 1 | 夹具里追一句的等待中位约 9 分钟，短于 10 分钟。若不把样本算进机会，rate 会大于 1。 |
+| 176 | B5.8 | 两个调用方（`feishu.ts`、`persona-bridge.ts` 及其上游）改成逐条发送 | `persona-bridge` 只改返回类型；逐条发送在 `message-handler`（微信 `sendText` 要带 ilink 的 context token）和 `feishu.ts`；共用 `sendChannelParts` | 手册写「以及它的上游」。真正调发送 API 的是上游。`server/wechat/ilink/**` 未改。 |
+| 177 | B5.8 | 正文写「同一个会话每天只发一次」 | Redis 键跟手册给出的格式：`silence-notice:<userId>:<personaId>:<日期>`，没有 `conversationKey` | 同一用户同一分身跨会话共用当天的一次。实现跟键走。 |
+| 178 | B5.8 | 之后的沉默什么都不发 | 通道上第二次 `handleChannelChat` 返回 `null` 不发；`runConversation` 仍会落一条 `origin: "system-notice"` | 网页历史能看见。手册这条是通道发送。 |
 
 ## 未验证清单
 
@@ -414,6 +417,7 @@
 | B6.9 | 账本标记有没有让分身前后说法一致。本机没有非 stub 的模型。不是单独的层 | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身在应用里说过可核对的话、已有分层标答的人 |
 | C8.1 | 真机没有收到通知。需要 HTTPS 或 localhost 上的真实浏览器，本机这次没有做订阅 | 在 localhost 打开设置，点「应用关着的时候也提醒我」，允许通知，再点「发一条试试」 | 有图形浏览器、并且服务以 localhost 或 HTTPS 跑着的人 |
 | B5.2 | 真实的多小时等待。本机单元测试用假定时器，没有把页面开着等到点 | 打开 `asyncDelivery`，发一条会抽到 >90 秒延迟的消息，关掉页面，等到 `dueAt` 之后看对话里是否出现回复，开了推送的话是否收到 `kind: "reply"` | 有真模型、并且该分身已打开「可以晚点回」的人 |
+| B5.8 | 真实微信、飞书上的连发间隔、延迟后逐条送达、追一句、同一天第二次沉默。本机只跑了单元测试和假定时器 | 绑好通道后连发三条，看是否合成一轮且回复拆成多条气泡；等到延迟任务的 `dueAt` 之后看是否逐条到达；追一句是否走同一通道；同一天第二次沉默是否不再发「没回」 | 绑了微信或飞书通道的人 |
 
 ## 待用户决定
 
@@ -1359,6 +1363,14 @@ B6.4 维持 🟡。B6.7 维持 ✅。B6.1、B6.2、B6.3、B6.5、B6.6、B6.8、B
 - 闸门 `418 passed | 6 skipped (424)` 文件，`3658 passed | 23 skipped (3681)` 用例，`all six steps passed`。相对 B5.6（417/6 文件、3636/23 用例）：通过文件 +1、通过用例 +22；跳过数不变。
 - 偏差 173–175。未验证清单、待用户决定无新增。
 - B5.7 标 ✅。接着做 B5.8。
+
+### WP9 · 实现会话 · 2026-11-19 · B5.8
+
+- `dc21aab`：通道回复改成 `{ parts, gapsMs }`。飞书和微信上游逐条发送，条间等 `gapsMs`（没有 typing 画像时 `clamp(字数×250, 600, 8000)`）。毕业提示只附在最后一条。通道读窗固定 4000ms，不论节奏开没开。沉默用 Redis 键 `silence-notice:<userId>:<personaId>:<日期>`，没有 Redis 时用进程内 Map，同一天第二次通道不发。通道上不做正在输入（撤回和拍一拍 B5.6 已跳过）。`server/wechat/ilink/**` 未改。
+- `32ed6d5`：延迟任务到点经 `adapter.send` 逐条发出。用户上一条来自通道的追一句也走通道。
+- 闸门 `419 passed | 6 skipped (425)` 文件，`3672 passed | 23 skipped (3695)` 用例，`all six steps passed`。相对 B5.7（418/6 文件、3658/23 用例）：通过文件 +1、通过用例 +14；跳过数不变。
+- 偏差 176–178。未验证清单新增 B5.8。待用户决定无新增。
+- B5.8 标 🟡。WP9 能做的条目都做完了。
 
 
 
