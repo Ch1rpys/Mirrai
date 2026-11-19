@@ -78,7 +78,13 @@ function contentOf(row: TypingRow): string {
  * Only when the timestamps actually have seconds. Fewer than thirty
  * pairs is not a measurement.
  */
-export function measureTyping(rows: TypingRow[]): TypingProfile | null {
+export function measureTyping(
+  rows: TypingRow[],
+  replyDelay?: { resolution?: string } | null,
+): TypingProfile | null {
+  // Minute-resolution exports cannot separate a pause from typing, and
+  // a profile with too few reply gaps has no second-resolution either.
+  if (replyDelay?.resolution !== "second") return null;
   if (resolutionOf(rows) !== "second") return null;
   const perChar: number[] = [];
   const gaps: number[] = [];

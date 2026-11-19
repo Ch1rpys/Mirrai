@@ -89,7 +89,10 @@ export function findWrong(previous: string, right: string): string | null {
     const slice = hay.slice(i, i + needle.length).join("");
     const distance = levenshtein(slice, right);
     if (distance < 1 || distance > 2) continue;
-    if (!best || distance < best.distance || (distance === best.distance && i < best.at)) {
+    // A one-character correction is distance 1 from every other character.
+    // The mistype sits at the end of the line they just sent ("今天好雷"
+    // then "*累"), so a tie keeps the later span.
+    if (!best || distance < best.distance || (distance === best.distance && i > best.at)) {
       best = { slice, distance, at: i };
     }
   }

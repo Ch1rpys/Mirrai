@@ -20,6 +20,8 @@ function burstPair(at: number, later: string, gapMs: number): TypingRow[] {
   ];
 }
 
+const seconds = { resolution: "second" as const };
+
 describe("measureTyping", () => {
   it("recovers 200 ms per character from a burst designed that way", () => {
     const rows: TypingRow[] = [];
@@ -28,7 +30,7 @@ describe("measureTyping", () => {
       const at = start + i * 60_000;
       rows.push(...burstPair(at, "你好啊", 3 * 200));
     }
-    const measured = measureTyping(rows);
+    const measured = measureTyping(rows, seconds);
     expect(measured).not.toBeNull();
     expect(measured!.msPerChar).toBeGreaterThanOrEqual(160);
     expect(measured!.msPerChar).toBeLessThanOrEqual(240);
@@ -43,7 +45,7 @@ describe("measureTyping", () => {
       kind: row.kind,
       speaker: row.speaker,
     }));
-    const measured = measureTyping(rows);
+    const measured = measureTyping(rows, seconds);
     expect(measured).not.toBeNull();
     expect(measured!.msPerChar).toBeGreaterThanOrEqual(160);
     expect(measured!.msPerChar).toBeLessThanOrEqual(240);
@@ -60,7 +62,18 @@ describe("measureTyping", () => {
         { role: "assistant", content: "好", timestamp: new Date(at + 120_000), kind: "text" },
       );
     }
-    expect(measureTyping(rows)).toBeNull();
+    expect(measureTyping(rows, seconds)).toBeNull();
+  });
+
+  it("returns null when there is no second-resolution reply delay", () => {
+    const rows: TypingRow[] = [];
+    const start = Date.parse("2024-06-03T12:00:01.123Z");
+    for (let i = 0; i < 32; i++) {
+      const at = start + i * 8 * 3_600_000;
+      rows.push(...burstPair(at, "你好啊", 3 * 200));
+    }
+    expect(measureTyping(rows, null)).toBeNull();
+    expect(measureTyping(rows, { resolution: "minute" })).toBeNull();
   });
 });
 

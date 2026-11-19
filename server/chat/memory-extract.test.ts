@@ -99,6 +99,28 @@ describe("the memory extraction", () => {
     expect(result.running).toBe(true);
   });
 
+  it("does not send a system notice to the model as something they said", async () => {
+    getMessagesSince.mockResolvedValue([
+      { id: 1, role: "user", content: "在吗", createdAt: new Date(NOW.getTime() - 120_000), origin: null },
+      {
+        id: 2,
+        role: "assistant",
+        content: "TA 这会儿没回",
+        createdAt: new Date(NOW.getTime() - 60_000),
+        origin: "system-notice",
+      },
+      { id: 3, role: "user", content: "我生日是5月21号", createdAt: NOW, origin: null },
+    ]);
+    invoke.mockResolvedValue("[]");
+
+    await extractMemories({ persona, userId: 1, now: NOW });
+
+    const sent = JSON.stringify(invoke.mock.calls[0]?.[0]);
+    expect(sent).not.toContain("TA 这会儿没回");
+    expect(sent).toContain("我生日是5月21号");
+    expect(sent).toContain("在吗");
+  });
+
   it("gives the claim back when the run is over", async () => {
     invoke.mockResolvedValue('[]');
 

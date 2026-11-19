@@ -5833,6 +5833,7 @@ export async function getMessagesSince(
     content: messages.content,
     createdAt: messages.createdAt,
     metadata: messages.metadata,
+    origin: messages.origin,
   }).from(messages)
     .where(and(
       eq(messages.personaId, personaId),

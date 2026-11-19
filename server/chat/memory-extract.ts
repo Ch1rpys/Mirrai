@@ -162,6 +162,7 @@ export async function extractMemories(params: {
     role: string;
     content: string;
     createdAt: Date;
+    origin?: string | null;
   }>;
 }): Promise<ExtractResult> {
   const { persona, userId } = params;
@@ -223,6 +224,7 @@ async function runExtraction(params: {
     role: string;
     content: string;
     createdAt: Date;
+    origin?: string | null;
   }>;
 }): Promise<ExtractResult> {
   const { persona, userId } = params;
@@ -279,6 +281,19 @@ async function runExtraction(params: {
    */
   const batch = history.slice(0, LOOKBACK);
   const coveredAt = batch[batch.length - 1]?.createdAt ?? null;
+  // A system notice is the app talking. It is not something they said,
+  // so it is not a fact to store.
+  const spoken = batch.filter((row) => row.origin !== "system-notice");
+  if (spoken.length === 0) {
+    if (!fromUpload) {
+      await db.markMemoryExtracted(
+        persona.id,
+        userId,
+        coveredAt ? new Date(coveredAt) : new Date(),
+      );
+    }
+    return { added: [], skipped: 0, readable: true, trimmed: 0, fromPersona: 0 };
+  }
 
   /**
    * Only the messages that have not been looked at yet.
@@ -291,7 +306,7 @@ async function runExtraction(params: {
    * that produced no new memory left the cut-off where it was, so the
    * same messages were sent to the model again on every later run.
    */
-  const fresh = batch;
+  const fresh = spoken;
   /**
    * Even a short batch is worth reading.
    *

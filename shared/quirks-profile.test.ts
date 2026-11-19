@@ -1,14 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { buildXiaomanRecords } from "../server/test-fixtures/xiaoman";
-import { measureQuirks, type QuirkRow } from "./quirks-profile";
+import { findWrong, measureQuirks, type QuirkRow } from "./quirks-profile";
 
 describe("measureQuirks", () => {
   it("recovers the fixture's six typo-fix pairs, each wrong sitting in the previous line", () => {
     const rows = buildXiaomanRecords();
     const measured = measureQuirks(rows);
-    const events = measured.typoFixes.reduce((sum, row) => sum + row.n, 0);
-    expect(events).toBe(6);
-    expect(measured.typoFixes.length).toBeGreaterThan(0);
+    expect(findWrong("今天好雷", "累")).toBe("雷");
+    expect(measured.typoFixes).toEqual([{ wrong: "雷", right: "累", n: 6 }]);
     const byTime = [...rows].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
     for (const pair of measured.typoFixes) {
       const hits = byTime.filter((row) => (

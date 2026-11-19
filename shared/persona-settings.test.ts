@@ -56,6 +56,19 @@ describe("persona settings", () => {
     expect(normalizePersonaSettings({ pendingRedistillRemoved: false }).pendingRedistillRemoved).toBeUndefined();
   });
 
+  it("turns sleep and follow-up off when late replies are turned off", () => {
+    const current = normalizePersonaSettings({
+      timing: { asyncDelivery: true, sleep: true, followUp: true },
+    });
+    const merged = mergePersonaSettings(current, { timing: { asyncDelivery: false } });
+    expect(merged.timing.asyncDelivery).toBe(false);
+    expect(merged.timing.sleep).toBe(false);
+    expect(merged.timing.followUp).toBe(false);
+    expect(normalizePersonaSettings({
+      timing: { asyncDelivery: true, sleep: true, followUp: true },
+    }).timing).toMatchObject({ sleep: true, followUp: true });
+  });
+
   it("deep-merges without dropping fields the patch did not mention", () => {
     const current = normalizePersonaSettings({
       layers: { twoStage: true, stickers: false },

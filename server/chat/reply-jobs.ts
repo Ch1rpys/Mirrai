@@ -30,7 +30,7 @@ import {
   type LifeEvent,
   type RoutineSchedule,
 } from "@shared/life-events";
-import { parseZoneless, zonedDateKey } from "@shared/timezone";
+import { parseZoneless, preferredClockZone, zonedDateKey } from "@shared/timezone";
 import { getEffectivePresence } from "../_core/graduation";
 import { pushToUser } from "../_core/push";
 import { getChannelAdapter } from "../channels";
@@ -154,7 +154,11 @@ export async function maybeDeferReply(params: {
     };
   }
 
-  const zone = (params.persona as { timezone?: string | null }).timezone || "UTC";
+  const userZone = await db.getUserTimezone(params.userId).catch(() => null);
+  const zone = preferredClockZone(
+    (params.persona as { timezone?: string | null }).timezone,
+    userZone,
+  ) || "UTC";
   const routine = normalizeRoutine(effectiveStyleProfile(params.persona).routine);
   const asleep = Boolean(
     settings.timing.sleep
@@ -246,19 +250,24 @@ export async function cancelPendingReplyJobs(
   return db.cancelPendingReplyJobs(personaId, userId);
 }
 
+/**
+ * True when the reply reached the channel, or when there was nothing
+ * to send there. A push that fails still counts: the line is already
+ * in the conversation. A channel that refuses does not.
+ */
 async function deliverReply(
   job: ReplyJob,
   persona: Persona,
   parts: string[],
   kind: "reply" | "followup" = "reply",
   gapsMs: number[] = [],
-): Promise<void> {
+): Promise<boolean> {
   const bubbles = parts.map((text) => text.trim()).filter(Boolean);
-  if (bubbles.length === 0) return;
+  if (bubbles.length === 0) return true;
   const channel = job.channel || "web";
   if (channel === "wechat" || channel === "feishu") {
     const adapter = getChannelAdapter(channel);
-    if (!adapter || !job.targetId) return;
+    if (!adapter || !job.targetId) return false;
     const locale = job.locale === "en" ? "en" : "zh";
     for (let i = 0; i < bubbles.length; i++) {
       if (i > 0) {
@@ -269,10 +278,10 @@ async function deliverReply(
         await adapter.send(job.userId, job.targetId, bubbles[i]!, locale);
       } catch (error) {
         console.warn("[ReplyJobs] The channel could not send the reply:", error);
-        return;
+        return false;
       }
     }
-    return;
+    return true;
   }
   try {
     await pushToUser(job.userId, {
@@ -284,6 +293,22 @@ async function deliverReply(
   } catch (error) {
     console.warn("[ReplyJobs] The push could not be sent:", error);
   }
+  return true;
+}
+
+async function failDelivery(job: ReplyJob): Promise<void> {
+  const locale: Locale = job.locale === "en" ? "en" : "zh";
+  await db.createMessage({
+    personaId: job.personaId,
+    userId: job.userId,
+    role: "assistant",
+    content: copy(locale, "channels.messageFailed", {
+      reason: copy(locale, "channels.deliveryFailed"),
+    }),
+    channel: job.channel === "wechat" || job.channel === "feishu" ? job.channel : "web",
+    origin: "system-notice",
+  });
+  await db.finishReplyJob(job.id, job.userId, "failed");
 }
 
 function melancholyLine(text: string): boolean {
@@ -309,7 +334,7 @@ export async function maybeScheduleFollowUp(params: {
 }): Promise<void> {
   if (params.afterMessageId <= 0) return;
   const settings = normalizePersonaSettings(params.persona.settings);
-  if (!settings.timing.followUp) return;
+  if (!settings.timing.asyncDelivery || !settings.timing.followUp) return;
   if (!Boolean((params.persona as { timingEnabled?: boolean }).timingEnabled)) return;
   if (!loadBehaviorProfile(params.persona)) return;
   const profile = normalizeDoubleText(effectiveStyleProfile(params.persona).doubleText);
@@ -351,7 +376,7 @@ async function runFollowUpJob(job: ReplyJob, userId: number): Promise<boolean> {
   const persona = await db.getPersonaById(job.personaId, userId);
   if (!persona) return cancel();
   const settings = normalizePersonaSettings(persona.settings);
-  if (!settings.timing.followUp) return cancel();
+  if (!settings.timing.asyncDelivery || !settings.timing.followUp) return cancel();
   if (!Boolean((persona as { timingEnabled?: boolean }).timingEnabled)) return cancel();
   if (!loadBehaviorProfile(persona)) return cancel();
   const profile = normalizeDoubleText(effectiveStyleProfile(persona).doubleText);
@@ -366,8 +391,12 @@ async function runFollowUpJob(job: ReplyJob, userId: number): Promise<boolean> {
   if (settings.mode === "memorial") return cancel();
 
   const now = new Date();
-  const zone = (persona as { timezone?: string | null }).timezone || "UTC";
-  const userZone = (await db.getUserTimezone(userId).catch(() => null)) || zone;
+  const userZoneRaw = await db.getUserTimezone(userId).catch(() => null);
+  const zone = preferredClockZone(
+    (persona as { timezone?: string | null }).timezone,
+    userZoneRaw,
+  ) || "UTC";
+  const userZone = userZoneRaw || zone;
   if (isQuietHour(now, ENV.reminderQuietHours, userZone)) return cancel();
   const routine = normalizeRoutine(effectiveStyleProfile(persona).routine);
   if (settings.timing.sleep && routine && isAsleep(now, routine, zone)) return cancel();
@@ -424,7 +453,10 @@ async function runFollowUpJob(job: ReplyJob, userId: number): Promise<boolean> {
     channel: job.channel === "wechat" || job.channel === "feishu" ? job.channel : "web",
     origin: "followup",
   });
-  await deliverReply(job, persona, [text], "followup");
+  if (!(await deliverReply(job, persona, [text], "followup"))) {
+    await failDelivery(job);
+    return false;
+  }
   await db.finishReplyJob(job.id, userId, "done");
   return true;
 }
@@ -527,7 +559,17 @@ export async function runReplyJob(jobId: number, userId: number): Promise<boolea
       scheduleReplyJob({ id: jobId, dueAt, userId });
       return false;
     }
-    await deliverReply(job, persona, parts.length > 0 ? parts : (text ? [text] : []), "reply", gapsMs);
+    const sent = await deliverReply(
+      job,
+      persona,
+      parts.length > 0 ? parts : (text ? [text] : []),
+      "reply",
+      gapsMs,
+    );
+    if (!sent) {
+      await failDelivery(job);
+      return false;
+    }
     await db.finishReplyJob(jobId, userId, "done");
     return true;
   } catch (error) {

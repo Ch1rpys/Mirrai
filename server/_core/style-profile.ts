@@ -139,7 +139,7 @@ export async function measureStyleProfile(params: {
   const sessions = measureSessions(labelledScenes, sessionZone);
   const replyDelay = measureReplyDelay(rows, sessionZone ?? "UTC") ?? undefined;
   const routine = measureRoutine(rows, sessionZone ?? "UTC") ?? undefined;
-  const typing = measureTyping(rows) ?? undefined;
+  const typing = measureTyping(rows, replyDelay) ?? undefined;
   const quirks = measureQuirks(rows);
   const doubleText = measureDoubleText(rows, rawData) ?? undefined;
   const multiPoint = measureMultiPoint(labelledScenes.flatMap((scene) => toTurns(scene)));

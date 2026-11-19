@@ -515,6 +515,25 @@ describe("queued replies", () => {
     expect(jobs[0]?.dueAt.getTime()).toBe(night.getTime() + 5 * 60_000);
   });
 
+  it("sleeps on the user's clock when the persona has no timezone", async () => {
+    const night = parseZoneless("2024-06-02 03:00", "Asia/Shanghai")!;
+    vi.setSystemTime(night);
+    getUserTimezone.mockResolvedValue("Asia/Shanghai");
+    const events = await drain(persona({
+      timezone: null,
+      settings: { timing: { asyncDelivery: true, maxDelayMinutes: 5, sleep: true } },
+      styleProfile: {
+        ...delayProfile(1200),
+        routine: { days: 80, sleep: { startMin: 0, endMin: 450 } },
+      },
+    }), "在吗", night);
+    expect(events[0]?.type).toBe("deferred");
+    expect(jobs[0]?.reason).toBe("asleep");
+    expect(jobs[0]?.dueAt.getTime()).toBe(
+      parseZoneless("2024-06-02 07:30", "Asia/Shanghai")!.getTime() + 1_200_000,
+    );
+  });
+
   it("does not queue a weak signal", async () => {
     const events = await drain(persona(), "我好累");
     expect(events.some((event) => event.type === "deferred")).toBe(false);
@@ -614,6 +633,44 @@ describe("queued replies", () => {
     await sending;
     expect(send.mock.calls.map((call) => call[2])).toEqual(["嗯", "好", "在"]);
     expect(jobs[0]?.status).toBe("done");
+  });
+
+  it("says the channel did not deliver and does not generate the reply again", async () => {
+    const events = await drain(persona(), "在吗", NOW, { channel: "feishu", conversationKey: "oc_1" });
+    expect(events[0]?.type).toBe("deferred");
+    vi.setSystemTime(jobs[0]!.dueAt);
+    send.mockRejectedValueOnce(new Error("refused"));
+    await runReplyJob(jobs[0]!.id, 1);
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+    expect(retryReplyJob).not.toHaveBeenCalled();
+    expect(jobs[0]?.status).toBe("failed");
+    const notice = stored.find((row) => row.origin === "system-notice");
+    expect(notice?.content).toBe("消息没有发出去：通道没有把这条消息送达。");
+  });
+
+  it("stops a burst when a later bubble cannot be sent", async () => {
+    invokeWithProvider.mockResolvedValue("嗯\n好\n在");
+    const bursting = persona({
+      behaviorProfile: {
+        samples: 20,
+        replyGapMedianSec: 90,
+        replyGapLogSigma: 0.8,
+        burstSizes: [3],
+        measuredAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    getPersonaById.mockImplementation(async () => bursting);
+    await drain(bursting, "在吗", NOW, { channel: "feishu", conversationKey: "oc_1" });
+    vi.setSystemTime(jobs[0]!.dueAt);
+    send.mockReset();
+    send.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("refused"));
+    invokeWithProvider.mockClear();
+    const sending = runReplyJob(jobs[0]!.id, 1);
+    await vi.advanceTimersByTimeAsync(20_000);
+    await sending;
+    expect(send.mock.calls.map((call) => call[2])).toEqual(["嗯", "好"]);
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+    expect(jobs[0]?.status).toBe("failed");
   });
 
 function doubleTextProfile(rate = 1) {
@@ -722,6 +779,13 @@ describe("a follow-up after they go quiet", () => {
     }));
     expect(stored.filter((row) => row.origin === "proactive")).toHaveLength(0);
     expect(pushToUser).not.toHaveBeenCalledWith(1, expect.objectContaining({ kind: "proactive" }));
+  });
+
+  it("does not queue when late replies are off, even if follow-up was left on", async () => {
+    await drain(followPersona({
+      settings: { timing: { asyncDelivery: false, followUp: true, sleep: false } },
+    }), "在吗");
+    expect(jobs.filter((job) => job.kind === "followup")).toHaveLength(0);
   });
 
   it("does not queue when the switch is off", async () => {

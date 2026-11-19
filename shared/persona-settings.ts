@@ -177,12 +177,16 @@ function normalizeLayers(value: unknown): PersonaSettings["layers"] {
 
 function normalizeTiming(value: unknown): PersonaSettings["timing"] {
   const source = isPlainObject(value) ? value : {};
+  const asyncDelivery = asBoolean(source.asyncDelivery, TIMING_DEFAULTS.asyncDelivery);
+  // Sleep and a follow-up both wait past the open page. They stay off
+  // unless late replies are on, including when late replies are turned
+  // back off and the switches can no longer be clicked.
   const out: PersonaSettings["timing"] = {
     typing: asBoolean(source.typing, TIMING_DEFAULTS.typing),
-    asyncDelivery: asBoolean(source.asyncDelivery, TIMING_DEFAULTS.asyncDelivery),
+    asyncDelivery,
     maxDelayMinutes: clampDelay(source.maxDelayMinutes),
-    sleep: asBoolean(source.sleep, TIMING_DEFAULTS.sleep),
-    followUp: asBoolean(source.followUp, TIMING_DEFAULTS.followUp),
+    sleep: asyncDelivery && asBoolean(source.sleep, TIMING_DEFAULTS.sleep),
+    followUp: asyncDelivery && asBoolean(source.followUp, TIMING_DEFAULTS.followUp),
     recall: asBoolean(source.recall, TIMING_DEFAULTS.recall),
   };
   return out;
