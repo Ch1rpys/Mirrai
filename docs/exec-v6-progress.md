@@ -76,7 +76,7 @@
 | B5.2 | 🟡 | 632d2f1 (table); c8c75e8 (execute); 161a3ef (routes); 203fe68 (UI); 96afe3c (crisis/sad) | 临时库 `mirrai_v6_scratch` 0055 四步+升级路径：push 后 migrate 应用到 `0055_reply_jobs`；`--replay` `replayed 53 migration(s)`；`--rollback 1` 后 `to_regclass` 为空；再 migrate 表回来。升级路径 DROP 表和两个索引并删 journal 的 `0055_reply_jobs` 后再 migrate，`reply_jobs_due_idx` 与 `reply_jobs_one_pending_reply_idx` 出现。库已 `dropdb`。`db-isolation`、`db-delete-coverage` 通过。`reply-jobs.test.ts` 13 通过：20 分钟 `deferred`、模型 0 次、一条 `pending`；到点 `runReplyJob` 模型 1 次、`metadata.deferred`、`pushToUser`、任务 `done`；排队期间再发两条仍一条任务，到点用户行 `["一","二","三"]`；40 秒不建任务；`maxDelayMinutes: 5` 抽 3 小时 `dueAt` 是 5 分钟后；睡时 `dueAt` 为 `nextWake`+延迟且超过上限，关 sleep 受上限；`weakSignal` / 「我想死」/「我很难过」不排队；并发两次 `runReplyJob` 模型 1 次；三次失败任务 `failed` 且有 `origin: "system-notice"`；`replyNow` 立刻执行；清掉定时器后 `sweepReplyJobs` 捞到到期任务；忙碌 `computeReplyDue` 为窗结束+D 且封顶。`routers.pending-reply.test.ts` 4 通过：别人的分身 `NOT_FOUND`、busy 带 title、空为 null、`replyNow` 调执行。`PendingReply.test.tsx` 3 通过：三种 `reason` 文案；点「现在就回」走 `replyNow({ personaId: 5 })`。`PersonaSwitches.test.tsx`：开「可以晚点回」写入 `asyncDelivery: true`；关着时上限输入禁用，开着改成 45 写入 `maxDelayMinutes: 45`。`stream.test.ts` / `chat-stream-e2e.test.ts` 转发 `deferred` 且不走 `onError`。闸门 `414 passed \| 6 skipped (420)` 文件，`3607 passed \| 23 skipped (3630)` 用例，`all six steps passed`。真实多小时等待见未验证清单。 |
 | B5.3 | ✅ | 59d801e | `shared/reply-delay.test.ts` 4 通过：夹具 `evening` 的 `exp(mu)` 在 32–48 秒、`afternoon` 在 95–145 秒，两档 `sigma` 在 0.65–0.95，`resolution` 为 `second`；细桶 n=5 时 `via` 为 `band|state|asking`；29 个样本 `null`；同一 `seededRandom` 种子两次相等，40 次抽样都在 1 秒到 6 小时。`service.test.ts`：`draws the delay from the measured bucket` 事件 `{ type: "delay", ms: 40000 }`，落库 `metadata.delay` 为 `{ ms: 40000, via: "band" }`；`keeps the old delay when nothing has been measured` 的毫秒数等于 `sampleReplyDelayMs` 的返回值且没有 `metadata.delay`；`does not delay a crisis, a weak signal, or someone saying they are sad` 对「我想死」「我好累」「我很难过」都没有 `delay` 事件。`DelayView.test.tsx` 渲染晚上「40 秒 / 20 次」、下午「2 分钟 / 12 次」，夜里和早上是「记录里没有」。闸门 `408 passed \| 6 skipped (414)` 文件，`3561 passed \| 23 skipped (3584)` 用例。 |
 | B5.4 | ✅ | 182da75 | `shared/routine-profile.test.ts` 5 通过：夹具睡眠窗盖住 01:00–07:00，`endMin` 在 450–480；59 天返回 `null`；全天有消息时 `sleep` 为 `undefined`。跨零点：上海 00:30 `isAsleep` 为真、21:00 为假，`nextWake` 等于 `parseZoneless("2024-06-02 07:00", "Asia/Shanghai")`。夏令时：纽约 `2024-03-10T06:30:00Z`（01:30 EST）在睡，`nextWake` 等于 `parseZoneless("2024-03-10 08:00", "America/New_York")`，08:30 已醒。`DelayView.test.tsx` 渲染「小满 一般 00:00 到 07:30 不在线」。`PersonaSwitches.test.tsx`：`asyncDelivery` 关着时「睡觉的时候不回」禁用；开着时可点，`updateSettings` 收到 `timing.sleep: true`，说明里有 00:00 和 07:30。排队行为按手册留在 B5.2。闸门 `409 passed \| 6 skipped (415)` 文件，`3568 passed \| 23 skipped (3591)` 用例。 |
-| B5.5 | ⬜ |  |  |
+| B5.5 | ✅ | 32f5c75 (measure); be30d51 (UI) | `shared/typing-profile.test.ts` 5 通过：32 对按 200 毫秒每字设计的连发 `msPerChar` 在 160–240；小满夹具同样在 200±40；时间戳只到分钟返回 `null`。`style-profile.test.ts` 夹具写入 `typing.msPerChar` 160–240、`pairs ≥ 30`。`service.test.ts`：三条件成立时 delay `{ ms: 40000, typingMs }` 且 `typingMs ≤ ms`，burst texts `["嗯","好","在"]`，`gapsMs`/`typingMs` 各长 2 且每个 `typingMs[i] ≤ gapsMs[i]`；`timing.typing: false` 时事件与没有 typing 画像 `toEqual`，delay 仍是 `{ type: "delay", ms: 40000 }`，burst 仍是 `{ type: "burst", texts: ["嗯","好","在"] }`。`useTypingReveal.test.ts` 3 通过：`ms=10000` `typingMs=3000` 前 7 秒无点、后 3 秒有、然后出字；连发三条三个点出现三次；中止后状态不再变。`chat-stream-e2e.test.ts` 转发 `typingMs`/`gapsMs`。`MessageBubble.test.tsx` `isTyping: false` 时没有 `.typing-dot`。闸门 `416 passed \| 6 skipped (422)` 文件，`3619 passed \| 23 skipped (3642)` 用例，`all six steps passed`。 |
 | B5.6 | ⬜ |  |  |
 | B5.7 | ⬜ |  |  |
 | B5.8 | ⬜ |  |  |
@@ -372,6 +372,7 @@
 | 168 | B5.2 | `pendingReply` 只返回 `{ jobId, dueAt, reason }` | 忙碌时另带 `title` | 等待文案「一般在{{title}}」要从 payload 读。 |
 | 169 | B5.2 | 忙碌时段没有点名数据源 | 用已确认的 `currentRoutines`（B6.3），窗结束用 `routineWindowEnd` | 手册写「落在已确认的忙碌时段」。 |
 | 170 | B5.2 | 认领只从 `pending` 抢 | 过期的 `running` 也可以再认领 | 任务变成 running 之后进程死了，只认 pending 就捞不回来。letters 一直停在 waiting。 |
+| 171 | B5.5 | burst 的 `typingMs` 是「每一条」 | `gapsMs` 与 `typingMs` 都是 n−1（第 2 条起）；第一条的 `typingMs` 在 delay 事件上 | 验收写「每个 `typingMs[i] ≤ gapsMs[i]`」，等长才能逐项比。第一条前面没有间隔，打字时间是 delay 的安静段之后。 |
 
 ## 未验证清单
 
@@ -1330,6 +1331,14 @@ B6.4 维持 🟡。B6.7 维持 ✅。B6.1、B6.2、B6.3、B6.5、B6.6、B6.8、B
 - 闸门 `414 passed | 6 skipped (420)` 文件，`3607 passed | 23 skipped (3630)` 用例，`all six steps passed`。相对 B5.1（411/6 文件、3582/23 用例）：通过文件 +3、通过用例 +25；跳过数不变。
 - 偏差 164–170。未验证清单新增 B5.2。待用户决定无新增。
 - B5.2 标 🟡。接着做 B5.5。
+
+### WP9 · 实现会话 · 2026-11-19 · B5.5
+
+- `32f5c75`：`measureTyping` 写入 `styleProfile.typing`。只在时间戳到秒时量；样本是同一轮相邻两条 TA 文本的间隔÷后一条字数；`msPerChar` 是第 25 百分位钳到 80–400。delay/burst 在 `timingEnabled`、开关、画像三者都开时带 `typingMs`/`gapsMs`。
+- `be30d51`：`useTypingReveal` 先空等再出三个点；连发两条之间点会出现又消失。中止清掉定时器。开关关着或没有画像时事件与改前相同。
+- 闸门 `416 passed | 6 skipped (422)` 文件，`3619 passed | 23 skipped (3642)` 用例，`all six steps passed`。相对 B5.2（414/6 文件、3607/23 用例）：通过文件 +2、通过用例 +12；跳过数不变。
+- 偏差 171。未验证清单、待用户决定无新增。
+- B5.5 标 ✅。接着做 B5.6。
 
 
 
