@@ -60,7 +60,7 @@ function EvidenceCardItem(props: { card: EvidenceCard; locale: string }) {
     <li className="text-sm text-muted-foreground leading-relaxed">
       <p>{props.card.claim}</p>
       {props.card.quotes.map((quote) => {
-        const day = quote.at ? quote.at.slice(0, 10) : "";
+        const day = quote.day ?? (quote.at ? quote.at.slice(0, 10) : "");
         const when = day ? formatDayKey(day, props.locale) : "";
         return (
           <p key={quote.recordId} className="mt-1 text-xs">

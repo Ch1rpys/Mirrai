@@ -1448,7 +1448,11 @@ export const appRouter = router({
           }),
         )];
         const records = await getRecordsByIds(ids, ctx.user.id);
-        return { dimensions: collectEvidence(cards, records) };
+        return {
+          dimensions: collectEvidence(cards, records, {
+            timeZone: ctx.user.timezone ?? null,
+          }),
+        };
       }),
 
     clarifications: protectedProcedure

@@ -4,6 +4,8 @@
  * Some layers are a model's summary with no quoted line behind them.
  * Those are always marked as inferred.
  */
+import { zonedDateKey } from "./timezone";
+
 export const EVIDENCE_DIMENSIONS = [
   "expression",
   "trigger",
@@ -49,6 +51,8 @@ export const EVIDENCE_CARD_LIMIT = 30;
 export interface EvidenceQuote {
   recordId: number;
   at: string | null;
+  /** The day the line was said, in the reader's zone. */
+  day?: string | null;
   speaker: string;
   text: string;
 }
@@ -137,6 +141,16 @@ function atIso(value: Date | string | null | undefined): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function dayInZone(
+  value: Date | string | null | undefined,
+  timeZone?: string | null,
+): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return zonedDateKey(date, timeZone);
+}
+
 /**
  * Turns stored observation cards into quotes the profile can show.
  *
@@ -146,6 +160,7 @@ function atIso(value: Date | string | null | undefined): string | null {
 export function collectEvidence(
   cards: StoredObservationCard[],
   records: EvidenceRecord[],
+  options: { timeZone?: string | null } = {},
 ): EvidenceByDimension {
   const byId = new Map(records.map((row) => [row.id, row]));
   const grouped: Record<EvidenceDimension, StoredObservationCard[]> = {
@@ -174,6 +189,7 @@ export function collectEvidence(
         return [{
           recordId,
           at: atIso(row.timestamp),
+          day: dayInZone(row.timestamp, options.timeZone),
           speaker: String(row.speaker || row.role || ""),
           text: String(row.content ?? ""),
         }];

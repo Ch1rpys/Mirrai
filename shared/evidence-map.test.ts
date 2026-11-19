@@ -48,15 +48,39 @@ describe("collecting quotes", () => {
         speaker: "小满",
         role: "assistant",
       }],
+      { timeZone: "UTC" },
     );
     expect(collected.habit[0]?.quotes).toEqual([
       {
         recordId: 2,
         at: "2023-07-12T08:16:09.000Z",
+        day: "2023-07-12",
         speaker: "小满",
         text: "在的呀",
       },
     ]);
+  });
+
+  it("reads the quoted day in the reader's timezone", () => {
+    const cards = [{
+      dimension: "habit" as const,
+      claim: "短句",
+      payload: { quotes: [1] },
+      createdAt: new Date("2023-07-12T08:16:09.000Z"),
+    }];
+    const records = [{
+      id: 1,
+      content: "凌晨还在",
+      timestamp: new Date("2023-07-11T17:00:00.000Z"),
+      speaker: "小满",
+      role: "assistant",
+    }];
+    expect(
+      collectEvidence(cards, records, { timeZone: "Asia/Shanghai" }).habit[0]?.quotes[0]?.day,
+    ).toBe("2023-07-12");
+    expect(
+      collectEvidence(cards, records, { timeZone: "UTC" }).habit[0]?.quotes[0]?.day,
+    ).toBe("2023-07-11");
   });
 
   it("keeps the newest thirty cards in a dimension", () => {
