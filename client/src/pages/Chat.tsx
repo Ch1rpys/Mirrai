@@ -296,8 +296,10 @@ export default function Chat() {
    * cannot read a value that changes afterwards. It reads this instead.
    */
   const recordingSecondsRef = useRef(0);
-  /** Aborts an in-flight streaming request when the user stops the reply. */
+  /** Aborts the latest in-flight streaming request when the user stops the reply. */
   const abortRef = useRef<AbortController | null>(null);
+  /** How many sends are still on the wire. The composer stays usable. */
+  const inFlightRef = useRef(0);
 
   // 录音波形高度在一次录音内固定，避免计时每秒重渲染导致跳动
   const recordingBarHeights = useMemo(
@@ -730,9 +732,10 @@ export default function Chat() {
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || isSending) return;
+    if (!text) return;
     setInput("");
     setLiveChoice(null);
+    inFlightRef.current += 1;
     setIsSending(true);
 
     const userMsg: Message = { id: `temp-${Date.now()}`, role: "user", content: text, createdAt: new Date() };
@@ -839,7 +842,6 @@ export default function Chat() {
             onChoice: (info) => {
               setLiveChoice(info);
               setMessages((prev) => prev.filter((m) => m.id !== streamId));
-              setIsSending(false);
             },
             onDone: (info) => {
               setMessages(prev => prev.map(m => m.id === streamId
@@ -872,6 +874,9 @@ export default function Chat() {
             onError: (message) => {
               toast.error(t("chat.interrupted", { message }));
               setMessages(prev => prev.map(m => m.id === streamId ? { ...m, isStreaming: false } : m));
+            },
+            onSuperseded: () => {
+              setMessages((prev) => prev.filter((m) => m.id !== streamId));
             },
           },
         });
@@ -911,6 +916,10 @@ export default function Chat() {
         if (failedSendKeepsTheMessage(result)) {
           toast.error(t("chat.failed", { message: t("errors.replyFailed") }));
           setMessages(prev => prev.map(m => (m.id === streamId ? { ...m, isStreaming: false } : m)));
+          return;
+        }
+        if (result.superseded) {
+          setMessages((prev) => prev.filter((m) => m.id !== streamId));
           return;
         }
         if (result.choice?.options?.length >= 2 && typeof result.choice.replyToMessageId === "number") {
@@ -972,8 +981,9 @@ export default function Chat() {
         toast.error(t("chat.failed", { message: (err as Error)?.message ?? t("errors.unknown") }));
       }
     } finally {
-      abortRef.current = null;
-      setIsSending(false);
+      inFlightRef.current = Math.max(0, inFlightRef.current - 1);
+      if (abortRef.current === controller) abortRef.current = null;
+      setIsSending(inFlightRef.current > 0);
       textareaRef.current?.focus();
     }
   };
@@ -1298,13 +1308,17 @@ export default function Chat() {
           },
           controller.signal,
         );
-        setMessages(prev => prev.map(m => m.id === streamId
-          ? { id: `ai-${Date.now()}`, role: "assistant", content: result.reply, emotionalState: result.emotionalState, createdAt: new Date(), isStreaming: false }
-          : m
-        ));
-        setCurrentState(result.emotionalState);
-        if (result.careNote?.showBanner) toast.info(careBannerText(result.careNote, t));
-        if (result.crisis) setShowCrisis(true);
+        if (result.superseded) {
+          setMessages((prev) => prev.filter((m) => m.id !== streamId));
+        } else {
+          setMessages(prev => prev.map(m => m.id === streamId
+            ? { id: `ai-${Date.now()}`, role: "assistant", content: result.reply, emotionalState: result.emotionalState, createdAt: new Date(), isStreaming: false }
+            : m
+          ));
+          setCurrentState(result.emotionalState);
+          if (result.careNote?.showBanner) toast.info(careBannerText(result.careNote, t));
+          if (result.crisis) setShowCrisis(true);
+        }
       } catch (err) {
         // A failed send used to vanish without a word.
         setMessages(prev => prev.filter(m => m.id !== streamId));
@@ -1398,6 +1412,10 @@ export default function Chat() {
             if (result.transcriptionFailed) {
               setMessages(prev => prev.filter(m => m.id !== streamId));
               toast.error(t("chat.voiceNotUnderstood"));
+              return;
+            }
+            if (result.superseded) {
+              setMessages((prev) => prev.filter((m) => m.id !== streamId));
               return;
             }
             setMessages(prev => prev.map(m => {
@@ -2199,17 +2217,16 @@ export default function Chat() {
                  */
                 maxLength={2000}
                 rows={1} className="flex-1 min-w-0 resize-none bg-muted/40 border-border text-foreground placeholder:text-muted-subtle rounded-md min-h-[44px] max-h-32 px-4 py-3" />
-              {isSending ? (
+              {isSending && (
                 <Button onClick={handleStopStreaming} aria-label={t("chat.stop")}
                   className="h-11 w-11 p-0 rounded-md flex-shrink-0">
                   <X className="w-5 h-5" />
                 </Button>
-              ) : (
-                <Button onClick={handleSend} disabled={!input.trim() || !isOnline} aria-label={t("chat.send")}
-                  className="h-11 w-11 p-0 rounded-md flex-shrink-0">
-                  <Send className="w-5 h-5" />
-                </Button>
               )}
+              <Button onClick={handleSend} disabled={!input.trim() || !isOnline} aria-label={t("chat.send")}
+                className="h-11 w-11 p-0 rounded-md flex-shrink-0">
+                <Send className="w-5 h-5" />
+              </Button>
             </div>
             </>
           )}

@@ -56,6 +56,8 @@ export interface StreamChatCallbacks {
   onChoice?: (info: { options: [string, string]; replyToMessageId: number }) => void;
   onReplace?: (text: string) => void;
   onError?: (message: string, partial: boolean) => void;
+  /** The turn was taken away by a later message. The streaming bubble goes. */
+  onSuperseded?: () => void;
 }
 
 export interface StreamChatOptions {
@@ -216,7 +218,7 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
       for (const frame of frames) {
         const parsed = parseFrame(frame);
         if (!parsed) continue;
-        if (parsed.event === "done" || parsed.event === "error") settled = true;
+        if (parsed.event === "done" || parsed.event === "error" || parsed.event === "superseded") settled = true;
         await handleEvent(parsed, callbacks, locale);
       }
     }
@@ -226,7 +228,7 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
     if (tail) {
       const parsed = parseFrame(tail);
       if (parsed) {
-        if (parsed.event === "done" || parsed.event === "error") settled = true;
+        if (parsed.event === "done" || parsed.event === "error" || parsed.event === "superseded") settled = true;
         await handleEvent(parsed, callbacks, locale);
       }
     }
@@ -304,6 +306,9 @@ async function handleEvent(
       }
       break;
     }
+    case "superseded":
+      callbacks.onSuperseded?.();
+      break;
     case "error":
       /**
        * The sentence is the server's own — and when there is none, the

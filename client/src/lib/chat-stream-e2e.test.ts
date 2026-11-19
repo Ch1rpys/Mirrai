@@ -93,6 +93,31 @@ describe("streamChat", () => {
     });
   });
 
+  it("hands a superseded event to the caller and does not treat it as a drop", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      mockSseResponse([
+        'event: delta\ndata: {"text":"在"}\n\n',
+        "event: superseded\ndata: {}\n\n",
+      ]),
+    );
+    globalThis.fetch = fetchMock as any;
+    const deltas: string[] = [];
+    const errors: string[] = [];
+    let superseded = 0;
+    await streamChat({
+      personaId: 1,
+      message: "在吗",
+      callbacks: {
+        onDelta: (text) => deltas.push(text),
+        onError: (message) => errors.push(message),
+        onSuperseded: () => { superseded += 1; },
+      },
+    });
+    expect(deltas).toEqual(["在"]);
+    expect(superseded).toBe(1);
+    expect(errors).toEqual([]);
+  });
+
   it("posts the message and the locale", async () => {
     const fetchMock = vi.fn().mockResolvedValue(mockSseResponse([]));
     globalThis.fetch = fetchMock as any;
