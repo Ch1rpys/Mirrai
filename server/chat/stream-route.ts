@@ -9,7 +9,7 @@
  * Event protocol:
  *   event: delta    data: {"text":"..."}
  *   event: emotion  data: {"state":"warm","reason":"..."}
- *   event: done     data: {"messageId":1,"emotionalState":"warm","graduationSuggested":false,"careNote":null}
+ *   event: done     data: {"messageId":1,"emotionalState":"warm","graduationSuggested":false,"careNote":null,"extra":[]}
  *   event: error    data: {"message":"...","partial":true}
  *   event: superseded  data: {}
  *   event: deferred    data: {"jobId":1,"dueAt":"...","reason":"delay"|"asleep"|"busy"}
@@ -240,6 +240,9 @@ async function handleChatStream(req: Request, res: Response): Promise<void> {
             // chip that says what the persona recalled never appeared
             // until the history was polled again.
             recalled: event.recalled,
+            // A sticker (B7.1) or a photograph (B7.9) arrives after the
+            // words were written, as its own message.
+            ...(event.extra ? { extra: event.extra } : {}),
           });
         } else if (event.type === "error") {
           /**

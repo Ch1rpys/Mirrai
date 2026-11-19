@@ -6,6 +6,7 @@
  * and a merge of confirmations. A field that has not been measured is
  * simply absent — there is no default to fill it with.
  */
+import { normalizeStickerStats, type StickerStats } from "./sticker-stats";
 import type { AddressEntry } from "./address-history";
 import { normalizeActClusters, type ActClusters } from "./act-clusters";
 import {
@@ -86,7 +87,7 @@ export interface StyleProfile {
   triggers?: TriggerEntry[];
   actClusters?: ActClusters;
   addressHistory?: AddressEntry[];
-  stickers?: unknown; // 由 B7.1 填
+  stickers?: StickerStats; // B7.1
   voice?: unknown; // 由 B7.4 填
   photos?: unknown; // 由 B7.9 填
   calls?: unknown; // 由 B7.13 填
@@ -183,6 +184,11 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
       if (key === "doubleText") {
         const doubleText = normalizeDoubleText(source.doubleText);
         if (doubleText) profile.doubleText = doubleText;
+        continue;
+      }
+      if (key === "stickers") {
+        const stickers = normalizeStickerStats(source.stickers);
+        if (stickers) profile.stickers = stickers;
         continue;
       }
       (profile as unknown as Record<string, unknown>)[key] = source[key];

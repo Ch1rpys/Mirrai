@@ -33,6 +33,8 @@ import { getEffectiveGraduationMode, canOfferGraduation, getEffectivePresence } 
 import { mayReachOut } from "@shared/graduation-mode";
 import { copy, localizeScene } from "@shared/copy";
 import { normalizePersonaSettings } from "@shared/persona-settings";
+import { renderRecordContent } from "@shared/records";
+import { pickStickerForTurn } from "./sticker-turn";
 import { asMaterial } from "../_core/material";
 import { buildPromptBundleForPersona } from "./prompt";
 import { splitBurst } from "./burst";
@@ -128,6 +130,17 @@ export type ChatEvent =
       graduationSuggested: boolean;
       careNote: CareNote | null;
       crisis: boolean;
+      /**
+       * Messages the reply carried besides its words: a sticker today,
+       * a photograph in B7.9. They are stored after the text, and the
+       * client appends them as further bubbles.
+       */
+      extra?: Array<{
+        messageId: number;
+        kind: string;
+        content: string;
+        mediaUrl?: string | null;
+      }>;
     }
   | {
       /**
@@ -489,10 +502,27 @@ async function toLLMMessage(
     content: string;
     messageType?: string | null;
     mediaUrl?: string | null;
+    metadata?: unknown;
   },
   locale: "zh" | "en",
 ): Promise<LLMMessage> {
   const role = message.role as "user" | "assistant";
+  /**
+   * A sticker reaches the model as what it is, not as its token.
+   *
+   * The row stores `[sticker:狗狗探头]` so the library can count it;
+   * the model reads the same words a person would.
+   */
+  const kind =
+    message.metadata && typeof message.metadata === "object"
+      ? (message.metadata as { kind?: unknown }).kind
+      : null;
+  if (kind === "sticker") {
+    return {
+      role,
+      content: renderRecordContent({ kind: "sticker", content: message.content }, locale),
+    };
+  }
   if (message.messageType === "image" && message.mediaUrl) {
     /**
      * The picture itself, not a path to it.
@@ -2089,6 +2119,59 @@ async function* runConversationTurn(
     }).catch(() => {});
   }
 
+  /**
+   * A sticker after the words, when this person would have sent one.
+   *
+   * It is stored as its own message — the way it arrives in a real
+   * conversation — and the client is told about it in `done.extra`.
+   * The decision is made with the mood that was just settled, and with
+   * the measured rate for that mood; an empty library, or one the user
+   * turned every sticker in off, sends nothing.
+   */
+  const extra: Array<{
+    messageId: number;
+    kind: string;
+    content: string;
+    mediaUrl?: string | null;
+  }> = [];
+  const stickersEnabled = normalizePersonaSettings(persona.settings).layers.stickers !== false;
+  if (stickersEnabled && !immediate) {
+    const sticker = await pickStickerForTurn({
+      personaId: persona.id,
+      userId,
+      styleProfile: (persona as { styleProfile?: unknown }).styleProfile,
+      state: newEmotionalState,
+      seed: turnInput.seed,
+      channel: options.channel ?? "web",
+      enabled: true,
+    }).catch((error) => {
+      console.warn("[Chat] The sticker could not be chosen:", error);
+      return null;
+    });
+    if (sticker) {
+      try {
+        const stickerMessageId = await db.createMessage({
+          personaId: persona.id,
+          userId,
+          role: "assistant",
+          content: `[sticker:${sticker.label}]`,
+          emotionalState: newEmotionalState,
+          channel: "web",
+          mediaUrl: sticker.imageUrl,
+          metadata: { kind: "sticker", stickerId: sticker.stickerId },
+        });
+        extra.push({
+          messageId: stickerMessageId,
+          kind: "sticker",
+          content: sticker.label,
+          ...(sticker.imageUrl ? { mediaUrl: sticker.imageUrl } : {}),
+        });
+      } catch (error) {
+        console.warn("[Chat] The sticker could not be stored:", error);
+      }
+    }
+  }
+
   yield { type: "emotion", state: newEmotionalState, reason: emotion.reason };
 
   /**
@@ -2282,6 +2365,7 @@ async function* runConversationTurn(
     recalled,
     ...(plan.routine ? { routine: plan.routine } : {}),
     ...(claims && claims.length > 0 ? { claims } : {}),
+    ...(extra.length > 0 ? { extra } : {}),
   };
 }
 

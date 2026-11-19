@@ -84,6 +84,7 @@ import {
   type ReanchorIssue,
 } from "@shared/style-reminder";
 import { normalizeAddressHistory } from "@shared/address-history";
+import { renderRecordContent } from "@shared/records";
 import type { ScoredMemory } from "./retrieval";
 
 export interface TurnInput {
@@ -353,10 +354,18 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       markRecalled: false,
       history: input.history,
     });
-    const historyMessages: LLMMessage[] = input.history.map((row) => ({
-      role: row.role === "user" ? "user" : "assistant",
-      content: row.content,
-    }));
+    const historyMessages: LLMMessage[] = input.history.map((row) => {
+      const kind =
+        row.metadata && typeof row.metadata === "object"
+          ? (row.metadata as { kind?: unknown }).kind
+          : null;
+      return {
+        role: row.role === "user" ? "user" : "assistant",
+        content: kind === "sticker"
+          ? renderRecordContent({ kind: "sticker", content: row.content }, input.locale)
+          : row.content,
+      };
+    });
     const messages = spliceAfterSystem(
       [asSystemMessage(built.prompt, built.cacheBreak), ...historyMessages],
       seedMsgs,

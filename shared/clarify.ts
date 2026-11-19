@@ -5,6 +5,7 @@
  * gap in what the records could measure, and the answer is written
  * into a known field — never into free-form persona prose.
  */
+import type { StickerStats } from "./sticker-stats";
 import { copy, type Locale } from "./copy";
 import type { ImperfectionEntry } from "./imperfection";
 import type { MicroRule } from "./micro-rules";
@@ -564,8 +565,8 @@ export function applyClarification(
       }
       const stickers =
         style.stickers && typeof style.stickers === "object" && !Array.isArray(style.stickers)
-          ? { ...(style.stickers as Record<string, unknown>), manualRate: rate }
-          : { manualRate: rate };
+          ? { ...style.stickers, manualRate: rate }
+          : ({ manualRate: rate } as StickerStats);
       return {
         personaData: { ...persona, clarified: markClarified(persona, question.id) },
         styleProfile: { ...style, stickers },

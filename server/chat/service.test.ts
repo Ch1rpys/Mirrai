@@ -44,6 +44,8 @@ const getMessageById = vi.fn();
 const updateEmotionSnapshot = vi.fn();
 const deleteMessage = vi.fn();
 const iterateRecords = vi.fn();
+const listEnabledStickers = vi.fn();
+const getLastExtractionAttemptAt = vi.fn();
 const getRecordsVersion = vi.fn();
 const getCollectedMessagesForPersona = vi.fn();
 
@@ -97,6 +99,8 @@ vi.mock("../db", () => ({
   updateEmotionSnapshot: (...a: unknown[]) => updateEmotionSnapshot(...a),
   deleteMessage: (...a: unknown[]) => deleteMessage(...a),
   iterateRecords: (...a: unknown[]) => iterateRecords(...a),
+  listEnabledStickers: (...a: unknown[]) => listEnabledStickers(...a),
+  getLastExtractionAttemptAt: (...a: unknown[]) => getLastExtractionAttemptAt(...a),
   getRecordsVersion: (...a: unknown[]) => getRecordsVersion(...a),
   getCollectedMessagesForPersona: (...a: unknown[]) => getCollectedMessagesForPersona(...a),
   cancelPendingReplyJobs: vi.fn().mockResolvedValue(0),
@@ -188,7 +192,8 @@ describe("runConversation", () => {
       getSessionStartAt, getUserMessageCountSince, getDailyUserChatCounts, hasSafetyEventSince,
       incrementChatCount, updateMessageMetadata, createFidelityPair, clearMessagePendingChoice,
       getMessageById, updateEmotionSnapshot, searchRecordsLexical, deleteMessage,
-      iterateRecords, getRecordsVersion, getCollectedMessagesForPersona,
+      iterateRecords, getRecordsVersion, getCollectedMessagesForPersona, listEnabledStickers,
+      getLastExtractionAttemptAt,
       invoke, invokeWithProvider,
       streamWithProvider, resolveProviderForUser, resolveProviderForPurpose, inferEmotionalState,
     ]) {
@@ -259,6 +264,8 @@ describe("runConversation", () => {
     iterateRecords.mockImplementation(async function* (): AsyncGenerator<unknown> {});
     getRecordsVersion.mockResolvedValue("0:0");
     getCollectedMessagesForPersona.mockResolvedValue([]);
+    listEnabledStickers.mockResolvedValue([]);
+    getLastExtractionAttemptAt.mockResolvedValue(null);
   });
 
   it("stores the user's turn and the persona's reply", async () => {
@@ -488,6 +495,173 @@ describe("runConversation", () => {
       reason: "inertia",
     });
     expect(events.some((event) => event.type === "emotion" && event.state === "distant")).toBe(true);
+  });
+
+  /**
+   * The sticker, after the words (B7.1).
+   *
+   * The mood is known before the sticker is chosen, and the rate comes
+   * from the measured profile. These tests set the rate to 1 so the
+   * draw always lands, and to 0 where the state must not send one.
+   */
+  const STICKER_PROFILE = {
+    version: 1,
+    measuredAt: "2026-01-15T12:00:00.000Z",
+    recordsVersion: "100:100",
+    stickers: {
+      samples: 20,
+      rate: 1,
+      soloRate: 0,
+      byState: {
+        happy: { rate: 1, turns: 40, top: [{ key: "狗狗探头", n: 12 }] },
+        distant: { rate: 0, turns: 40, top: [] },
+      },
+      runs: { one: 20, two: 0, threePlus: 0 },
+    },
+  };
+
+  it("sends the sticker the record says they send, after the words", async () => {
+    inferEmotionalState.mockResolvedValue({ state: "happy", source: "heuristic" });
+    listEnabledStickers.mockResolvedValue([
+      { id: 41, key: "label:狗狗探头", label: "狗狗探头", fileKey: null, enabled: true },
+    ]);
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona({ styleProfile: STICKER_PROFILE }),
+      userId: 1,
+      message: "今天好开心",
+      mode: "once",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      events.push(event);
+    }
+
+    const stored = createMessage.mock.calls
+      .map((call: unknown[]) => call[0] as Record<string, any>)
+      .filter((data) => data?.metadata?.kind === "sticker");
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({
+      content: "[sticker:狗狗探头]",
+      role: "assistant",
+      emotionalState: "happy",
+      metadata: { kind: "sticker", stickerId: 41 },
+    });
+    const done = events.find((event) => event.type === "done") as any;
+    expect(done.extra).toEqual([
+      { messageId: 99, kind: "sticker", content: "狗狗探头" },
+    ]);
+  });
+
+  it("shows a sticker to the model as words, not as the token or a picture", async () => {
+    getMessagesByPersonaId.mockResolvedValue([
+      {
+        id: 1,
+        personaId: 1,
+        userId: 1,
+        role: "assistant",
+        content: "[sticker:狗狗探头]",
+        messageType: "text",
+        mediaUrl: "/uploads/personas/1/1/stickers/abc.png",
+        metadata: { kind: "sticker", stickerId: 41 },
+        createdAt: new Date("2026-01-15T11:59:00.000Z"),
+        origin: null,
+      },
+    ]);
+    for await (const _event of runConversation({
+      persona: persona({ styleProfile: STICKER_PROFILE }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      // drained
+    }
+    const sent = JSON.stringify(invokeWithProvider.mock.calls[0]![1]);
+    expect(sent).toContain("［表情：狗狗探头］");
+    expect(sent).not.toContain("[sticker:");
+    expect(sent).not.toContain("/stickers/abc.png");
+  });
+
+  it("does not send a sticker in a mood that never has one", async () => {
+    inferEmotionalState.mockResolvedValue({ state: "distant", source: "heuristic" });
+    listEnabledStickers.mockResolvedValue([
+      { id: 41, key: "label:狗狗探头", label: "狗狗探头", fileKey: null, enabled: true },
+    ]);
+    for await (const _event of runConversation({
+      persona: persona({ styleProfile: STICKER_PROFILE }),
+      userId: 1,
+      message: "嗯",
+      mode: "once",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      // drained
+    }
+    const stored = createMessage.mock.calls
+      .map((call: unknown[]) => call[0] as Record<string, any>)
+      .filter((data) => data?.metadata?.kind === "sticker");
+    expect(stored).toHaveLength(0);
+  });
+
+  it("does not send a sticker when every one is turned off or the switch is off", async () => {
+    inferEmotionalState.mockResolvedValue({ state: "happy", source: "heuristic" });
+    listEnabledStickers.mockResolvedValue([]);
+    for await (const _event of runConversation({
+      persona: persona({ styleProfile: STICKER_PROFILE }),
+      userId: 1,
+      message: "今天好开心",
+      mode: "once",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      // drained
+    }
+    expect(
+      createMessage.mock.calls
+        .map((call: unknown[]) => call[0] as Record<string, any>)
+        .filter((data) => data?.metadata?.kind === "sticker"),
+    ).toHaveLength(0);
+
+    listEnabledStickers.mockResolvedValue([
+      { id: 41, key: "label:狗狗探头", label: "狗狗探头", fileKey: null, enabled: true },
+    ]);
+    for await (const _event of runConversation({
+      persona: persona({
+        styleProfile: STICKER_PROFILE,
+        settings: { layers: { stickers: false } },
+      }),
+      userId: 1,
+      message: "今天好开心",
+      mode: "once",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      // drained
+    }
+    expect(
+      createMessage.mock.calls
+        .map((call: unknown[]) => call[0] as Record<string, any>)
+        .filter((data) => data?.metadata?.kind === "sticker"),
+    ).toHaveLength(0);
+  });
+
+  it("does not send a sticker on a channel", async () => {
+    inferEmotionalState.mockResolvedValue({ state: "happy", source: "heuristic" });
+    listEnabledStickers.mockResolvedValue([
+      { id: 41, key: "label:狗狗探头", label: "狗狗探头", fileKey: null, enabled: true },
+    ]);
+    for await (const _event of runConversation({
+      persona: persona({ styleProfile: STICKER_PROFILE }),
+      userId: 1,
+      message: "今天好开心",
+      mode: "once",
+      channel: "wechat",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      // drained
+    }
+    expect(
+      createMessage.mock.calls
+        .map((call: unknown[]) => call[0] as Record<string, any>)
+        .filter((data) => data?.metadata?.kind === "sticker"),
+    ).toHaveLength(0);
   });
 
   it("writes a decayed mood back before the reply is planned", async () => {

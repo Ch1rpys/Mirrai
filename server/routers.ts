@@ -304,6 +304,14 @@ const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const MAX_IMAGE_UPLOAD_BYTES = 20 * 1024 * 1024;
 const MAX_AUDIO_UPLOAD_BYTES = 25 * 1024 * 1024;
 
+/** A message the reply carried besides its words. */
+type ExtraMessage = {
+  messageId: number;
+  kind: string;
+  content: string;
+  mediaUrl?: string | null;
+};
+
 /** How many base64 characters carry a given number of bytes. */
 function base64CharsFor(bytes: number): number {
   return Math.ceil(bytes / 3) * 4;
@@ -2430,6 +2438,7 @@ export const appRouter = router({
         let failureStored = false;
         let superseded = false;
         let deferred: { jobId: number; dueAt: string; reason: "delay" | "asleep" | "busy" } | null = null;
+        let extra: ExtraMessage[] | null = null;
 
         /**
          * A persona that has said goodbye.
@@ -2477,6 +2486,7 @@ export const appRouter = router({
               graduationSuggested = event.graduationSuggested;
               careNote = event.careNote;
               crisis = event.crisis;
+              if (event.extra && event.extra.length > 0) extra = event.extra;
             }
           }
         } catch (e) {
@@ -2556,7 +2566,17 @@ export const appRouter = router({
           };
         }
 
-        return { reply, emotionalState, graduationSuggested, careNote, crisis, choice, failed: false, superseded };
+        return {
+          reply,
+          emotionalState,
+          graduationSuggested,
+          careNote,
+          crisis,
+          choice,
+          failed: false,
+          superseded,
+          ...(extra ? { extra } : {}),
+        };
       }),
 
     sendImage: protectedProcedure.use(rateLimit(RATE_LIMITS.upload))
@@ -2613,6 +2633,7 @@ export const appRouter = router({
         let failure: string | null = null;
         let superseded = false;
         let deferred: { jobId: number; dueAt: string; reason: "delay" | "asleep" | "busy" } | null = null;
+        let extra: ExtraMessage[] | null = null;
 
         for await (const event of runConversation({
           persona,
@@ -2641,6 +2662,7 @@ export const appRouter = router({
             graduationSuggested = event.graduationSuggested;
             careNote = event.careNote;
             crisis = event.crisis;
+            if (event.extra && event.extra.length > 0) extra = event.extra;
           }
         }
         // A failure is reported, not swallowed. See the note in `send`.
@@ -2664,7 +2686,16 @@ export const appRouter = router({
           };
         }
 
-        return { reply, emotionalState, imageUrl: url, graduationSuggested, careNote, crisis, superseded };
+        return {
+          reply,
+          emotionalState,
+          imageUrl: url,
+          graduationSuggested,
+          careNote,
+          crisis,
+          superseded,
+          ...(extra ? { extra } : {}),
+        };
       }),
 
     sendVoice: protectedProcedure.use(rateLimit(RATE_LIMITS.chatMedia))
@@ -2761,6 +2792,7 @@ export const appRouter = router({
         let failure: string | null = null;
         let superseded = false;
         let deferred: { jobId: number; dueAt: string; reason: "delay" | "asleep" | "busy" } | null = null;
+        let extra: ExtraMessage[] | null = null;
 
         for await (const event of runConversation({
           persona,
@@ -2789,6 +2821,7 @@ export const appRouter = router({
             graduationSuggested = event.graduationSuggested;
             careNote = event.careNote;
             crisis = event.crisis;
+            if (event.extra && event.extra.length > 0) extra = event.extra;
           }
         }
         // A failure is reported, not swallowed. See the note in `send`.
@@ -2813,7 +2846,17 @@ export const appRouter = router({
           };
         }
 
-        return { reply, emotionalState, transcription, voiceUrl: url, graduationSuggested, careNote, crisis, superseded };
+        return {
+          reply,
+          emotionalState,
+          transcription,
+          voiceUrl: url,
+          graduationSuggested,
+          careNote,
+          crisis,
+          superseded,
+          ...(extra ? { extra } : {}),
+        };
       }),
 
     clear: protectedProcedure

@@ -49,6 +49,7 @@ import { measureReplyDelay } from "@shared/reply-delay";
 import { measureRoutine } from "@shared/routine-profile";
 import { measureTyping } from "@shared/typing-profile";
 import { measureQuirks } from "@shared/quirks-profile";
+import { measureStickers } from "@shared/sticker-stats";
 import { measureDoubleText } from "@shared/double-text";
 import { toTurns } from "@shared/scenes";
 import { splitScenes } from "@shared/scenes";
@@ -142,6 +143,7 @@ export async function measureStyleProfile(params: {
   const typing = measureTyping(rows, replyDelay) ?? undefined;
   const quirks = measureQuirks(rows);
   const doubleText = measureDoubleText(rows, rawData) ?? undefined;
+  const stickers = measureStickers(rows) ?? undefined;
   const multiPoint = measureMultiPoint(labelledScenes.flatMap((scene) => toTurns(scene)));
   const inSession = measureInSessionFromScenes(labelledScenes);
   const next = normalizeStyleProfile({
@@ -165,6 +167,7 @@ export async function measureStyleProfile(params: {
     ...(typing ? { typing } : { typing: undefined }),
     quirks,
     ...(doubleText ? { doubleText } : { doubleText: undefined }),
+    ...(stickers ? { stickers } : { stickers: undefined }),
     ...(multiPoint ? { multiPoint } : { multiPoint: undefined }),
     ...(inSession ? { inSession } : { inSession: undefined }),
   });
