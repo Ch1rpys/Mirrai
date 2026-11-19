@@ -12,6 +12,14 @@ export const V6 = {
     zh: "记录不够，重排选不出来。至少要有 40 条 {{name}} 的话。",
     en: "There are not enough lines to rerank. {{name}} needs at least 40 of their own.",
   },
+  "errors.stickerLimit": {
+    zh: "这个分身的表情已经有 {{max}} 个了，删掉一些再补图。",
+    en: "This persona already has {{max}} stickers; remove one before adding a picture.",
+  },
+  "errors.stickerImage": {
+    zh: "只收 PNG、JPEG、GIF 或 WebP 的图片。",
+    en: "Only PNG, JPEG, GIF or WebP pictures are accepted.",
+  },
   "errors.importFailed": {
     zh: "这份文件没有整理成记录。",
     en: "This file was not turned into records.",

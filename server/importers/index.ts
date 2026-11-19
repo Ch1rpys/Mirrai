@@ -27,6 +27,7 @@ import {
 } from "../db";
 import { importRecords, RecordLimitError } from "../collectors/db-store";
 import { afterRecordsChanged } from "../_core/style-profile";
+import { registerStickers } from "./stickers";
 import { resolveStoredPath } from "../storage";
 import {
   importUnpackRelKey,
@@ -462,6 +463,18 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
       });
     } catch (error) {
       console.warn("[Import] The style profile could not be updated:", error);
+    }
+    try {
+      /**
+       * The stickers the record uses (B7.1).
+       *
+       * Registered from the rows that were just written, and copied
+       * out of the import directory so deleting the import does not
+       * empty the library.
+       */
+      await registerStickers({ personaId: file.personaId, userId: input.userId });
+    } catch (error) {
+      console.warn("[Import] The sticker library could not be updated:", error);
     }
     return { status: "done", written };
   } catch (error) {

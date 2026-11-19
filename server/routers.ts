@@ -140,6 +140,7 @@ import { personaVersionRouter } from "./routers-v6/persona-version";
 import { blindRouter } from "./routers-v6/blind";
 import { materialRouter } from "./routers-v6/material";
 import { pushRouter } from "./routers-v6/push";
+import { stickerRouter } from "./routers-v6/sticker";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { stateRulesFromTranscript } from "./skill-engine/state-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
@@ -6568,6 +6569,7 @@ export const appRouter = router({
   blind: blindRouter,
   material: materialRouter,
   push: pushRouter,
+  sticker: stickerRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {

@@ -26,6 +26,7 @@ import {
   userMoods, relationshipEvents, letters, memoryExtractions,
   InsertUserMood, InsertRelationshipEvent, InsertLetter,
   replyJobs, InsertReplyJob, ReplyJob,
+  stickers, InsertSticker, Sticker,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
@@ -1039,6 +1040,26 @@ async function collectStoredFiles(userId: number, personaId?: number): Promise<s
     keys.add(url.slice(at + marker.length));
   }
 
+  /**
+   * The sticker images.
+   *
+   * They are copies under `personas/<id>/<id>/stickers/`, made so the
+   * library survives the source import being deleted — which means
+   * nothing else points at them, and deleting the persona or the
+   * account has to take them too.
+   */
+  const stickerFiles = await db
+    .select({ fileKey: stickers.fileKey })
+    .from(stickers)
+    .where(
+      personaId === undefined
+        ? eq(stickers.userId, userId)
+        : and(eq(stickers.userId, userId), eq(stickers.personaId, personaId)),
+    );
+  for (const sticker of stickerFiles) {
+    if (sticker.fileKey) keys.add(sticker.fileKey);
+  }
+
   return [...keys];
 }
 
@@ -1098,6 +1119,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(personaVersions).where(eq(personaVersions.userId, id));
     await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, id));
     await tx.delete(replyJobs).where(eq(replyJobs.userId, id));
+    await tx.delete(stickers).where(eq(stickers.userId, id));
     await tx.delete(recordEmbeddings).where(eq(recordEmbeddings.userId, id));
     await tx.delete(relationshipEvents).where(eq(relationshipEvents.userId, id));
     await tx.delete(reminderDeliveries).where(eq(reminderDeliveries.userId, id));
@@ -1508,6 +1530,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(skillJobs).where(and(eq(skillJobs.personaId, id), eq(skillJobs.userId, userId)));
     await tx.delete(letters).where(and(eq(letters.personaId, id), eq(letters.userId, userId)));
     await tx.delete(replyJobs).where(and(eq(replyJobs.personaId, id), eq(replyJobs.userId, userId)));
+    await tx.delete(stickers).where(and(eq(stickers.personaId, id), eq(stickers.userId, userId)));
     await tx.delete(wechatBindings).where(and(eq(wechatBindings.personaId, id), eq(wechatBindings.userId, userId)));
     await tx.delete(personas).where(and(eq(personas.id, id), eq(personas.userId, userId)));
   });
@@ -2485,6 +2508,140 @@ export async function searchAllMessages(
   return [...messageRows, ...memoryRows, ...diaryRows]
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
     .slice(0, limit);
+}
+
+// ─── Sticker helpers ───────────────────────────────────────────────────────
+
+/**
+ * Writes a sticker, or adds to the one already there.
+ *
+ * The key is what makes it the same sticker: the content hash when
+ * there is an image, the label when there is not. A second import of
+ * the same pack must not create a second row — it updates the counts
+ * and the last-used time.
+ */
+export async function upsertSticker(data: InsertSticker): Promise<Sticker> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [row] = await db
+    .insert(stickers)
+    .values(data)
+    .onConflictDoUpdate({
+      target: [stickers.personaId, stickers.userId, stickers.key],
+      set: {
+        label: data.label,
+        ...(data.fileKey ? { fileKey: data.fileKey, mime: data.mime ?? null } : {}),
+        usesByThem: data.usesByThem ?? 0,
+        usesByMe: data.usesByMe ?? 0,
+        firstUsedAt: data.firstUsedAt ?? null,
+        lastUsedAt: data.lastUsedAt ?? null,
+      },
+    })
+    .returning();
+  return row!;
+}
+
+export async function listStickers(personaId: number, userId: number): Promise<Sticker[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(stickers)
+    .where(and(eq(stickers.personaId, personaId), eq(stickers.userId, userId)))
+    .orderBy(desc(stickers.usesByThem), asc(stickers.label));
+}
+
+export async function listEnabledStickers(
+  personaId: number,
+  userId: number,
+): Promise<Sticker[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(stickers)
+    .where(
+      and(
+        eq(stickers.personaId, personaId),
+        eq(stickers.userId, userId),
+        eq(stickers.enabled, true),
+      ),
+    )
+    .orderBy(desc(stickers.usesByThem), asc(stickers.label));
+}
+
+export async function countStickers(personaId: number, userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [row] = await db
+    .select({ c: count() })
+    .from(stickers)
+    .where(and(eq(stickers.personaId, personaId), eq(stickers.userId, userId)));
+  return Number(row?.c ?? 0);
+}
+
+export async function setStickerEnabled(
+  personaId: number,
+  userId: number,
+  stickerId: number,
+  enabled: boolean,
+): Promise<Sticker | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .update(stickers)
+    .set({ enabled })
+    .where(
+      and(
+        eq(stickers.id, stickerId),
+        eq(stickers.personaId, personaId),
+        eq(stickers.userId, userId),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+export async function setStickerImage(
+  personaId: number,
+  userId: number,
+  stickerId: number,
+  image: { fileKey: string; mime: string },
+): Promise<Sticker | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .update(stickers)
+    .set({ fileKey: image.fileKey, mime: image.mime })
+    .where(
+      and(
+        eq(stickers.id, stickerId),
+        eq(stickers.personaId, personaId),
+        eq(stickers.userId, userId),
+      ),
+    )
+    .returning();
+  return row ?? null;
+}
+
+export async function deleteSticker(
+  personaId: number,
+  userId: number,
+  stickerId: number,
+): Promise<Sticker | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .delete(stickers)
+    .where(
+      and(
+        eq(stickers.id, stickerId),
+        eq(stickers.personaId, personaId),
+        eq(stickers.userId, userId),
+      ),
+    )
+    .returning();
+  return row ?? null;
 }
 
 // ─── WeChat Binding helpers ─────────────────────────────────────────────────

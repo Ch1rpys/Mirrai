@@ -1742,3 +1742,41 @@ export const replyJobs = pgTable("reply_jobs", {
 
 export type ReplyJob = typeof replyJobs.$inferSelect;
 export type InsertReplyJob = typeof replyJobs.$inferInsert;
+
+/**
+ * The stickers they actually used.
+ *
+ * A persona that sent `[sticker:狗狗探头]` six times can send it again —
+ * and only it. The library is measured from the record, never invented,
+ * so a persona who never used a sticker never sends one.
+ *
+ * `key` is the content hash when there is an image and `label:<name>`
+ * when there is only a name, so two imports of the same pack keep one
+ * row. `fileKey` points at a copy under `personas/<userId>/<personaId>/stickers/`,
+ * made because the import directory can be deleted.
+ */
+export const stickers = pgTable("stickers", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  key: varchar("key", { length: 128 }).notNull(),
+  label: varchar("label", { length: 64 }).notNull(),
+  fileKey: varchar("fileKey", { length: 500 }),
+  mime: varchar("mime", { length: 64 }),
+  usesByThem: integer("usesByThem").default(0).notNull(),
+  usesByMe: integer("usesByMe").default(0).notNull(),
+  firstUsedAt: timestamp("firstUsedAt"),
+  lastUsedAt: timestamp("lastUsedAt"),
+  enabled: boolean("enabled").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  oneKey: uniqueIndex("stickers_persona_key_idx").on(
+    table.personaId,
+    table.userId,
+    table.key,
+  ),
+  personaIdx: index("stickers_persona_idx").on(table.personaId, table.userId),
+}));
+
+export type Sticker = typeof stickers.$inferSelect;
+export type InsertSticker = typeof stickers.$inferInsert;
