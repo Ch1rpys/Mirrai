@@ -66,6 +66,20 @@ describe("the prompt the persona is given", () => {
     getRecordsByIds.mockResolvedValue([]);
   });
 
+  it("never puts the public voice into a one-to-one prompt", async () => {
+    const built = await buildPromptForPersona({
+      persona: {
+        ...persona,
+        personaData: {
+          ...persona.personaData,
+          publicVoice: "PUBLIC-VOICE-ONLY",
+        },
+      },
+      userId: 1,
+    });
+    expect(built).not.toContain("PUBLIC-VOICE-ONLY");
+  });
+
   it("is the same prompt the preview shows", async () => {
     const built = await buildPromptForPersona({ persona, userId: 1 });
     const preview = buildSystemPrompt(persona, {});

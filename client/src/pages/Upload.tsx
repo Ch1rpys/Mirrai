@@ -14,6 +14,7 @@ import RecordSources from "@/components/v6/RecordSources";
 import MaterialReport from "@/components/v6/MaterialReport";
 import ImportWizard from "@/components/v6/ImportWizard";
 import ScreenshotImport from "@/components/v6/ScreenshotImport";
+import MomentsImport from "@/components/v6/MomentsImport";
 import HarmNotice from "@/components/v6/HarmNotice";
 import ClarifyCard from "@/components/v6/ClarifyCard";
 import { normalizeHarmReport } from "@shared/harm";
@@ -805,6 +806,7 @@ export default function Upload() {
 
         {/* A chat that only exists as screenshots (B7.11). */}
         <ScreenshotImport personaId={personaId} personaName={persona?.name ?? ""} />
+        <MomentsImport personaId={personaId} />
 
         {/* No chat logs? The questionnaire builds a persona without them. */}
         <div className="text-center mb-6 animate-fade-in-up">

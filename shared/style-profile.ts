@@ -94,7 +94,7 @@ export interface StyleProfile {
   voice?: VoiceStats; // B7.4
   photos?: PhotoStats; // B7.9
   calls?: CallStats; // B7.13
-  publicFingerprint?: unknown; // 由 B7.12 填
+  publicFingerprint?: StyleFingerprint; // B7.12
   writtenFingerprint?: unknown; // 由 C1.8 填
   group?: unknown; // 由 C9.8 填
   mirror?: unknown; // 由 C4.1 填

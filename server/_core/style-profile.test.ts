@@ -238,6 +238,63 @@ describe("measureStyleProfile", () => {
     expect(measured.voice?.byState.warm?.rate).toBeGreaterThan(0);
   });
 
+  it("measures the public register separately and needs forty posts", async () => {
+    getRecordsVersion.mockResolvedValue("3200:3200");
+    getPersonaStyleProfile.mockResolvedValue(null);
+    getPersonaById.mockResolvedValue({ id: 5, userId: 1, name: "小满", personaData: {} });
+    getUserById.mockResolvedValue({ id: 1, name: "阿树", timezone: "Asia/Shanghai" });
+    const privateRows = buildXiaomanRecords();
+    const makePublic = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        id: 10_000 + i,
+        role: "assistant",
+        content: i % 3 === 0 ? "今天去看了海。" : i % 3 === 1 ? "周末在家。" : "晚上吃了面。",
+        timestamp: new Date(Date.UTC(2024, 5, 1 + (i % 28), 12, 0, i % 60)),
+        kind: "text",
+        speaker: "小满",
+        meta: { register: "public" },
+      }));
+    let publicRows: ReturnType<typeof makePublic> = [];
+    iterateRecords.mockImplementation(async function* (
+      _personaId: number,
+      _userId: number,
+      options?: { register?: string },
+    ) {
+      const source = options?.register === "public" ? publicRows : privateRows;
+      for (const row of source) yield row;
+    });
+
+    const before = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    expect(before.publicFingerprint).toBeUndefined();
+
+    publicRows = makePublic(60);
+    const withPosts = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    expect(withPosts.publicFingerprint).toBeTruthy();
+    // The private measurements do not move when public posts arrive.
+    expect(withPosts.fingerprint).toEqual(before.fingerprint);
+    expect(withPosts.samplePool).toEqual(before.samplePool);
+    expect(withPosts.actClusters).toEqual(before.actClusters);
+    expect(withPosts.replyDelay).toEqual(before.replyDelay);
+
+    const privateBefore = withPosts.fingerprint;
+    publicRows = makePublic(39);
+    const short = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    expect(short.publicFingerprint).toBeUndefined();
+    expect(short.fingerprint).toEqual(privateBefore);
+  });
+
   it("writes the call table from the fixture", async () => {
     getRecordsVersion.mockResolvedValue("3200:3200");
     getPersonaStyleProfile.mockResolvedValue(null);

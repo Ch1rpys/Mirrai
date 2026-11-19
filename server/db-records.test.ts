@@ -120,6 +120,17 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
       expect(await countRecords(personaId, userId)).toBe(1);
       expect(await countRecords(personaId, userId, { register: "public" })).toBe(1);
       expect(await countRecords(personaId, userId, { register: "all" })).toBe(2);
+
+      const read = async (register?: string) => {
+        const out: string[] = [];
+        for await (const row of iterateRecords(personaId, userId, { register })) {
+          out.push(row.content);
+        }
+        return out;
+      };
+      expect(await read()).toEqual(["private line"]);
+      expect(await read("public")).toEqual(["public line"]);
+      expect((await read("all")).sort()).toEqual(["private line", "public line"]);
     } finally {
       await deletePersona(personaId, userId);
     }

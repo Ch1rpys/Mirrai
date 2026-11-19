@@ -125,6 +125,11 @@ export interface PersonaData {
    * confirmed ones only appear when the topic is mentioned.
    */
   stances?: Stance[];
+  /**
+   * How this person talks to everyone, read from the public register
+   * (B7.12). Shown on the profile; never used in a one-to-one prompt.
+   */
+  publicVoice?: string;
 }
 
 /** The stages a relationship can be in. */
@@ -163,6 +168,7 @@ export const PERSONA_DATA_FIELDS: Array<keyof PersonaData> = [
   "lexicon",
   "people",
   "stances",
+  "publicVoice",
 ];
 
 /**
@@ -212,6 +218,7 @@ export const PERSONA_DOCUMENT_EXCLUDED_FIELDS: Array<keyof PersonaData> = [
   "lexicon",
   "people",
   "stances",
+  "publicVoice",
 ];
 
 /** The default realism level: noticeably imperfect, but not a mess. */
@@ -361,6 +368,7 @@ export function normalizePersonaData(
   const lexicon = normalizeLexicon(source.lexicon ?? fallback.lexicon);
   const people = normalizePeople(source.people ?? fallback.people);
   const stances = normalizeStances(source.stances ?? fallback.stances);
+  const publicVoice = toText(source.publicVoice ?? fallback.publicVoice);
 
   return {
     personality,
@@ -389,5 +397,6 @@ export function normalizePersonaData(
     lexicon,
     people,
     stances,
+    ...(publicVoice ? { publicVoice } : {}),
   };
 }

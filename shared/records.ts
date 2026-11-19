@@ -219,6 +219,18 @@ export function isUnparsedChatUpload(file: {
   return file.parseStatus == null || file.parseStatus === "";
 }
 
+/**
+ * Whether a row is the private one-to-one conversation.
+ *
+ * Moments, letters and group chats are other registers. The private
+ * voice is measured from the private rows only; a public post speaks to
+ * everyone and must not quietly change how the persona talks to one
+ * person (B7.12).
+ */
+export function isPrivateRecord(row: { meta?: Record<string, unknown> | null }): boolean {
+  return recordRegister(row) !== "public";
+}
+
 /** The register a stored row belongs to. Missing means private. */
 export function recordRegister(
   row: { meta?: Record<string, unknown> | null },

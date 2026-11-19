@@ -27,6 +27,7 @@ import type { LLMMessage, LLMOptions } from "../llm/types";
 import { loadPrompt } from "./prompts";
 import { asMaterial, fencedName } from "./material";
 import { appendVideoMaterial } from "./video-materials";
+import { distillPublicVoice } from "./public-voice";
 import { runPythonTool } from "./runner";
 import { extractJsonObject } from "../_core/json";
 import {
@@ -1666,6 +1667,20 @@ async function runSkillPipelineOnce(
       locale,
       userId,
     );
+    /**
+     * The public voice (B7.12): a separate description, from the public
+     * register, never mixed into the one-to-one prompt.
+     */
+    const publicVoice = await distillPublicVoice({
+      personaId,
+      userId,
+      name,
+      locale,
+      invoke: invokeForDistill,
+    }).catch((error) => {
+      console.warn("[SkillEngine] The public voice could not be distilled:", error);
+      return null;
+    });
     const baseData = normalizePersonaData(parsed, { name, locale });
     const memoryParts = [baseData.memories];
     if (imageNote) {
@@ -1677,6 +1692,7 @@ async function runSkillPipelineOnce(
     const enrichedData: PersonaData = {
       ...baseData,
       memories: memoryParts.filter((part) => part.trim().length > 0).join("\n\n").trim(),
+      ...(publicVoice ? { publicVoice } : {}),
       ...(harmReport ? { harmReport } : {}),
     };
 

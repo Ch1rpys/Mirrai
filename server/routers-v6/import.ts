@@ -26,6 +26,11 @@ import { importRecords } from "../collectors/db-store";
 import { afterRecordsChanged } from "../_core/style-profile";
 import { readScreenshotPages } from "../importers/screenshot";
 import { mergeScreenshotPages } from "../importers/screenshot-merge";
+import {
+  momentPostsToRecords,
+  readMomentScreenshots,
+  splitMomentText,
+} from "../importers/moments";
 
 const formatIds = IMPORTERS.map((row) => row.id) as [ImportFormatId, ...ImportFormatId[]];
 const formatId = z.enum(formatIds);
@@ -164,6 +169,106 @@ export const importRouter = router({
       const result = await cancelImport(input.fileId, ctx.user.id, ctx.locale);
       if (!result) throw new TRPCError({ code: "NOT_FOUND" });
       return result;
+    }),
+
+  /**
+   * Reads the public register — pasted text or screenshots (B7.12).
+   *
+   * Nothing is written here. Each post is the persona's own words, and
+   * the register is `public`, so the private voice is not touched.
+   */
+  momentsPreview: protectedProcedure
+    .use(rateLimit(RATE_LIMITS.upload))
+    .input(z.object({
+      personaId: z.number(),
+      text: z.string().max(200_000).optional(),
+      date: z.string().max(20).optional(),
+      images: z.array(z.object({
+        name: z.string().min(1).max(200),
+        base64: z.string().min(1).max(14_000_000),
+      })).max(30).optional(),
+    }).refine(
+      (value) => Boolean(value.text?.trim()) || Boolean(value.images?.length),
+      { message: "text or images required" },
+    ))
+    .mutation(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      const images = input.images ?? [];
+      if (images.length > 0) {
+        const provider = await resolveProviderForPurpose({
+          userId: ctx.user.id,
+          purpose: "extract",
+        });
+        if (!provider || !provider.capabilities.vision) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: copy(ctx.locale, "errors.screenshotNoVision"),
+          });
+        }
+        const read = await readMomentScreenshots({
+          images,
+          provider,
+          name: persona.name,
+          date: input.date ?? null,
+          timeZone: ctx.user.timezone ?? null,
+          locale: ctx.locale,
+        });
+        return {
+          posts: read.posts.map((post) => ({
+            text: post.text,
+            at: post.at ? post.at.toISOString() : null,
+            timeApprox: post.timeApprox,
+          })),
+          failures: read.failures,
+        };
+      }
+      const posts = splitMomentText(input.text ?? "", {
+        date: input.date ?? null,
+        timeZone: ctx.user.timezone ?? null,
+      });
+      return {
+        posts: posts.map((post) => ({
+          text: post.text,
+          at: post.at ? post.at.toISOString() : null,
+          timeApprox: post.timeApprox,
+        })),
+        failures: [],
+      };
+    }),
+
+  /** Writes the moments the user confirmed (B7.12). */
+  momentsConfirm: protectedProcedure
+    .input(z.object({
+      personaId: z.number(),
+      posts: z.array(z.object({
+        text: z.string().min(1).max(20000),
+        at: z.string().nullable(),
+      })).min(1).max(2000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      let written = 0;
+      try {
+        written = await importRecords({
+          personaId: input.personaId,
+          userId: ctx.user.id,
+          source: "moments",
+          records: momentPostsToRecords(input.posts),
+        });
+      } catch {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: copy(ctx.locale, "errors.importFailed"),
+        });
+      }
+      await afterRecordsChanged({
+        personaId: input.personaId,
+        userId: ctx.user.id,
+        added: written,
+      }).catch(() => {});
+      return { written };
     }),
 
   /**

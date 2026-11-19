@@ -92,6 +92,30 @@ export async function measureStyleProfile(params: {
           : null,
     });
   }
+  /**
+   * The public register (B7.12).
+   *
+   * Read separately and never mixed into the private rows: a post that
+   * speaks to everyone must not change how the persona talks to one
+   * person.
+   */
+  const publicRows: FingerprintRow[] = [];
+  for await (const row of iterateRecords(personaId, userId, { register: "public" })) {
+    publicRows.push({
+      id: row.id,
+      role: row.role,
+      content: row.content,
+      timestamp: row.timestamp,
+      kind: row.kind,
+      act: row.act,
+      emotion: row.emotion,
+      speaker: row.speaker,
+      meta:
+        row.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
+          ? (row.meta as Record<string, unknown>)
+          : null,
+    });
+  }
   const persona = await getPersonaById(personaId, userId);
   const user = await getUserById(userId);
   const rawData =
@@ -115,6 +139,10 @@ export async function measureStyleProfile(params: {
   const addressForms = minedForms.length > 0 ? minedForms : knownForms;
   const periods = normalizePeriods(rawData.periods);
   const fingerprint = measureFingerprint(rows, { addressForms, periods }) ?? undefined;
+  const publicFingerprint =
+    publicRows.length >= 40
+      ? measureFingerprint(publicRows, { addressForms, periods }) ?? undefined
+      : undefined;
   const userSide = measureUserSide(rows);
   if (userSide) {
     const userFingerprint = measureFingerprint(rows, { role: "user", addressForms });
@@ -167,6 +195,7 @@ export async function measureStyleProfile(params: {
     measuredAt: now.toISOString(),
     recordsVersion,
     fingerprint,
+    publicFingerprint,
     userSide: userSide ?? undefined,
     imperfectionDrafts: drafts,
     addressHistory,

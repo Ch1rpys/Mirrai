@@ -65,6 +65,8 @@ vi.mock("@/lib/trpc", () => ({
       cancel: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       screenshotPreview: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       screenshotConfirm: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      momentsPreview: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      momentsConfirm: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     collector: {
       preview: { useQuery: () => ({ data: { total: distillPage.collected } }) },

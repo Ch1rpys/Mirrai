@@ -22,6 +22,7 @@ import TriggersView from "@/components/v6/TriggersView";
 import ProsodyView from "@/components/v6/ProsodyView";
 import CallsView from "@/components/v6/CallsView";
 import PhotoTimeline from "@/components/v6/PhotoTimeline";
+import FingerprintView from "@/components/v6/FingerprintView";
 import { Button } from "@/components/ui/button";
 import { resolveRelationshipPhase } from "@shared/user-side";
 
@@ -305,6 +306,28 @@ export default function PersonaProfile() {
             prosody={styleProfile.voice?.prosody}
           />
         </motion.section>
+
+        {(data.publicVoice || styleProfile.publicFingerprint) && (
+          <motion.section
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.114 }}
+            className="surface p-5 sm:p-6"
+          >
+            <h2 className="section-title">{t("profile.publicVoiceTitle", { name: persona.name })}</h2>
+            <p className="text-xs text-muted-foreground mt-1 mb-3 leading-relaxed">
+              {t("profile.publicVoiceNote")}
+            </p>
+            {data.publicVoice && (
+              <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">
+                {data.publicVoice}
+              </p>
+            )}
+            {styleProfile.publicFingerprint && (
+              <div className="mt-3">
+                <FingerprintView fingerprint={styleProfile.publicFingerprint} />
+              </div>
+            )}
+          </motion.section>
+        )}
 
         {triggers.length > 0 && (
           <motion.section

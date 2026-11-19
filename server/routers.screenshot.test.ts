@@ -112,6 +112,32 @@ describe("importing a chat from screenshots", () => {
     expect(afterRecordsChanged).toHaveBeenCalledWith({ personaId: 5, userId: 1, added: 2 });
   });
 
+  it("previews pasted public posts without a provider", async () => {
+    const result = await appRouter.createCaller(ctxFor()).import.momentsPreview({
+      personaId: 5,
+      text: "今天去看了海。\n\n周末在家。",
+      date: "2024-06-01",
+    });
+    expect(result.posts.map((post) => post.text)).toEqual(["今天去看了海。", "周末在家。"]);
+    expect(result.posts[0]?.at).toBe("2024-06-01T04:00:00.000Z");
+    expect(resolveProviderForPurpose).not.toHaveBeenCalled();
+    expect(importRecords).not.toHaveBeenCalled();
+  });
+
+  it("writes confirmed public posts with the public register", async () => {
+    await appRouter.createCaller(ctxFor()).import.momentsConfirm({
+      personaId: 5,
+      posts: [{ text: "今天去看了海。", at: "2024-06-01T04:00:00.000Z" }],
+    });
+    const call = importRecords.mock.calls[0]![0] as any;
+    expect(call.source).toBe("moments");
+    expect(call.records[0]).toMatchObject({
+      role: "assistant",
+      content: "今天去看了海。",
+      meta: { register: "public" },
+    });
+  });
+
   it("does not write to somebody else's persona", async () => {
     getPersonaById.mockResolvedValue(undefined);
     await expect(
