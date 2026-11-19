@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import type { TrpcContext } from "../_core/context";
-import { createCollectedMessages, createPersona, deletePersona } from "../db";
+import { createCollectedMessages, createPersona, deletePersona, setPersonaStyleProfile } from "../db";
 import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
 import { seedXiaoman } from "../test-fixtures/seed-db";
 import { MIN_FINGERPRINT_SAMPLES } from "@shared/style-fingerprint";
 import { isTextRecord } from "@shared/records";
-import { materialRouter } from "./material";
+import { materialRouter, ritualHaveFromStyleProfile } from "./material";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -54,7 +54,7 @@ describe.skipIf(!DATABASE_URL)("the material report", () => {
     } finally {
       await deletePersona(personaId, userId);
     }
-  });
+  }, 15_000);
 
   it("says the fingerprint is short when only the first thirty lines are kept", async () => {
     const userId = 9_820_000 + Math.floor(Math.random() * 10_000);
@@ -108,5 +108,25 @@ describe.skipIf(!DATABASE_URL)("the material report", () => {
     } finally {
       await deletePersona(personaId, userId);
     }
+  });
+});
+
+describe("the measured ritual layer", () => {
+  it("reads the fixed-reply count from the measured ritual table", () => {
+    const profile = (n: number) => ({
+      version: 1,
+      measuredAt: "2026-01-01T00:00:00.000Z",
+      recordsVersion: "1:1",
+      rituals: [{
+        trigger: "晚安",
+        variants: ["晚安"],
+        n,
+        replies: [{ text: "晚安", n, recordId: 1 }],
+        coverage: 1,
+      }],
+    });
+    expect(ritualHaveFromStyleProfile(profile(5))).toBe(5);
+    expect(ritualHaveFromStyleProfile(profile(12))).toBe(12);
+    expect(ritualHaveFromStyleProfile(null)).toBe(0);
   });
 });

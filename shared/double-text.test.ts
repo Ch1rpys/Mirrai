@@ -32,7 +32,7 @@ describe("measureDoubleText", () => {
     const measured = measureDoubleText(rows);
     expect(measured).not.toBeNull();
     expect(measured!.samples).toBe(30);
-    expect(measured!.lines[0]?.text).toBe("人呢");
+    expect(measured!.lines[0]?.text).toBe("人呐");
     expect(measured!.lines[1]?.text).toBe("？");
     expect(measured!.lines[0]!.n / measured!.lines[1]!.n).toBeGreaterThan(7 / 3 - 0.4);
     expect(measured!.lines[0]!.n / measured!.lines[1]!.n).toBeLessThan(7 / 3 + 0.4);

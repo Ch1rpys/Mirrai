@@ -23,7 +23,7 @@ import {
   type EvalMetrics,
 } from "./metrics";
 import type { EvalCaseData } from "./dataset";
-import { isLayerId, type LayerId } from "@shared/layers";
+import { isLayerId, LAYERS, type LayerId } from "@shared/layers";
 import type { SpeechAct } from "@shared/speech-acts";
 import { normalizeStyleProfile } from "@shared/style-profile";
 import { dayPartFromHour, type ActDayPart } from "@shared/act-profile";
@@ -117,6 +117,83 @@ function averageSampleScores(samples: EvalCaseScore[]): EvalCaseScore {
       ? { ...first.residue, rate: mean((score) => score.residue?.rate ?? 0) }
       : undefined,
   };
+}
+
+/**
+ * The layers a run of these cases would actually use, without calling a
+ * model.
+ *
+ * The ablation preview asks this before it spends anything. The static
+ * switch list is not enough: the generator adds data layers (a
+ * fingerprint brings projection and lengthCap, a sample pool brings
+ * styleReminder, and so on) only when it plans a turn. Planning is cheap
+ * and deterministic, so the preview plans the cases and reads the union.
+ */
+export interface PreviewLayersOptions {
+  persona: Persona;
+  userId: number;
+  cases: EvalCaseData[];
+  locale?: "zh" | "en";
+  variant?: EvalVariant;
+  without?: string[];
+  rerank?: boolean;
+  sampleAct?: boolean;
+}
+
+export async function previewLayersUsed(
+  options: PreviewLayersOptions,
+): Promise<LayerId[]> {
+  const locale = options.locale ?? "zh";
+  const variant = options.variant ?? "default";
+  const switches = variantSwitches(variant);
+  const useRerank = options.rerank ?? false;
+  const layerOverrides = layerOverridesForEval({
+    variant,
+    without: options.without,
+    sampleAct: options.sampleAct ?? (switches.act === "on"),
+  });
+  if (useRerank === false) layerOverrides.rerank = false;
+
+  const used = new Set<LayerId>();
+  for (let i = 0; i < options.cases.length; i++) {
+    const caseData = options.cases[i]!;
+    const lastUser = [...caseData.context].reverse().find((message) => message.role === "user");
+    const now = caseData.expected.timestamp ?? new Date();
+    const dayPart =
+      caseData.dayPart ??
+      (caseData.expected.timestamp
+        ? dayPartFromHour(
+            zonedHour(
+              caseData.expected.timestamp,
+              (options.persona as { timezone?: string }).timezone,
+            ),
+          )
+        : null);
+    const plan = await planTurn({
+      persona: options.persona,
+      userId: options.userId,
+      userMessage: lastUser?.content ?? "",
+      history: caseData.context.map((row) => ({
+        role: row.role === "user" ? ("user" as const) : ("assistant" as const),
+        content: row.content,
+      })),
+      now,
+      locale,
+      seed: `eval:${options.persona.id}:${i}:${caseData.expected.content}`,
+      periodId: caseData.periodId ?? null,
+      actCondition: {
+        emotion: caseData.expectedState,
+        dayPart,
+      },
+      layerOverrides,
+      exclude: {
+        recordIds: caseData.expected.id ? [caseData.expected.id] : undefined,
+        texts: [caseData.expected.content],
+      },
+    });
+    for (const layer of plan.layersUsed) used.add(layer);
+  }
+  return LAYERS.filter((layer) => used.has(layer));
 }
 
 export interface EvalRunOptions {

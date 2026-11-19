@@ -59,19 +59,24 @@ vi.mock("./eval/act-labels", () => ({
 
 /** The cases the run has to measure. */
 let evalCases: any[] = [{ context: "在吗", expected: "在的", expectedState: "warm" }];
+/** The messages and options the router handed to the real case cutter. */
+let buildCalls: any[][] = [];
 
 vi.mock("./eval/dataset", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./eval/dataset")>();
   return {
     ...actual,
     // The cases are built for real, so the run has something to measure.
-    buildEvalCases: () => evalCases,
+    buildEvalCases: (...args: any[]) => {
+      buildCalls.push(args);
+      return evalCases;
+    },
   };
 });
 
 import { appRouter } from "./routers";
 
-function ctxFor(userId: number): TrpcContext {
+function ctxFor(userId: number, timezone: string | null = null): TrpcContext {
   return {
     user: {
       id: userId,
@@ -86,7 +91,7 @@ function ctxFor(userId: number): TrpcContext {
       updatedAt: new Date(),
       lastSignedIn: new Date(),
       name: `User ${userId}`,
-      timezone: null,
+      timezone,
       locale: "zh",
     },
     req: {} as any,
@@ -110,6 +115,8 @@ describe("the fidelity evaluation", () => {
     getCollectedMessagesForPersonaRows.mockResolvedValue([]);
     getEvalCases.mockResolvedValue([]);
     evalCases = [{ context: "在吗", expected: "在的", expectedState: "warm" }];
+    buildCalls = [];
+    persona.personaData = {};
     saveEvalCases.mockResolvedValue(undefined);
     saveEvalRun.mockResolvedValue(undefined);
     getLatestPersonaVersion.mockResolvedValue(undefined);
@@ -141,6 +148,29 @@ describe("the fidelity evaluation", () => {
     // One run, one bill. Evaluation treats rerank as on.
     expect(runEval).toHaveBeenCalledTimes(1);
     expect(runEval.mock.calls[0][0]).toEqual(expect.objectContaining({ rerank: true }));
+  });
+
+  it("runs a case cut with the user's zone and keeps its period", async () => {
+    const ctx = ctxFor(1, "Asia/Shanghai");
+    persona.personaData = {
+      periods: [{ id: "p1", from: "2024-01-01T00:00:00.000Z", to: "2024-12-31T00:00:00.000Z" }],
+    };
+    evalCases = [
+      {
+        context: [{ role: "user", content: "今天好累", timestamp: null }],
+        expected: { role: "assistant", content: "哦。", timestamp: null },
+        expectedState: "distant",
+        periodId: "p1",
+      },
+    ];
+    await appRouter.createCaller(ctx).eval.run({ personaId: 5, variant: "default", locale: "zh" });
+
+    expect(runEval.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({ persona: expect.objectContaining({ timezone: "Asia/Shanghai" }) }),
+    );
+    expect(saveEvalCases.mock.calls.at(-1)?.[2][0]).toEqual(
+      expect.objectContaining({ periodId: "p1" }),
+    );
   });
 
   it("lets a run start again once the first one is finished", async () => {
@@ -187,6 +217,53 @@ describe("the fidelity evaluation", () => {
       caller.eval.audition({ personaId: 5, locale: "zh" }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(runAudition).not.toHaveBeenCalled();
+  });
+
+  it("cuts app cases with labels, periods, and the user's zone", async () => {
+    const ctx = ctxFor(1, "Asia/Shanghai");
+    persona.personaData = {
+      periods: [{ id: "p1", from: "2024-01-01T00:00:00.000Z", to: "2024-12-31T00:00:00.000Z" }],
+    };
+    getCollectedMessagesForPersonaRows.mockResolvedValue([
+      {
+        id: 1,
+        role: "user",
+        content: "今天好累",
+        timestamp: new Date("2024-01-15T15:00:00.000Z"),
+        kind: "text",
+        emotion: "distant",
+        act: "acknowledge",
+        actSource: "model",
+      },
+    ]);
+    evalCases = [
+      {
+        context: [{ role: "user", content: "今天好累", timestamp: null }],
+        expected: { role: "assistant", content: "哦。", timestamp: null },
+        expectedState: "distant",
+        expectedAct: "acknowledge",
+        periodId: "p1",
+      },
+    ];
+    await appRouter.createCaller(ctx).eval.buildCases({ personaId: 5, locale: "zh" });
+
+    expect(buildCalls.at(-1)?.[0]).toEqual([
+      expect.objectContaining({
+        kind: "text",
+        emotion: "distant",
+        act: "acknowledge",
+        actSource: "model",
+      }),
+    ]);
+    expect(buildCalls.at(-1)?.[1]).toEqual(
+      expect.objectContaining({
+        timezone: "Asia/Shanghai",
+        periods: [expect.objectContaining({ id: "p1" })],
+      }),
+    );
+    expect(saveEvalCases.mock.calls.at(-1)?.[2][0]).toEqual(
+      expect.objectContaining({ periodId: "p1" }),
+    );
   });
 
   it("cuts a feedback case from a rewrite and leaves it out of training", async () => {

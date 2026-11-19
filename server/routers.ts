@@ -101,12 +101,14 @@ import {
   isValidTimeZone,
   localDateKey,
   previousDateKey,
+  zoneForRecords,
   zonedDateKey,
 } from "@shared/timezone";
 import { isMemoryDate } from "@shared/memory-date";
 import { resolveRelationshipPhase, parseRecalledIds } from "@shared/user-side";
 import { copy, localizeScene } from "@shared/copy";
 import { normalizeHarmReport } from "@shared/harm";
+import { normalizePeriods } from "@shared/periods";
 import {
   applyClarification,
   measureClarifyCountsFromRecords,
@@ -121,7 +123,7 @@ import { importUnpackRelKey } from "./importers/archive";
 import { afterRecordsRemoved } from "./_core/style-profile";
 import { asMaterial } from "./_core/material";
 import { buildEvalCases, buildFeedbackEvalCases, casesFromRows, trainingTexts } from "./eval/dataset";
-import type { EvalCaseData } from "./eval/dataset";
+import type { EvalCaseData, EvalSourceMessage } from "./eval/dataset";
 import { labelEvalCases } from "./eval/act-labels";
 import { runEval } from "./eval/run";
 import { listAuditionProviders, runAudition } from "./eval/audition";
@@ -731,6 +733,54 @@ const extraConfigInputSchema = z.record(
     JSON.stringify(value).length <= 16_000,
   "The extra configuration is too large",
 );
+
+type EvalRecordRow = {
+  id: number;
+  role: string;
+  content: string;
+  timestamp?: Date | null;
+  kind?: string | null;
+  emotion?: string | null;
+  act?: string | null;
+  actSource?: string | null;
+};
+
+/** A record as the eval dataset reads it. `other` rows are not one-to-one talk. */
+function evalMessagesFromRows(rows: EvalRecordRow[]): EvalSourceMessage[] {
+  return rows.flatMap((row) => {
+    if (row.role !== "user" && row.role !== "assistant") return [];
+    return [{
+      id: row.id,
+      role: row.role === "assistant" ? ("assistant" as const) : ("user" as const),
+      content: row.content,
+      timestamp: row.timestamp ?? null,
+      kind: row.kind ?? null,
+      emotion: row.emotion ?? null,
+      act: row.act ?? null,
+      actSource: row.actSource ?? null,
+    }];
+  });
+}
+
+/** The periods and the zone the stored wall-clock times were written in. */
+function evalCutOptions(
+  persona: { personaData?: unknown; timezone?: string | null },
+  userTimezone: string | null,
+) {
+  return {
+    periods: normalizePeriods((persona.personaData as { periods?: unknown } | null)?.periods),
+    timezone: zoneForRecords(persona.timezone, userTimezone),
+  };
+}
+
+/** A copy of the persona with the zone the app resolved for this run. */
+function personaForEval<T extends { timezone?: string | null }>(
+  persona: T,
+  timezone: string | null,
+): T {
+  if (!timezone || persona.timezone) return persona;
+  return { ...persona, timezone };
+}
 
 export const appRouter = router({
   system: systemRouter,
@@ -5090,12 +5140,13 @@ export const appRouter = router({
   }),
 
   /**
-   * The ruler.
+   * The records the ruler cuts from.
    *
-   * Everything else in this product is measured by whether it works.
-   * This is the part that is measured by whether it is *still* the
-   * person: one of their real lines is held back, and the rebuilt
-   * persona has to say it again.
+   * The map has to carry the labels, not just the text: the held-out
+   * case's state and action come from the row (B1.4, B1.5), and the
+   * time of day comes from the timestamp and the zone the export was
+   * read in. Dropping these made the app cut cases from the raw text
+   * while the CLI cut them from labelled records.
    */
   eval: router({
     /** Cuts a fresh set of held-out cases out of the imported records. */
@@ -5109,15 +5160,11 @@ export const appRouter = router({
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
 
         const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id, { newest: true });
-        const messages = rows.map((row) => ({
-          id: row.id,
-          role: row.role === "assistant" ? ("assistant" as const) : ("user" as const),
-          content: row.content,
-          timestamp: row.timestamp ?? null,
-        }));
+        const messages = evalMessagesFromRows(rows);
+        const { periods, timezone } = evalCutOptions(persona, ctx.user.timezone);
         // The emotion is read in the language the records are in.
         const cases = await labelEvalCases(
-          buildEvalCases(messages, { locale: input.locale }),
+          buildEvalCases(messages, { locale: input.locale, periods, timezone }),
           { userId: ctx.user.id, locale: input.locale },
         );
         const feedback = await evalCasesFromRewrites(input.personaId, ctx.user.id);
@@ -5133,6 +5180,7 @@ export const appRouter = router({
               expectedActSource: item.expectedActSource ?? null,
               source: "collected" as const,
               occurredAt: item.expected.timestamp ?? null,
+              periodId: item.periodId ?? null,
             })),
             ...feedback.map((item) => ({
               context: item.context,
@@ -5142,6 +5190,7 @@ export const appRouter = router({
               expectedActSource: item.expectedActSource ?? null,
               source: "feedback" as const,
               occurredAt: item.expected.timestamp ?? null,
+              periodId: item.periodId ?? null,
             })),
           ],
         );
@@ -5208,12 +5257,9 @@ export const appRouter = router({
         runningEvals.add(runKey);
         try {
           const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id, { newest: true });
-          const messages = rows.map((row) => ({
-            id: row.id,
-            role: row.role === "assistant" ? ("assistant" as const) : ("user" as const),
-            content: row.content,
-            timestamp: row.timestamp ?? null,
-          }));
+          const messages = evalMessagesFromRows(rows);
+          const { periods, timezone } = evalCutOptions(persona, ctx.user.timezone);
+          const runPersona = personaForEval(persona, timezone);
 
           // The stored cases are the ones that get measured. Cutting a
           // fresh set every time would measure a different question each
@@ -5225,7 +5271,7 @@ export const appRouter = router({
             : await evalCasesFromRewrites(input.personaId, ctx.user.id);
           const cut = stored.length
             ? stored
-            : [...buildEvalCases(messages, { locale: input.locale }), ...feedback];
+            : [...buildEvalCases(messages, { locale: input.locale, periods, timezone }), ...feedback];
           const cases = await labelEvalCases(cut, { userId: ctx.user.id, locale: input.locale });
           if (!cases.length) {
             throw new TRPCError({
@@ -5249,12 +5295,13 @@ export const appRouter = router({
                 expectedActSource: item.expectedActSource ?? null,
                 source: item.source === "feedback" ? "feedback" : "collected",
                 occurredAt: item.expected.timestamp ?? null,
+                periodId: item.periodId ?? null,
               })),
             );
           }
 
           const metrics: Awaited<ReturnType<typeof runEval>> = await runEval({
-            persona,
+            persona: runPersona,
             userId: ctx.user.id,
             cases,
             trainingTexts: trainingTexts(messages, cases),
@@ -5367,19 +5414,15 @@ export const appRouter = router({
         runningEvals.add(runKey);
         try {
           const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id, { newest: true });
-          const messages = rows.map((row) => ({
-            id: row.id,
-            role: row.role === "assistant" ? ("assistant" as const) : ("user" as const),
-            content: row.content,
-            timestamp: row.timestamp ?? null,
-          }));
+          const messages = evalMessagesFromRows(rows);
+          const { periods, timezone } = evalCutOptions(persona, ctx.user.timezone);
           const stored = casesFromRows(await getEvalCases(input.personaId, ctx.user.id));
           const feedback = stored.length
             ? []
             : await evalCasesFromRewrites(input.personaId, ctx.user.id);
           const cut = stored.length
             ? stored
-            : [...buildEvalCases(messages, { locale: input.locale }), ...feedback];
+            : [...buildEvalCases(messages, { locale: input.locale, periods, timezone }), ...feedback];
           const cases = await labelEvalCases(cut, { userId: ctx.user.id, locale: input.locale });
           if (!cases.length) {
             throw new TRPCError({
@@ -5388,7 +5431,7 @@ export const appRouter = router({
             });
           }
           return await runAudition({
-            persona,
+            persona: personaForEval(persona, timezone),
             userId: ctx.user.id,
             cases,
             trainingTexts: trainingTexts(messages, cases),

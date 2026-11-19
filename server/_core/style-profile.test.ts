@@ -273,7 +273,7 @@ describe("measureStyleProfile", () => {
     expect(measured.typing?.pairs).toBeGreaterThanOrEqual(30);
     expect(measured.quirks?.typoFixes.reduce((sum, row) => sum + row.n, 0)).toBe(6);
     expect(measured.doubleText?.samples).toBe(30);
-    expect(measured.doubleText?.lines.slice(0, 2).map((row) => row.text)).toEqual(["人呢", "？"]);
+    expect(measured.doubleText?.lines.slice(0, 2).map((row) => row.text)).toEqual(["人呐", "？"]);
   });
 
   it("remakes the sample pool from labelled rows even when the records version is unchanged", async () => {

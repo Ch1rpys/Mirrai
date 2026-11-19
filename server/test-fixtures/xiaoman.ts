@@ -200,7 +200,7 @@ export const XIAOMAN_TRUTH = {
   openLoopTa: "下次带你去吃那家面",
   openLoopUser: "说好的 周末看电影",
   multiPoint: { count: 40, lastOnlyRate: 0.8 },
-  followUp: { count: 30, 人呢: 0.7, "？": 0.3, minMin: 6, maxMin: 12 },
+  followUp: { count: 30, 人呐: 0.7, "？": 0.3, minMin: 6, maxMin: 12 },
   typos: 6,
   harm: { count: 5, lines: HARM_LINES },
   derive: deriveXiaomanTruth,
@@ -494,22 +494,41 @@ function pickActiveDays(rng: Rng, n: number): CivilDate[] {
 // i18n:allow-identifier — filler used only to pad designed line lengths.
 const PAD_CHARS = Array.from("今天晚上还好在忙回头待会那个这个好累刚完吃饭出门到家没事知道可以等下先啊哦");
 
+// i18n:allow-input — the laugh token is matched against the synthetic lines.
+const LAUGH_FOUR = "哈哈哈哈";
+
 function fitLength(text: string, n: number, keep: string[] = []): string {
   const target = Math.max(1, Math.min(XIAOMAN_TRUTH.taP95Max, n));
   let chars = Array.from(text);
   const keepTokens = keep.filter((k) => k && text.includes(k));
   if (chars.length === target) return text;
   if (chars.length < target) {
+    /**
+     * Padding goes before the line, not before its last character.
+     *
+     * The old insert point split a four-哈 laugh into 哈哈哈 + 哈哈,
+     * which then showed up as a laugh run of length three and a stray
+     * 哈. The keep token cannot survive an insertion in the middle.
+     */
+    const insertAt = text.includes(LAUGH_FOUR) ? 0 : Math.max(0, chars.length - 1);
     let i = 0;
     while (chars.length < target) {
-      chars.splice(Math.max(0, chars.length - 1), 0, PAD_CHARS[i % PAD_CHARS.length]!);
+      chars.splice(insertAt, 0, PAD_CHARS[i % PAD_CHARS.length]!);
       i++;
     }
     return chars.join("");
   }
   for (const token of keepTokens) {
     const tokenChars = Array.from(token);
-    if (tokenChars.length >= target) return tokenChars.slice(0, target).join("");
+    if (tokenChars.length >= target) {
+      /**
+       * A laugh is exactly four 哈. Cutting the token to the target
+       * length would leave 哈哈 or 哈哈哈, which is a different habit
+       * from the one the fixture is designed to measure.
+       */
+      if (token === LAUGH_FOUR) return token;
+      return tokenChars.slice(0, target).join("");
+    }
   }
   const suffix = chars[chars.length - 1];
   const body = chars.slice(0, -1);
@@ -1432,9 +1451,9 @@ export function buildXiaomanRecords(options?: {
    */
   for (const row of drafts) {
     if (row.role !== "assistant" || row.kind !== "text" || row.truth.state === "distant") continue;
-    if (!/哈{3}/u.test(row.content) || row.content.includes("哈哈哈哈")) continue;
+    if (!/哈{3}/u.test(row.content) || row.content.includes(LAUGH_FOUR)) continue;
     const target = charCount(row.content);
-    row.content = fitLength(`哈哈哈哈${row.content.replaceAll("哈", "")}`, target, ["哈哈哈哈"]);
+    row.content = fitLength(`哈哈哈哈${row.content.replaceAll("哈", "")}`, target, [LAUGH_FOUR]);
   }
 
   /**
@@ -1486,7 +1505,7 @@ export function buildXiaomanRecords(options?: {
 
   function insertFollowUps(): void {
     const replies = quota(rng, [
-      ["人呢", 21],
+      ["人呐", 21],
       ["？", 9],
     ]);
     const anchors = shuffle(
@@ -1551,7 +1570,7 @@ export function buildXiaomanRecords(options?: {
       push({
         role: "assistant",
         speaker: XIAOMAN_NAME,
-        content: replies[added] ?? "人呢",
+        content: replies[added] ?? "人呐",
         timestamp: at,
         kind: "text",
         truth: {
@@ -1706,7 +1725,7 @@ function polish(drafts: Draft[], rng: Rng): void {
     (row) =>
       (row.truth.state === "happy" || row.truth.state === "playful") &&
       !row.truth.locked &&
-      !row.content.includes("哈哈哈哈"),
+      !row.content.includes(LAUGH_FOUR),
   );
   const happyPlayful = taText.filter((row) => row.truth.state === "happy" || row.truth.state === "playful");
   const laughCount = Math.round(happyPlayful.length * XIAOMAN_TRUTH.laughRate);
@@ -1715,13 +1734,13 @@ function polish(drafts: Draft[], rng: Rng): void {
     .forEach((row) => {
       row.content = `哈哈哈哈${row.content}`;
       if (charCount(row.content) > XIAOMAN_TRUTH.taP95Max) {
-        row.content = fitLength(row.content, XIAOMAN_TRUTH.taP95Max, ["哈哈哈哈", "树树"]);
+        row.content = fitLength(row.content, XIAOMAN_TRUTH.taP95Max, [LAUGH_FOUR, "树树"]);
       }
-      if (!row.content.includes("哈哈哈哈")) row.content = "哈哈哈哈";
+      if (!row.content.includes(LAUGH_FOUR)) row.content = LAUGH_FOUR;
       row.truth.act = "tease";
     });
 
-  const keep = ["树树", "哈哈哈哈", "琪琪", "我妈", "咕咕", "香菜", "喜欢海"];
+  const keep = ["树树", LAUGH_FOUR, "琪琪", "我妈", "咕咕", "香菜", "喜欢海"];
   for (const row of taText) {
     if (row.truth.state === "distant") continue;
     const target = row.truth.period === "p1" ? 10 : 6;
@@ -1758,11 +1777,29 @@ function polish(drafts: Draft[], rng: Rng): void {
   for (const row of taText) {
     if (row.truth.locked || row.truth.state === "distant") continue;
     if (row.content.includes("呢")) row.content = row.content.replaceAll("呢", "呀");
-    if (row.content.includes("呵呵")) row.content = row.content.replaceAll("呵呵", "哈哈");
+    if (row.content.includes("呵呵")) row.content = row.content.replaceAll("呵呵", LAUGH_FOUR);
     if (row.content.includes("～")) row.content = row.content.replaceAll("～", "");
     if (row.content.includes("…")) row.content = row.content.replaceAll("…", "...");
     if (row.content.includes("。。。")) row.content = row.content.replaceAll("。。。", "...");
     if (row.content.endsWith("。")) row.content = row.content.slice(0, -1) + "呀";
+  }
+
+  /**
+   * One laugh run, exactly four 哈.
+   *
+   * A line can arrive here with a two- or three-哈 run from a template or
+   * a padding step. It is still a laugh, and the fingerprint's habit is
+   * exactly four, so the run is rebuilt after every other edit.
+   */
+  for (const row of taText) {
+    if (row.truth.state === "distant") continue;
+    if (!/哈{2,}/u.test(row.content) || row.content.includes(LAUGH_FOUR)) continue;
+    const target = charCount(row.content);
+    row.content = fitLength(
+      `哈哈哈哈${row.content.replace(/哈+/g, "")}`,
+      target,
+      [LAUGH_FOUR],
+    );
   }
 }
 
@@ -1801,7 +1838,7 @@ function median(values: number[]): number {
 function retargetMedian(rows: Draft[], target: number, rng: Rng): void {
   const adjustable = rows.filter((row) => !row.truth.locked && row.kind === "text");
   if (adjustable.length === 0) return;
-  const keep = ["树树", "哈哈哈哈", "琪琪", "我妈", "咕咕", "香菜", "喜欢海"];
+  const keep = ["树树", LAUGH_FOUR, "琪琪", "我妈", "咕咕", "香菜", "喜欢海"];
   for (const row of adjustable) {
     row.content = fitLength(row.content, target, keep);
   }

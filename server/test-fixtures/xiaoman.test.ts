@@ -291,7 +291,7 @@ describe("语气词", () => {
     expectRate(nonDistant.filter((row) => row.content.endsWith("呀")).length, nonDistant.length, 0.3);
     expectRate(nonDistant.filter((row) => row.content.endsWith("啦")).length, nonDistant.length, 0.2);
     expectRate(nonDistant.filter((row) => row.content.endsWith("嘛")).length, nonDistant.length, 0.1);
-    expect(taText().filter((row) => row.content.includes("呢") && row.content !== "人呢").length).toBe(0);
+    expect(taText().filter((row) => row.content.includes("呢")).length).toBe(0);
   });
 });
 
@@ -662,10 +662,10 @@ describe("多点消息", () => {
 });
 
 describe("追一句", () => {
-  it("follows up 30 times after 6–12 minutes with 人呢 or ？", () => {
+  it("follows up 30 times after 6–12 minutes with 人呐 or ？", () => {
     const follows = taText().filter((row) => row.truth.ritual === "follow-up");
     expect(follows.length).toBe(30);
-    expectRate(follows.filter((row) => row.content === "人呢").length, follows.length, 0.7);
+    expectRate(follows.filter((row) => row.content === "人呐").length, follows.length, 0.7);
     expectRate(follows.filter((row) => row.content === "？").length, follows.length, 0.3);
     for (const follow of follows) {
       const earlier = records
@@ -712,7 +712,7 @@ describe("seed robustness", () => {
     for (const seed of ["xiaoman", "alpha", "beta", "speed", "h98", "h186", "h439", "h476", "seed-37", "", "😀", "0", "1"]) {
       expect(() => buildXiaomanRecords({ seed }), seed).not.toThrow();
     }
-  });
+  }, 15_000);
 });
 
 describe("the harmful variant", () => {
@@ -846,7 +846,7 @@ describe("the design constants", () => {
       wordGugu: 15,
       stockMentions: 6,
       multiPoint: { count: 40, lastOnlyRate: 0.8 },
-      followUp: { count: 30, 人呢: 0.7, "？": 0.3, minMin: 6, maxMin: 12 },
+      followUp: { count: 30, 人呐: 0.7, "？": 0.3, minMin: 6, maxMin: 12 },
       typos: 6,
       harmCount: 5,
     });

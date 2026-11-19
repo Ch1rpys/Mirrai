@@ -45,7 +45,8 @@ vi.mock("../chat/prompt", () => ({
   },
 }));
 
-import { runEval } from "./run";
+import { previewLayersUsed, runEval } from "./run";
+import { measureFingerprint } from "@shared/style-fingerprint";
 import type { EvalCaseData } from "./dataset";
 import * as generate from "../chat/generate";
 
@@ -102,6 +103,41 @@ beforeEach(() => {
   buildPromptForPersona.mockReset();
   buildPromptForPersona.mockResolvedValue("【系统】");
   invokeWithProvider.mockResolvedValue("嗯嗯");
+});
+
+describe("previewing the layers", () => {
+  it("plans the data layers an ablation would actually run", async () => {
+    const fingerprint = measureFingerprint(
+      Array.from({ length: 40 }, (_, i) => ({
+        role: "assistant" as const,
+        content: `在的呀${i % 3}`,
+        kind: "text",
+      })),
+    );
+    expect(fingerprint).not.toBeNull();
+    const previewed = {
+      ...persona,
+      styleProfile: {
+        version: 1,
+        measuredAt: "2023-01-01T00:00:00.000Z",
+        recordsVersion: "40:40",
+        fingerprint,
+        samplePool: { any: ["在的呀", "好呀", "嗯嗯"] },
+      },
+    };
+    const layers = await previewLayersUsed({
+      persona: previewed,
+      userId: 1,
+      cases: cases(),
+      locale: "zh",
+      variant: "default",
+      rerank: false,
+    });
+    expect(layers).toEqual(
+      expect.arrayContaining(["projection", "lengthCap", "styleReminder"]),
+    );
+    expect(layers.length).toBeGreaterThan(5);
+  });
 });
 
 describe("running the cases", () => {

@@ -29,7 +29,7 @@ import { normalizePeriods } from "../shared/periods";
 import { dayPartFromHour } from "../shared/act-profile";
 import { zoneForRecords, zonedHour } from "../shared/timezone";
 import { labelEvalCases } from "../server/eval/act-labels";
-import { layerOverridesForEval, runEval } from "../server/eval/run";
+import { previewLayersUsed, runEval } from "../server/eval/run";
 import {
   compareMetricCI,
   evaluateGate,
@@ -48,7 +48,6 @@ import {
 import { DriftNeedUserSideError, DRIFT_TURNS_DEFAULT, runDrift } from "../server/eval/drift";
 import { attachComposite, runAudition, type AuditionResult } from "../server/eval/audition";
 import { ablationCalls, layersFromBaseline, runAblation } from "../server/eval/ablate";
-import { applyLayerOverrides, layersFromSettings, layersInEffect } from "../shared/layers";
 import { resolveProviderForUser } from "../server/llm/user-provider";
 
 const args = process.argv.slice(2);
@@ -200,6 +199,7 @@ if (!Number.isFinite(personaId) || !Number.isFinite(userId)) {
 async function loadRecords(): Promise<EvalSourceMessage[]> {
   const rows = await db.getCollectedMessagesForPersona(personaId, userId, { newest: true });
   return rows
+    .filter((row) => row.role === "user" || row.role === "assistant")
     .map((row) => ({
       id: row.id,
       role: row.role === "assistant" ? ("assistant" as const) : ("user" as const),
@@ -433,16 +433,16 @@ if (audition) {
 }
 
 if (ablate) {
-  const previewEnabled = applyLayerOverrides(
-    layersFromSettings(persona),
-    layerOverridesForEval({
-      variant,
-      without,
-      sampleAct: variant !== "withoutAct",
-    }),
-  );
-  if (!rerank) previewEnabled.rerank = false;
-  const previewLayers = layersInEffect(previewEnabled, persona);
+  const previewLayers = await previewLayersUsed({
+    persona,
+    userId,
+    cases,
+    locale,
+    variant,
+    without,
+    rerank,
+    sampleAct: variant !== "withoutAct",
+  });
   const estimated = ablationCalls(previewLayers.length, cases.length, samplesPerCase);
   console.log(
     `[eval] ablation would make ${previewLayers.length + 1} runs × ${cases.length} cases × ${samplesPerCase} = ${estimated} calls`,

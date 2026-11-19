@@ -92,15 +92,13 @@ describe("measureFingerprint", () => {
     const distantShare =
       taText.filter((row) => row.emotion === "distant").length / Math.max(taText.length, 1);
     expect(Math.abs((fp?.endings.period ?? 0) - distantShare * 0.9)).toBeLessThanOrEqual(0.02);
-    const neLines = taText.filter((row) => lastParticleOf(row.content) === "呢");
-    expect(neLines.every((row) => row.content.trim() === "人呢")).toBe(true);
-    expect(fp?.particles["呢"]).toBeCloseTo(neLines.length / taText.length, 8);
+    expect(taText.filter((row) => lastParticleOf(row.content) === "呢")).toHaveLength(0);
+    expect(fp?.particles["呢"]).toBe(0);
     const haRuns = fp?.laugh.haRuns ?? [];
     expect(haRuns[4]).toBeGreaterThan(0);
-    const otherHa = haRuns
-      .map((count, length) => ({ count, length }))
-      .filter((bin) => bin.length >= 2 && bin.length !== 4);
-    expect(otherHa.every((bin) => bin.count < (haRuns[4] ?? 0) / 5)).toBe(true);
+    expect(haRuns[2]).toBe(0);
+    expect(haRuns[3]).toBe(0);
+    expect(haRuns.slice(5)).toEqual(Array(haRuns.length - 5).fill(0));
     expect(fp?.punctuation.ellipsisForms.unicode).toBe(0);
     expect(fp?.emoji.rate).toBe(0);
   });
