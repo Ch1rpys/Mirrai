@@ -32,6 +32,7 @@ vi.mock("../db", () => ({
   recordReminder: (...a: unknown[]) => recordReminder(...a),
   forgetReminder: (...a: unknown[]) => forgetReminder(...a),
   moveReminderToWeb: (...a: unknown[]) => moveReminderToWeb(...a),
+  listPushSubscriptions: async () => [],
 }));
 
 const send = vi.fn();

@@ -741,4 +741,12 @@ export const V6 = {
   "labels.routine.activity.training": { zh: "训练", en: "training" },
   "labels.routine.activity.piano": { zh: "练琴", en: "piano practice" },
   "labels.routine.activity.study": { zh: "上自习", en: "study hall" },
+  "errors.pushNoPersona": {
+    zh: "还没有分身，发不了测试通知。",
+    en: "There is no persona yet, so a test notification cannot be sent.",
+  },
+  "push.testBody": {
+    zh: "这是一条测试通知。",
+    en: "This is a test notification.",
+  },
 } as const satisfies CopyTable;

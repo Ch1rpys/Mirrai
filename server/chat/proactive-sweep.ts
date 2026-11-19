@@ -12,6 +12,7 @@ import { loadBehaviorProfile } from "../_core/behavior-profile";
 import { resolvePresence } from "@shared/graduation-mode";
 import { getChannelAdapter } from "../channels";
 import { isQuietHour } from "../scheduler/reminders";
+import { pushToUser } from "../_core/push";
 import { ENV } from "../_core/env";
 import { openingRateForWindow, normalizeOpeningProfile } from "@shared/opening-profile";
 import { parseQuietHours } from "@shared/proactive-decision";
@@ -319,6 +320,14 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
         emotionalState: persona.emotionalState,
         locale: settings.locale,
       });
+      if (delivered === "web") {
+        await pushToUser(row.userId, {
+          kind: "proactive",
+          personaId: persona.id,
+          personaName: persona.name,
+          text,
+        });
+      }
       // The channel it went out on is worth recording.
       if (delivered !== "web" && messageId) {
         await db.updateMessageChannel(messageId, row.userId, delivered).catch(() => undefined);

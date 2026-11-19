@@ -18,6 +18,7 @@ import {
 import { buildUserContextBlock, isUserMood } from "@shared/user-side";
 import { userTimeZone } from "./prompt";
 import { buildCrisisResponse, detectCrisis } from "../safety/crisis";
+import { pushToUser } from "../_core/push";
 import { getEffectivePresence } from "../_core/graduation";
 
 /**
@@ -251,6 +252,12 @@ export async function answerDueLetters(now: Date = new Date()): Promise<number> 
           },
         );
         if (!answered_) continue;
+        await pushToUser(letter.userId, {
+          kind: "letter",
+          personaId: persona.id,
+          personaName: persona.name,
+          text: replyText,
+        });
       } catch (e) {
         await db.releaseLetterClaim(letter.id, letter.userId).catch(() => {});
         throw e;

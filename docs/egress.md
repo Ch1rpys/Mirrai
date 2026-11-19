@@ -21,3 +21,4 @@
 | collector-slack | Slack Web API（子进程 slack_auto_collector.py） | 访问令牌，以及要采集的频道范围 | 用户主动跑 Slack 采集器时 | 关 | 不要跑采集器 | server |
 | collector-email | 不联网：子进程 email_parser.py 只解析本机上的邮件导出文件 | 不发送。读的是用户选定的本地文件 | 用户导入一份邮件导出时 | 关 | 不要跑这个采集器 | server |
 | collector-wechat-export | 不联网：子进程 feishu_parser.py 只解析本机上的微信导出文件 | 不发送。读的是用户选定的本地文件 | 用户导入一份微信导出时 | 关 | 不要跑这个采集器 | server |
+| push-browser | 浏览器厂商的推送服务（地址由浏览器在订阅时给出，例如 fcm.googleapis.com 或 push.services.mozilla.com） | 加密后的通知负载。默认只有种类、分身编号和打开对话的地址，不含名字和内容 | 用户打开了「应用关着的时候也提醒我」，并且有一条主动开口、回信或提醒要送到网页时 | 关 | 设置里关掉「应用关着的时候也提醒我」，或在系统里取消通知权限 | server |

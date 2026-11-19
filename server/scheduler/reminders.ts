@@ -13,6 +13,7 @@ import { zonedDateKey, zonedHour, zonedMinute } from "@shared/timezone";
 import { resolvePresence, mayReachOut } from "@shared/graduation-mode";
 import { resolveRelationshipPhase } from "@shared/user-side";
 import { copy, type Locale } from "@shared/copy";
+import { pushToUser } from "../_core/push";
 
 export type ReminderKind = "anniversary" | "together_years" | "memory_trigger";
 
@@ -377,7 +378,15 @@ export async function deliverReminder(params: {
           console.warn("[Reminders] Could not move the reminder to the web:", e2);
           return false;
         });
-      if (moved) return true;
+      if (moved) {
+        await pushToUser(userId, {
+          kind: "reminder",
+          personaId: reminder.personaId,
+          personaName: reminder.personaName,
+          text: reminder.text,
+        });
+        return true;
+      }
       // The claim could not be moved, so the slot is given back and the
       // next tick tries again — a reminder that cannot be delivered is
       // worth another attempt.
@@ -395,6 +404,12 @@ export async function deliverReminder(params: {
    * returned false — so the reminder was delivered, the user saw it,
    * and the sweep reported nothing.
    */
+  await pushToUser(userId, {
+    kind: "reminder",
+    personaId: reminder.personaId,
+    personaName: reminder.personaName,
+    text: reminder.text,
+  });
   return true;
 }
 

@@ -339,4 +339,25 @@ export const EGRESS_ITEMS: EgressItem[] = [
       en: "Do not run this collector",
     },
   },
+  {
+    id: "push-browser",
+    side: "server",
+    destination: {
+      zh: "浏览器厂商的推送服务（地址由浏览器在订阅时给出，例如 fcm.googleapis.com 或 push.services.mozilla.com）",
+      en: "The browser vendor's push service (the address comes from the browser at subscribe time, for example fcm.googleapis.com or push.services.mozilla.com)",
+    },
+    payload: {
+      zh: "加密后的通知负载。默认只有种类、分身编号和打开对话的地址，不含名字和内容",
+      en: "An encrypted notification. By default it carries only the kind, the persona id and the chat URL, not the name or the text",
+    },
+    when: {
+      zh: "用户打开了「应用关着的时候也提醒我」，并且有一条主动开口、回信或提醒要送到网页时",
+      en: "When the user has asked to be notified while the app is closed, and a first message, a letter or a reminder is delivered on the web",
+    },
+    defaultOn: false,
+    offHow: {
+      zh: "设置里关掉「应用关着的时候也提醒我」，或在系统里取消通知权限",
+      en: "Turn off “notify me while the app is closed” in Settings, or revoke the notification permission",
+    },
+  },
 ];

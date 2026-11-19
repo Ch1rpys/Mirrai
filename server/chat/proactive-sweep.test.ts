@@ -31,6 +31,7 @@ vi.mock("../db", () => ({
   getUserLocale: (...a: unknown[]) => getUserLocale(...a),
   getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
   getMessagesByPersonaId: async () => [],
+  listPushSubscriptions: async () => [],
 }));
 
 const getUserLocale = vi.fn();

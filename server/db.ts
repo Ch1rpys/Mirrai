@@ -11,7 +11,7 @@ import {
   collectionJobs,
   distillationChunks, distillationCards, personaVersions,
   evalCases, evalRuns, outboundLetters, fidelityFeedback, fidelityPairs, blindSessions,
-  recordEmbeddings,
+  recordEmbeddings, pushSubscriptions,
   InsertPersona, InsertPersonaFile, InsertMessage,
   InsertWechatBinding, InsertSkillJob, InsertLlmConfig,
   InsertMemory, InsertEmotionSnapshot, InsertDiaryEntry, InsertScene,
@@ -1095,6 +1095,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(personaQuestionnaireAnswers).where(eq(personaQuestionnaireAnswers.userId, id));
     await tx.delete(personaTemplates).where(eq(personaTemplates.userId, id));
     await tx.delete(personaVersions).where(eq(personaVersions.userId, id));
+    await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, id));
     await tx.delete(recordEmbeddings).where(eq(recordEmbeddings.userId, id));
     await tx.delete(relationshipEvents).where(eq(relationshipEvents.userId, id));
     await tx.delete(reminderDeliveries).where(eq(reminderDeliveries.userId, id));
@@ -1834,6 +1835,99 @@ export async function countFidelityPairs(personaId: number, userId: number): Pro
     .from(fidelityPairs)
     .where(and(eq(fidelityPairs.personaId, personaId), eq(fidelityPairs.userId, userId)));
   return Number(row?.n ?? 0);
+}
+
+export async function listPushSubscriptions(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(pushSubscriptions)
+    .where(eq(pushSubscriptions.userId, userId))
+    .orderBy(asc(pushSubscriptions.createdAt));
+}
+
+/**
+ * One browser, one row.
+ *
+ * The endpoint is unique. Subscribing again — the same browser, or a
+ * different account on that browser — updates the keys instead of
+ * inserting a second row.
+ */
+export async function upsertPushSubscription(
+  userId: number,
+  input: {
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    userAgent: string | null;
+  },
+) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [row] = await db
+    .insert(pushSubscriptions)
+    .values({
+      userId,
+      endpoint: input.endpoint,
+      p256dh: input.p256dh,
+      auth: input.auth,
+      userAgent: input.userAgent,
+    })
+    .onConflictDoUpdate({
+      target: pushSubscriptions.endpoint,
+      set: {
+        userId,
+        p256dh: input.p256dh,
+        auth: input.auth,
+        userAgent: input.userAgent,
+      },
+    })
+    .returning();
+  return row;
+}
+
+export async function deletePushSubscription(userId: number, endpoint: string): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .delete(pushSubscriptions)
+    .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)))
+    .returning({ id: pushSubscriptions.id });
+  return rows.length > 0;
+}
+
+export async function setPushSubscriptionPreview(
+  userId: number,
+  endpoint: string,
+  showPreview: boolean,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .update(pushSubscriptions)
+    .set({ showPreview })
+    .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)))
+    .returning({ id: pushSubscriptions.id });
+  return rows.length > 0;
+}
+
+export async function markPushSuccess(userId: number, endpoint: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(pushSubscriptions)
+    .set({ lastSuccessAt: new Date(), failCount: 0 })
+    .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)));
+}
+
+export async function markPushFailure(userId: number, endpoint: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(pushSubscriptions)
+    .set({ failCount: sql`${pushSubscriptions.failCount} + 1` })
+    .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)));
 }
 
 export async function upsertRecordEmbedding(data: InsertRecordEmbedding) {

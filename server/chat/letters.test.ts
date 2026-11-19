@@ -31,6 +31,7 @@ vi.mock("../db", () => ({
   getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
   getUserLocale: (...a: unknown[]) => getUserLocale(...a),
   createSafetyEvent: vi.fn(async () => undefined),
+  listPushSubscriptions: async () => [],
 }));
 
 const invokeWithProvider = vi.fn();

@@ -1680,3 +1680,29 @@ export const recordEmbeddings = pgTable("record_embeddings", {
 
 export type RecordEmbedding = typeof recordEmbeddings.$inferSelect;
 export type InsertRecordEmbedding = typeof recordEmbeddings.$inferInsert;
+
+/**
+ * A browser push subscription.
+ *
+ * The endpoint is the browser vendor's address. There is no persona on
+ * the row: a subscription belongs to the account, and one browser can
+ * only be subscribed once.
+ */
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  endpoint: text("endpoint").notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  userAgent: varchar("userAgent", { length: 255 }),
+  showPreview: boolean("showPreview").default(false).notNull(),
+  failCount: integer("failCount").default(0).notNull(),
+  lastSuccessAt: timestamp("lastSuccessAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  endpointIdx: uniqueIndex("push_subscriptions_endpoint_idx").on(table.endpoint),
+  userIdx: index("push_subscriptions_user_idx").on(table.userId),
+}));
+
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type InsertPushSubscription = typeof pushSubscriptions.$inferInsert;
