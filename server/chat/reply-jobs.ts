@@ -37,8 +37,10 @@ import { getChannelAdapter } from "../channels";
 import {
   currentGeneration,
   enter,
+  fallbackChannelGapMs,
   inboxKey,
   leave,
+  waitAbortable,
 } from "./inbox";
 
 export const IN_CONNECTION_DELAY_MS = 90_000;
@@ -247,23 +249,28 @@ export async function cancelPendingReplyJobs(
 async function deliverReply(
   job: ReplyJob,
   persona: Persona,
-  text: string,
+  parts: string[],
   kind: "reply" | "followup" = "reply",
+  gapsMs: number[] = [],
 ): Promise<void> {
-  if (!text) return;
+  const bubbles = parts.map((text) => text.trim()).filter(Boolean);
+  if (bubbles.length === 0) return;
   const channel = job.channel || "web";
   if (channel === "wechat" || channel === "feishu") {
     const adapter = getChannelAdapter(channel);
     if (!adapter || !job.targetId) return;
-    try {
-      await adapter.send(
-        job.userId,
-        job.targetId,
-        text,
-        job.locale === "en" ? "en" : "zh",
-      );
-    } catch (error) {
-      console.warn("[ReplyJobs] The channel could not send the reply:", error);
+    const locale = job.locale === "en" ? "en" : "zh";
+    for (let i = 0; i < bubbles.length; i++) {
+      if (i > 0) {
+        const gap = gapsMs[i - 1] ?? fallbackChannelGapMs(bubbles[i]!);
+        if (gap > 0) await waitAbortable(gap);
+      }
+      try {
+        await adapter.send(job.userId, job.targetId, bubbles[i]!, locale);
+      } catch (error) {
+        console.warn("[ReplyJobs] The channel could not send the reply:", error);
+        return;
+      }
     }
     return;
   }
@@ -272,7 +279,7 @@ async function deliverReply(
       kind,
       personaId: persona.id,
       personaName: persona.name,
-      text,
+      text: bubbles.join("\n\n"),
     });
   } catch (error) {
     console.warn("[ReplyJobs] The push could not be sent:", error);
@@ -417,7 +424,7 @@ async function runFollowUpJob(job: ReplyJob, userId: number): Promise<boolean> {
     channel: job.channel === "wechat" || job.channel === "feishu" ? job.channel : "web",
     origin: "followup",
   });
-  await deliverReply(job, persona, text, "followup");
+  await deliverReply(job, persona, [text], "followup");
   await db.finishReplyJob(job.id, userId, "done");
   return true;
 }
@@ -473,6 +480,8 @@ export async function runReplyJob(jobId: number, userId: number): Promise<boolea
   const generation = currentGeneration(key);
   enter(key, "generating", controller);
   let text = "";
+  let parts: string[] = [];
+  let gapsMs: number[] = [];
   let superseded = false;
   let failedMessage = "";
   try {
@@ -494,10 +503,19 @@ export async function runReplyJob(jobId: number, userId: number): Promise<boolea
       inbox: { key, generation },
       fromReplyJob: { jobId: job.id, reason: (job.reason as ReplyReason) || "delay" },
     })) {
-      if (event.type === "delta") text += event.text;
-      else if (event.type === "burst") text = event.texts.join("\n\n");
-      else if (event.type === "silence") text = event.notice;
-      else if (event.type === "superseded") superseded = true;
+      if (event.type === "delta") {
+        text += event.text;
+        parts = [text];
+        gapsMs = [];
+      } else if (event.type === "burst") {
+        parts = event.texts.filter((line) => line.length > 0);
+        gapsMs = event.gapsMs ?? [];
+        text = parts.join("\n\n");
+      } else if (event.type === "silence") {
+        parts = [event.notice];
+        gapsMs = [];
+        text = event.notice;
+      } else if (event.type === "superseded") superseded = true;
       else if (event.type === "error") failedMessage = event.message || "the model did not answer";
     }
     if (failedMessage) throw new Error(failedMessage);
@@ -509,7 +527,7 @@ export async function runReplyJob(jobId: number, userId: number): Promise<boolea
       scheduleReplyJob({ id: jobId, dueAt, userId });
       return false;
     }
-    await deliverReply(job, persona, text);
+    await deliverReply(job, persona, parts.length > 0 ? parts : (text ? [text] : []), "reply", gapsMs);
     await db.finishReplyJob(jobId, userId, "done");
     return true;
   } catch (error) {

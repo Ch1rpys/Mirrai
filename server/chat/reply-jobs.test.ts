@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { parseZoneless } from "@shared/timezone";
-import { READ_WINDOW_MS, resetInbox } from "./inbox";
+import { CHANNEL_READ_WINDOW_MS, READ_WINDOW_MS, resetInbox } from "./inbox";
 
 const stored: Array<Record<string, unknown>> = [];
 let nextMessageId = 1;
@@ -322,7 +322,12 @@ function delayProfile(seconds: number) {
   };
 }
 
-async function drain(personaRow: unknown, message: string, now = NOW) {
+async function drain(
+  personaRow: unknown,
+  message: string,
+  now = NOW,
+  extra: { channel?: string; conversationKey?: string } = {},
+) {
   const events: Array<Record<string, unknown>> = [];
   const running = (async () => {
     for await (const event of runConversation({
@@ -331,11 +336,16 @@ async function drain(personaRow: unknown, message: string, now = NOW) {
       message,
       mode: "once",
       now,
+      channel: extra.channel as any,
+      conversationKey: extra.conversationKey,
     })) {
       events.push(event as Record<string, unknown>);
     }
   })();
-  await vi.advanceTimersByTimeAsync(READ_WINDOW_MS);
+  const wait = extra.channel === "wechat" || extra.channel === "feishu"
+    ? CHANNEL_READ_WINDOW_MS
+    : READ_WINDOW_MS;
+  await vi.advanceTimersByTimeAsync(wait);
   await running;
   return events;
 }
@@ -579,6 +589,31 @@ describe("queued replies", () => {
     });
     expect(due.reason).toBe("busy");
     expect(due.dueAt.getTime()).toBe(now.getTime() + 30 * 60_000);
+  });
+
+  it("sends a deferred burst through the channel one bubble at a time", async () => {
+    invokeWithProvider.mockResolvedValue("嗯\n好\n在");
+    const bursting = persona({
+      behaviorProfile: {
+        samples: 20,
+        replyGapMedianSec: 90,
+        replyGapLogSigma: 0.8,
+        burstSizes: [3],
+        measuredAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    getPersonaById.mockImplementation(async () => bursting);
+    const events = await drain(bursting, "在吗", NOW, { channel: "feishu", conversationKey: "oc_1" });
+    expect(events[0]?.type).toBe("deferred");
+    expect(jobs[0]?.channel).toBe("feishu");
+    expect(jobs[0]?.targetId).toBe("oc_1");
+    vi.setSystemTime(jobs[0]!.dueAt);
+    send.mockClear();
+    const sending = runReplyJob(jobs[0]!.id, 1);
+    await vi.advanceTimersByTimeAsync(20_000);
+    await sending;
+    expect(send.mock.calls.map((call) => call[2])).toEqual(["嗯", "好", "在"]);
+    expect(jobs[0]?.status).toBe("done");
   });
 
 function doubleTextProfile(rate = 1) {
@@ -874,6 +909,21 @@ describe("a follow-up after they go quiet", () => {
       }),
     });
     await expectCancelled();
+  });
+
+  it("delivers a follow-up through the channel they were talking on", async () => {
+    await seedFollowUp();
+    jobs[0]!.channel = "feishu";
+    jobs[0]!.targetId = "oc_1";
+    await runReplyJob(jobs[0]!.id, 1);
+    expect(jobs[0]?.status).toBe("done");
+    expect(send).toHaveBeenCalledWith(
+      1,
+      "oc_1",
+      expect.stringMatching(/^(人呢|？)$/),
+      "zh",
+    );
+    expect(invokeWithProvider).not.toHaveBeenCalled();
   });
 });
 });
