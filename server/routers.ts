@@ -74,7 +74,9 @@ import {
   createPersonaVersion, getLatestPersonaVersion, setPersonaVersionEvalRun,
   listBlindSessions,
   createSafetyEvent, countSafetyEvents,
+  getPendingReplyJob,
 } from "./db";
+import { replyNow as executePendingReply } from "./chat/reply-jobs";
 import { nanoid } from "nanoid";
 import path from "path";
 import { getBotStatus, startWeChatBot, stopWeChatBot, startLogin, submitVerifyCode, cancelLogin } from "./wechat/bot";
@@ -2370,6 +2372,7 @@ export const appRouter = router({
          */
         let failureStored = false;
         let superseded = false;
+        let deferred: { jobId: number; dueAt: string; reason: "delay" | "asleep" | "busy" } | null = null;
 
         /**
          * A persona that has said goodbye.
@@ -2406,6 +2409,13 @@ export const appRouter = router({
               failureStored = event.storedUserMessage === true;
             }
             else if (event.type === "superseded") superseded = true;
+            else if (event.type === "deferred") {
+              deferred = {
+                jobId: event.jobId,
+                dueAt: event.dueAt,
+                reason: event.reason,
+              };
+            }
             else if (event.type === "done") {
               graduationSuggested = event.graduationSuggested;
               careNote = event.careNote;
@@ -2475,6 +2485,20 @@ export const appRouter = router({
           });
         }
 
+        if (deferred) {
+          return {
+            reply: "",
+            emotionalState,
+            graduationSuggested,
+            careNote,
+            crisis,
+            choice: null,
+            failed: false,
+            superseded: false,
+            deferred,
+          };
+        }
+
         return { reply, emotionalState, graduationSuggested, careNote, crisis, choice, failed: false, superseded };
       }),
 
@@ -2531,6 +2555,7 @@ export const appRouter = router({
         let crisis = false;
         let failure: string | null = null;
         let superseded = false;
+        let deferred: { jobId: number; dueAt: string; reason: "delay" | "asleep" | "busy" } | null = null;
 
         for await (const event of runConversation({
           persona,
@@ -2548,6 +2573,13 @@ export const appRouter = router({
           else if (event.type === "emotion") emotionalState = event.state;
           else if (event.type === "error") failure = event.message;
           else if (event.type === "superseded") superseded = true;
+          else if (event.type === "deferred") {
+            deferred = {
+              jobId: event.jobId,
+              dueAt: event.dueAt,
+              reason: event.reason,
+            };
+          }
           else if (event.type === "done") {
             graduationSuggested = event.graduationSuggested;
             careNote = event.careNote;
@@ -2560,6 +2592,19 @@ export const appRouter = router({
             code: "INTERNAL_SERVER_ERROR",
             message: copy(ctx.locale, "errors.replyFailed"),
           });
+        }
+
+        if (deferred) {
+          return {
+            reply: "",
+            emotionalState,
+            imageUrl: url,
+            graduationSuggested,
+            careNote,
+            crisis,
+            superseded: false,
+            deferred,
+          };
         }
 
         return { reply, emotionalState, imageUrl: url, graduationSuggested, careNote, crisis, superseded };
@@ -2654,6 +2699,7 @@ export const appRouter = router({
         let crisis = false;
         let failure: string | null = null;
         let superseded = false;
+        let deferred: { jobId: number; dueAt: string; reason: "delay" | "asleep" | "busy" } | null = null;
 
         for await (const event of runConversation({
           persona,
@@ -2671,6 +2717,13 @@ export const appRouter = router({
           else if (event.type === "emotion") emotionalState = event.state;
           else if (event.type === "error") failure = event.message;
           else if (event.type === "superseded") superseded = true;
+          else if (event.type === "deferred") {
+            deferred = {
+              jobId: event.jobId,
+              dueAt: event.dueAt,
+              reason: event.reason,
+            };
+          }
           else if (event.type === "done") {
             graduationSuggested = event.graduationSuggested;
             careNote = event.careNote;
@@ -2683,6 +2736,20 @@ export const appRouter = router({
             code: "INTERNAL_SERVER_ERROR",
             message: copy(ctx.locale, "errors.replyFailed"),
           });
+        }
+
+        if (deferred) {
+          return {
+            reply: "",
+            emotionalState,
+            transcription,
+            voiceUrl: url,
+            graduationSuggested,
+            careNote,
+            crisis,
+            superseded: false,
+            deferred,
+          };
         }
 
         return { reply, emotionalState, transcription, voiceUrl: url, graduationSuggested, careNote, crisis, superseded };
@@ -2701,6 +2768,47 @@ export const appRouter = router({
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         return searchMessages(input.personaId, ctx.user.id, input.query, input.limit);
+      }),
+
+    /**
+     * A reply that is still waiting to be written.
+     *
+     * The row is the moment they look at their phone, not a stored
+     * answer. The client polls this while the banner is up.
+     */
+    pendingReply: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const job = await getPendingReplyJob(input.personaId, ctx.user.id, "reply");
+        if (!job) return null;
+        const payload = job.payload && typeof job.payload === "object" && !Array.isArray(job.payload)
+          ? job.payload as { title?: unknown }
+          : {};
+        const title = typeof payload.title === "string" && payload.title.trim()
+          ? payload.title
+          : undefined;
+        return {
+          jobId: job.id,
+          dueAt: job.dueAt.toISOString(),
+          reason: job.reason as "delay" | "asleep" | "busy",
+          title,
+        };
+      }),
+
+    /**
+     * Write the waiting reply now.
+     *
+     * It does not change the switch. It only brings this one job due.
+     */
+    replyNow: protectedProcedure.use(rateLimit(RATE_LIMITS.llm))
+      .input(z.object({ personaId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const ok = await executePendingReply(input.personaId, ctx.user.id);
+        return { ok };
       }),
 
     tts: protectedProcedure.use(rateLimit(RATE_LIMITS.tts))

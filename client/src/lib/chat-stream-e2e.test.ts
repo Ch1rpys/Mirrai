@@ -118,6 +118,30 @@ describe("streamChat", () => {
     expect(errors).toEqual([]);
   });
 
+  it("hands a deferred event to the caller and does not treat it as a drop", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      mockSseResponse([
+        'event: deferred\ndata: {"jobId":11,"dueAt":"2024-06-01T12:20:00.000Z","reason":"delay"}\n\n',
+      ]),
+    );
+    globalThis.fetch = fetchMock as any;
+    const errors: string[] = [];
+    const deferred: Array<{ jobId: number; dueAt: string; reason: string }> = [];
+    await streamChat({
+      personaId: 1,
+      message: "在吗",
+      callbacks: {
+        onDelta: () => {},
+        onError: (message) => errors.push(message),
+        onDeferred: (info) => deferred.push(info),
+      },
+    });
+    expect(deferred).toEqual([
+      { jobId: 11, dueAt: "2024-06-01T12:20:00.000Z", reason: "delay" },
+    ]);
+    expect(errors).toEqual([]);
+  });
+
   it("posts the message and the locale", async () => {
     const fetchMock = vi.fn().mockResolvedValue(mockSseResponse([]));
     globalThis.fetch = fetchMock as any;

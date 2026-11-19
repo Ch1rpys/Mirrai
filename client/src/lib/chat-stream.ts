@@ -58,6 +58,12 @@ export interface StreamChatCallbacks {
   onError?: (message: string, partial: boolean) => void;
   /** The turn was taken away by a later message. The streaming bubble goes. */
   onSuperseded?: () => void;
+  /** The reply will be written later. The streaming bubble goes. */
+  onDeferred?: (info: {
+    jobId: number;
+    dueAt: string;
+    reason: "delay" | "asleep" | "busy";
+  }) => void;
 }
 
 export interface StreamChatOptions {
@@ -218,7 +224,12 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
       for (const frame of frames) {
         const parsed = parseFrame(frame);
         if (!parsed) continue;
-        if (parsed.event === "done" || parsed.event === "error" || parsed.event === "superseded") settled = true;
+        if (
+          parsed.event === "done"
+          || parsed.event === "error"
+          || parsed.event === "superseded"
+          || parsed.event === "deferred"
+        ) settled = true;
         await handleEvent(parsed, callbacks, locale);
       }
     }
@@ -228,7 +239,12 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
     if (tail) {
       const parsed = parseFrame(tail);
       if (parsed) {
-        if (parsed.event === "done" || parsed.event === "error" || parsed.event === "superseded") settled = true;
+        if (
+          parsed.event === "done"
+          || parsed.event === "error"
+          || parsed.event === "superseded"
+          || parsed.event === "deferred"
+        ) settled = true;
         await handleEvent(parsed, callbacks, locale);
       }
     }
@@ -308,6 +324,19 @@ async function handleEvent(
     }
     case "superseded":
       callbacks.onSuperseded?.();
+      break;
+    case "deferred":
+      if (
+        typeof data?.jobId === "number"
+        && typeof data?.dueAt === "string"
+        && (data.reason === "delay" || data.reason === "asleep" || data.reason === "busy")
+      ) {
+        callbacks.onDeferred?.({
+          jobId: data.jobId,
+          dueAt: data.dueAt,
+          reason: data.reason,
+        });
+      }
       break;
     case "error":
       /**

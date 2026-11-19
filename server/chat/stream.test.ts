@@ -329,6 +329,30 @@ describe("POST /api/chat/stream", () => {
     expect(frames[1].data.text).toBe("好的");
   });
 
+  it("forwards a deferred event", async () => {
+    runConversation.mockImplementation(async function* () {
+      yield {
+        type: "deferred",
+        jobId: 11,
+        dueAt: "2024-06-01T12:20:00.000Z",
+        reason: "delay",
+      };
+    });
+
+    const res = await fetch(`${baseUrl}/api/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personaId: 1, message: "在吗" }),
+    });
+    const frames = await readFrames(res);
+    expect(frames.map((frame) => frame.event)).toEqual(["deferred"]);
+    expect(frames[0].data).toEqual({
+      jobId: 11,
+      dueAt: "2024-06-01T12:20:00.000Z",
+      reason: "delay",
+    });
+  });
+
   it("reports a mid-stream failure as an error event and keeps the partial text", async () => {
     runConversation.mockImplementation(async function* () {
       yield { type: "delta", text: "我在" };
