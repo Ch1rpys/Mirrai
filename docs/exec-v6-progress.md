@@ -2052,6 +2052,15 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 - 页面 `/persona/:id/call`：麦克风能量检测、700 毫秒静音收尾、播放队列按序、播放中开口打断、固定「合成的声音」说明、麦克风被拒说明；入口在档案页「更多」。开关在 `PersonaSwitches`。
 - 测试与闸门见进度表 B7.14 行。闸门 `470 passed | 8 skipped (478)` 文件，`4012 passed | 31 skipped (4043)` 用例，`all six steps passed`。
 
+### WP10 · 实现会话 · 2026-11-20 · WP10 收尾
+
+- 本轮从 `85add13`（B7.1–B7.6 已提交）接着做，完成 B7.8、B7.9、B7.10、B7.11、B7.12、B7.13、B7.14、B7.15；B7.7 按第 1.2 节保持 ⛔。
+- 提交范围：`7de23a6`（B7.13）、`0eac981` + `d53a429` + `3e080e2`（B7.8）、`36fd07f`（B7.9）、`835e76e`（B7.10）、`4e22470`（B7.11）、`aad6930`（B7.12）、`e663d5b`（B7.14）、`6e8afd3`（B7.15），以及每个条目的进度提交。
+- 最终完整闸门（无 `--fast`、无 `DATABASE_URL`，Node v24.14.1）：`Test Files  470 passed | 8 skipped (478)`，`Tests  4012 passed | 31 skipped (4043)`，`all six steps passed`。开工基线 `443 passed | 7 skipped (450)` 文件、`3880 passed | 28 skipped (3908)` 用例：通过文件 +27、通过用例 +132；跳过文件 +1、跳过用例 +3，全部是 `server/db-memory-media.test.ts` 按 2.3 写的 `skipIf`。没有删测试、没有加 skip、黄金快照未改。
+- 数据库：B7.8 的 `0058_memory_media` 在 `mirrai_v6_scratch` 上走完四步+升级路径；收尾时在同一个临时库上带 `DATABASE_URL` 跑 `db-records`（含 B7.12 的三种 register）、`db-memory-media`、`db-media`、`db-stickers`、`db-unique-indexes`、`idempotency-db`、`db-delete-coverage`，共 33 条通过；`db-isolation` 单独跑 13 条通过（和多个库测试同进程跑时 Vitest 报 `node:sqlite` 内置模块缺失，是既有环境问题，不计入代码）。库已 `dropdb`；`mirrai_live` 未连接。
+- 真实跑过的东西：B7.10 用 ffmpeg 生成并处理了一段 5 秒 640×360 视频（3 帧 data URL、时长与尺寸正确、无本机 STT 所以没有转写）；其余「更像 TA / 真实记录 / 真实模型 / 真人麦克风」的效果都没有量，逐条见未验证清单。
+- 没有做独立验收：留给另一个会话。WP10 可做条目全部完成，不开始 WP11。
+
 **遗留 / 下一次要注意**：
 - 表达式 `styleProfile.voice.prosody` 的测量目前要手动点「量一下」；转写任务完成后没有自动接上（偏差 215）。
 - 阅读器 C2.10（WP11）落地后，把 `Voices.tsx` 里的「记录第 N 条」换成跳转（偏差 203）。
