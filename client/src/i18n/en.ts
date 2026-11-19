@@ -1882,6 +1882,7 @@ export const en = {
   profile: {
     moreTitle: "More",
     voicesEntry: "Hear {{name}}'s voice",
+    photosEntry: "{{name}}'s photos",
     voicesEntryNote: "Real recordings from the record, not synthesised.",
     kicker: "Who they are",
     edit: "Edit",
@@ -2289,6 +2290,48 @@ export const en = {
     medianChars: "Median length",
     newlineRate: "Newline rate",
     questionEndingRate: "Question-ending rate",
+  },
+
+  memoryPhoto: {
+    attach: "Attach a photo",
+    change: "Change the photo",
+    remove: "Take the photo off",
+    pick: "Use this photo",
+    attached: "This photo is attached to the memory",
+    suggestHint: "Photos from three days either side of the memory",
+    empty: "No photos from those days.",
+    failed: "The photos could not be read.",
+  },
+
+  photos: {
+    title: "{{name}}'s photos",
+    note: "Every picture here is one you uploaded. None of them is generated.",
+    empty: "No photos yet. Pictures from an imported record show up here.",
+    loadFailed: "The album could not be read.",
+    open: "Open this photo",
+    close: "Close",
+    noDate: "When this was taken is not known",
+  },
+
+  avatar: {
+    title: "Avatar",
+    note: "Only a real photograph, cropped to a square.",
+    current: "{{name}}'s avatar",
+    chooseLocal: "Choose a photo",
+    remove: "No avatar",
+    saved: "The avatar is changed.",
+    dragHint: "Drag a square on the photo.",
+    cropAlt: "The photo to crop",
+    save: "Use this",
+    cancel: "Cancel",
+    albumFailed: "The album could not be read.",
+    fromAlbum: "Choose one from the album",
+    usePhoto: "Use this photo",
+    faceButton: "Help me find {{name}}'s face",
+    faceHint: "This runs only in your browser; the result is not stored.",
+    faceFailed: "No face could be found this time. Try another photo.",
+    faceEmpty: "No faces were found in these photos.",
+    clusterSize: "{{n}} faces in this group",
   },
 
   material: {

@@ -1720,7 +1720,7 @@ export default function Chat() {
           </button>
           <div className="flex items-center gap-2.5 flex-1 min-w-0">
             <div className="mood-ring-sm flex-shrink-0" style={moodRingStyle}>
-              <PersonaAvatar name={persona?.name || "?"} className="w-8 h-8 rounded-full text-sm" />
+              <PersonaAvatar name={persona?.name || "?"} url={persona?.avatarUrl} className="w-8 h-8 rounded-full text-sm" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
@@ -2098,7 +2098,7 @@ export default function Chat() {
               initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: "easeOut" as const }}
               className="text-center py-12 sm:py-16">
               <div className="mood-ring-sm inline-flex" style={moodRingStyle}>
-                <PersonaAvatar name={persona?.name || "?"} className="w-16 h-16 sm:w-20 sm:h-20 rounded-full text-2xl sm:text-3xl" />
+                <PersonaAvatar name={persona?.name || "?"} url={persona?.avatarUrl} className="w-16 h-16 sm:w-20 sm:h-20 rounded-full text-2xl sm:text-3xl" />
               </div>
               <h2 className="page-title mt-7">
                 {t("chat.waitingForYou", { name: persona?.name || t("common.them") })}

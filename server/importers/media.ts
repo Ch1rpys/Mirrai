@@ -3,8 +3,10 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 import { iterateRecords, upsertMedia } from "../db";
+import type { Media } from "../../drizzle/schema";
 import { ENV } from "../_core/env";
 import { fileExtension, resolveUploadPath } from "../_core/filename";
+import { readImageExif } from "../_core/image-exif";
 import { importUnpackRelKey } from "./archive";
 
 /**
@@ -67,6 +69,52 @@ async function hashFile(filePath: string): Promise<string> {
   });
 }
 
+/** The EXIF fields worth keeping: the time is `at`, the place is here. */
+function placeOf(exif: { lat: number | null; lng: number | null }): Record<string, number> | null {
+  if (exif.lat == null || exif.lng == null) return null;
+  return { lat: exif.lat, lng: exif.lng };
+}
+
+/**
+ * Registers a photograph uploaded on its own, not through an export.
+ *
+ * The image is already on disk under the persona's directory. This
+ * makes it part of the album and reads its camera tags. A failure to
+ * read EXIF is not a failure to upload.
+ */
+export async function registerUploadedImage(params: {
+  personaId: number;
+  userId: number;
+  fileKey: string;
+  buffer: Buffer;
+  mime: string;
+  timeZone?: string | null;
+}): Promise<Media | null> {
+  try {
+    const exif = await readImageExif(params.buffer, params.timeZone);
+    const hash = createHash("sha256").update(params.buffer).digest("hex");
+    return await upsertMedia({
+      userId: params.userId,
+      personaId: params.personaId,
+      kind: "photo",
+      fileKey: params.fileKey,
+      mime: params.mime,
+      bytes: params.buffer.length,
+      hash,
+      at: exif.at ?? new Date(),
+      recordId: null,
+      fileId: null,
+      fromThem: false,
+      width: exif.width,
+      height: exif.height,
+      exif: placeOf(exif),
+    });
+  } catch (error) {
+    console.warn("[Import] The uploaded photo could not be registered:", (error as Error).message);
+    return null;
+  }
+}
+
 export interface RegisterMediaResult {
   registered: number;
   skipped: number;
@@ -78,6 +126,8 @@ export async function registerMedia(params: {
   userId: number;
   /** Only the rows of this upload. Missing means every import of the persona. */
   fileId?: number;
+  /** The user's zone, for the wall clock a camera wrote into EXIF. */
+  timeZone?: string | null;
 }): Promise<RegisterMediaResult> {
   let registered = 0;
   let skipped = 0;
@@ -123,6 +173,24 @@ export async function registerMedia(params: {
 
     const duration = Number(meta.durationSec);
     const transcript = typeof meta.transcript === "string" ? meta.transcript : null;
+    let at: Date | null = row.timestamp ?? row.createdAt ?? null;
+    let width: number | null = null;
+    let height: number | null = null;
+    let exif: Record<string, number> | null = null;
+    if (kind === "photo") {
+      /**
+       * A picture knows when it was taken better than the export does.
+       *
+       * The record's time is when the message was sent, which is often
+       * a moment later. The camera's time is what a memory dated that
+       * afternoon should line up with.
+       */
+      const read = await readImageExif(resolveUploadPath(ENV.uploadDir, fileKey), params.timeZone);
+      if (read.at) at = read.at;
+      width = read.width;
+      height = read.height;
+      exif = placeOf(read);
+    }
     try {
       await upsertMedia({
         userId: params.userId,
@@ -132,11 +200,14 @@ export async function registerMedia(params: {
         mime: mimeForFile(relative),
         bytes,
         hash,
-        at: row.timestamp ?? row.createdAt ?? null,
+        at,
         recordId: row.id,
         fileId: row.fileId,
         fromThem: row.role === "assistant",
         durationSec: Number.isFinite(duration) ? Math.round(duration) : null,
+        width,
+        height,
+        exif,
         transcript,
         transcriptEngine: transcript ? "import" : null,
       });

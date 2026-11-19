@@ -13,6 +13,7 @@ import { csrfGuard } from "./csrf";
 import { securityHeaders } from "./security-headers";
 import { initRateLimiter } from "./rate-limit";
 import { uploadsAuthGuard } from "./uploads";
+import { resolveFaceModelFile } from "./face-models";
 import { registerChatStreamRoute } from "../chat/stream-route";
 import { registerImportUploadRoute } from "../importers/upload-route";
 import { bootstrapAdminAccount } from "../bootstrap/bootstrap";
@@ -108,6 +109,26 @@ async function startServer() {
   const uploadsPath = path.resolve(ENV.uploadDir);
   // codeql[js/missing-rate-limiting]
   app.use("/uploads", uploadsAuthGuard, express.static(uploadsPath));
+
+  /**
+   * The face model weights (B7.8).
+   *
+   * They are not a user's data, so they are not behind the uploads
+   * guard. They are also not a general file server: only the six files
+   * the avatar picker loads are answered, and a name not on that list —
+   * `../package.json`, another model — is a 404 before the disk is
+   * touched. The browser loads them from this origin; no CDN.
+   */
+  app.get("/models/face/:name", (req, res) => {
+    const name = path.basename(req.params.name);
+    const file = resolveFaceModelFile(name);
+    if (!file) {
+      res.status(404).json({ error: "Not found" });
+      return;
+    }
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.sendFile(file);
+  });
   /**
    * The uploads are private to their owner, and they are files.
    *

@@ -28,6 +28,7 @@ import {
   replyJobs, InsertReplyJob, ReplyJob,
   stickers, InsertSticker, Sticker,
   media, InsertMedia, Media,
+  memoryMedia, InsertMemoryMedia, MemoryMedia,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
@@ -1080,6 +1081,39 @@ async function collectStoredFiles(userId: number, personaId?: number): Promise<s
     if (row.fileKey) keys.add(row.fileKey);
   }
 
+  /**
+   * The avatar and the chat background.
+   *
+   * They are written by the avatar and background routes under the
+   * persona's own directory, and nothing else points at them — so they
+   * would survive the persona that owns them.
+   */
+  const personaRows = await db
+    .select({ avatarUrl: personas.avatarUrl, settings: personas.settings })
+    .from(personas)
+    .where(
+      personaId === undefined
+        ? eq(personas.userId, userId)
+        : and(eq(personas.userId, userId), eq(personas.id, personaId)),
+    );
+  for (const row of personaRows) {
+    const settings =
+      row.settings && typeof row.settings === "object" && !Array.isArray(row.settings)
+        ? (row.settings as Record<string, unknown>)
+        : {};
+    const skin =
+      settings.skin && typeof settings.skin === "object" && !Array.isArray(settings.skin)
+        ? (settings.skin as Record<string, unknown>)
+        : {};
+    for (const url of [row.avatarUrl, skin.background]) {
+      if (typeof url !== "string") continue;
+      const marker = "/uploads/";
+      const at = url.indexOf(marker);
+      if (at === -1) continue;
+      keys.add(url.slice(at + marker.length));
+    }
+  }
+
   return [...keys];
 }
 
@@ -1131,6 +1165,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(letters).where(eq(letters.userId, id));
     await tx.delete(memories).where(eq(memories.userId, id));
     await tx.delete(memoryExtractions).where(eq(memoryExtractions.userId, id));
+    await tx.delete(memoryMedia).where(eq(memoryMedia.userId, id));
     await tx.delete(messages).where(eq(messages.userId, id));
     await tx.delete(outboundLetters).where(eq(outboundLetters.userId, id));
     await tx.delete(personaFiles).where(eq(personaFiles.userId, id));
@@ -1539,6 +1574,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(graduationAssessments).where(and(eq(graduationAssessments.personaId, id), eq(graduationAssessments.userId, userId)));
     await tx.delete(memories).where(and(eq(memories.personaId, id), eq(memories.userId, userId)));
     await tx.delete(memoryExtractions).where(and(eq(memoryExtractions.personaId, id), eq(memoryExtractions.userId, userId)));
+    await tx.delete(memoryMedia).where(and(eq(memoryMedia.personaId, id), eq(memoryMedia.userId, userId)));
     await tx.delete(messages).where(and(eq(messages.personaId, id), eq(messages.userId, userId)));
     await tx.delete(outboundLetters).where(and(eq(outboundLetters.personaId, id), eq(outboundLetters.userId, userId)));
     await tx.delete(personaFiles).where(and(eq(personaFiles.personaId, id), eq(personaFiles.userId, userId)));
@@ -2799,6 +2835,166 @@ export async function deleteMediaByFile(
     )
     .returning({ id: media.id });
   return rows.length;
+}
+
+/** One stored photograph, by id, limited to its owner. */
+export async function getMediaById(id: number, userId: number): Promise<Media | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(media)
+    .where(and(eq(media.id, id), eq(media.userId, userId)))
+    .limit(1);
+  return rows[0];
+}
+
+/** A photograph attached to a memory, with the fields the panel shows. */
+export interface MemoryMediaPhoto {
+  memoryId: number;
+  mediaId: number;
+  kind: string;
+  fileKey: string;
+  at: Date | null;
+  width: number | null;
+  height: number | null;
+}
+
+export async function linkMemoryMedia(data: {
+  userId: number;
+  personaId: number;
+  memoryId: number;
+  mediaId: number;
+}): Promise<MemoryMedia> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [row] = await db
+    .insert(memoryMedia)
+    .values(data)
+    .onConflictDoNothing({
+      target: [memoryMedia.memoryId, memoryMedia.mediaId],
+    })
+    .returning();
+  if (row) return row;
+  const [existing] = await db
+    .select()
+    .from(memoryMedia)
+    .where(
+      and(
+        eq(memoryMedia.memoryId, data.memoryId),
+        eq(memoryMedia.mediaId, data.mediaId),
+        eq(memoryMedia.userId, data.userId),
+      ),
+    )
+    .limit(1);
+  if (!existing) throw new Error("DB not available");
+  return existing;
+}
+
+export async function unlinkMemoryMedia(
+  memoryId: number,
+  mediaId: number,
+  userId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .delete(memoryMedia)
+    .where(
+      and(
+        eq(memoryMedia.memoryId, memoryId),
+        eq(memoryMedia.mediaId, mediaId),
+        eq(memoryMedia.userId, userId),
+      ),
+    )
+    .returning({ id: memoryMedia.id });
+  return rows.length > 0;
+}
+
+/**
+ * The photographs attached to one memory.
+ *
+ * Both the link and the photo are filtered by the owner: a link row is
+ * not permission to read somebody else's picture.
+ */
+export async function listMemoryMedia(
+  memoryId: number,
+  userId: number,
+): Promise<MemoryMediaPhoto[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({
+      memoryId: memoryMedia.memoryId,
+      mediaId: media.id,
+      kind: media.kind,
+      fileKey: media.fileKey,
+      at: media.at,
+      width: media.width,
+      height: media.height,
+    })
+    .from(memoryMedia)
+    .innerJoin(media, eq(media.id, memoryMedia.mediaId))
+    .where(
+      and(
+        eq(memoryMedia.memoryId, memoryId),
+        eq(memoryMedia.userId, userId),
+        eq(media.userId, userId),
+      ),
+    )
+    .orderBy(asc(media.at), asc(media.id));
+  return rows;
+}
+
+/**
+ * The photos attached to a set of memories, grouped by memory.
+ *
+ * `chat.getHistory` asks once for a page of messages rather than once
+ * per recalled memory.
+ */
+export async function listMemoryMediaForMemories(
+  memoryIds: number[],
+  userId: number,
+): Promise<MemoryMediaPhoto[]> {
+  const db = await getDb();
+  if (!db || memoryIds.length === 0) return [];
+  const unique = Array.from(new Set(memoryIds));
+  return db
+    .select({
+      memoryId: memoryMedia.memoryId,
+      mediaId: media.id,
+      kind: media.kind,
+      fileKey: media.fileKey,
+      at: media.at,
+      width: media.width,
+      height: media.height,
+    })
+    .from(memoryMedia)
+    .innerJoin(media, eq(media.id, memoryMedia.mediaId))
+    .where(
+      and(
+        inArray(memoryMedia.memoryId, unique),
+        eq(memoryMedia.userId, userId),
+        eq(media.userId, userId),
+      ),
+    )
+    .orderBy(asc(media.at), asc(media.id));
+}
+
+/** Sets or clears the avatar of one persona. */
+export async function setPersonaAvatar(
+  personaId: number,
+  userId: number,
+  avatarUrl: string | null,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .update(personas)
+    .set({ avatarUrl })
+    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)))
+    .returning({ id: personas.id });
+  return rows.length > 0;
 }
 
 export interface VoicePage {
@@ -5787,7 +5983,7 @@ export async function deletePersonaFile(
         ),
       )
       .returning({ id: collectedMessages.id });
-    await tx
+    const removedMedia = await tx
       .delete(media)
       .where(
         and(
@@ -5795,7 +5991,18 @@ export async function deletePersonaFile(
           eq(media.userId, userId),
           eq(media.fileId, fileId),
         ),
-      );
+      )
+      .returning({ id: media.id });
+    if (removedMedia.length > 0) {
+      await tx
+        .delete(memoryMedia)
+        .where(
+          and(
+            inArray(memoryMedia.mediaId, removedMedia.map((row) => row.id)),
+            eq(memoryMedia.userId, userId),
+          ),
+        );
+    }
     await tx
       .delete(personaFiles)
       .where(and(eq(personaFiles.id, fileId), eq(personaFiles.userId, userId)));

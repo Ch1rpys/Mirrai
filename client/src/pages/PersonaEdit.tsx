@@ -27,6 +27,7 @@ import LexiconEditor from "@/components/v6/LexiconEditor";
 import WorldEditors from "@/components/v6/WorldEditors";
 import PersonaSwitches from "@/components/v6/PersonaSwitches";
 import StickerLibrary from "@/components/v6/StickerLibrary";
+import AvatarPicker from "@/components/v6/AvatarPicker";
 import PersonaSampling from "@/components/v6/PersonaSampling";
 import HarmNotice from "@/components/v6/HarmNotice";
 import VersionHistory from "@/components/v6/VersionHistory";
@@ -599,6 +600,16 @@ export default function PersonaEdit() {
             className="rounded-md px-5">
             <Save className="w-3.5 h-3.5" />{updateMutation.isPending ? t("common.saving") : t("personaEdit.saveBasic")}
           </Button>
+        </section>
+
+        {/* A real photograph, not a generated face (B7.8). */}
+        <section className="surface p-5 sm:p-6 animate-fade-in-up">
+          <AvatarPicker
+            personaId={personaId}
+            name={name}
+            avatarUrl={persona.avatarUrl}
+            onChanged={() => refetch()}
+          />
         </section>
 
         {/* The letters. A letter that is kept and never answered, and a

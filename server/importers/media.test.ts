@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 /**
@@ -30,7 +30,7 @@ vi.mock("../db", () => ({
   },
 }));
 
-import { registerMedia } from "./media";
+import { registerMedia, registerUploadedImage } from "./media";
 
 const importDir = path.join(uploadRoot, "personas", "1", "5", "imports", "9");
 
@@ -113,6 +113,75 @@ describe("registering media", () => {
     const result = await registerMedia({ personaId: 5, userId: 1, fileId: 9 });
     expect(result.total).toBe(1);
     expect(db.upserted).toHaveLength(1);
+  });
+
+  it("reads the camera time and place of an imported photo", async () => {
+    await mkdir(path.join(importDir, "media"), { recursive: true });
+    await copyFile(
+      path.resolve(__dirname, "../test-fixtures/media/exif-sample.jpg"),
+      path.join(importDir, "media", "exif.jpg"),
+    );
+    db.rows = [
+      row("media/exif.jpg", {
+        id: 6,
+        kind: "image",
+        content: "[image]",
+        timestamp: new Date("2022-04-02T12:30:00Z"),
+        meta: { path: "media/exif.jpg" },
+      }),
+    ];
+    db.upserted = [];
+    await registerMedia({ personaId: 5, userId: 1, timeZone: "Asia/Shanghai" });
+    const photo = db.upserted[0]!;
+    expect(photo.kind).toBe("photo");
+    expect((photo.at as Date).toISOString()).toBe("2022-04-02T04:00:00.000Z");
+    expect(photo.width).toBe(4);
+    expect(photo.height).toBe(4);
+    expect(photo.exif).toEqual({ lat: expect.closeTo(31.2303, 3), lng: expect.closeTo(121.4739, 3) });
+  });
+
+  it("falls back to the message time when the photo has no EXIF", async () => {
+    await copyFile(
+      path.resolve(__dirname, "../test-fixtures/media/no-exif.jpg"),
+      path.join(importDir, "media", "plain.jpg"),
+    );
+    db.rows = [
+      row("media/plain.jpg", {
+        id: 7,
+        kind: "image",
+        content: "[image]",
+        timestamp: new Date("2022-04-03T12:30:00Z"),
+        meta: { path: "media/plain.jpg" },
+      }),
+    ];
+    db.upserted = [];
+    await registerMedia({ personaId: 5, userId: 1, timeZone: "Asia/Shanghai" });
+    const photo = db.upserted[0]!;
+    expect((photo.at as Date).toISOString()).toBe("2022-04-03T12:30:00.000Z");
+    expect(photo.width).toBeNull();
+    expect(photo.exif).toBeNull();
+  });
+
+  it("registers a photo uploaded on its own", async () => {
+    const bytes = await import("node:fs/promises").then((fs) =>
+      fs.readFile(path.resolve(__dirname, "../test-fixtures/media/exif-sample.jpg")),
+    );
+    db.upserted = [];
+    const row = await registerUploadedImage({
+      personaId: 5,
+      userId: 1,
+      fileKey: "personas/1/5/uploaded.jpg",
+      buffer: bytes,
+      mime: "image/jpeg",
+      timeZone: "Asia/Shanghai",
+    });
+    expect(row).not.toBeNull();
+    const stored = db.upserted[0]!;
+    expect(stored.kind).toBe("photo");
+    expect(stored.recordId).toBeNull();
+    expect(stored.fileId).toBeNull();
+    expect((stored.at as Date).toISOString()).toBe("2022-04-02T04:00:00.000Z");
+    expect(stored.exif).toEqual({ lat: expect.closeTo(31.2303, 3), lng: expect.closeTo(121.4739, 3) });
   });
 
   it("maps a picture and a video to their own kinds", async () => {

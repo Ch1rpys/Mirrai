@@ -20,6 +20,14 @@ export const V6 = {
     zh: "只收 PNG、JPEG、GIF 或 WebP 的图片。",
     en: "Only PNG, JPEG, GIF or WebP pictures are accepted.",
   },
+  "errors.avatarType": {
+    zh: "头像只收 JPEG、PNG 或 WebP 的图片。",
+    en: "The avatar has to be a JPEG, PNG or WebP picture.",
+  },
+  "errors.avatarTooLarge": {
+    zh: "头像不能超过 1 MB。",
+    en: "The avatar cannot be larger than 1 MB.",
+  },
   "errors.importFailed": {
     zh: "这份文件没有整理成记录。",
     en: "This file was not turned into records.",

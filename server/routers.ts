@@ -71,6 +71,10 @@ import {
   setPersonaBehaviorProfile, getPersonaBehaviorProfile,
   getPersonaSettings, setPersonaSettings,
   getPersonaStyleProfile, setPersonaStyleProfile,
+  setPersonaAvatar,
+  linkMemoryMedia, unlinkMemoryMedia, listMemoryMedia, getMediaById,
+  listMedia,
+  listMemoryMediaForMemories,
   createPersonaVersion, getLatestPersonaVersion, setPersonaVersionEvalRun,
   listBlindSessions,
   createSafetyEvent, countSafetyEvents,
@@ -105,6 +109,11 @@ import {
   zonedDateKey,
 } from "@shared/timezone";
 import { isMemoryDate } from "@shared/memory-date";
+import {
+  isDayNearMemoryDate,
+  isMonthDayNearMemoryDate,
+  MEMORY_PHOTO_DAYS,
+} from "@shared/memory-date";
 import { resolveRelationshipPhase, parseRecalledIds } from "@shared/user-side";
 import { copy, localizeScene } from "@shared/copy";
 import { normalizeHarmReport } from "@shared/harm";
@@ -119,10 +128,16 @@ import { normalizeStyleProfile } from "@shared/style-profile";
 import { collectEvidence } from "@shared/evidence-map";
 import type { PersonaData } from "./_core/persona-schema";
 import { isChatImportFileType, startImport } from "./importers";
+import { registerUploadedImage } from "./importers/media";
 import { importUnpackRelKey } from "./importers/archive";
 import { afterRecordsRemoved } from "./_core/style-profile";
 import { transcribeAudio } from "./_core/stt";
 import { asMaterial } from "./_core/material";
+import {
+  decodeBase64Image,
+  sniffPersonaImage,
+  PERSONA_IMAGE_MIME,
+} from "./_core/persona-image";
 import { buildEvalCases, buildFeedbackEvalCases, casesFromRows, trainingTexts } from "./eval/dataset";
 import type { EvalCaseData, EvalSourceMessage } from "./eval/dataset";
 import { labelEvalCases } from "./eval/act-labels";
@@ -304,6 +319,18 @@ const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
  */
 const MAX_IMAGE_UPLOAD_BYTES = 20 * 1024 * 1024;
 const MAX_AUDIO_UPLOAD_BYTES = 25 * 1024 * 1024;
+/** The avatar is decoded and re-encoded by the browser at 512 pixels. */
+const MAX_AVATAR_BYTES = 1024 * 1024;
+
+/** The key inside a stored `/uploads/...` URL, or null. */
+function uploadKeyOf(url: string | null | undefined): string | null {
+  if (typeof url !== "string") return null;
+  const marker = "/uploads/";
+  const at = url.indexOf(marker);
+  if (at === -1) return null;
+  const key = url.slice(at + marker.length);
+  return key || null;
+}
 
 /** A message the reply carried besides its words. */
 type ExtraMessage = {
@@ -1156,6 +1183,59 @@ export const appRouter = router({
           if (!written) throw new TRPCError({ code: "NOT_FOUND" });
           return next;
         });
+      }),
+
+    /**
+     * The avatar, chosen from a real photograph (B7.8).
+     *
+     * The browser crops a square and sends 512 pixels; the server only
+     * checks what it can check — the bytes are really an image of an
+     * accepted kind, and small enough. The old avatar's file is
+     * removed after the new one is written, so a failed upload never
+     * leaves the persona with no avatar at all.
+     */
+    uploadAvatar: protectedProcedure
+      .use(rateLimit(RATE_LIMITS.upload))
+      .input(z.object({ personaId: z.number(), base64: z.string().min(1).max(6_000_000) }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const buffer = decodeBase64Image(input.base64, MAX_AVATAR_BYTES);
+        if (!buffer) {
+          const decoded = decodeBase64Image(input.base64, Number.MAX_SAFE_INTEGER);
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: copy(
+              ctx.locale,
+              decoded ? "errors.avatarTooLarge" : "errors.avatarType",
+            ),
+          });
+        }
+        const kind = sniffPersonaImage(buffer);
+        if (!kind) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: copy(ctx.locale, "errors.avatarType"),
+          });
+        }
+        const fileKey = `personas/${ctx.user.id}/${input.personaId}/avatar-${nanoid()}.${kind}`;
+        const { url } = await storagePut(fileKey, buffer, PERSONA_IMAGE_MIME[kind]);
+        const written = await setPersonaAvatar(input.personaId, ctx.user.id, url);
+        if (!written) throw new TRPCError({ code: "NOT_FOUND" });
+        const oldKey = uploadKeyOf(persona.avatarUrl);
+        if (oldKey && oldKey !== fileKey) await storageDelete(oldKey);
+        return { avatarUrl: url };
+      }),
+
+    clearAvatar: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        await setPersonaAvatar(input.personaId, ctx.user.id, null);
+        const oldKey = uploadKeyOf(persona.avatarUrl);
+        if (oldKey) await storageDelete(oldKey);
+        return { avatarUrl: null };
       }),
 
     /**
@@ -2143,6 +2223,24 @@ export const appRouter = router({
             locale: ctx.locale,
           });
         }
+        /**
+         * A photograph uploaded on its own joins the album (B7.8).
+         *
+         * It has no record behind it — the user chose the file, not a
+         * chat line — but it is still a real picture of this person,
+         * and the album and the memory panel are built from the same
+         * table.
+         */
+        if (input.fileType === "image") {
+          await registerUploadedImage({
+            personaId: input.personaId,
+            userId: ctx.user.id,
+            fileKey,
+            buffer,
+            mime: input.mimeType,
+            timeZone: (ctx.user as { timezone?: string | null }).timezone ?? persona.timezone ?? null,
+          });
+        }
         return { fileId, fileUrl: url };
       }),
 
@@ -2208,11 +2306,40 @@ export const appRouter = router({
          */
         const fileIds = ids.filter((id) => id < 0).map((id) => Math.abs(id));
         const fileTitles = await getFileSummaryTitles(fileIds, ctx.user.id);
+        /**
+         * The photo a recalled memory carries, if any (B7.8).
+         *
+         * The chip can show a thumbnail of the real photograph; the
+         * full picture is opened by the bubble. This is the one the
+         * user attached, not a generated image.
+         */
+        const memoryPhotos = await listMemoryMediaForMemories(
+          ids.filter((id) => id > 0),
+          ctx.user.id,
+        );
+        const photoByMemory = new Map<number, {
+          id: number;
+          url: string;
+          at: Date | null;
+          width: number | null;
+          height: number | null;
+        }>();
+        for (const photo of memoryPhotos) {
+          if (photoByMemory.has(photo.memoryId)) continue;
+          photoByMemory.set(photo.memoryId, {
+            id: photo.mediaId,
+            url: `/uploads/${photo.fileKey}`,
+            at: photo.at,
+            width: photo.width,
+            height: photo.height,
+          });
+        }
         return rows.map((m: any) => ({
           ...m,
           recalled: parseRecalledIds(m.recalledMemoryIds).map((id: number) => ({
             id,
             title: titles.get(id) ?? fileTitles.get(Math.abs(id)) ?? "",
+            ...(photoByMemory.has(id) ? { photo: photoByMemory.get(id) } : {}),
           })),
         }));
       }),
@@ -4466,9 +4593,115 @@ export const appRouter = router({
           getMemoriesByPersonaId(input.personaId, ctx.user.id),
           countMemories(input.personaId, ctx.user.id),
         ]);
+        /**
+         * The photographs attached to each memory.
+         *
+         * One query for the page, not one per memory. The panel can
+         * then draw a photo next to the memory without asking again.
+         */
+        const photos = await listMemoryMediaForMemories(
+          items.map((memory) => memory.id),
+          ctx.user.id,
+        );
+        const byMemory = new Map<number, Array<{
+          id: number;
+          url: string;
+          at: Date | null;
+          width: number | null;
+          height: number | null;
+        }>>();
+        for (const photo of photos) {
+          const list = byMemory.get(photo.memoryId) ?? [];
+          list.push({
+            id: photo.mediaId,
+            url: `/uploads/${photo.fileKey}`,
+            at: photo.at,
+            width: photo.width,
+            height: photo.height,
+          });
+          byMemory.set(photo.memoryId, list);
+        }
         // The total is returned so the interface can say when the list
         // has been cut short. It used to be cut short silently.
-        return { items, total };
+        return {
+          items: items.map((memory) => ({
+            ...memory,
+            media: byMemory.get(memory.id) ?? [],
+          })),
+          total,
+        };
+      }),
+
+    /**
+     * Attaches one of the user's own photographs to a memory (B7.8).
+     *
+     * Both rows have to belong to the same person: a memory in one
+     * persona must not borrow a photo from another.
+     */
+    linkMedia: protectedProcedure
+      .input(z.object({ memoryId: z.number(), mediaId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const memory = await getMemoryById(input.memoryId, ctx.user.id);
+        if (!memory) throw new TRPCError({ code: "NOT_FOUND" });
+        const photo = await getMediaById(input.mediaId, ctx.user.id);
+        if (!photo || photo.personaId !== memory.personaId || photo.kind !== "photo") {
+          throw new TRPCError({ code: "NOT_FOUND" });
+        }
+        await linkMemoryMedia({
+          userId: ctx.user.id,
+          personaId: memory.personaId,
+          memoryId: memory.id,
+          mediaId: photo.id,
+        });
+        return { media: await listMemoryMedia(memory.id, ctx.user.id) };
+      }),
+
+    unlinkMedia: protectedProcedure
+      .input(z.object({ memoryId: z.number(), mediaId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const memory = await getMemoryById(input.memoryId, ctx.user.id);
+        if (!memory) throw new TRPCError({ code: "NOT_FOUND" });
+        await unlinkMemoryMedia(memory.id, input.mediaId, ctx.user.id);
+        return { media: await listMemoryMedia(memory.id, ctx.user.id) };
+      }),
+
+    /**
+     * The photos taken around the day of a memory.
+     *
+     * A photo with no camera time was given the upload time, so it can
+     * still line up — but the suggestion is always something the user
+     * has to accept.
+     */
+    suggestMedia: protectedProcedure
+      .input(z.object({ memoryId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const memory = await getMemoryById(input.memoryId, ctx.user.id);
+        if (!memory) throw new TRPCError({ code: "NOT_FOUND" });
+        const date = typeof memory.date === "string" ? memory.date.trim() : "";
+        if (!date || !isMemoryDate(date)) return { photos: [] };
+        const photos = await listMedia(memory.personaId, ctx.user.id, { kind: "photo" });
+        const zone = zoneForRecords(null, ctx.user.timezone);
+        const matched = photos
+          .map((photo) => {
+            const at = photo.at;
+            if (!at) return null;
+            const key = zonedDateKey(at, zone);
+            const near = /^\d{4}-\d{2}-\d{2}$/.test(date)
+              ? isDayNearMemoryDate(key, date, MEMORY_PHOTO_DAYS)
+              : isMonthDayNearMemoryDate(key, date, MEMORY_PHOTO_DAYS);
+            return near ? photo : null;
+          })
+          .filter((photo): photo is NonNullable<typeof photo> => photo !== null)
+          .sort((a, b) => (b.at?.getTime() ?? 0) - (a.at?.getTime() ?? 0));
+        return {
+          photos: matched.map((photo) => ({
+            id: photo.id,
+            url: `/uploads/${photo.fileKey}`,
+            at: photo.at,
+            width: photo.width,
+            height: photo.height,
+          })),
+        };
       }),
 
     /**

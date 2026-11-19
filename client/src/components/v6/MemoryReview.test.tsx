@@ -8,6 +8,9 @@ import { ConfirmProvider } from "@/components/ConfirmDialog";
 const update = vi.fn();
 const remove = vi.fn();
 const adjudicate = vi.fn();
+const linkMedia = vi.fn();
+const unlinkMedia = vi.fn();
+const suggestions = vi.fn();
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -21,6 +24,9 @@ vi.mock("@/lib/trpc", () => ({
       adjudicate: {
         useMutation: () => ({ mutate: adjudicate, isPending: false }),
       },
+      suggestMedia: { useQuery: () => suggestions() },
+      linkMedia: { useMutation: () => ({ mutate: linkMedia, isPending: false }) },
+      unlinkMedia: { useMutation: () => ({ mutate: unlinkMedia, isPending: false }) },
     },
   },
 }));
@@ -49,6 +55,12 @@ const items = [
 describe("the memory ledger", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    suggestions.mockReturnValue({
+      data: { photos: [{ id: 11, url: "/uploads/a.jpg", at: null, width: 4, height: 4 }] },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
   });
 
   it("renders nothing when there are none", () => {
@@ -75,6 +87,41 @@ describe("the memory ledger", () => {
 
     await user.click(screen.getByRole("button", { name: "这是真的" }));
     expect(update).toHaveBeenCalledWith({ id: 3, subject: "them" });
+  });
+
+  it("shows an attached photo and can take it off", async () => {
+    const user = userEvent.setup();
+    const withPhoto = [
+      {
+        ...items[0]!,
+        media: [{ id: 11, url: "/uploads/a.jpg", at: null, width: 4, height: 4 }],
+      },
+    ];
+    render(
+      <ConfirmProvider>
+        <MemoryReview personaId={5} items={withPhoto} onChanged={() => {}} />
+      </ConfirmProvider>,
+    );
+    expect(screen.getByTitle(translate("zh", "memoryPhoto.attached"))).toHaveAttribute(
+      "href",
+      "/uploads/a.jpg",
+    );
+    await user.click(screen.getByRole("button", { name: translate("zh", "memoryPhoto.remove") }));
+    expect(unlinkMedia).toHaveBeenCalledWith({ memoryId: 1, mediaId: 11 });
+  });
+
+  it("suggests a near photo and attaches the one picked", async () => {
+    const user = userEvent.setup();
+    render(
+      <ConfirmProvider>
+        <MemoryReview personaId={5} items={items} onChanged={() => {}} />
+      </ConfirmProvider>,
+    );
+    await user.click(screen.getAllByText(translate("zh", "memoryPhoto.attach"))[0]!);
+    await user.click(
+      screen.getByRole("button", { name: translate("zh", "memoryPhoto.pick") }),
+    );
+    expect(linkMedia).toHaveBeenCalledWith({ memoryId: 1, mediaId: 11 });
   });
 
   it("deletes a memory after the confirmation", async () => {

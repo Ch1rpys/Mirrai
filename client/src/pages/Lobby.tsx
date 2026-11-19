@@ -1246,7 +1246,7 @@ function QuickChatBar({ personas, onChat }: { personas: any[]; onChat: (id: numb
               className="flex flex-col items-center gap-1.5 flex-shrink-0 group relative">
               <div className="relative">
                 <div className="mood-ring-sm" style={{ "--mood-color": emotionColor(p.emotionalState) } as CSSProperties}>
-                  <PersonaAvatar name={p.name} className="w-12 h-12 rounded-full text-base" />
+                  <PersonaAvatar name={p.name} url={p.avatarUrl} className="w-12 h-12 rounded-full text-base" />
                 </div>
                 <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-card border flex items-center justify-center"
                   style={{ borderColor: emotionColor(p.emotionalState), color: emotionColor(p.emotionalState) }}>

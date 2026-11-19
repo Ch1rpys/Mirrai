@@ -11,11 +11,23 @@ const TONES = [
 
 export function PersonaAvatar({
   name,
+  url,
   className,
 }: {
   name: string;
+  /** A real photograph the user chose (B7.8); the initial is the fallback. */
+  url?: string | null;
   className?: string;
 }) {
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt=""
+        className={cn("inline-block object-cover select-none", className)}
+      />
+    );
+  }
   const label = name || "?";
   const idx = label.charCodeAt(0) % TONES.length;
   return (

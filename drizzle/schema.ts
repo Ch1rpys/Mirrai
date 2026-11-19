@@ -1821,3 +1821,26 @@ export const media = pgTable("media", {
 
 export type Media = typeof media.$inferSelect;
 export type InsertMedia = typeof media.$inferInsert;
+
+/**
+ * A photograph the user attached to a memory (B7.8).
+ *
+ * The photo lives in `media`; this table only says which memory it
+ * belongs to. A photo can belong to more than one memory and a memory
+ * can carry more than one photo.
+ */
+export const memoryMedia = pgTable("memory_media", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  memoryId: integer("memoryId").notNull(),
+  mediaId: integer("mediaId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  onePair: uniqueIndex("memory_media_pair_idx").on(table.memoryId, table.mediaId),
+  personaIdx: index("memory_media_persona_idx").on(table.personaId, table.userId),
+  mediaIdx: index("memory_media_media_idx").on(table.mediaId),
+}));
+
+export type MemoryMedia = typeof memoryMedia.$inferSelect;
+export type InsertMemoryMedia = typeof memoryMedia.$inferInsert;

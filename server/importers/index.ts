@@ -473,7 +473,11 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
        * the record it belongs to. The files stay in the import
        * directory; deleting that import removes the rows with it.
        */
-      await registerMedia({ personaId: file.personaId, userId: input.userId });
+      await registerMedia({
+        personaId: file.personaId,
+        userId: input.userId,
+        timeZone: user?.timezone ?? persona?.timezone ?? null,
+      });
     } catch (error) {
       console.warn("[Import] The media rows could not be stored:", error);
     }

@@ -8,10 +8,11 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import { getPersonaById, listVoices } from "../db";
+import { getPersonaById, listMedia, listVoices } from "../db";
 import { startMediaTranscription, transcriptionStatus } from "../media/transcribe";
 import { sttEngine } from "../_core/stt";
 import { measureProsody } from "../_core/prosody";
+import { faceModelsAvailable } from "../_core/face-models";
 
 function urlOf(fileKey: string): string {
   return `/uploads/${fileKey}`;
@@ -49,6 +50,32 @@ export const mediaRouter = router({
           recordId: row.recordId,
         })),
         nextCursor: page.nextCursor,
+      };
+    }),
+
+  /**
+   * The photographs of one persona (B7.8).
+   *
+   * Newest first, with the camera's time when it had one. This is the
+   * album, the avatar picker's source, and the memory panel's photos —
+   * all from the same `media` rows.
+   */
+  listPhotos: protectedProcedure
+    .input(z.object({ personaId: z.number(), limit: z.number().int().min(1).max(500).default(200) }))
+    .query(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      const rows = await listMedia(input.personaId, ctx.user.id, { kind: "photo" });
+      return {
+        photos: rows.slice(0, input.limit).map((row) => ({
+          id: row.id,
+          url: urlOf(row.fileKey),
+          at: row.at,
+          width: row.width,
+          height: row.height,
+          fromThem: row.fromThem,
+        })),
+        total: rows.length,
       };
     }),
 
@@ -91,6 +118,10 @@ export const mediaRouter = router({
 
   /** What this machine can do, for the upload and soundtrack pages. */
   capabilities: protectedProcedure.query(() => {
-    return { sttEngine: sttEngine() };
+    return {
+      sttEngine: sttEngine(),
+      /** Whether the face weights are on disk; the picker hides the button when not. */
+      faceModels: faceModelsAvailable(),
+    };
   }),
 });

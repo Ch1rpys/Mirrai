@@ -43,7 +43,19 @@ export interface Message {
   /** The quoted text, for the bubble. */
   replyToContent?: string | null;
   /** The memories that were injected into this turn. */
-  recalled?: Array<{ id: number; title: string; subject: string }>;
+  recalled?: Array<{
+    id: number;
+    title: string;
+    subject?: string;
+    /** The real photo attached to that memory (B7.8). */
+    photo?: {
+      id: number;
+      url: string;
+      at: Date | string | null;
+      width?: number | null;
+      height?: number | null;
+    };
+  }>;
   /**
    * Dates, places, and old days named in this reply, and whether the
    * record holds them.
@@ -639,6 +651,21 @@ export function MessageBubble({
               {msg.recalled.map((memory) => (
                 <li key={memory.id} className="text-[11px] text-muted-subtle leading-relaxed">
                   · {memory.title}
+                  {memory.photo && (
+                    <a
+                      href={memory.photo.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 block w-16 overflow-hidden rounded-sm border border-border/60"
+                    >
+                      <img
+                        src={memory.photo.url}
+                        alt=""
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                      />
+                    </a>
+                  )}
                 </li>
               ))}
             </ul>

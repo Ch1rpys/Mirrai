@@ -483,6 +483,35 @@ describe("the message bubble", () => {
     expect(screen.getByText(/她养的那只猫/)).toBeInTheDocument();
   });
 
+  it("shows the real photo a recalled memory carries", () => {
+    const { container } = render(
+      <MessageBubble
+        msg={makeMessage({
+          recalled: [
+            {
+              id: 1,
+              title: "第一次见面",
+              subject: "them",
+              photo: {
+                id: 11,
+                url: "/uploads/personas/1/5/imports/1/a.jpg",
+                at: "2022-04-02T04:00:00.000Z",
+                width: 4,
+                height: 4,
+              },
+            },
+          ],
+        })}
+        personaName="小A"
+        showMood={false}
+      />,
+    );
+    const image = container.querySelector(
+      'img[src="/uploads/personas/1/5/imports/1/a.jpg"]',
+    );
+    expect(image).not.toBeNull();
+  });
+
   it("marks a supported claim and an unsupported one", () => {
     render(
       <MessageBubble

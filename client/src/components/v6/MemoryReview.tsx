@@ -1,4 +1,5 @@
-import { Pin, X } from "lucide-react";
+import { useState } from "react";
+import { ImagePlus, Pin, X } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { useConfirm } from "@/components/ConfirmDialog";
@@ -16,6 +17,13 @@ type MemoryRow = {
   messageId?: number | null;
   factKey?: string | null;
   status?: string;
+  media?: Array<{
+    id: number;
+    url: string;
+    at: Date | string | null;
+    width?: number | null;
+    height?: number | null;
+  }>;
 };
 
 const CATEGORY_LABELS: Record<string, { labelKey: "chat.memory.categories.memory" | "chat.memory.categories.milestone" | "chat.memory.categories.anniversary" | "chat.memory.categories.anchor"; dot: string; chip: string }> = {
@@ -102,6 +110,10 @@ export default function MemoryReview(props: {
                       )}
                       <p className="text-sm font-medium text-foreground mt-1">{m.title}</p>
                       {m.description && <p className="text-xs text-muted-foreground mt-0.5">{m.description}</p>}
+                      <MemoryPhotos
+                        memory={m}
+                        onChanged={props.onChanged}
+                      />
                       {m.messageId ? (
                         <button
                           type="button"
@@ -173,6 +185,126 @@ export default function MemoryReview(props: {
           </section>
         );
       })}
+    </div>
+  );
+}
+
+
+/**
+ * A photo attached to a memory (B7.8).
+ *
+ * The suggestion is only a suggestion: the user picks the photo. A
+ * memory without a photo shows one quiet button and nothing else, so
+ * the panel does not turn into an album by itself.
+ */
+function MemoryPhotos({
+  memory,
+  onChanged,
+}: {
+  memory: MemoryRow;
+  onChanged?: () => void;
+}) {
+  const { t } = useLocale();
+  const [picking, setPicking] = useState(false);
+  const suggest = trpc.memory.suggestMedia.useQuery(
+    { memoryId: memory.id },
+    { enabled: picking },
+  );
+  const link = trpc.memory.linkMedia.useMutation({
+    onSuccess: () => {
+      setPicking(false);
+      onChanged?.();
+    },
+    onError: (error: { message: string }) => toast.error(error.message),
+  });
+  const unlink = trpc.memory.unlinkMedia.useMutation({
+    onSuccess: () => onChanged?.(),
+    onError: (error: { message: string }) => toast.error(error.message),
+  });
+  const photos = memory.media ?? [];
+
+  return (
+    <div className="mt-1.5">
+      {photos.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {photos.map((photo) => (
+            <span key={photo.id} className="relative inline-block group/photo">
+              <a
+                href={photo.url}
+                target="_blank"
+                rel="noreferrer"
+                title={t("memoryPhoto.attached")}
+                className="block w-14 h-14 overflow-hidden rounded-sm border border-border/60"
+              >
+                <img src={photo.url} alt="" className="w-full h-full object-cover" />
+              </a>
+              <button
+                type="button"
+                title={t("memoryPhoto.remove")}
+                aria-label={t("memoryPhoto.remove")}
+                disabled={unlink.isPending}
+                onClick={() => unlink.mutate({ memoryId: memory.id, mediaId: photo.id })}
+                className="absolute -top-1.5 -right-1.5 rounded-full bg-background border border-border p-0.5 opacity-100 md:opacity-0 md:group-hover/photo:opacity-100 focus-visible:opacity-100"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {picking ? (
+        <div className="mt-1.5 space-y-1.5">
+          {suggest.isLoading && (
+            <p className="text-[11px] text-muted-subtle">{t("common.loading")}</p>
+          )}
+          {suggest.isError && (
+            <p className="text-[11px] text-muted-subtle">
+              {t("memoryPhoto.failed")}{" "}
+              <button type="button" className="underline" onClick={() => suggest.refetch()}>
+                {t("common.retry")}
+              </button>
+            </p>
+          )}
+          {suggest.data && suggest.data.photos.length === 0 && (
+            <p className="text-[11px] text-muted-subtle">{t("memoryPhoto.empty")}</p>
+          )}
+          {suggest.data && suggest.data.photos.length > 0 && (
+            <>
+              <p className="text-[11px] text-muted-subtle">{t("memoryPhoto.suggestHint")}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {suggest.data.photos.map((photo) => (
+                  <button
+                    key={photo.id}
+                    type="button"
+                    className="w-14 h-14 overflow-hidden rounded-sm border border-border/60 hover:border-primary transition-colors"
+                    aria-label={t("memoryPhoto.pick")}
+                    disabled={link.isPending}
+                    onClick={() => link.mutate({ memoryId: memory.id, mediaId: photo.id })}
+                  >
+                    <img src={photo.url} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          <button
+            type="button"
+            className="text-[11px] text-muted-foreground underline underline-offset-2"
+            onClick={() => setPicking(false)}
+          >
+            {t("common.cancel")}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="text-[11px] text-muted-foreground underline underline-offset-2 inline-flex items-center gap-1"
+          onClick={() => setPicking(true)}
+        >
+          <ImagePlus className="w-3 h-3" />
+          {photos.length > 0 ? t("memoryPhoto.change") : t("memoryPhoto.attach")}
+        </button>
+      )}
     </div>
   );
 }

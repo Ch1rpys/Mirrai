@@ -21,6 +21,7 @@ import DelayView, { SleepWindow } from "@/components/v6/DelayView";
 import TriggersView from "@/components/v6/TriggersView";
 import ProsodyView from "@/components/v6/ProsodyView";
 import CallsView from "@/components/v6/CallsView";
+import PhotoTimeline from "@/components/v6/PhotoTimeline";
 import { Button } from "@/components/ui/button";
 import { resolveRelationshipPhase } from "@shared/user-side";
 
@@ -192,7 +193,7 @@ export default function PersonaProfile() {
       <main className="container page-main max-w-3xl space-y-6">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="surface p-5 sm:p-6">
           <div className="flex items-start gap-4">
-            <PersonaAvatar name={persona.name} className="w-16 h-16 rounded-full text-2xl flex-shrink-0" />
+            <PersonaAvatar name={persona.name} url={persona.avatarUrl} className="w-16 h-16 rounded-full text-2xl flex-shrink-0" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="font-display text-xl font-semibold text-foreground">{persona.name}</h1>
@@ -433,6 +434,18 @@ export default function PersonaProfile() {
               {t("profile.voicesEntryNote")}
             </span>
           </button>
+          <details className="rounded-lg border border-border/70 p-3">
+            <summary className="cursor-pointer text-sm text-foreground">
+              {t("profile.photosEntry", { name: persona.name })}
+            </summary>
+            <div className="pt-3">
+              <PhotoTimeline
+                personaId={personaId}
+                name={persona.name}
+                timeZone={persona.timezone}
+              />
+            </div>
+          </details>
         </motion.section>
 
         <motion.section

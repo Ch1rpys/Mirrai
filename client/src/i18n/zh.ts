@@ -1894,6 +1894,7 @@ export const zh = {
   profile: {
     moreTitle: "更多",
     voicesEntry: "听听 {{name}} 的声音",
+    photosEntry: "{{name}} 的照片",
     voicesEntryNote: "记录里的真实录音，不是合成的。",
     kicker: "TA 是谁",
     edit: "去修改",
@@ -2300,6 +2301,48 @@ export const zh = {
     medianChars: "中位句长",
     newlineRate: "换行率",
     questionEndingRate: "问句收尾率",
+  },
+
+  memoryPhoto: {
+    attach: "挂一张照片",
+    change: "换一张照片",
+    remove: "把照片拿下来",
+    pick: "用这张照片",
+    attached: "这张照片挂在记忆上",
+    suggestHint: "记忆日期前后三天的照片",
+    empty: "这几天前后没有照片。",
+    failed: "照片没读出来。",
+  },
+
+  photos: {
+    title: "{{name}} 的照片",
+    note: "这里都是你上传过的真照片，没有一张是生成的。",
+    empty: "还没有照片。带图片的记录导进来之后会出现在这里。",
+    loadFailed: "相册没读出来。",
+    open: "看这张照片",
+    close: "关闭",
+    noDate: "不知道这张是什么时候拍的",
+  },
+
+  avatar: {
+    title: "头像",
+    note: "只从真实照片里选，会裁成正方形。",
+    current: "{{name}} 的头像",
+    chooseLocal: "选一张照片",
+    remove: "不用头像",
+    saved: "头像换好了。",
+    dragHint: "在照片上拖一个正方形。",
+    cropAlt: "待裁剪的照片",
+    save: "用这张",
+    cancel: "取消",
+    albumFailed: "相册没读出来。",
+    fromAlbum: "从相册里选一张",
+    usePhoto: "用这张照片",
+    faceButton: "帮我找出 {{name}} 的脸",
+    faceHint: "只在你的浏览器里算，结果不会存下来。",
+    faceFailed: "这次没有看出脸来，换一张试试。",
+    faceEmpty: "这些照片里没有找到脸。",
+    clusterSize: "这一组有 {{n}} 张",
   },
 
   material: {

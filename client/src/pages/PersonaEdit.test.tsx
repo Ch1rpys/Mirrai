@@ -45,6 +45,19 @@ vi.mock("@/lib/trpc", () => ({
       graduationMode: { useQuery: () => ({ data: { mode: "suggest" } }) },
       getSettings: { useQuery: () => ({ data: { layers: { abPairs: false } }, isLoading: false, refetch: vi.fn() }) },
       updateSettings: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      uploadAvatar: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clearAvatar: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    media: {
+      capabilities: { useQuery: () => ({ data: { faceModels: false }, isLoading: false }) },
+      listPhotos: {
+        useQuery: () => ({
+          data: { photos: [], total: 0 },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
     },
     personaCard: {
       export: { useMutation: () => ({ mutate: exportCard, isPending: false }) },
