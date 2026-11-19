@@ -13,6 +13,16 @@ import { translate } from "@/i18n";
  */
 
 const history: unknown[] = [];
+const chatPersona = vi.hoisted(() => ({
+  value: {
+    id: 1,
+    name: "小A",
+    analysisStatus: "ready",
+    emotionalState: "warm",
+    graduationStatus: null,
+    personaData: {},
+  } as Record<string, unknown>,
+}));
 
 const streamChat = vi.fn();
 
@@ -27,14 +37,7 @@ vi.mock("@/lib/trpc", () => ({
     persona: {
       get: {
         useQuery: () => ({
-          data: {
-            id: 1,
-            name: "小A",
-            analysisStatus: "ready",
-            emotionalState: "warm",
-            graduationStatus: null,
-            personaData: {},
-          },
+          data: chatPersona.value,
           isError: false,
           error: null,
           refetch: vi.fn(),
@@ -142,7 +145,22 @@ describe("Chat", () => {
   beforeEach(() => {
     streamChat.mockReset();
     history.length = 0;
+    delete chatPersona.value.settings;
     Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("wears the skin and the note the user chose, and keeps the badge", () => {
+    chatPersona.value.settings = { skin: { theme: "im-green", alias: "阿满" } };
+    const { container } = render(<Chat />);
+    const root = container.querySelector(".chat-root");
+    expect(root?.getAttribute("data-skin")).toBe("im-green");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("阿满");
+    expect(screen.getByText("数字分身")).toBeInTheDocument();
+  });
+
+  it("is the classic layout by default", () => {
+    const { container } = render(<Chat />);
+    expect(container.querySelector(".chat-root")?.getAttribute("data-skin")).toBe("classic");
   });
 
   it("lets the composer take another line while a reply is still arriving", async () => {

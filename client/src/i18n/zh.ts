@@ -2321,6 +2321,24 @@ export const zh = {
     failed: "照片没读出来。",
   },
 
+  skin: {
+    title: "聊天页的样子",
+    note: "换成接近你们原来聊天的版式。只改外观，不改任何内容。",
+    classic: "默认",
+    green: "绿色气泡",
+    blue: "蓝色气泡",
+    aliasLabel: "你给 TA 的备注",
+    aliasPlaceholder: "显示在顶栏",
+    saveAlias: "保存备注名",
+    chooseBackground: "换聊天背景",
+    clearBackground: "不用背景图",
+    backgroundAlt: "聊天背景",
+    backgroundSaved: "背景换好了。",
+    saved: "样子换好了。",
+    tooLarge: "背景图不能超过 2 MB。",
+    unreadable: "这张图没有读成图片。",
+  },
+
   moments: {
     title: "动态",
     note: "发在朋友圈、动态里的话是公开的语气，不会混进你们一对一的聊天。粘贴一段文字，或者导入截图。",

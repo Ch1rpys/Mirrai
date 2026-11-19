@@ -1,0 +1,97 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   The chat's appearance (B7.15).
+
+   Three neutral layouts. Only the look changes: the words, the metadata
+   and the "this is a digital persona" badge are the same in all of them.
+
+   The classic layout is the app's own. The two IM layouts put both
+   people's avatars beside the bubbles and use a flatter, squarer
+   bubble — the shape a chat app usually has — without naming or copying
+   any particular product.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.chat-root[data-skin="im-green"] {
+  background-color: #ececec;
+}
+
+.chat-root[data-skin="im-blue"] {
+  background-color: #edf1f7;
+}
+
+.chat-root[data-skin="im-green"] .bubble-user {
+  background: #a9e97a;
+  color: #14210e;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0.375rem;
+}
+
+.chat-root[data-skin="im-green"] .bubble-ai {
+  background: #ffffff;
+  color: #1c1c1c;
+  border: 0;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+  border-radius: 0.375rem;
+}
+
+.chat-root[data-skin="im-blue"] .bubble-user {
+  background: #5b8def;
+  color: #ffffff;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0.375rem;
+}
+
+.chat-root[data-skin="im-blue"] .bubble-ai {
+  background: #ffffff;
+  color: #1c1c1c;
+  border: 0;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+  border-radius: 0.375rem;
+}
+
+/* Both people get a round avatar in the two IM layouts. The classic
+   layout keeps the single avatar it has always had. */
+.chat-root[data-skin="im-green"] .message-row,
+.chat-root[data-skin="im-blue"] .message-row {
+  align-items: flex-start;
+}
+
+.chat-root[data-skin="im-green"] .message-row .message-avatar,
+.chat-root[data-skin="im-blue"] .message-row .message-avatar {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.chat-root[data-skin="im-green"] .message-row .message-avatar-user,
+.chat-root[data-skin="im-blue"] .message-row .message-avatar-user {
+  display: inline-flex;
+}
+
+/* The time bar the three layouts share. The classic layout does not
+   draw one, because it already shows times its own way. */
+.chat-root[data-skin="im-green"] .time-bar,
+.chat-root[data-skin="im-blue"] .time-bar {
+  display: flex;
+}
+
+.chat-root[data-skin="im-green"] .time-bar span,
+.chat-root[data-skin="im-blue"] .time-bar span {
+  background: rgb(0 0 0 / 0.08);
+  color: rgb(0 0 0 / 0.55);
+  border-radius: 0.25rem;
+  font-size: 0.6875rem;
+  padding: 0.125rem 0.5rem;
+}
+
+.chat-root[data-skin="im-green"] .chat-composer,
+.chat-root[data-skin="im-blue"] .chat-composer {
+  background: rgb(255 255 255 / 0.82);
+  border-top: 1px solid rgb(0 0 0 / 0.06);
+  backdrop-filter: blur(6px);
+}

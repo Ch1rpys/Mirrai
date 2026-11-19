@@ -72,6 +72,7 @@ import {
   getPersonaSettings, setPersonaSettings,
   getPersonaStyleProfile, setPersonaStyleProfile,
   setPersonaAvatar,
+  setPersonaBackground,
   linkMemoryMedia, unlinkMemoryMedia, listMemoryMedia, getMediaById,
   listMedia,
   listMemoryMediaForMemories,
@@ -322,6 +323,8 @@ const MAX_IMAGE_UPLOAD_BYTES = 20 * 1024 * 1024;
 const MAX_AUDIO_UPLOAD_BYTES = 25 * 1024 * 1024;
 /** The avatar is decoded and re-encoded by the browser at 512 pixels. */
 const MAX_AVATAR_BYTES = 1024 * 1024;
+/** A chat background: a picture the browser may downscale before sending. */
+const MAX_BACKGROUND_BYTES = 2 * 1024 * 1024;
 
 /** The key inside a stored `/uploads/...` URL, or null. */
 function uploadKeyOf(url: string | null | undefined): string | null {
@@ -1247,6 +1250,59 @@ export const appRouter = router({
         const oldKey = uploadKeyOf(persona.avatarUrl);
         if (oldKey && oldKey !== fileKey) await storageDelete(oldKey);
         return { avatarUrl: url };
+      }),
+
+    /**
+     * The chat background (B7.15).
+     *
+     * The same rules as the avatar: the bytes decide the kind, the
+     * decoded size is bounded, and the old file goes only after the new
+     * one is written.
+     */
+    uploadBackground: protectedProcedure
+      .use(rateLimit(RATE_LIMITS.upload))
+      .input(z.object({ personaId: z.number(), base64: z.string().min(1).max(12_000_000) }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const buffer = decodeBase64Image(input.base64, MAX_BACKGROUND_BYTES);
+        if (!buffer) {
+          const decoded = decodeBase64Image(input.base64, Number.MAX_SAFE_INTEGER);
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: copy(
+              ctx.locale,
+              decoded ? "errors.backgroundTooLarge" : "errors.backgroundType",
+            ),
+          });
+        }
+        const kind = sniffPersonaImage(buffer);
+        if (!kind) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: copy(ctx.locale, "errors.backgroundType"),
+          });
+        }
+        const oldBackground = normalizePersonaSettings(persona.settings).skin?.background ?? null;
+        const fileKey = `personas/${ctx.user.id}/${input.personaId}/bg-${nanoid()}.${kind}`;
+        const { url } = await storagePut(fileKey, buffer, PERSONA_IMAGE_MIME[kind]);
+        const written = await setPersonaBackground(input.personaId, ctx.user.id, url);
+        if (!written) throw new TRPCError({ code: "NOT_FOUND" });
+        const oldKey = uploadKeyOf(oldBackground);
+        if (oldKey && oldKey !== fileKey) await storageDelete(oldKey);
+        return { backgroundUrl: url };
+      }),
+
+    clearBackground: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const oldBackground = normalizePersonaSettings(persona.settings).skin?.background ?? null;
+        await setPersonaBackground(input.personaId, ctx.user.id, null);
+        const oldKey = uploadKeyOf(oldBackground);
+        if (oldKey) await storageDelete(oldKey);
+        return { backgroundUrl: null };
       }),
 
     clearAvatar: protectedProcedure

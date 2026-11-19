@@ -2310,6 +2310,24 @@ export const en = {
     failed: "The photos could not be read.",
   },
 
+  skin: {
+    title: "How the chat looks",
+    note: "Change the layout to something closer to what you used to use. This changes the look only, never the content.",
+    classic: "Default",
+    green: "Green bubbles",
+    blue: "Blue bubbles",
+    aliasLabel: "Your name for them",
+    aliasPlaceholder: "Shown in the header",
+    saveAlias: "Save the name",
+    chooseBackground: "Change the background",
+    clearBackground: "No background picture",
+    backgroundAlt: "Chat background",
+    backgroundSaved: "The background is changed.",
+    saved: "The look is changed.",
+    tooLarge: "The background cannot be larger than 2 MB.",
+    unreadable: "That picture could not be read.",
+  },
+
   moments: {
     title: "Public posts",
     note: "What they posted publicly is a different voice from your one-to-one chat. Paste the text, or import screenshots.",

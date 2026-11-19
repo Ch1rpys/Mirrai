@@ -72,6 +72,14 @@ export const V6 = {
     zh: "头像只收 JPEG、PNG 或 WebP 的图片。",
     en: "The avatar has to be a JPEG, PNG or WebP picture.",
   },
+  "errors.backgroundType": {
+    zh: "背景只收 JPEG、PNG 或 WebP 的图片。",
+    en: "The background has to be a JPEG, PNG or WebP picture.",
+  },
+  "errors.backgroundTooLarge": {
+    zh: "背景图不能超过 2 MB。",
+    en: "The background cannot be larger than 2 MB.",
+  },
   "errors.avatarTooLarge": {
     zh: "头像不能超过 1 MB。",
     en: "The avatar cannot be larger than 1 MB.",

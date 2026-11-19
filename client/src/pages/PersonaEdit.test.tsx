@@ -43,10 +43,18 @@ vi.mock("@/lib/trpc", () => ({
       applyCorrection: { useMutation: () => ({ mutate: applyCorrection, isPending: false }) },
       correctionLog: { useQuery: () => ({ data: { entries: [] } }) },
       graduationMode: { useQuery: () => ({ data: { mode: "suggest" } }) },
-      getSettings: { useQuery: () => ({ data: { layers: { abPairs: false } }, isLoading: false, refetch: vi.fn() }) },
+      getSettings: {
+        useQuery: () => ({
+          data: { layers: { abPairs: false }, skin: { theme: "classic" } },
+          isLoading: false,
+          refetch: vi.fn(),
+        }),
+      },
       updateSettings: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       uploadAvatar: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       clearAvatar: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      uploadBackground: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clearBackground: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     media: {
       capabilities: { useQuery: () => ({ data: { faceModels: false }, isLoading: false }) },

@@ -28,6 +28,7 @@ import WorldEditors from "@/components/v6/WorldEditors";
 import PersonaSwitches from "@/components/v6/PersonaSwitches";
 import StickerLibrary from "@/components/v6/StickerLibrary";
 import AvatarPicker from "@/components/v6/AvatarPicker";
+import SkinPicker from "@/components/v6/SkinPicker";
 import PersonaSampling from "@/components/v6/PersonaSampling";
 import HarmNotice from "@/components/v6/HarmNotice";
 import VersionHistory from "@/components/v6/VersionHistory";
@@ -610,6 +611,11 @@ export default function PersonaEdit() {
             avatarUrl={persona.avatarUrl}
             onChanged={() => refetch()}
           />
+        </section>
+
+        {/* The chat's appearance (B7.15). */}
+        <section className="surface p-5 sm:p-6 animate-fade-in-up">
+          <SkinPicker personaId={personaId} />
         </section>
 
         {/* The letters. A letter that is kept and never answered, and a

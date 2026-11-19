@@ -26,6 +26,8 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { formatZonedClock, zonedHour, daysSinceContact } from "@shared/timezone";
 import { formatDayKey, formatInstantInZone, formatTimeInZone } from "@/lib/dates";
 import DigitalPersonaBadge from "@/components/DigitalPersonaBadge";
+import TimeBar from "@/components/v6/TimeBar";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionKey } from "@/lib/emotions";
 import { useConfirm } from "@/components/ConfirmDialog";
 import MemoryReview from "@/components/v6/MemoryReview";
@@ -187,7 +189,7 @@ export default function Chat() {
   const personaId = Number.parseInt(params.id ?? "", 10);
   const hasPersonaId = Number.isInteger(personaId) && personaId > 0;
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth({ redirectOnUnauthenticated: true });
+  const { isAuthenticated, user } = useAuth({ redirectOnUnauthenticated: true });
   const { t, locale } = useLocale();
   /**
    * The app's own confirmation.
@@ -395,6 +397,8 @@ export default function Chat() {
     () => periods.find((period) => period.id === periodId) ?? null,
     [periods, periodId],
   );
+  const skin = normalizePersonaSettings(persona?.settings).skin ?? { theme: "classic" as const };
+  const displayName = skin.alias?.trim() || persona?.name || "";
 
   /**
    * A farewell the app has already offered.
@@ -1726,7 +1730,19 @@ export default function Chat() {
   }
 
   return (
-    <div className="h-dvh bg-background flex flex-col relative">
+    <div
+      className="h-dvh bg-background flex flex-col relative chat-root"
+      data-skin={skin.theme}
+      style={
+        skin.background
+          ? {
+              backgroundImage: `url("${skin.background}")`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+            }
+          : undefined
+      }
+    >
       {/* Header */}
       <header className="sticky top-0 z-40 app-header flex-shrink-0">
         <div className="container app-nav">
@@ -1755,7 +1771,7 @@ export default function Chat() {
                   role="heading"
                   aria-level={1}
                 >
-                  {persona?.name || "..."}
+                  {displayName || "..."}
                 </p>
                 {/* The user should always know what they are talking to.
                     The label lives in the interface, not in the model's
@@ -2184,11 +2200,21 @@ export default function Chat() {
                 : msg.role === "user" && liveChoice && liveChoice.replyToMessageId === numericId
                   ? liveChoice
                   : null;
+            const previous = i > 0 ? messages[i - 1] : undefined;
             return (
               <div key={msg.id} data-message-id={msg.id}>
+              <TimeBar
+                at={msg.createdAt}
+                previousAt={previous?.createdAt}
+                skin={skin.theme}
+                locale={locale}
+                timeZone={user?.timezone}
+              />
               <MessageBubble
                 msg={msg}
-                personaName={persona?.name || "?"}
+                personaName={displayName || "?"}
+                showUserAvatar={skin.theme !== "classic"}
+                userName={user?.name || t("common.me")}
                 showMood={showMood}
                 personaId={personaId}
                 onRegenerate={handleRegenerate}

@@ -311,6 +311,8 @@ function numericMessageId(id: Message["id"]): number | null {
 export function MessageBubble({
   msg,
   personaName,
+  showUserAvatar,
+  userName,
   showMood,
   personaId,
   onRegenerate,
@@ -321,6 +323,8 @@ export function MessageBubble({
 }: {
   msg: Message;
   personaName: string;
+  showUserAvatar?: boolean;
+  userName?: string;
   showMood: boolean;
   personaId?: number;
   onRegenerate?: (msg: Message) => void;
@@ -609,7 +613,7 @@ export function MessageBubble({
   }
 
   return (
-    <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"} mb-4 animate-fade-in-up`}>
+    <div className={`message-row flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"} mb-4 animate-fade-in-up`}>
       {!isUser && (
         <>
           {/* The persona's name, for a screen reader.
@@ -618,8 +622,14 @@ export function MessageBubble({
               given message came from, which in an app with several of
               them is the context that matters. */}
           <span className="sr-only">{personaName}</span>
-          <PersonaAvatar name={personaName} className="w-8 h-8 rounded-full text-sm flex-shrink-0 mt-0.5" />
+          <PersonaAvatar name={personaName} className="message-avatar w-8 h-8 rounded-full text-sm flex-shrink-0 mt-0.5" />
         </>
+      )}
+      {isUser && showUserAvatar && (
+        <PersonaAvatar
+          name={userName || ""}
+          className="message-avatar message-avatar-user hidden w-8 h-8 rounded-full text-sm flex-shrink-0 mt-0.5"
+        />
       )}
       <div className={`max-w-[78%] sm:max-w-[75%] flex flex-col gap-1.5 ${isUser ? "items-end" : "items-start"}`}>
         {!isUser && mood && showMood && (

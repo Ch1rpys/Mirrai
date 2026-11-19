@@ -3023,6 +3023,34 @@ export interface VoicePage {
 }
 
 /**
+ * Writes the chat background of one persona into its settings (B7.15).
+ *
+ * The upload route sets one string; reading and rewriting the whole
+ * settings object under the persona lock is not needed for that.
+ */
+export async function setPersonaBackground(
+  personaId: number,
+  userId: number,
+  background: string | null,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .update(personas)
+    .set({
+      settings: sql`jsonb_set(
+        COALESCE(${personas.settings}, '{}'::jsonb),
+        '{skin,background}',
+        ${JSON.stringify(background ?? "")}::jsonb,
+        true
+      )`,
+    })
+    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)))
+    .returning({ id: personas.id });
+  return rows.length > 0;
+}
+
+/**
  * The photos sent into the conversation since a moment (B7.9).
  *
  * The same picture is not sent twice within a month. The message's

@@ -10,6 +10,7 @@ import type { TrpcContext } from "./_core/context";
 
 const getPersonaById = vi.fn();
 const setPersonaAvatar = vi.fn();
+const setPersonaBackground = vi.fn();
 const storagePut = vi.fn();
 const storageDelete = vi.fn();
 
@@ -22,6 +23,7 @@ vi.mock("./db", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   setPersonaAvatar: (...a: unknown[]) => setPersonaAvatar(...a),
+  setPersonaBackground: (...a: unknown[]) => setPersonaBackground(...a),
 }));
 
 import { appRouter } from "./routers";
@@ -53,6 +55,7 @@ describe("uploading an avatar", () => {
     vi.clearAllMocks();
     getPersonaById.mockResolvedValue({ id: 5, userId: 1, name: "小满", avatarUrl: null });
     setPersonaAvatar.mockResolvedValue(true);
+    setPersonaBackground.mockResolvedValue(true);
     storagePut.mockImplementation(async (key: string) => ({ key, url: `/uploads/${key}` }));
   });
 
@@ -113,6 +116,58 @@ describe("uploading an avatar", () => {
       base64: PNG_DATA_URL,
     });
     expect(storageDelete).toHaveBeenCalledWith("personas/1/5/old.png");
+  });
+
+  it("uploads a background and removes the old one", async () => {
+    getPersonaById.mockResolvedValue({
+      id: 5,
+      userId: 1,
+      name: "小满",
+      avatarUrl: null,
+      settings: { skin: { theme: "classic", background: "/uploads/personas/1/5/old-bg.png" } },
+    });
+    const result = await appRouter.createCaller(ctxFor()).persona.uploadBackground({
+      personaId: 5,
+      base64: PNG_DATA_URL,
+    });
+    expect(result.backgroundUrl).toMatch(/^\/uploads\/personas\/1\/5\/bg-.+\.png$/);
+    expect(setPersonaBackground).toHaveBeenCalledWith(5, 1, result.backgroundUrl);
+    expect(storageDelete).toHaveBeenCalledWith("personas/1/5/old-bg.png");
+  });
+
+  it("refuses a background over two megabytes and an SVG", async () => {
+    const big = Buffer.concat([PNG, Buffer.alloc(2 * 1024 * 1024)]);
+    await expect(
+      appRouter.createCaller(ctxFor()).persona.uploadBackground({
+        personaId: 5,
+        base64: `data:image/png;base64,${big.toString("base64")}`,
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      appRouter.createCaller(ctxFor()).persona.uploadBackground({
+        personaId: 5,
+        base64: SVG_DATA_URL,
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(sessionStoragePut()).toBe(0);
+  });
+
+  function sessionStoragePut() {
+    return storagePut.mock.calls.filter((call) => String(call[0]).includes("bg-")).length;
+  }
+
+  it("clears a background and its file", async () => {
+    getPersonaById.mockResolvedValue({
+      id: 5,
+      userId: 1,
+      name: "小满",
+      avatarUrl: null,
+      settings: { skin: { theme: "classic", background: "/uploads/personas/1/5/old-bg.png" } },
+    });
+    const result = await appRouter.createCaller(ctxFor()).persona.clearBackground({ personaId: 5 });
+    expect(result.backgroundUrl).toBeNull();
+    expect(setPersonaBackground).toHaveBeenCalledWith(5, 1, null);
+    expect(storageDelete).toHaveBeenCalledWith("personas/1/5/old-bg.png");
   });
 
   it("clears an avatar and its file", async () => {
