@@ -27,6 +27,7 @@ import {
   InsertUserMood, InsertRelationshipEvent, InsertLetter,
   replyJobs, InsertReplyJob, ReplyJob,
   stickers, InsertSticker, Sticker,
+  media, InsertMedia, Media,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
@@ -1022,7 +1023,7 @@ async function collectStoredFiles(userId: number, personaId?: number): Promise<s
    * would have been left behind even after the files table was
    * cleaned.
    */
-  const media = await db
+  const messageMedia = await db
     .select({ mediaUrl: messages.mediaUrl })
     .from(messages)
     .where(
@@ -1030,7 +1031,7 @@ async function collectStoredFiles(userId: number, personaId?: number): Promise<s
         ? eq(messages.userId, userId)
         : and(eq(messages.userId, userId), eq(messages.personaId, personaId)),
     );
-  for (const message of media) {
+  for (const message of messageMedia) {
     const url = message.mediaUrl;
     if (!url) continue;
     // The url is a path: "/uploads/chat/1/2/x.png".
@@ -1058,6 +1059,25 @@ async function collectStoredFiles(userId: number, personaId?: number): Promise<s
     );
   for (const sticker of stickerFiles) {
     if (sticker.fileKey) keys.add(sticker.fileKey);
+  }
+
+  /**
+   * The recordings and photographs.
+   *
+   * They are not copies — each row points into the import directory —
+   * but the row is what says the file belongs to this persona, so the
+   * files go when it does.
+   */
+  const mediaFiles = await db
+    .select({ fileKey: media.fileKey })
+    .from(media)
+    .where(
+      personaId === undefined
+        ? eq(media.userId, userId)
+        : and(eq(media.userId, userId), eq(media.personaId, personaId)),
+    );
+  for (const row of mediaFiles) {
+    if (row.fileKey) keys.add(row.fileKey);
   }
 
   return [...keys];
@@ -1120,6 +1140,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, id));
     await tx.delete(replyJobs).where(eq(replyJobs.userId, id));
     await tx.delete(stickers).where(eq(stickers.userId, id));
+    await tx.delete(media).where(eq(media.userId, id));
     await tx.delete(recordEmbeddings).where(eq(recordEmbeddings.userId, id));
     await tx.delete(relationshipEvents).where(eq(relationshipEvents.userId, id));
     await tx.delete(reminderDeliveries).where(eq(reminderDeliveries.userId, id));
@@ -1531,6 +1552,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(letters).where(and(eq(letters.personaId, id), eq(letters.userId, userId)));
     await tx.delete(replyJobs).where(and(eq(replyJobs.personaId, id), eq(replyJobs.userId, userId)));
     await tx.delete(stickers).where(and(eq(stickers.personaId, id), eq(stickers.userId, userId)));
+    await tx.delete(media).where(and(eq(media.personaId, id), eq(media.userId, userId)));
     await tx.delete(wechatBindings).where(and(eq(wechatBindings.personaId, id), eq(wechatBindings.userId, userId)));
     await tx.delete(personas).where(and(eq(personas.id, id), eq(personas.userId, userId)));
   });
@@ -2642,6 +2664,208 @@ export async function deleteSticker(
     )
     .returning();
   return row ?? null;
+}
+
+// ─── Media helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Registers a recording, photograph, or video.
+ *
+ * The hash is the identity: the same file imported twice must be one
+ * row. A re-import may bring a fresher timestamp or a transcript, so
+ * the interesting fields are updated rather than left alone.
+ */
+export async function upsertMedia(data: InsertMedia): Promise<Media> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [row] = await db
+    .insert(media)
+    .values(data)
+    .onConflictDoUpdate({
+      target: [media.personaId, media.userId, media.hash],
+      set: {
+        fileKey: data.fileKey,
+        mime: data.mime ?? null,
+        bytes: data.bytes ?? null,
+        at: data.at ?? null,
+        recordId: data.recordId ?? null,
+        fileId: data.fileId ?? null,
+        fromThem: data.fromThem ?? false,
+        durationSec: data.durationSec ?? null,
+        width: data.width ?? null,
+        height: data.height ?? null,
+        ...(data.transcript ? { transcript: data.transcript } : {}),
+        ...(data.transcriptEngine ? { transcriptEngine: data.transcriptEngine } : {}),
+        ...(data.exif ? { exif: data.exif } : {}),
+      },
+    })
+    .returning();
+  return row!;
+}
+
+export async function listMedia(
+  personaId: number,
+  userId: number,
+  options: { kind?: string } = {},
+): Promise<Media[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(media)
+    .where(
+      and(
+        eq(media.personaId, personaId),
+        eq(media.userId, userId),
+        ...(options.kind ? [eq(media.kind, options.kind)] : []),
+      ),
+    )
+    .orderBy(desc(media.at), desc(media.id));
+}
+
+/** The voice notes that do not have words yet. */
+export async function listUntranscribedMedia(
+  personaId: number,
+  userId: number,
+): Promise<Media[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(media)
+    .where(
+      and(
+        eq(media.personaId, personaId),
+        eq(media.userId, userId),
+        eq(media.kind, "voice"),
+        isNull(media.transcript),
+      ),
+    )
+    .orderBy(asc(media.id));
+}
+
+export async function setMediaTranscript(
+  id: number,
+  userId: number,
+  transcript: string,
+  engine: string,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const [row] = await db
+    .update(media)
+    .set({ transcript, transcriptEngine: engine })
+    .where(and(eq(media.id, id), eq(media.userId, userId)))
+    .returning({ id: media.id });
+  return Boolean(row);
+}
+
+export async function countMedia(
+  personaId: number,
+  userId: number,
+  kind?: string,
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [row] = await db
+    .select({ c: count() })
+    .from(media)
+    .where(
+      and(
+        eq(media.personaId, personaId),
+        eq(media.userId, userId),
+        ...(kind ? [eq(media.kind, kind)] : []),
+      ),
+    );
+  return Number(row?.c ?? 0);
+}
+
+/** Removes the media rows of one deleted source file. */
+export async function deleteMediaByFile(
+  personaId: number,
+  userId: number,
+  fileId: number,
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows = await db
+    .delete(media)
+    .where(
+      and(
+        eq(media.personaId, personaId),
+        eq(media.userId, userId),
+        eq(media.fileId, fileId),
+      ),
+    )
+    .returning({ id: media.id });
+  return rows.length;
+}
+
+export interface VoicePage {
+  rows: Media[];
+  nextCursor: number | null;
+}
+
+/**
+ * The voice notes of a persona, newest first.
+ *
+ * The cursor is the last id of the previous page. Registration walks
+ * the record in time order, so id order is arrival order — which is
+ * close enough to time order for a paged list, and it is a stable one.
+ */
+export async function listVoices(
+  personaId: number,
+  userId: number,
+  options: { q?: string; fromThem?: boolean; cursor?: number; limit?: number } = {},
+): Promise<VoicePage> {
+  const db = await getDb();
+  if (!db) return { rows: [], nextCursor: null };
+  const limit = Math.max(1, Math.min(100, options.limit ?? 30));
+  const q = options.q?.trim();
+  const page = await db
+    .select()
+    .from(media)
+    .where(
+      and(
+        eq(media.personaId, personaId),
+        eq(media.userId, userId),
+        eq(media.kind, "voice"),
+        ...(options.fromThem === undefined ? [] : [eq(media.fromThem, options.fromThem)]),
+        ...(q ? [ilike(media.transcript, `%${q}%`)] : []),
+        ...(options.cursor ? [lt(media.id, options.cursor)] : []),
+      ),
+    )
+    .orderBy(desc(media.id))
+    .limit(limit + 1);
+  const rows = page.slice(0, limit);
+  return {
+    rows,
+    nextCursor: page.length > limit ? rows[rows.length - 1]?.id ?? null : null,
+  };
+}
+
+/**
+ * Merges a patch into a record's `meta`.
+ *
+ * The transcript of a voice note belongs on the record as well as on
+ * the media row: the readers of content (facts, people, search) go
+ * through `recordText`, which reads `meta.transcript`.
+ */
+export async function updateRecordMeta(
+  id: number,
+  userId: number,
+  patch: Record<string, unknown>,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const [row] = await db
+    .update(collectedMessages)
+    .set({
+      meta: sql`COALESCE(${collectedMessages.meta}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+    })
+    .where(and(eq(collectedMessages.id, id), eq(collectedMessages.userId, userId)))
+    .returning({ id: collectedMessages.id });
+  return Boolean(row);
 }
 
 // ─── WeChat Binding helpers ─────────────────────────────────────────────────
@@ -5563,6 +5787,15 @@ export async function deletePersonaFile(
         ),
       )
       .returning({ id: collectedMessages.id });
+    await tx
+      .delete(media)
+      .where(
+        and(
+          eq(media.personaId, file.personaId),
+          eq(media.userId, userId),
+          eq(media.fileId, fileId),
+        ),
+      );
     await tx
       .delete(personaFiles)
       .where(and(eq(personaFiles.id, fileId), eq(personaFiles.userId, userId)));

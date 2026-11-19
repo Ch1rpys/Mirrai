@@ -28,6 +28,7 @@ import {
 import { importRecords, RecordLimitError } from "../collectors/db-store";
 import { afterRecordsChanged } from "../_core/style-profile";
 import { registerStickers } from "./stickers";
+import { registerMedia } from "./media";
 import { resolveStoredPath } from "../storage";
 import {
   importUnpackRelKey,
@@ -463,6 +464,18 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
       });
     } catch (error) {
       console.warn("[Import] The style profile could not be updated:", error);
+    }
+    try {
+      /**
+       * The recordings and pictures of the import (B7.3).
+       *
+       * Registered after the rows are written, so every media row has
+       * the record it belongs to. The files stay in the import
+       * directory; deleting that import removes the rows with it.
+       */
+      await registerMedia({ personaId: file.personaId, userId: input.userId });
+    } catch (error) {
+      console.warn("[Import] The media rows could not be stored:", error);
     }
     try {
       /**

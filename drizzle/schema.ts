@@ -1780,3 +1780,44 @@ export const stickers = pgTable("stickers", {
 
 export type Sticker = typeof stickers.$inferSelect;
 export type InsertSticker = typeof stickers.$inferInsert;
+
+/**
+ * The recordings, photographs and videos the record carries.
+ *
+ * A row points at the original file inside the import directory — the
+ * audio is not copied, because it can be large and the import is where
+ * the user put it. `hash` is the file's content, so importing the same
+ * export twice registers the same recording once.
+ */
+export const media = pgTable("media", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  kind: varchar("kind", { length: 8 }).notNull(),
+  fileKey: varchar("fileKey", { length: 500 }).notNull(),
+  mime: varchar("mime", { length: 64 }),
+  bytes: integer("bytes"),
+  hash: varchar("hash", { length: 64 }).notNull(),
+  at: timestamp("at"),
+  recordId: integer("recordId"),
+  fileId: integer("fileId"),
+  fromThem: boolean("fromThem").default(false).notNull(),
+  durationSec: integer("durationSec"),
+  width: integer("width"),
+  height: integer("height"),
+  transcript: text("transcript"),
+  transcriptEngine: varchar("transcriptEngine", { length: 32 }),
+  exif: jsonb("exif"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  oneHash: uniqueIndex("media_persona_hash_idx").on(
+    table.personaId,
+    table.userId,
+    table.hash,
+  ),
+  personaIdx: index("media_persona_idx").on(table.personaId, table.userId),
+  recordIdx: index("media_record_idx").on(table.recordId),
+}));
+
+export type Media = typeof media.$inferSelect;
+export type InsertMedia = typeof media.$inferInsert;
