@@ -6,18 +6,34 @@ import { translate } from "@/i18n";
 
 const mutate = vi.fn();
 
+const settingsState: { data: any } = {
+  data: { layers: { abPairs: false } },
+};
+
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     persona: {
       getSettings: {
         useQuery: () => ({
-          data: { layers: { abPairs: false } },
+          data: settingsState.data,
           isLoading: false,
           refetch: vi.fn(),
         }),
       },
       updateSettings: {
         useMutation: () => ({ mutate, isPending: false }),
+      },
+    },
+    style: {
+      get: {
+        useQuery: () => ({
+          data: {
+            profile: {
+              routine: { days: 80, sleep: { startMin: 0, endMin: 450 } },
+            },
+          },
+          isLoading: false,
+        }),
       },
     },
   },
@@ -97,5 +113,29 @@ describe("the persona switches section", () => {
       id: 5,
       patch: { layers: { factRewrite: true } },
     });
+  });
+
+  it("keeps sleep off until late replies are on, then saves the switch", async () => {
+    const user = userEvent.setup();
+    settingsState.data = { layers: { abPairs: false } };
+    const { unmount } = render(<PersonaSwitches personaId={5} name="小满" />);
+    expect(screen.getByRole("checkbox", { name: /小满 睡觉的时候不回/ })).toBeDisabled();
+    unmount();
+
+    settingsState.data = {
+      layers: {},
+      timing: { asyncDelivery: true, sleep: false },
+    };
+    render(<PersonaSwitches personaId={5} name="小满" />);
+    const box = screen.getByRole("checkbox", { name: /小满 睡觉的时候不回/ });
+    expect(box).not.toBeDisabled();
+    expect(screen.getByText(/00:00/)).toBeInTheDocument();
+    expect(screen.getByText(/07:30/)).toBeInTheDocument();
+    await user.click(box);
+    expect(mutate).toHaveBeenCalledWith({
+      id: 5,
+      patch: { timing: { sleep: true } },
+    });
+    settingsState.data = { layers: { abPairs: false } };
   });
 });

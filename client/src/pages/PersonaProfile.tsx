@@ -17,7 +17,7 @@ import { normalizeMicroRules } from "@shared/micro-rules";
 import { normalizeAddressHistory } from "@shared/address-history";
 import { normalizeStyleProfile } from "@shared/style-profile";
 import AddressHistoryView from "@/components/v6/AddressHistoryView";
-import DelayView from "@/components/v6/DelayView";
+import DelayView, { SleepWindow } from "@/components/v6/DelayView";
 import TriggersView from "@/components/v6/TriggersView";
 import { Button } from "@/components/ui/button";
 import { resolveRelationshipPhase } from "@shared/user-side";
@@ -281,12 +281,13 @@ export default function PersonaProfile() {
           </motion.section>
         )}
 
-        {styleProfile.replyDelay ? (
+        {(styleProfile.replyDelay || styleProfile.routine?.sleep) ? (
           <motion.section
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.112 }}
             className="surface p-5 sm:p-6"
           >
             <DelayView name={persona.name} replyDelay={styleProfile.replyDelay} />
+            <SleepWindow name={persona.name} routine={styleProfile.routine} />
           </motion.section>
         ) : null}
 

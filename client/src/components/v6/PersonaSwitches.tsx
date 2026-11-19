@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { toast } from "sonner";
+import { formatMinuteOfDay, normalizeRoutine } from "@shared/routine-profile";
 
 /**
  * The per-persona switches for the sixth stage.
@@ -31,6 +32,15 @@ export default function PersonaSwitches(props: { personaId: number; name: string
   const abPairs = Boolean(settings.data?.layers?.abPairs);
   const twoStage = Boolean(settings.data?.layers?.twoStage);
   const factRewrite = Boolean(settings.data?.layers?.factRewrite);
+  const asyncDelivery = Boolean(settings.data?.timing?.asyncDelivery);
+  const asleep = Boolean(settings.data?.timing?.sleep);
+  const style = trpc.style.get.useQuery(
+    { personaId: props.personaId },
+    { enabled: props.personaId > 0 },
+  );
+  const sleepWindow = normalizeRoutine(style.data?.profile?.routine)?.sleep;
+  const sleepStart = sleepWindow ? formatMinuteOfDay(sleepWindow.startMin) : "—";
+  const sleepEnd = sleepWindow ? formatMinuteOfDay(sleepWindow.endMin) : "—";
   const busy = settings.isLoading || update.isPending;
 
   return (
@@ -276,6 +286,26 @@ export default function PersonaSwitches(props: { personaId: number; name: string
           <span className="block">{t("personaEdit.factRewrite")}</span>
           <span className="block text-xs text-muted-foreground leading-relaxed">
             {t("personaEdit.factRewriteNote")}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={asleep}
+          disabled={busy || !asyncDelivery}
+          onChange={(event) =>
+            update.mutate({
+              id: props.personaId,
+              patch: { timing: { sleep: event.target.checked } },
+            })
+          }
+          className="mt-0.5"
+        />
+        <span>
+          <span className="block">{t("personaEdit.sleep", { name: props.name })}</span>
+          <span className="block text-xs text-muted-foreground leading-relaxed">
+            {t("personaEdit.sleepNote", { name: props.name, start: sleepStart, end: sleepEnd })}
           </span>
         </span>
       </label>

@@ -1,5 +1,6 @@
 import { useLocale } from "@/contexts/LocaleContext";
 import { DELAY_BANDS, normalizeReplyDelay, type DelayBucket } from "@shared/reply-delay";
+import { formatMinuteOfDay, normalizeRoutine } from "@shared/routine-profile";
 
 /**
  * How long they usually take to answer, one row per part of the day.
@@ -52,5 +53,20 @@ export default function DelayView({
         })}
       </ul>
     </section>
+  );
+}
+
+export function SleepWindow({ name, routine }: { name: string; routine?: unknown }) {
+  const { t } = useLocale();
+  const profile = normalizeRoutine(routine);
+  if (!profile?.sleep) return null;
+  return (
+    <p className="text-sm leading-relaxed mt-3">
+      {t("profile.sleepOffline", {
+        name,
+        start: formatMinuteOfDay(profile.sleep.startMin),
+        end: formatMinuteOfDay(profile.sleep.endMin),
+      })}
+    </p>
   );
 }

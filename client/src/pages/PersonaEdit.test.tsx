@@ -52,6 +52,7 @@ vi.mock("@/lib/trpc", () => ({
     },
     llmConfig: { listProviders: { useQuery: () => ({ data: [] }) } },
     behavior: { get: { useQuery: () => ({ data: { profile: null }, isLoading: false }) } },
+    style: { get: { useQuery: () => ({ data: { profile: null }, isLoading: false }) } },
     material: {
       report: {
         useQuery: () => ({

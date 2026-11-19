@@ -12,7 +12,7 @@ vi.mock("@/contexts/LocaleContext", () => ({
   }),
 }));
 
-import DelayView from "./DelayView";
+import DelayView, { SleepWindow } from "./DelayView";
 
 describe("reply delay on the profile", () => {
   it("shows a median and a count for each part of the day", () => {
@@ -43,5 +43,19 @@ describe("reply delay on the profile", () => {
     }))).toBeInTheDocument();
     expect(screen.getByText(translate("zh", "profile.delayEmpty", { band: "夜里" }))).toBeInTheDocument();
     expect(screen.getByText(translate("zh", "profile.delayEmpty", { band: "早上" }))).toBeInTheDocument();
+  });
+
+  it("says when they are usually away", () => {
+    render(
+      <SleepWindow
+        name="小满"
+        routine={{ days: 80, sleep: { startMin: 0, endMin: 450 } }}
+      />,
+    );
+    expect(screen.getByText(translate("zh", "profile.sleepOffline", {
+      name: "小满",
+      start: "00:00",
+      end: "07:30",
+    }))).toBeInTheDocument();
   });
 });
