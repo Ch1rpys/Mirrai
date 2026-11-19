@@ -462,6 +462,17 @@ describe("the message bubble", () => {
     expect(screen.queryByLabelText(translate("zh", "chat.delete"))).toBeNull();
   });
 
+  it("hides the three dots while a delay is still waiting in silence", () => {
+    const { container } = render(
+      <MessageBubble
+        msg={makeMessage({ isStreaming: true, isTyping: false, content: "", createdAt: undefined })}
+        personaName="小A"
+        showMood={false}
+      />,
+    );
+    expect(container.querySelector(".typing-dot")).toBeNull();
+  });
+
   it("lets the reader mark a reply as unlike them", async () => {
     const user = userEvent.setup();
     render(

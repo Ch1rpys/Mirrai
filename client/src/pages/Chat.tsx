@@ -31,6 +31,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import MemoryReview from "@/components/v6/MemoryReview";
 import ChoiceBubble from "@/components/v6/ChoiceBubble";
 import PendingReply from "@/components/v6/PendingReply";
+import { useTypingReveal } from "@/components/v6/useTypingReveal";
 
 /**
  * The largest picture the chat will send.
@@ -139,6 +140,7 @@ export default function Chat() {
    * is reading the app in.
    */
   const confirm = useConfirm();
+  const { revealDelay, revealBurst } = useTypingReveal();
 
   const [messages, setMessages] = useState<Message[]>([]);
 
@@ -799,13 +801,15 @@ export default function Chat() {
                 ? { ...m, content: notice || t("chat.thinking"), isStreaming: true }
                 : m));
             },
-            onDelay: (ms) => new Promise((resolve) => {
-              const wait = Math.min(Math.max(0, ms), 90_000);
-              const timer = setTimeout(resolve, wait);
-              controller.signal.addEventListener("abort", () => {
-                clearTimeout(timer);
-                resolve();
-              }, { once: true });
+            onDelay: (ms, typingMs) => revealDelay({
+              ms,
+              typingMs,
+              signal: controller.signal,
+              setDots: (on) => {
+                setMessages((prev) => prev.map((m) => (
+                  m.id === streamId ? { ...m, isTyping: on, isStreaming: true } : m
+                )));
+              },
             }),
             onSilence: (notice) => {
               setMessages(prev => prev.map(m => m.id === streamId
@@ -817,21 +821,46 @@ export default function Chat() {
                   }
                 : m));
             },
-            onBurst: (texts) => {
-              const now = Date.now();
-              setMessages(prev => {
-                const others = prev.filter((m) => m.id !== streamId);
-                const bubbles = texts.map((part, index) => ({
-                  id: index === texts.length - 1 ? streamId : `burst-${now}-${index}`,
-                  role: "assistant" as const,
-                  content: part,
-                  isStreaming: index === texts.length - 1,
-                  emotionalState: currentState,
-                  createdAt: new Date(now + index),
-                }));
-                return [...others, ...bubbles];
-              });
-            },
+            onBurst: (texts, extra) => revealBurst({
+              texts,
+              gapsMs: extra?.gapsMs,
+              typingMs: extra?.typingMs,
+              signal: controller.signal,
+              setDots: (on) => {
+                setMessages((prev) => prev.map((m) => (
+                  m.id === streamId ? { ...m, isTyping: on, isStreaming: true } : m
+                )));
+              },
+              show: (parts) => {
+                setMessages((prev) => {
+                  const others = prev.filter((m) => (
+                    m.id !== streamId
+                    && !(typeof m.id === "string" && m.id.startsWith(`burst-${streamId}-`))
+                  ));
+                  const complete = parts.length === texts.length;
+                  const bubbles: Message[] = parts.map((part, index) => ({
+                    id: complete && index === parts.length - 1 ? streamId : `burst-${streamId}-${index}`,
+                    role: "assistant",
+                    content: part,
+                    isStreaming: complete && index === parts.length - 1,
+                    emotionalState: currentState,
+                    createdAt: new Date(),
+                  }));
+                  if (!complete) {
+                    bubbles.push({
+                      id: streamId,
+                      role: "assistant",
+                      content: "",
+                      isStreaming: true,
+                      isTyping: false,
+                      emotionalState: currentState,
+                      createdAt: new Date(),
+                    });
+                  }
+                  return [...others, ...bubbles];
+                });
+              },
+            }),
             onEmotion: (state) => {
               setCurrentState(state);
               setMessages(prev => prev.map(m => m.id === streamId ? { ...m, emotionalState: state } : m));

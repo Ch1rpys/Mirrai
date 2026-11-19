@@ -187,7 +187,7 @@ describe("streamChat", () => {
         onDelta: () => {},
         onThinking: (notice) => thinking.push(notice),
         onDelay: (ms) => { delays.push(ms); },
-        onBurst: (texts) => bursts.push(texts),
+        onBurst: (texts) => { bursts.push(texts); },
         onSilence: (notice) => silences.push(notice),
       },
     });
@@ -196,6 +196,37 @@ describe("streamChat", () => {
     expect(bursts).toEqual([["嗯", "在"]]);
     expect(silences).toEqual(["TA 这会儿没回"]);
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).periodId).toBe("period-1");
+  });
+
+  it("hands typing durations on delay and burst events to the caller", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      mockSseResponse([
+        'event: delay\ndata: {"ms":40000,"typingMs":800}\n\n',
+        'event: burst\ndata: {"texts":["嗯","好"],"gapsMs":[600],"typingMs":[400]}\n\n',
+        'event: done\ndata: {"messageId":8,"emotionalState":"warm","graduationSuggested":false,"careNote":null,"crisis":false}\n\n',
+      ]),
+    );
+    globalThis.fetch = fetchMock as any;
+    const delays: Array<{ ms: number; typingMs?: number }> = [];
+    const bursts: Array<{ texts: string[]; extra?: { gapsMs?: number[]; typingMs?: number[] } }> = [];
+    await streamChat({
+      personaId: 1,
+      message: "在吗",
+      callbacks: {
+        onDelta: () => {},
+        onDelay: (ms, typingMs) => {
+          delays.push({ ms, typingMs });
+        },
+        onBurst: (texts, extra) => {
+          bursts.push({ texts, extra });
+        },
+      },
+    });
+    expect(delays).toEqual([{ ms: 40_000, typingMs: 800 }]);
+    expect(bursts).toEqual([{
+      texts: ["嗯", "好"],
+      extra: { gapsMs: [600], typingMs: [400] },
+    }]);
   });
 
   it("hands a replace event to the caller", async () => {

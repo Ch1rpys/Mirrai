@@ -35,6 +35,8 @@ export interface Message {
   channel?: string;
   createdAt?: Date;
   isStreaming?: boolean;
+  /** False hides the three dots while a delay is still waiting in silence. */
+  isTyping?: boolean;
   /** The message this one replies to. */
   replyToId?: number | null;
   /** The quoted text, for the bubble. */
@@ -490,6 +492,9 @@ export function MessageBubble({
     }
     if (msg.isStreaming) {
       if (!msg.content) {
+        if (msg.isTyping === false) {
+          return <span className="inline-block min-h-[1.25rem]" aria-hidden="true" />;
+        }
         return (
           <span className="inline-flex items-center gap-1 px-0.5 py-1.5">
             <span className="typing-dot" />

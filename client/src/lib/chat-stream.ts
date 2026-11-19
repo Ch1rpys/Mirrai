@@ -48,9 +48,12 @@ export interface StreamChatCallbacks {
   /** Called for every chunk of the reply. */
   onDelta: (text: string) => void;
   onThinking?: (notice: string) => void;
-  onDelay?: (ms: number) => void | Promise<void>;
+  onDelay?: (ms: number, typingMs?: number) => void | Promise<void>;
   onSilence?: (notice: string) => void;
-  onBurst?: (texts: string[]) => void;
+  onBurst?: (
+    texts: string[],
+    extra?: { gapsMs?: number[]; typingMs?: number[] },
+  ) => void | Promise<void>;
   onEmotion?: (state: string, reason?: string) => void;
   onDone?: (info: StreamDoneInfo) => void;
   onChoice?: (info: { options: [string, string]; replyToMessageId: number }) => void;
@@ -293,13 +296,26 @@ async function handleEvent(
       callbacks.onThinking?.(typeof data?.notice === "string" ? data.notice : "");
       break;
     case "delay":
-      if (typeof data?.ms === "number") await callbacks.onDelay?.(data.ms);
+      if (typeof data?.ms === "number") {
+        const typingMs = typeof data.typingMs === "number" ? data.typingMs : undefined;
+        await callbacks.onDelay?.(data.ms, typingMs);
+      }
       break;
     case "silence":
       callbacks.onSilence?.(typeof data?.notice === "string" ? data.notice : "");
       break;
     case "burst":
-      if (Array.isArray(data?.texts)) callbacks.onBurst?.(data.texts.filter((item: unknown) => typeof item === "string"));
+      if (Array.isArray(data?.texts)) {
+        const texts = data.texts.filter((item: unknown) => typeof item === "string");
+        const gapsMs = Array.isArray(data?.gapsMs)
+          ? data.gapsMs.filter((item: unknown) => typeof item === "number")
+          : undefined;
+        const typingMs = Array.isArray(data?.typingMs)
+          ? data.typingMs.filter((item: unknown) => typeof item === "number")
+          : undefined;
+        const extra = gapsMs || typingMs ? { gapsMs, typingMs } : undefined;
+        await callbacks.onBurst?.(texts, extra);
+      }
       break;
     case "emotion":
       callbacks.onEmotion?.(data?.state, data?.reason);
