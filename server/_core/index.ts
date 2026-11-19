@@ -15,6 +15,7 @@ import { initRateLimiter } from "./rate-limit";
 import { uploadsAuthGuard } from "./uploads";
 import { resolveFaceModelFile } from "./face-models";
 import { registerChatStreamRoute } from "../chat/stream-route";
+import { attachCallServer } from "../chat/call";
 import { registerImportUploadRoute } from "../importers/upload-route";
 import { bootstrapAdminAccount } from "../bootstrap/bootstrap";
 import { migrateLegacyTTSFiles } from "./tts";
@@ -67,6 +68,8 @@ async function startServer() {
   installProcessGuards();
   const app = express();
   const server = createServer(app);
+  // Phone mode listens on the same port, on `/api/call` (B7.14).
+  attachCallServer(server);
 
   /**
    * The headers every response carries.

@@ -37,6 +37,7 @@ export default function PersonaSwitches(props: { personaId: number; name: string
   const twoStage = Boolean(settings.data?.layers?.twoStage);
   const factRewrite = Boolean(settings.data?.layers?.factRewrite);
   const voiceNotes = Boolean(settings.data?.layers?.voiceNotes);
+  const callMode = Boolean(settings.data?.layers?.callMode);
   const asyncDelivery = Boolean(settings.data?.timing?.asyncDelivery);
   const maxDelayMinutes = settings.data?.timing?.maxDelayMinutes ?? 30;
   const asleep = Boolean(settings.data?.timing?.sleep);
@@ -352,6 +353,26 @@ export default function PersonaSwitches(props: { personaId: number; name: string
             {voicesInfo.data?.leavesMachine
               ? t("personaEdit.voiceNotesEdge")
               : t("personaEdit.voiceNotesLocal")}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={callMode}
+          disabled={busy}
+          onChange={(event) =>
+            update.mutate({
+              id: props.personaId,
+              patch: { layers: { callMode: event.target.checked } },
+            })
+          }
+          className="mt-0.5"
+        />
+        <span>
+          <span className="block">{t("personaEdit.callMode", { name: props.name })}</span>
+          <span className="block text-xs text-muted-foreground leading-relaxed">
+            {t("personaEdit.callModeNote", { name: props.name })}
           </span>
         </span>
       </label>

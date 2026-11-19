@@ -72,6 +72,22 @@ export const V6 = {
     zh: "头像只收 JPEG、PNG 或 WebP 的图片。",
     en: "The avatar has to be a JPEG, PNG or WebP picture.",
   },
+  "call.tooLong": {
+    zh: "这通电话到了 60 分钟上限，先挂断了。",
+    en: "This call reached the sixty-minute limit and was ended.",
+  },
+  "call.notHeard": {
+    zh: "这句没有听清，再说一次。",
+    en: "That was not heard. Say it again.",
+  },
+  "call.replyFailed": {
+    zh: "刚才没有回成，再说一次。",
+    en: "The reply did not come through. Say it again.",
+  },
+  "call.durationNotice": {
+    zh: "通话 {{minutes}} 分 {{seconds}} 秒",
+    en: "Call {{minutes}} min {{seconds}} sec",
+  },
   "errors.backgroundType": {
     zh: "背景只收 JPEG、PNG 或 WebP 的图片。",
     en: "The background has to be a JPEG, PNG or WebP picture.",

@@ -2255,6 +2255,22 @@ function metadataObject(value: unknown): Record<string, unknown> {
  * pick a line — there is no assistant row yet, so this is the only
  * place the two unreplied lines can sit.
  */
+/** Replaces the words of one stored message, limited to its owner. */
+export async function setMessageContent(
+  id: number,
+  userId: number,
+  content: string,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .update(messages)
+    .set({ content })
+    .where(and(eq(messages.id, id), eq(messages.userId, userId)))
+    .returning({ id: messages.id });
+  return rows.length > 0;
+}
+
 export async function updateMessageMetadata(
   id: number,
   userId: number,

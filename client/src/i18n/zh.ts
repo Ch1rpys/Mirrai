@@ -1400,6 +1400,8 @@ export const zh = {
     closing: "{{name}} 会自己说「我先睡了」",
     closingNote: "聊得比 {{name}} 平时久了，或者到了 {{name}} 平时睡觉的点，分身会用 {{name}} 的方式收尾。之后你还可以接着说。",
     photos: "{{name}} 聊到某件事时可以发那张照片",
+    callMode: "可以和 {{name}} 打电话",
+    callModeNote: "你说的话会被转成文字，分身的回答会被读出来。比打字贵，也慢一点。声音是合成的中性音色，不是 {{name}} 的嗓音。",
     photosNote: "只发你上传过、并且挂在记忆上的真照片。不生成任何图片。",
     stickers: "{{name}} 可以发 {{name}} 用过的表情",
     stickersNote: "只从记录里 {{name}} 真的发过的表情里选，按 {{name}} 发表情的频率。",
@@ -1899,6 +1901,8 @@ export const zh = {
   profile: {
     moreTitle: "更多",
     voicesEntry: "听听 {{name}} 的声音",
+    callEntry: "和 {{name}} 打电话",
+    callEntryNote: "用说的聊。声音是合成的，不是 {{name}} 的嗓音。",
     photosEntry: "{{name}} 的照片",
     voicesEntryNote: "记录里的真实录音，不是合成的。",
     kicker: "TA 是谁",
@@ -2319,6 +2323,25 @@ export const zh = {
     suggestHint: "记忆日期前后三天的照片",
     empty: "这几天前后没有照片。",
     failed: "照片没读出来。",
+  },
+
+  call: {
+    off: "这个分身还没有打开电话模式。到编辑页的开关里打开它。",
+    connecting: "正在接通…",
+    ready: "可以说话了。说完停一下，这边就听到了。",
+    declined: "这个点 {{name}} 一般不接电话。按记录，{{name}} 通常在{{slots}}接。",
+    force: "还是打",
+    ended: "通话结束了。",
+    synthesised: "合成的声音 · 不是 {{name}} 本人",
+    crisis: "我听出来了。先别一个人扛着，打 12356 也可以。",
+    connectionFailed: "没有接通。",
+    micDenied: "麦克风没有开。",
+    micDeniedHint: "在浏览器的地址栏旁边允许这个站点使用麦克风，然后刷新这一页。",
+    mute: "静音",
+    unmute: "取消静音",
+    hangup: "挂断",
+    slot: "{{weekday}} {{hour}} 点",
+    slotSeparator: "、",
   },
 
   skin: {

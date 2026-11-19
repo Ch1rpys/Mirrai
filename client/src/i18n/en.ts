@@ -1399,6 +1399,8 @@ export const en = {
     closing: "{{name}} will say “I'm turning in” themselves",
     closingNote: "When you've talked longer than {{name}} used to, or it's the hour {{name}} used to go to sleep, the persona closes in {{name}}'s way. You can keep talking after that.",
     photos: "{{name}} can send that photo when something comes up",
+    callMode: "You can call {{name}}",
+    callModeNote: "What you say is transcribed and the answer is read aloud. It costs more and is slower. The voice is a neutral synthesised one, not {{name}}'s.",
     photosNote: "Only a real photo you uploaded and attached to a memory. No image is generated.",
     stickers: "{{name}} can send the stickers {{name}} used",
     stickersNote: "Only the stickers {{name}} really sent, as often as {{name}} sent them.",
@@ -1887,6 +1889,8 @@ export const en = {
   profile: {
     moreTitle: "More",
     voicesEntry: "Hear {{name}}'s voice",
+    callEntry: "Call {{name}}",
+    callEntryNote: "Talk instead of typing. The voice is synthesised, not {{name}}'s.",
     photosEntry: "{{name}}'s photos",
     voicesEntryNote: "Real recordings from the record, not synthesised.",
     kicker: "Who they are",
@@ -2308,6 +2312,25 @@ export const en = {
     suggestHint: "Photos from three days either side of the memory",
     empty: "No photos from those days.",
     failed: "The photos could not be read.",
+  },
+
+  call: {
+    off: "Phone mode is not on for this persona. Turn it on in the editor.",
+    connecting: "Connecting…",
+    ready: "You can talk now. Pause after you finish and it will hear you.",
+    declined: "{{name}} usually does not answer at this hour. The records say {{name}} usually answers on {{slots}}.",
+    force: "Call anyway",
+    ended: "The call ended.",
+    synthesised: "Synthesised voice · not {{name}}",
+    crisis: "I hear it. Please do not carry this alone; 12356 is there too.",
+    connectionFailed: "The call did not connect.",
+    micDenied: "The microphone is off.",
+    micDeniedHint: "Allow this site to use the microphone in the address bar, then reload this page.",
+    mute: "Mute",
+    unmute: "Unmute",
+    hangup: "Hang up",
+    slot: "{{weekday}} at {{hour}}:00",
+    slotSeparator: ", ",
   },
 
   skin: {

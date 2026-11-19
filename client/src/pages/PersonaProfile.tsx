@@ -457,6 +457,18 @@ export default function PersonaProfile() {
               {t("profile.voicesEntryNote")}
             </span>
           </button>
+          <button
+            type="button"
+            onClick={() => navigate(`/persona/${personaId}/call`)}
+            className="w-full rounded-lg border border-border/70 p-3 text-left transition-colors hover:bg-muted/30"
+          >
+            <span className="block text-sm text-foreground">
+              {t("profile.callEntry", { name: persona.name })}
+            </span>
+            <span className="block text-xs text-muted-foreground leading-relaxed">
+              {t("profile.callEntryNote")}
+            </span>
+          </button>
           <details className="rounded-lg border border-border/70 p-3">
             <summary className="cursor-pointer text-sm text-foreground">
               {t("profile.photosEntry", { name: persona.name })}
