@@ -2369,6 +2369,7 @@ export const appRouter = router({
          * never started.
          */
         let failureStored = false;
+        let superseded = false;
 
         /**
          * A persona that has said goodbye.
@@ -2404,6 +2405,7 @@ export const appRouter = router({
               failure = event.message;
               failureStored = event.storedUserMessage === true;
             }
+            else if (event.type === "superseded") superseded = true;
             else if (event.type === "done") {
               graduationSuggested = event.graduationSuggested;
               careNote = event.careNote;
@@ -2473,7 +2475,7 @@ export const appRouter = router({
           });
         }
 
-        return { reply, emotionalState, graduationSuggested, careNote, crisis, choice, failed: false };
+        return { reply, emotionalState, graduationSuggested, careNote, crisis, choice, failed: false, superseded };
       }),
 
     sendImage: protectedProcedure.use(rateLimit(RATE_LIMITS.upload))
@@ -2528,6 +2530,7 @@ export const appRouter = router({
         let careNote = null;
         let crisis = false;
         let failure: string | null = null;
+        let superseded = false;
 
         for await (const event of runConversation({
           persona,
@@ -2544,6 +2547,7 @@ export const appRouter = router({
           else if (event.type === "burst") reply = event.texts.join("\n\n");
           else if (event.type === "emotion") emotionalState = event.state;
           else if (event.type === "error") failure = event.message;
+          else if (event.type === "superseded") superseded = true;
           else if (event.type === "done") {
             graduationSuggested = event.graduationSuggested;
             careNote = event.careNote;
@@ -2558,7 +2562,7 @@ export const appRouter = router({
           });
         }
 
-        return { reply, emotionalState, imageUrl: url, graduationSuggested, careNote, crisis };
+        return { reply, emotionalState, imageUrl: url, graduationSuggested, careNote, crisis, superseded };
       }),
 
     sendVoice: protectedProcedure.use(rateLimit(RATE_LIMITS.chatMedia))
@@ -2649,6 +2653,7 @@ export const appRouter = router({
         let careNote = null;
         let crisis = false;
         let failure: string | null = null;
+        let superseded = false;
 
         for await (const event of runConversation({
           persona,
@@ -2665,6 +2670,7 @@ export const appRouter = router({
           else if (event.type === "burst") reply = event.texts.join("\n\n");
           else if (event.type === "emotion") emotionalState = event.state;
           else if (event.type === "error") failure = event.message;
+          else if (event.type === "superseded") superseded = true;
           else if (event.type === "done") {
             graduationSuggested = event.graduationSuggested;
             careNote = event.careNote;
@@ -2679,7 +2685,7 @@ export const appRouter = router({
           });
         }
 
-        return { reply, emotionalState, transcription, voiceUrl: url, graduationSuggested, careNote, crisis };
+        return { reply, emotionalState, transcription, voiceUrl: url, graduationSuggested, careNote, crisis, superseded };
       }),
 
     clear: protectedProcedure

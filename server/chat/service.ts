@@ -53,6 +53,17 @@ import {
   pendingChoiceOf,
   shouldOfferChoice,
 } from "../eval/ab-pairs";
+import {
+  READ_WINDOW_MS,
+  arrive,
+  combineSignals,
+  enter,
+  inboxKey,
+  isLatest,
+  isSupersededSignal,
+  leave,
+  waitAbortable,
+} from "./inbox";
 
 export type ChatMode = "stream" | "once";
 
@@ -68,10 +79,19 @@ const TRAJECTORY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export type ChatEvent =
   | { type: "delta"; text: string }
   | { type: "thinking" }
-  | { type: "delay"; ms: number }
+  | { type: "delay"; ms: number; typingMs?: number }
   | { type: "silence"; notice: string }
-  | { type: "burst"; texts: string[] }
+  | { type: "burst"; texts: string[]; gapsMs?: number[]; typingMs?: number[] }
   | { type: "replace"; text: string }
+  | { type: "superseded" }
+  | {
+      type: "deferred";
+      jobId: number;
+      dueAt: string;
+      reason: "delay" | "asleep" | "busy";
+    }
+  | { type: "recall"; text: string; showMs: number }
+  | { type: "pat" }
   | { type: "emotion"; state: string; reason?: string }
   | {
       type: "done";
@@ -269,6 +289,20 @@ export interface ConversationOptions {
   now?: Date;
   /** Which stretch of them this turn is speaking from. */
   periodId?: string | null;
+  /**
+   * The stored user message, when receive already wrote it.
+   *
+   * Aborting a user-stopped turn still needs the id, so the empty
+   * answer can take the question away with it.
+   */
+  storedUserMessageId?: number | null;
+  /**
+   * Receive already ran: the persona is awake, the message is stored,
+   * a crisis has been answered if there was one.
+   */
+  admitted?: boolean;
+  /** Which arrival this reply belongs to, when the inbox is in play. */
+  inbox?: { key: string; generation: number };
 }
 
 /**
@@ -465,6 +499,14 @@ export async function composeMessages(params: {
   persona: Persona;
   userId: number;
   userMessage: string;
+  /**
+   * What memory retrieval searches for.
+   *
+   * A burst of user messages is answered as one turn: the last line is
+   * what the persona is answering, and the whole burst is what memory
+   * looks at.
+   */
+  retrievalQuery?: string;
   contextLimit: number;
   providerName?: string;
   locale?: "zh" | "en";
@@ -507,7 +549,7 @@ export async function composeMessages(params: {
   const retrieved = await retrieveMemories({
     personaId: params.persona.id,
     userId: params.userId,
-    userMessage: params.userMessage,
+    userMessage: params.retrievalQuery ?? params.userMessage,
     topK: params.extraConfig?.retrievalK,
     locale,
     now: now.getTime(),
@@ -702,12 +744,60 @@ export async function withPersonaTurn<T>(
 export async function* runConversation(
   options: ConversationOptions & { mode: ChatMode; turnHeld?: boolean },
 ): AsyncGenerator<ChatEvent> {
-  const release = options.turnHeld ? () => undefined : await takeTurn(options.persona.id);
+  const isolated = Boolean(options.turnHeld || options.alreadyPersisted);
+  if (isolated) {
+    const release = options.turnHeld ? () => undefined : await takeTurn(options.persona.id);
+    try {
+      for await (const event of runConversationTurn(options)) {
+        yield event;
+      }
+    } finally {
+      release();
+    }
+    return;
+  }
+
+  const admitted = yield* admitUserMessage(options);
+  if (admitted.done) return;
+
+  const key = inboxKey(options.userId, options.persona.id);
+  const generation = arrive(key);
+  const controller = new AbortController();
+  const release = await takeTurn(options.persona.id);
   try {
-    for await (const event of runConversationTurn(options)) {
+    if (!isLatest(key, generation) || controller.signal.aborted) {
+      yield { type: "superseded" };
+      return;
+    }
+    enter(key, "waiting", controller);
+    const timingEnabled =
+      Boolean((options.persona as { timingEnabled?: boolean }).timingEnabled) &&
+      Boolean(loadBehaviorProfile(options.persona));
+    if (timingEnabled) {
+      try {
+        await waitAbortable(READ_WINDOW_MS, controller.signal);
+      } catch {
+        yield { type: "superseded" };
+        return;
+      }
+      if (!isLatest(key, generation) || controller.signal.aborted) {
+        yield { type: "superseded" };
+        return;
+      }
+    }
+    enter(key, "generating", controller);
+    for await (const event of runConversationTurn({
+      ...options,
+      alreadyPersisted: true,
+      admitted: true,
+      storedUserMessageId: admitted.userMessageId,
+      signal: combineSignals(options.signal, controller.signal),
+      inbox: { key, generation },
+    })) {
       yield event;
     }
   } finally {
+    leave(key, generation);
     release();
   }
 }
@@ -913,37 +1003,21 @@ function emotionInertiaForTurn(
   };
 }
 
-async function* runConversationTurn(
-  options: ConversationOptions & { mode: ChatMode },
-): AsyncGenerator<ChatEvent> {
+type AdmitResult =
+  | { done: true }
+  | { done: false; userMessageId: number | null; crisis: ReturnType<typeof detectCrisis> };
+
+/**
+ * Receive: the persona is awake, the user's message is stored, a crisis
+ * is answered if there is one. This does not wait for the persona's turn.
+ */
+async function* admitUserMessage(
+  options: ConversationOptions,
+): AsyncGenerator<ChatEvent, AdmitResult> {
   const { persona, userId, message } = options;
   const now = options.now ?? new Date();
   const locale = options.locale ?? "zh";
 
-  /**
-   * The user's midnight.
-   *
-   * The safety events are filed under the user's own day, so "already
-   * said today" means "since the user's midnight" — not the server's.
-   */
-  /**
-   * The user's midnight.
-   *
-   * The safety events are filed under the user's own day, so "already
-   * said today" means "since the user's midnight" — not the server's.
-   *
-   * It used to be the user's midnight shifted by the offset of the zone
-   * *now* — and the offset of a zone is not the same all year. So on
-   * the day the clocks changed, the first hour of the user's day was
-   * filed under the day before, and the safety count for the day was
-   * off by an hour's worth of messages.
-   */
-  const dayStart = zonedDayStart(now, await db.getUserTimezone(userId));
-
-  // A persona that has said goodbye is asleep. It used to stay perfectly
-  // chatable, which meant the "graduation" was only a badge: the app
-  // announced the anniversary of a relationship the user had ended and
-  // still let them talk to it. Waking the persona is the way back.
   const presence = getEffectivePresence({
     personaPresence: persona.presence,
     graduationStatus: persona.graduationStatus,
@@ -954,12 +1028,6 @@ async function* runConversationTurn(
     );
   }
 
-  /**
-   * An unanswered pair is settled first.
-   *
-   * Sending the next message instead of picking is a choice of the
-   * first line, and it must not write a training pair.
-   */
   const pendingMsg = await findPendingChoiceMessage(persona.id, userId);
   if (pendingMsg) {
     try {
@@ -980,6 +1048,118 @@ async function* runConversationTurn(
     }
     const refreshed = await db.getPersonaById(persona.id, userId).catch(() => null);
     if (refreshed) Object.assign(persona, refreshed);
+  }
+
+  let replyToId = options.replyToId ?? null;
+  if (replyToId) {
+    const quoted = await db
+      .getMessageById(replyToId, userId, persona.id)
+      .catch(() => null);
+    if (!quoted) replyToId = null;
+  }
+
+  let storedUserMessageId: number | null = options.storedUserMessageId ?? null;
+  if (!options.alreadyPersisted) {
+    storedUserMessageId = await db.createMessage({
+      personaId: persona.id,
+      userId,
+      role: "user",
+      content: message,
+      emotionalState: persona.emotionalState,
+      channel: options.channel ?? "web",
+      messageType: options.media?.type ?? "text",
+      mediaUrl: options.media?.url ?? null,
+      replyToId,
+    });
+  }
+
+  const crisis = detectCrisis(message);
+  if (crisis.crisis) {
+    const replyText = buildCrisisResponse(persona.name, locale);
+    const messageId = await db.createMessage({
+      personaId: persona.id,
+      userId,
+      role: "assistant",
+      content: replyText,
+      emotionalState: persona.emotionalState,
+      channel: options.channel ?? "web",
+    });
+    await db.createSafetyEvent({
+      userId,
+      personaId: persona.id,
+      type: "crisis",
+      severity: "critical",
+      excerpt: crisis.matched.join(", "),
+    }).catch((e) => console.warn("[Safety] Failed to record crisis event:", e));
+    // B5.2 fills this in: a crisis cancels a queued reply.
+    arrive(inboxKey(userId, persona.id));
+
+    yield { type: "delta", text: replyText };
+    yield {
+      type: "done",
+      messageId,
+      emotionalState: persona.emotionalState,
+      graduationSuggested: false,
+      careNote: null,
+      crisis: true,
+    };
+    return { done: true };
+  }
+
+  return { done: false, userMessageId: storedUserMessageId, crisis };
+}
+
+function userBatchAfterLastReply(
+  history: Array<{ role: string; content: string; origin?: string | null }>,
+  fallback: string,
+): string[] {
+  let lastAssistant = -1;
+  for (let i = 0; i < history.length; i++) {
+    const row = history[i]!;
+    if (row.role === "assistant" && row.origin !== "system-notice") lastAssistant = i;
+  }
+  const texts = history
+    .slice(lastAssistant + 1)
+    .filter((row) => row.role === "user")
+    .map((row) => row.content)
+    .filter((text) => typeof text === "string" && text.length > 0);
+  if (texts.length === 0 && fallback) return [fallback];
+  return texts;
+}
+
+function melancholyOf(text: string): boolean {
+  return EMOTION_TRIGGER_PATTERNS.zh.melancholy.test(text)
+    || EMOTION_TRIGGER_PATTERNS.en.melancholy.test(text);
+}
+
+async function* runConversationTurn(
+  options: ConversationOptions & { mode: ChatMode },
+): AsyncGenerator<ChatEvent> {
+  const { persona, userId } = options;
+  const now = options.now ?? new Date();
+  const locale = options.locale ?? "zh";
+
+  /**
+   * The user's midnight.
+   *
+   * The safety events are filed under the user's own day, so "already
+   * said today" means "since the user's midnight" — not the server's.
+   *
+   * It used to be the user's midnight shifted by the offset of the zone
+   * *now* — and the offset of a zone is not the same all year. So on
+   * the day the clocks changed, the first hour of the user's day was
+   * filed under the day before, and the safety count for the day was
+   * off by an hour's worth of messages.
+   */
+  const dayStart = zonedDayStart(now, await db.getUserTimezone(userId));
+
+  let storedUserMessageId: number | null = options.storedUserMessageId ?? null;
+  let crisis = detectCrisis(options.message);
+  if (!options.admitted) {
+    const admitted = yield* admitUserMessage(options);
+    if (admitted.done) return;
+    storedUserMessageId = admitted.userMessageId;
+    crisis = admitted.crisis;
   }
 
   const defaultConfig = await db.getDefaultLlmConfig(userId);
@@ -1023,53 +1203,12 @@ async function* runConversationTurn(
     if (!quoted) replyToId = null;
   }
 
-  // The user's turn is stored first so the history and any summarisation see it.
-  let storedUserMessageId: number | null = null;
-  if (!options.alreadyPersisted) {
-    storedUserMessageId = await db.createMessage({
-      personaId: persona.id,
-      userId,
-      role: "user",
-      content: message,
-      emotionalState: persona.emotionalState,
-      channel: options.channel ?? "web",
-      messageType: options.media?.type ?? "text",
-      mediaUrl: options.media?.url ?? null,
-      replyToId,
-    });
-  }
-
-  // Crisis handling short-circuits the model entirely.
-  const crisis = detectCrisis(message);
-  if (crisis.crisis) {
-    const replyText = buildCrisisResponse(persona.name, locale);
-    const messageId = await db.createMessage({
-      personaId: persona.id,
-      userId,
-      role: "assistant",
-      content: replyText,
-      emotionalState: persona.emotionalState,
-      channel: options.channel ?? "web",
-    });
-    await db.createSafetyEvent({
-      userId,
-      personaId: persona.id,
-      type: "crisis",
-      severity: "critical",
-      excerpt: crisis.matched.join(", "),
-    }).catch((e) => console.warn("[Safety] Failed to record crisis event:", e));
-
-    yield { type: "delta", text: replyText };
-    yield {
-      type: "done",
-      messageId,
-      emotionalState: persona.emotionalState,
-      graduationSuggested: false,
-      careNote: null,
-      crisis: true,
-    };
-    return;
-  }
+  const historyRows = await db
+    .getMessagesByPersonaId(persona.id, userId, 200)
+    .catch(() => [] as Array<{ role: string; content: string; origin?: string | null }>);
+  const batch = userBatchAfterLastReply(historyRows, options.message);
+  const message = batch[batch.length - 1] ?? options.message;
+  const retrievalQuery = batch.join("\n");
 
   // A weak signal is ordinary distress, not a crisis: the persona still
   // answers normally and checks in afterwards.
@@ -1146,6 +1285,7 @@ async function* runConversationTurn(
     persona,
     userId,
     userMessage: message,
+    retrievalQuery,
     history: [] as Array<{ role: "user" | "assistant"; content: string }>,
     now,
     locale,
@@ -1157,7 +1297,22 @@ async function* runConversationTurn(
     replyToId: options.replyToId,
     mediaType: options.media?.type ?? null,
   };
+  const inbox = options.inbox;
+  const dropped = (): boolean => {
+    if (!inbox) return false;
+    if (isSupersededSignal(options.signal)) return true;
+    return !isLatest(inbox.key, inbox.generation);
+  };
+  const beginCommit = (): boolean => {
+    if (dropped()) return false;
+    if (inbox) enter(inbox.key, "committing");
+    return true;
+  };
   const plan = await planTurn(turnInput);
+  if (dropped()) {
+    yield { type: "superseded" };
+    return;
+  }
   const rng = plan.rng;
   const sampled = plan.kind === "silence"
     ? { act: "silence" as const }
@@ -1167,6 +1322,10 @@ async function* runConversationTurn(
   const recalled = plan.recalled;
 
   if (plan.kind === "silence") {
+    if (!beginCommit()) {
+      yield { type: "superseded" };
+      return;
+    }
     const notice = copy(locale, "prompt.didNotReply");
     const messageId = await db.createMessage({
       personaId: persona.id,
@@ -1265,6 +1424,10 @@ async function* runConversationTurn(
         userMessageId = lastUser?.id ?? null;
       }
       if (first && second && userMessageId) {
+        if (!beginCommit()) {
+          yield { type: "superseded" };
+          return;
+        }
         const { fingerprint, discriminator } = fingerprintFromPersona(persona);
         const sampledAct =
           sampled?.act && sampled.act !== "silence" ? String(sampled.act) : null;
@@ -1290,6 +1453,10 @@ async function* runConversationTurn(
     } catch (e) {
       failed = true;
       failureMessage = (e as Error).message;
+      if (isSupersededSignal(options.signal) || dropped()) {
+        yield { type: "superseded" };
+        return;
+      }
       if (options.signal?.aborted) {
         if (storedUserMessageId) {
           await db
@@ -1353,6 +1520,10 @@ async function* runConversationTurn(
     // stop, so nothing is stored and nothing is counted. Storing a
     // "（沉默）" in its place would put a message in the transcript that
     // the person never received and never asked for.
+    if (isSupersededSignal(options.signal) || dropped()) {
+      yield { type: "superseded" };
+      return;
+    }
     if (options.signal?.aborted) {
       /**
        * A message with nothing under it.
@@ -1592,9 +1763,8 @@ async function* runConversationTurn(
   const finalText = appended.length > 0 ? `${baseText}\n\n${appended.join("\n\n")}` : baseText;
 
   // A crisis already returned. Weak distress and "I'm sad" do not wait.
-  const melancholy = EMOTION_TRIGGER_PATTERNS.zh.melancholy.test(message)
-    || EMOTION_TRIGGER_PATTERNS.en.melancholy.test(message);
-  const immediate = crisis.weakSignal || melancholy;
+  const immediate = crisis.weakSignal
+    || batch.some((text) => detectCrisis(text).weakSignal || melancholyOf(text));
   let delayMeta: { ms: number; via: string } | null = null;
   if (timingEnabled && behavior && !immediate) {
     const measured = effectiveStyleProfile(persona).replyDelay;
@@ -1693,6 +1863,10 @@ async function* runConversationTurn(
     ...(plan.routine ? { routine: plan.routine } : {}),
     ...(delayMeta ? { delay: delayMeta } : {}),
   };
+  if (!beginCommit()) {
+    yield { type: "superseded" };
+    return;
+  }
   let parts = [finalText];
   if (timingEnabled && behavior) {
     parts = splitBurst(finalText, sampleBurstSize(behavior, rng));

@@ -122,6 +122,8 @@ export interface TurnInput {
   replyToId?: number | null;
   /** The current turn's attachment, when the user sent a picture or a voice note. */
   mediaType?: string | null;
+  /** Memory retrieval query. Defaults to `userMessage`. */
+  retrievalQuery?: string;
 }
 
 export interface TurnPlan {
@@ -407,6 +409,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     persona: input.persona,
     userId: input.userId,
     userMessage: input.userMessage,
+    retrievalQuery: input.retrievalQuery,
     contextLimit: input.contextLimit ?? 20,
     providerName: input.providerName,
     locale: input.locale,
@@ -1013,6 +1016,39 @@ function applyLengthCap(text: string, plan: TurnPlan, projection: string[]): {
   return { text: capped.text, projection: [...projection, "length_cap"] };
 }
 
+async function invokeAbortable(
+  provider: LLMProvider,
+  params: Parameters<typeof llmService.invokeWithProvider>[1],
+  signal?: AbortSignal,
+): Promise<string> {
+  if (signal?.aborted) {
+    const error = new Error("aborted");
+    error.name = "AbortError";
+    throw error;
+  }
+  const work = llmService.invokeWithProvider(provider, {
+    ...params,
+    options: {
+      ...params.options,
+      purpose: params.options?.purpose ?? "reply",
+      signal,
+    },
+  });
+  if (!signal) return work;
+  return await Promise.race([
+    work,
+    new Promise<string>((_, reject) => {
+      const fail = () => {
+        const error = new Error("aborted");
+        error.name = "AbortError";
+        reject(error);
+      };
+      if (signal.aborted) fail();
+      else signal.addEventListener("abort", fail, { once: true });
+    }),
+  ]);
+}
+
 export async function* executePlan(
   plan: TurnPlan,
   input: TurnInput,
@@ -1217,10 +1253,28 @@ export async function* executePlan(
     && !rewriteTwoStage
   ) {
     let replyText = "";
-    for await (const chunk of llmService.streamWithProvider(voiceProvider, {
+    const stream = llmService.streamWithProvider(voiceProvider, {
       messages: replyMessages,
       options: { ...replyOptions, purpose: "reply" },
-    })) {
+    });
+    const aborted = io.signal
+      ? new Promise<never>((_, reject) => {
+          const fail = () => {
+            const error = new Error("aborted");
+            error.name = "AbortError";
+            reject(error);
+          };
+          if (io.signal?.aborted) fail();
+          else io.signal?.addEventListener("abort", fail, { once: true });
+        })
+      : null;
+    const iterator = stream[Symbol.asyncIterator]();
+    for (;;) {
+      const next = aborted
+        ? await Promise.race([iterator.next(), aborted])
+        : await iterator.next();
+      if (next.done) break;
+      const chunk = next.value;
       replyText += chunk.text;
       // Always yield the chunk so a mid-stream failure still leaves the
       // half-answer in the caller's buffer. The caller decides whether
@@ -1237,10 +1291,10 @@ export async function* executePlan(
     return;
   }
 
-  let replyText = await llmService.invokeWithProvider(voiceProvider, {
+  let replyText = await invokeAbortable(voiceProvider, {
     messages: replyMessages,
     options: { ...replyOptions, purpose: "reply" },
-  });
+  }, io.signal);
   if (io.emptyAsSilence === false) {
     replyText = typeof replyText === "string" ? replyText : "";
   } else {

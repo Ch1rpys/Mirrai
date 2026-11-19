@@ -11,6 +11,12 @@
  *   event: emotion  data: {"state":"warm","reason":"..."}
  *   event: done     data: {"messageId":1,"emotionalState":"warm","graduationSuggested":false,"careNote":null}
  *   event: error    data: {"message":"...","partial":true}
+ *   event: superseded  data: {}
+ *   event: deferred    data: {"jobId":1,"dueAt":"...","reason":"delay"|"asleep"|"busy"}
+ *   event: recall      data: {"text":"...","showMs":3000}
+ *   event: pat         data: {}
+ *   event: delay       data: {"ms":40000,"typingMs":?}
+ *   event: burst       data: {"texts":[...],"gapsMs":?,"typingMs":?}
  */
 import type { Express, Request, Response } from "express";
 import { TRPCError } from "@trpc/server";
@@ -192,11 +198,27 @@ async function handleChatStream(req: Request, res: Response): Promise<void> {
         } else if (event.type === "thinking") {
           writeEvent(res, "thinking", { notice: copy(parsed.data.locale, "prompt.thinking") });
         } else if (event.type === "delay") {
-          writeEvent(res, "delay", { ms: event.ms });
+          writeEvent(res, "delay", { ms: event.ms, typingMs: event.typingMs });
         } else if (event.type === "silence") {
           writeEvent(res, "silence", { notice: event.notice });
         } else if (event.type === "burst") {
-          writeEvent(res, "burst", { texts: event.texts });
+          writeEvent(res, "burst", {
+            texts: event.texts,
+            gapsMs: event.gapsMs,
+            typingMs: event.typingMs,
+          });
+        } else if (event.type === "superseded") {
+          writeEvent(res, "superseded", {});
+        } else if (event.type === "deferred") {
+          writeEvent(res, "deferred", {
+            jobId: event.jobId,
+            dueAt: event.dueAt,
+            reason: event.reason,
+          });
+        } else if (event.type === "recall") {
+          writeEvent(res, "recall", { text: event.text, showMs: event.showMs });
+        } else if (event.type === "pat") {
+          writeEvent(res, "pat", {});
         } else if (event.type === "emotion") {
           writeEvent(res, "emotion", { state: event.state, reason: event.reason });
         } else if (event.type === "choice") {

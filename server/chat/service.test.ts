@@ -42,6 +42,7 @@ const createFidelityPair = vi.fn();
 const clearMessagePendingChoice = vi.fn();
 const getMessageById = vi.fn();
 const updateEmotionSnapshot = vi.fn();
+const deleteMessage = vi.fn();
 
 const storageToDataUrl = vi.fn();
 vi.mock("../storage", () => ({
@@ -91,6 +92,7 @@ vi.mock("../db", () => ({
   clearMessagePendingChoice: (...a: unknown[]) => clearMessagePendingChoice(...a),
   getMessageById: (...a: unknown[]) => getMessageById(...a),
   updateEmotionSnapshot: (...a: unknown[]) => updateEmotionSnapshot(...a),
+  deleteMessage: (...a: unknown[]) => deleteMessage(...a),
 }));
 
 const invoke = vi.fn();
@@ -132,6 +134,7 @@ import {
   clampTemperature,
   clampMaxTokens,
 } from "./service";
+import { READ_WINDOW_MS, resetInbox } from "./inbox";
 
 function persona(overrides: Record<string, unknown> = {}) {
   return {
@@ -157,6 +160,7 @@ function persona(overrides: Record<string, unknown> = {}) {
 
 describe("runConversation", () => {
   beforeEach(() => {
+    resetInbox();
     for (const fn of [
       createMessage, getDefaultLlmConfig, getTodaySnapshot, createEmotionSnapshot,
       getIntimacyData, updateIntimacy, updatePersona, getPersonaById,
@@ -167,7 +171,7 @@ describe("runConversation", () => {
       getLastMessageAt, getMessageCountSince, getDailyChatCounts,
       getSessionStartAt, getUserMessageCountSince, getDailyUserChatCounts, hasSafetyEventSince,
       incrementChatCount, updateMessageMetadata, createFidelityPair, clearMessagePendingChoice,
-      getMessageById, updateEmotionSnapshot, searchRecordsLexical,
+      getMessageById, updateEmotionSnapshot, searchRecordsLexical, deleteMessage,
       invoke, invokeWithProvider,
       streamWithProvider, resolveProviderForUser, resolveProviderForPurpose, inferEmotionalState,
     ]) {
@@ -234,6 +238,7 @@ describe("runConversation", () => {
     incrementChatCount.mockResolvedValue(11);
     getMessageById.mockResolvedValue(null);
     updateEmotionSnapshot.mockResolvedValue(undefined);
+    deleteMessage.mockResolvedValue(true);
   });
 
   it("stores the user's turn and the persona's reply", async () => {
@@ -918,40 +923,327 @@ describe("runConversation", () => {
     expect(assistantCall.content).not.toContain("12356");
   });
 
-  it("runs the turns of one persona one after the other", async () => {
-    // Two turns for the same persona used to run at once — the web
-    // interface and a chat window, or two tabs. They both read the same
-    // history, so the transcript ended up as "user A, user B, reply A,
-    // reply B": the reply to A was written without seeing B's message.
-    const order: string[] = [];
-    invokeWithProvider.mockImplementation(async () => {
-      order.push("start");
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      order.push("end");
-      return "在的。";
+  it("answers a burst of three as one turn", async () => {
+    /**
+     * A later message used to wait for the earlier reply. Three quick
+     * lines then got three answers, and the first two never saw the
+     * rest. They are now one turn: the earlier generations are taken
+     * away, and the model is asked once, with all three lines.
+     */
+    const store: Array<{
+      id: number;
+      role: string;
+      content: string;
+      origin?: string | null;
+    }> = [];
+    let nextId = 1;
+    createMessage.mockImplementation(async (row: { role: string; content: string; origin?: string }) => {
+      const id = nextId++;
+      store.push({ id, role: row.role, content: row.content, origin: row.origin ?? null });
+      return id;
+    });
+    getMessagesByPersonaId.mockImplementation(async () => [...store]);
+
+    const live = new Set<() => void>();
+    const firstStarted = new Promise<void>((resolve) => {
+      invokeWithProvider.mockImplementation(async (
+        _provider: unknown,
+        params: { options?: { signal?: AbortSignal } },
+      ) => {
+        const signal = params.options?.signal;
+        if (signal?.aborted) {
+          const error = new Error("aborted");
+          error.name = "AbortError";
+          throw error;
+        }
+        return await new Promise<string>((wait, reject) => {
+          const finish = () => {
+            live.delete(finish);
+            wait("在的。");
+          };
+          const fail = () => {
+            live.delete(finish);
+            const error = new Error("aborted");
+            error.name = "AbortError";
+            reject(error);
+          };
+          signal?.addEventListener("abort", fail, { once: true });
+          live.add(finish);
+          resolve();
+        });
+      });
     });
 
+    const events1: Array<{ type: string }> = [];
+    const events2: Array<{ type: string }> = [];
+    const events3: Array<{ type: string }> = [];
     const first = (async () => {
-      for await (const _ of runConversation({
+      for await (const event of runConversation({
         persona: persona(),
         userId: 1,
-        message: "在吗",
+        message: "一",
         mode: "once",
-      })) { /* drain */ }
+      })) {
+        events1.push(event);
+      }
     })();
+    await firstStarted;
     const second = (async () => {
-      for await (const _ of runConversation({
+      for await (const event of runConversation({
         persona: persona(),
         userId: 1,
-        message: "在吗",
+        message: "二",
         mode: "once",
-      })) { /* drain */ }
+      })) {
+        events2.push(event);
+      }
     })();
+    await vi.waitFor(() => {
+      expect(store.some((row) => row.content === "二")).toBe(true);
+    });
+    const third = (async () => {
+      for await (const event of runConversation({
+        persona: persona(),
+        userId: 1,
+        message: "三",
+        mode: "once",
+      })) {
+        events3.push(event);
+      }
+    })();
+    await vi.waitFor(() => {
+      expect(store.some((row) => row.content === "三")).toBe(true);
+    });
+    await vi.waitFor(() => {
+      const dropped = [events1, events2, events3].filter((events) =>
+        events.some((event) => event.type === "superseded"),
+      );
+      expect(dropped).toHaveLength(2);
+      expect(live.size).toBe(1);
+    });
+    for (const finish of live) finish();
+    await Promise.all([first, second, third]);
 
+    expect(events1.at(-1)?.type).toBe("superseded");
+    expect(events2.at(-1)?.type).toBe("superseded");
+    expect(events3.some((event) => event.type === "done")).toBe(true);
+    const settled = await Promise.allSettled(
+      invokeWithProvider.mock.results.map((row) => row.value as Promise<unknown>),
+    );
+    expect(settled.filter((row) => row.status === "fulfilled")).toHaveLength(1);
+    const lastCall = invokeWithProvider.mock.calls.at(-1)?.[1] as {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    const messages = lastCall.messages;
+    const userLines = messages
+      .filter((row) => row.role === "user")
+      .map((row) => String(row.content));
+    expect(userLines).toEqual(["一", "二", "三"]);
+    const assistant = store.filter((row) => row.role === "assistant");
+    expect(assistant).toHaveLength(1);
+    expect(incrementChatCount).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not store a half reply when a later message takes the turn away", async () => {
+    let streams = 0;
+    let firstChunk = false;
+    streamWithProvider.mockImplementation(async function* (
+      _provider: unknown,
+      params: { options?: { signal?: AbortSignal } },
+    ) {
+      streams += 1;
+      if (streams === 1) {
+        firstChunk = true;
+        yield { text: "在" };
+        const signal = params.options?.signal;
+        await new Promise<void>((_, reject) => {
+          const fail = () => {
+            const error = new Error("aborted");
+            error.name = "AbortError";
+            reject(error);
+          };
+          if (signal?.aborted) fail();
+          else signal?.addEventListener("abort", fail, { once: true });
+        });
+        return;
+      }
+      yield { text: "在的。" };
+    });
+
+    const firstEvents: Array<{ type: string }> = [];
+    const first = (async () => {
+      for await (const event of runConversation({
+        persona: persona(),
+        userId: 1,
+        message: "一",
+        mode: "stream",
+      })) {
+        firstEvents.push(event);
+      }
+    })();
+    await vi.waitFor(() => {
+      expect(firstChunk).toBe(true);
+    });
+    const secondEvents: Array<{ type: string }> = [];
+    const second = (async () => {
+      for await (const event of runConversation({
+        persona: persona(),
+        userId: 1,
+        message: "二",
+        mode: "stream",
+      })) {
+        secondEvents.push(event);
+      }
+    })();
     await Promise.all([first, second]);
 
-    // The two turns did not overlap.
-    expect(order).toEqual(["start", "end", "start", "end"]);
+    expect(firstEvents.some((event) => event.type === "superseded")).toBe(true);
+    const assistant = createMessage.mock.calls.filter(
+      (call) => (call[0] as { role?: string }).role === "assistant",
+    );
+    expect(assistant).toHaveLength(1);
+    expect((assistant[0][0] as { content: string }).content).toContain("在的。");
+  });
+
+  it("keeps a half reply when the user stops the turn", async () => {
+    const controller = new AbortController();
+    streamWithProvider.mockImplementation(async function* () {
+      yield { text: "在" };
+      controller.abort();
+      const error = new Error("aborted");
+      error.name = "AbortError";
+      throw error;
+    });
+
+    const events: Array<{ type: string }> = [];
+    for await (const event of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "在吗",
+      mode: "stream",
+      signal: controller.signal,
+    })) {
+      events.push(event);
+    }
+
+    expect(events.some((event) => event.type === "superseded")).toBe(false);
+    const assistant = createMessage.mock.calls.find(
+      (call) => (call[0] as { role?: string }).role === "assistant",
+    );
+    expect(assistant?.[0].content).toContain("在");
+  });
+
+  it("answers a crisis immediately and drops the ordinary reply", async () => {
+    let releaseFirst = () => {};
+    let hanging = true;
+    const firstStarted = new Promise<void>((resolve) => {
+      invokeWithProvider.mockImplementation(async (
+        _provider: unknown,
+        params: { options?: { signal?: AbortSignal } },
+      ) => {
+        const signal = params.options?.signal;
+        if (signal?.aborted) {
+          const error = new Error("aborted");
+          error.name = "AbortError";
+          throw error;
+        }
+        if (!hanging) return "在的。";
+        return await new Promise<string>((wait, reject) => {
+          const fail = () => {
+            const error = new Error("aborted");
+            error.name = "AbortError";
+            reject(error);
+          };
+          signal?.addEventListener("abort", fail, { once: true });
+          releaseFirst = () => {
+            hanging = false;
+            wait("在的。");
+          };
+          resolve();
+        });
+      });
+    });
+
+    const firstEvents: Array<{ type: string }> = [];
+    const first = (async () => {
+      for await (const event of runConversation({
+        persona: persona(),
+        userId: 1,
+        message: "在吗",
+        mode: "once",
+      })) {
+        firstEvents.push(event);
+      }
+    })();
+    await firstStarted;
+    const crisisEvents: Array<{ type: string; crisis?: boolean }> = [];
+    for await (const event of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "我不想活了",
+      mode: "once",
+    })) {
+      crisisEvents.push(event);
+    }
+    releaseFirst();
+    await first;
+
+    expect(firstEvents.some((event) => event.type === "superseded")).toBe(true);
+    expect(crisisEvents.some((event) => event.type === "done" && event.crisis)).toBe(true);
+    const assistant = createMessage.mock.calls.filter(
+      (call) => (call[0] as { role?: string }).role === "assistant",
+    );
+    expect(assistant).toHaveLength(1);
+    expect((assistant[0][0] as { content: string }).content).toContain("12356");
+  });
+
+  it("does not wait for a read window when timing is off", async () => {
+    vi.useFakeTimers();
+    try {
+      const running = (async () => {
+        for await (const _ of runConversation({
+          persona: persona(),
+          userId: 1,
+          message: "在吗",
+          mode: "once",
+        })) {
+          /* drain */
+        }
+      })();
+      await vi.advanceTimersByTimeAsync(0);
+      await running;
+      expect(invokeWithProvider).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("waits the read window when timing is on", async () => {
+    vi.useFakeTimers();
+    try {
+      let called = false;
+      invokeWithProvider.mockImplementation(async () => {
+        called = true;
+        return "在的。";
+      });
+      const running = (async () => {
+        for await (const _ of runConversation({
+          persona: timedPersona(),
+          userId: 1,
+          message: "在吗",
+          mode: "once",
+        })) {
+          /* drain */
+        }
+      })();
+      await vi.advanceTimersByTimeAsync(READ_WINDOW_MS - 1);
+      expect(called).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await running;
+      expect(called).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("assesses the emotional trajectory and lets it suggest graduation earlier", async () => {
@@ -1238,56 +1530,83 @@ describe("runConversation", () => {
   };
 
   it("draws the delay from the measured bucket", async () => {
-    const events = [];
-    for await (const event of runConversation({
-      persona: timedPersona({ styleProfile: eveningDelay }),
-      userId: 1,
-      message: "在吗",
-      mode: "once",
-      now: new Date("2024-06-01T12:00:00.000Z"),
-    })) {
-      events.push(event);
+    vi.useFakeTimers();
+    try {
+      const events: Array<{ type: string; ms?: number }> = [];
+      const running = (async () => {
+        for await (const event of runConversation({
+          persona: timedPersona({ styleProfile: eveningDelay }),
+          userId: 1,
+          message: "在吗",
+          mode: "once",
+          now: new Date("2024-06-01T12:00:00.000Z"),
+        })) {
+          events.push(event);
+        }
+      })();
+      await vi.advanceTimersByTimeAsync(READ_WINDOW_MS);
+      await running;
+      const delay = events.find((event) => event.type === "delay");
+      expect(delay).toEqual({ type: "delay", ms: 40_000 });
+      const stored = createMessage.mock.calls.find((call) => call[0].role === "assistant");
+      expect(stored?.[0].metadata.delay).toEqual({ ms: 40_000, via: "band" });
+    } finally {
+      vi.useRealTimers();
     }
-    const delay = events.find((event) => event.type === "delay");
-    expect(delay).toEqual({ type: "delay", ms: 40_000 });
-    const stored = createMessage.mock.calls.find((call) => call[0].role === "assistant");
-    expect(stored?.[0].metadata.delay).toEqual({ ms: 40_000, via: "band" });
   });
 
   it("keeps the old delay when nothing has been measured", async () => {
-    const spy = vi.spyOn(behaviorProfile, "sampleReplyDelayMs");
-    const events = [];
-    for await (const event of runConversation({
-      persona: timedPersona(),
-      userId: 1,
-      message: "在吗",
-      mode: "once",
-      now: new Date("2024-06-01T12:00:00.000Z"),
-    })) {
-      events.push(event);
+    vi.useFakeTimers();
+    try {
+      const spy = vi.spyOn(behaviorProfile, "sampleReplyDelayMs");
+      const events: Array<{ type: string; ms?: number }> = [];
+      const running = (async () => {
+        for await (const event of runConversation({
+          persona: timedPersona(),
+          userId: 1,
+          message: "在吗",
+          mode: "once",
+          now: new Date("2024-06-01T12:00:00.000Z"),
+        })) {
+          events.push(event);
+        }
+      })();
+      await vi.advanceTimersByTimeAsync(READ_WINDOW_MS);
+      await running;
+      const delay = events.find((event) => event.type === "delay");
+      expect(spy).toHaveBeenCalled();
+      expect(delay?.ms).toBe(spy.mock.results.at(-1)?.value);
+      const stored = createMessage.mock.calls.find((call) => call[0].role === "assistant");
+      expect(stored?.[0].metadata.delay).toBeUndefined();
+      spy.mockRestore();
+    } finally {
+      vi.useRealTimers();
     }
-    const delay = events.find((event) => event.type === "delay");
-    expect(spy).toHaveBeenCalled();
-    expect(delay?.ms).toBe(spy.mock.results.at(-1)?.value);
-    const stored = createMessage.mock.calls.find((call) => call[0].role === "assistant");
-    expect(stored?.[0].metadata.delay).toBeUndefined();
-    spy.mockRestore();
   });
 
   it("does not delay a crisis, a weak signal, or someone saying they are sad", async () => {
-    for (const message of ["我想死", "我好累", "我很难过"]) {
-      createMessage.mockClear();
-      const events = [];
-      for await (const event of runConversation({
-        persona: timedPersona({ styleProfile: eveningDelay }),
-        userId: 1,
-        message,
-        mode: "once",
-        now: new Date("2024-06-01T12:00:00.000Z"),
-      })) {
-        events.push(event);
+    vi.useFakeTimers();
+    try {
+      for (const message of ["我想死", "我好累", "我很难过"]) {
+        createMessage.mockClear();
+        const events: Array<{ type: string }> = [];
+        const running = (async () => {
+          for await (const event of runConversation({
+            persona: timedPersona({ styleProfile: eveningDelay }),
+            userId: 1,
+            message,
+            mode: "once",
+            now: new Date("2024-06-01T12:00:00.000Z"),
+          })) {
+            events.push(event);
+          }
+        })();
+        await vi.advanceTimersByTimeAsync(READ_WINDOW_MS);
+        await running;
+        expect(events.some((event) => event.type === "delay"), message).toBe(false);
       }
-      expect(events.some((event) => event.type === "delay"), message).toBe(false);
+    } finally {
+      vi.useRealTimers();
     }
   });
 });
