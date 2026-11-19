@@ -1691,30 +1691,37 @@ async function runSkillPipelineOnce(
       ...mineOpenLoops({ messages: transcriptRows }),
       ...mineRoutines(transcriptRows, input.timeZone, { locale }),
     ];
-    await labelActsForRecords({
-      personaId,
-      userId,
-      mode: preset.id,
-      locale,
-      timeZone: input.timeZone,
-      records: transcriptRows,
-      write: recordLines.length > 0,
-      invoke: invokeForDistill,
-    }).catch((e) =>
-      console.warn("[SkillEngine] The acts could not be labelled:", e.message),
-    );
-    await labelEmotionsForRecords({
-      personaId,
-      userId,
-      mode: preset.id,
-      locale,
-      timeZone: input.timeZone,
-      records: transcriptRows,
-      write: recordLines.length > 0,
-      invoke: invokeForDistill,
-    }).catch((e) =>
-      console.warn("[SkillEngine] The emotions could not be labelled:", e.message),
-    );
+    /**
+     * Labelling writes back to `collected_messages`, which only exists
+     * on the records path. The upload-only path keeps its old profile
+     * (see `legacy` below): it has no rows to label.
+     */
+    if (recordLines.length > 0) {
+      await labelActsForRecords({
+        personaId,
+        userId,
+        mode: preset.id,
+        locale,
+        timeZone: input.timeZone,
+        records: transcriptRows,
+        write: true,
+        invoke: invokeForDistill,
+      }).catch((e) =>
+        console.warn("[SkillEngine] The acts could not be labelled:", e.message),
+      );
+      await labelEmotionsForRecords({
+        personaId,
+        userId,
+        mode: preset.id,
+        locale,
+        timeZone: input.timeZone,
+        records: transcriptRows,
+        write: true,
+        invoke: invokeForDistill,
+      }).catch((e) =>
+        console.warn("[SkillEngine] The emotions could not be labelled:", e.message),
+      );
+    }
     /**
      * Per-state pools read the emotion column. Labelling does not
      * change the records-version string, so a profile measured at
@@ -1746,6 +1753,7 @@ async function runSkillPipelineOnce(
       locale,
       timezone: input.timeZone,
       relationshipPhase: enrichedData.relationshipPhase,
+      legacy: recordLines.length === 0,
     }).catch(() => null);
     const exchanges = exchangesFromRecords(
       transcriptRows.map((row) => ({

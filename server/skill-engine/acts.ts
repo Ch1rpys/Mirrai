@@ -113,9 +113,20 @@ export async function buildActProfile(params: {
   timezone?: string | null;
   relationshipPhase?: string | null;
   emotionalState?: string | null;
+  /**
+   * The upload-only path, which has no `collected_messages` rows to
+   * label and write back.
+   *
+   * B1.1 says that path keeps its old behaviour. It therefore uses the
+   * old labeler here (rules plus one model call for up to eighty
+   * unlabelled replies) and the old `warm` bucket, instead of reading
+   * labels that were never written.
+   */
+  legacy?: boolean;
 }): Promise<ActProfile | null> {
   const theirs: Array<{
-    act: SpeechAct;
+    act: SpeechAct | null;
+    content: string;
     timestamp?: Date | string | null;
     previousUser: string | null;
     previousUserAct: UserAct | null;
@@ -132,17 +143,40 @@ export async function buildActProfile(params: {
       continue;
     }
     if (row.role !== "assistant") continue;
-    if (!isSpeechAct(row.act)) continue;
+    if (!params.legacy && !isSpeechAct(row.act)) continue;
     theirs.push({
-      act: row.act,
+      act: isSpeechAct(row.act) ? row.act : null,
+      content: row.content,
       timestamp: row.timestamp,
       previousUser,
       previousUserAct,
-      emotion: row.emotion?.trim() || undefined,
+      emotion: params.legacy
+        ? (row.emotion?.trim() || "warm")
+        : (row.emotion?.trim() || undefined),
       relationshipPhase: params.relationshipPhase ?? "initial",
     });
   }
   if (theirs.length < ACT_MIN_SAMPLES) return null;
+
+  if (params.legacy) {
+    const unlabeled = theirs.filter(
+      (row) => !labelSpeechActByRule(row.content, row.previousUser),
+    );
+    const modelled = await labelWithModel({
+      unlabeled: unlabeled.map((row) => ({
+        content: row.content,
+        previousUser: row.previousUser,
+      })),
+      userId: params.userId,
+      locale: params.locale ?? "zh",
+    });
+    for (const row of theirs) {
+      if (row.act) continue;
+      row.act = labelSpeechActByRule(row.content, row.previousUser)
+        ?? modelled.get(row.content)
+        ?? null;
+    }
+  }
 
   const unconditional: ActCounts = emptyCounts();
   const bucketMap = new Map<string, ActBucket>();
@@ -155,6 +189,7 @@ export async function buildActProfile(params: {
   }>();
 
   for (const row of theirs) {
+    if (!row.act) continue;
     Object.assign(unconditional, incrementCount(unconditional, row.act));
     if (row.previousUserAct) {
       const current = byUserActMap.get(row.previousUserAct) ?? {};
