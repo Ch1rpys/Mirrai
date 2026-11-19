@@ -1468,3 +1468,31 @@ A1、A2、A3、A4、C1.2、C1.3、C1.4、C1.5、C1.6、C1.7 维持 ✅。C1.1 �
 - 更新 A1、A4 两行的验收证据（A1 的四列落库断言在 `server/collectors/db-store.test.ts:526`、上传停在 `needs_roles`；A4 的时期边界改为 `2023-07-04T23:47:05.000Z`，上海 2023-07-05）。
 - 闸门 `419 passed | 6 skipped (425)` 文件，`3684 passed | 23 skipped (3707)` 用例，`all six steps passed`（相对验收时的 3683 条 +1，是新增的 `needs_chat` 用例；跳过数不变）。这次没有新增偏差。
 - C1.1 改回 ✅。A1、A2、A3、A4、C1.2–C1.7 维持 ✅。验收时列的「向导英文界面没在浏览器点过」「README 外链没有逐条打开」仍未做；`wechat-html` 仍按未验证清单不列为已支持。
+
+### WP2 · 独立验收 · 2026-11-19
+
+对照 `docs/exec-v6.md` 的 A5–A9 从头重跑，不沿用上面的证据；代码和测试一行未改（临时改动都用 `git checkout HEAD -- <文件>` 还原，未提交，`git status` 干净）。`corepack pnpm gate`（无 `--fast`、无 `DATABASE_URL`，Node v24.14.1）退出码 0：`Test Files  419 passed | 6 skipped (425)`，`Tests  3684 passed | 23 skipped (3707)`，`all six steps passed`，与本文件最新的 WP1 修复行一致。通过数 3684 高于手册 2.2 基线 2486；跳过数 23，比本包收尾的 16 多 7，全部来自后面工作包按手册 2.3 加的 `describe.skipIf(!DATABASE_URL)`（`db-persona-versions` +2、`material` +3、`db-push` +2），本包内 16→16 没有增加。本包各行记的闸门数字（315/3 文件、2863/16 用例）是 WP2 收尾时的历史快照，之后 WP3–WP18 加了测试，不能拿来对当前总数；当前总数与本文件最后一行一致。
+
+WP2 点名的 13 个测试文件 148 条全过：`Lobby.test.tsx` 16、`lobby-eligibility.test.ts` 5、`Analytics.test.tsx` 5、`Milestones.test.tsx` 3、`routers.milestones.test.ts` 2、`MemoryReview.test.tsx` 2、`memory-extract-source.test.ts` 5、`chat/memory-extract.test.ts` 11、`memory-extract.test.ts` 10、`resources.test.ts` 7、`egress.test.ts` 4、`i18n.test.ts` 15、`db-behaviour.test.ts` 63。
+
+先红后绿（临时改完都已还原）：
+- A5：把 `Lobby.tsx` 和中英文案倒回 `84ada9e`（A5 前），`does not put a daily letter in a persona's mouth` 红在 `expected <h2 class="section-title"></h2> to be null`（「TA 想对你说」）。
+- A6：倒回 `21981ee`（A6 前），4 条红：引言池含「想你」、快捷栏里有暂停的分身、找不到标题「接着聊」、卡片没有「上次联系 3 天前」。
+- A7：倒回 `d9f679d`（A7 前），大厅红在 `连续对话 2 天`，`Analytics.test.tsx` 红在 `最长连续`。
+- A8：用 WP2 版 `memory-extract-source.test.ts` 对 `2cfd462^` 的抽取器，红在 `expected "vi.fn()" to not be called at all, but actually been called 1 times`；用当前版测试对同一旧代码也红 5 条（`subject: "said"` 等）。
+- A9：把 `lastVerified` 改回 `2026-01-01`，红在 `cn-national: expected '2026-01-01' not to be '2026-01-01'`。
+
+A9 的五个来源 2026-11-19 重新打开核对：NDCPA 页面（200）写「全国 31 个省（区、市）均已开通运行 12356」；crisis.org.cn（200）写手机 010-82951332；findahelpline.com（200，第一次连接被重置、HTTP/1.1 重试成功）在线、由 ThroughLine 运营；988lifeline.org（200）写 national mental health hotline: 988；canada.ca（200，重试后）写 call or text 9-8-8、9-8-8: Suicide Crisis Helpline。应用仍不联网取这些号码，`egress.test.ts` 4 通过。
+
+清单外边界：临时库 `mirrai_v6_verify`（`push --force` 建 schema，用完已 `dropdb`，`mirrai_live` 未碰；本包没有迁移，所以不做手册 2.3 的四步）上 seed 两个用户后，`getUserMilestones` 各自只拿到自己的最早一封 `kind = "letter"` 的信、最早的 `outbound_letters.sentAt`、最早的 `personas.graduatedAt`；`todo` 行不算信；没有数据的用户三个 null。`getPersonasWithStats` 的 `relationshipEnded`：无事件且无 `togetherTo` 为 false；`togetherTo` 有值为 true；最近阶段事件是 breakup / apart 为 true、reconciliation 为 false；另一个用户的事件不影响。`getMemoriesFromPersona` 只返回本用户、本分身、`status = "active"`、来源行是 assistant 的记忆；其他用户的行、被取代的行、来源行是用户消息的行都不返回。英文界面另用临时测试（已删，`git status` 干净）跑过大堂：暂停的分身不进「Pick up where you left off」，卡片显示 `Last spoke 7 days ago`，可推荐的分身有英文标题；2 条通过。
+
+A8 的 WP2 验收 1、5 在当前 HEAD 已被 WP8 B6.9 按手册计划取代（偏差 133、134）：现在是 `subject: "said"` 账本 + 三组记忆面板 + `memory.update` 的「这是真的」，对应 B6.9 的验收；WP2 当时的「不存」和「留着/删掉」两个按钮已不存在。当前测试对旧抽取器仍会红（见上），红线没有被悄悄放弃。
+
+提交范围 `84ada9e..27c25d3`（21 个提交）：没有 `Co-Authored-By`；`package.json` 与 `pnpm-lock.yaml` 零改动；没有动 `server/wechat/ilink`；`drizzle/` 零改动（本包没有新迁移，也没有改旧迁移）；测试文件净 +760/−4，没有删测试文件、没有加 `skip`、没有删 `expect`（那 4 行删除是 `memory-extract.test.ts` 里 mock 回答补 `line` 的替换）；黄金快照只在 `e506484` 出现过；只记进度的提交只改这个文件；其余提交的文件清单和提交信息对得上，没有混入不相干的改动。
+
+- [ ] A8 行的验收证据已过时：那里写的 `does not store a fact the persona said` 在当前 HEAD 不存在，`memory-extract-source.test.ts` 第一条现在是 `stores a fact the persona said as a ledger entry, not an anchor`（5 条），`MemoryReview.test.tsx` 现在是三组面板、2 条（没有「留着」「删掉」按钮）。这是 B6.9 的计划内改动（偏差 133、134），不是本包缺陷；需要把 A8 行证据改成现在的行为和测试名，或注明已被 B6.9 取代。复现：`git log -1 --format=%h 881d917` 后看 `server/chat/memory-extract-source.test.ts`、`client/src/components/v6/MemoryReview.test.tsx`。
+- [ ] A9 行的验收证据已过时：那里写「四条都核到了」「`resources.test.ts` 6 通过」；当前是五条（`17b934c` 把美加拆成 `us` / `ca`）和 7 条用例。不是缺陷，证据行需要更新。
+
+存疑（未记为问题）：A6 的第 3 条验收写「用固定的 `lastUserMessageAt` 和 mock 的当前时间」，`Lobby.test.tsx` 的 `says on the card how many days since the user last spoke` 用的是 `new Date(Date.now() - 3 * 86_400_000)`，没有 mock 当前时间；因为正好减 3 个 86400000 毫秒，`daysSinceContact` 的 floor 稳定是 3，跑多次都绿，但字面上和验收写法不一致。
+
+A5–A9 维持 ✅（A8、A9 各有一条证据行待更新）。
