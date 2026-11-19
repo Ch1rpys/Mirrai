@@ -328,6 +328,36 @@ describe("measureStyleProfile", () => {
     expect(weights?.length).toBeLessThan(0);
     expect(setPersonaStyleProfile).toHaveBeenCalled();
   });
+
+  it("stores the user's own side of the record in the profile", async () => {
+    getRecordsVersion.mockResolvedValue("80:80");
+    getPersonaStyleProfile.mockResolvedValue(null);
+    getPersonaById.mockResolvedValue({ id: 5, userId: 1, name: "小满", personaData: {} });
+    getUserById.mockResolvedValue({ id: 1, name: "阿树" });
+    iterateRecords.mockImplementation(async function* () {
+      for (let i = 0; i < 40; i++) {
+        yield {
+          role: "user",
+          content: `我自己说的一句 ${i}`,
+          timestamp: new Date(Date.parse("2022-03-01T12:00:00.000Z") + i * 120_000),
+          kind: "text",
+        };
+        yield {
+          role: "assistant",
+          content: "在的呀",
+          timestamp: new Date(Date.parse("2022-03-01T12:01:00.000Z") + i * 120_000),
+          kind: "text",
+        };
+      }
+    });
+    const measured = await measureStyleProfile({ personaId: 5, userId: 1 });
+    expect(measured.userSide?.samples).toBe(40);
+    expect(measured.userSide?.sampleLines).toHaveLength(12);
+    const written = setPersonaStyleProfile.mock.calls.at(-1)?.[2] as
+      | { userSide?: { samples?: number } }
+      | undefined;
+    expect(written?.userSide?.samples).toBe(40);
+  });
 });
 
 describe("afterRecordsChanged", () => {
