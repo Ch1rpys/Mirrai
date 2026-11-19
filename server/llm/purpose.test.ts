@@ -9,11 +9,12 @@ const SERVER = join(ROOT, "server");
 /**
  * Every model call under `server/` has to say why it is being made.
  *
- * The four names the handbook lists, plus `invokeForUserWithReason`,
- * which is the same door with a failure reason attached.
+ * The four names the handbook lists, the same door with a failure reason
+ * attached, and the direct provider calls a wrapper makes on a caller's
+ * behalf.
  */
 const CALL_RE =
-  /\b(?:llmService\.(?:invokeWithProvider|streamWithProvider|invoke)|invokeWithProvider|streamWithProvider|invokeForUserWithReason|invokeForUser)\s*\(/g;
+  /\b(?:llmService\.(?:invokeWithProvider|streamWithProvider|invoke)|provider\.(?:invoke|stream)|invokeWithProvider|streamWithProvider|invokeForUserWithReason|invokeForUser)\s*\(/g;
 
 function walk(dir: string, files: string[] = []): string[] {
   for (const name of readdirSync(dir)) {

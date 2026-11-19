@@ -14,6 +14,12 @@ describe("inspectExtraBody", () => {
     expect(inspectExtraBody(extraBody)).toEqual({ ok: false, error: "too_large" });
   });
 
+  it("counts UTF-8 bytes, not characters", () => {
+    const extraBody = { blob: "中".repeat(1000) };
+    expect(JSON.stringify(extraBody).length).toBeLessThan(EXTRA_BODY_MAX_BYTES);
+    expect(inspectExtraBody(extraBody)).toEqual({ ok: false, error: "too_large" });
+  });
+
   it("rejects extraBody that names model", () => {
     expect(inspectExtraBody({ model: "other" })).toEqual({ ok: false, error: "forbidden" });
   });

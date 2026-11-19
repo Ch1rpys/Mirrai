@@ -25,7 +25,7 @@ export function inspectExtraBody(
   } catch {
     return { ok: false, error: "not_object" };
   }
-  if (serialized.length > EXTRA_BODY_MAX_BYTES) {
+  if (Buffer.byteLength(serialized, "utf8") > EXTRA_BODY_MAX_BYTES) {
     return { ok: false, error: "too_large" };
   }
   for (const key of EXTRA_BODY_FORBIDDEN) {

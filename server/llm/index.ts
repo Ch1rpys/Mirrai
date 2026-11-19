@@ -359,6 +359,7 @@ export class LLMService {
       try {
         return await provider.invoke(params.messages, {
           ...params.options,
+          purpose: params.options?.purpose ?? "other",
           signal: attempt_.signal,
         });
       } catch (err) {
@@ -408,6 +409,7 @@ export class LLMService {
       try {
         for await (const chunk of provider.stream(params.messages, {
           ...params.options,
+          purpose: params.options?.purpose ?? "other",
           signal: attempt_.signal,
         })) {
           emitted = true;

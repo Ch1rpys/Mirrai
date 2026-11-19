@@ -75,7 +75,7 @@ export default function ExtraBodyEditor() {
               setHint(t("settings.ai.extraBodyInvalid"));
               return;
             }
-            if (JSON.stringify(parsed).length > EXTRA_BODY_MAX_BYTES) {
+            if (new TextEncoder().encode(JSON.stringify(parsed)).length > EXTRA_BODY_MAX_BYTES) {
               setHint(t("settings.ai.extraBodyTooLarge"));
               return;
             }

@@ -559,6 +559,40 @@ describe("runConversation", () => {
     expect(assistant.metadata?.ritual).toBeUndefined();
   });
 
+  it("keeps the crisis path when the message also contains a ritual trigger", async () => {
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona({
+        styleProfile: {
+          version: 1,
+          measuredAt: "2026-01-15T12:00:00.000Z",
+          recordsVersion: "100:100",
+          rituals: [
+            {
+              trigger: "晚安",
+              variants: ["晚安"],
+              n: 100,
+              coverage: 1,
+              replies: [{ text: "晚安", n: 100, recordId: 11 }],
+            },
+          ],
+        },
+      }),
+      userId: 1,
+      message: "晚安 我不想活了",
+      mode: "once",
+    })) {
+      events.push(event);
+    }
+
+    expect(events.find((event) => event.type === "done")?.crisis).toBe(true);
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+    const assistant = createMessage.mock.calls.find(
+      (call: unknown[]) => (call[0] as { role?: string }).role === "assistant",
+    )?.[0] as { metadata?: { ritual?: string } };
+    expect(assistant.metadata?.ritual).toBeUndefined();
+  });
+
   it("streams the reply, then writes claim metadata", async () => {
     streamWithProvider.mockImplementation(async function* () {
       yield { text: "上次去拾光咖啡那天你迟到了" };

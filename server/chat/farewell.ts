@@ -264,7 +264,7 @@ async function writeSinglePassLetter(params: {
 
   if (provider) {
     try {
-      const response = await withTimeout(provider.invoke(messages));
+      const response = await withTimeout(provider.invoke(messages, { purpose: "letter" }));
       if (response?.trim()) return response.trim();
     } catch (e) {
       console.warn(

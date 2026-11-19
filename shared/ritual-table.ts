@@ -155,9 +155,38 @@ export function mergeManualRituals(
 ): RitualEntry[] {
   const manuals = (previous ?? []).filter((entry) => entry.manual);
   if (manuals.length === 0) return mined;
-  const used = new Set(mined.map((entry) => entry.trigger));
-  const kept = manuals.filter((entry) => !used.has(entry.trigger));
-  return [...mined, ...kept];
+  /**
+   * A trigger the user already wrote down is not replaced by the mined
+   * entry. Its replies are merged in, so a re-measure cannot throw away
+   * a line the user chose.
+   */
+  const out = mined.map((entry) => ({
+    ...entry,
+    variants: [...entry.variants],
+    replies: entry.replies.map((reply) => ({ ...reply })),
+  }));
+  const byTrigger = new Map(out.map((entry) => [entry.trigger, entry]));
+  for (const manual of manuals) {
+    const current = byTrigger.get(manual.trigger);
+    if (!current) {
+      out.push(manual);
+      byTrigger.set(manual.trigger, manual);
+      continue;
+    }
+    current.variants = [...new Set([...current.variants, ...manual.variants])];
+    const seen = new Set(current.replies.map((reply) => reply.text));
+    const extra = manual.replies.filter((reply) => !seen.has(reply.text));
+    if (extra.length > 0) {
+      current.replies = [...current.replies, ...extra];
+      current.n += extra.reduce((sum, reply) => sum + reply.n, 0);
+      current.replies.sort((a, b) => b.n - a.n || a.text.localeCompare(b.text, "zh"));
+      current.replies = current.replies.slice(0, RITUAL_MAX_REPLIES);
+      const topThree = current.replies.slice(0, 3).reduce((sum, reply) => sum + reply.n, 0);
+      current.coverage = current.n > 0 ? topThree / current.n : 0;
+    }
+    current.manual = true;
+  }
+  return out;
 }
 
 export function normalizeRituals(value: unknown): RitualEntry[] {

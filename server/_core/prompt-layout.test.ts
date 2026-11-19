@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { copy } from "@shared/copy";
 import { checkPersonaStructure, completePersona } from "./fidelity-gate";
 import {
@@ -88,5 +90,10 @@ describe("the fidelity gate under both layouts", () => {
     const cache = checkPersonaStructure(completePersona(), "cache");
     expect(cache.ok).toBe(true);
     expect(cache.checks).toHaveLength(7);
+  });
+
+  it("hands the resolved layout to the command-line gate", () => {
+    const source = readFileSync(join(__dirname, "../../scripts/fidelity-gate.ts"), "utf8");
+    expect(source).toContain("checkPersonaStructure(completePersona(), layout)");
   });
 });

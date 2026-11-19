@@ -46,4 +46,16 @@ describe("the extra request body editor", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("这不是一个 JSON 对象。");
     expect(mutate).not.toHaveBeenCalled();
   });
+
+  it("counts the 2 KB limit in UTF-8 bytes", () => {
+    render(<ExtraBodyEditor />);
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: JSON.stringify({ blob: "中".repeat(1000) }) },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存额外参数" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      translate("zh", "settings.ai.extraBodyTooLarge"),
+    );
+    expect(mutate).not.toHaveBeenCalled();
+  });
 });

@@ -22,7 +22,6 @@ export const REANCHOR_WINDOW = 8;
 export const REANCHOR_RESIDUE = 0.3;
 export const REANCHOR_SURPRISE_MULT = 1.5;
 export const REANCHOR_PERIOD_RARE = 0.15;
-export const REANCHOR_ISSUE_SHARE = 0.5;
 
 export const REANCHOR_ISSUES = ["long", "question", "period", "cliche"] as const;
 export type ReanchorIssue = (typeof REANCHOR_ISSUES)[number];
@@ -131,15 +130,14 @@ export function detectReanchor(params: {
       : Number.POSITIVE_INFINITY;
   if (rollingResidue < REANCHOR_RESIDUE && rollingSurprise < surpriseCut) return null;
 
-  const share = (count: number) => count / recent.length >= REANCHOR_ISSUE_SHARE;
   const issues: ReanchorIssue[] = [];
-  if (share(residues.filter((row) => row.tooLong).length)) issues.push("long");
-  if (share(residues.filter((row) => row.questionEnding).length)) issues.push("question");
+  if (residues.some((row) => row.tooLong)) issues.push("long");
+  if (residues.some((row) => row.questionEnding)) issues.push("question");
   const periodEnds = recent.filter((line) => endingClassOf(line) === "period").length;
-  if (share(periodEnds) && (core.endings.period ?? 0) <= REANCHOR_PERIOD_RARE) {
+  if (periodEnds > 0 && (core.endings.period ?? 0) <= REANCHOR_PERIOD_RARE) {
     issues.push("period");
   }
-  if (share(residues.filter((row) => row.emotionCliche).length)) issues.push("cliche");
+  if (residues.some((row) => row.emotionCliche)) issues.push("cliche");
   if (issues.length === 0) return null;
   return { issues, rollingResidue, rollingSurprise };
 }

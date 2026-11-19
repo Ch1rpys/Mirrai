@@ -77,6 +77,34 @@ describe("detectReanchor", () => {
     expect(own).toBeNull();
   });
 
+  it("fires when the residue is high but each tell is spread across fewer than half the lines", () => {
+    const spread = measureFingerprint(
+      Array.from({ length: 40 }, () => ({
+        role: "assistant",
+        content: "一二三四五六七八九",
+        kind: "text",
+      })),
+    );
+    expect(spread).toBeTruthy();
+    const mixed = detectReanchor({
+      history: [
+        ...Array.from({ length: 3 }, () => ({
+          role: "assistant",
+          content: "这是一句很长很长很长很长的问句吗？",
+        })),
+        ...Array.from({ length: 2 }, () => ({
+          role: "assistant",
+          content: "我理解你\n1. 好",
+        })),
+        ...Array.from({ length: 3 }, () => ({ role: "assistant", content: "在的呀" })),
+      ],
+      fingerprint: spread,
+      core: spread,
+    });
+    expect(mixed).not.toBeNull();
+    expect(mixed?.issues).toEqual(expect.arrayContaining(["long", "question", "cliche"]));
+  });
+
   it("does not fire with fewer than eight assistant lines", () => {
     const longQuestion = "这是一句很长很长很长很长很长很长的问句对不对？";
     expect(

@@ -1100,7 +1100,16 @@ export async function* executePlan(
     stop: plan.stop,
     signal: io.signal,
   };
-  const plannerOptions = { ...invokeOptions, purpose: "plan" as const };
+  const plannerOptions = {
+    provider: io.options.provider,
+    temperature: io.options.temperature,
+    topP: io.options.topP,
+    presencePenalty: io.options.presencePenalty,
+    frequencyPenalty: io.options.frequencyPenalty,
+    extraBody: io.options.extraBody,
+    signal: io.signal,
+    purpose: "plan" as const,
+  };
   const sampling = normalizePersonaSettings(input.persona.settings).sampling;
   const replyOptions = {
     ...invokeOptions,

@@ -15,7 +15,7 @@ import { resolvePromptLayout } from "../server/_core/persona-utils";
 const layout = resolvePromptLayout();
 console.log(`[gate] prompt layout: ${layout}`);
 
-const result = checkPersonaStructure(completePersona());
+const result = checkPersonaStructure(completePersona(), layout);
 
 if (result.ok) {
   console.log("[gate] the persona still has everything it needs:");

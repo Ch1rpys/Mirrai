@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildXiaomanRecords } from "../server/test-fixtures/xiaoman";
 import {
   matchRitual,
+  mergeManualRituals,
   mineRituals,
   normalizeRituals,
   turnsFromRecords,
@@ -86,6 +87,36 @@ describe("normalizeRituals", () => {
         manual: true,
       },
     ]);
+  });
+});
+
+describe("mergeManualRituals", () => {
+  it("keeps a handwritten reply when the same trigger is mined again", () => {
+    const mined = [
+      {
+        trigger: "嗨",
+        variants: ["嗨"],
+        n: 20,
+        replies: [{ text: "你好", n: 20, recordId: 1 }],
+        coverage: 1,
+      },
+    ];
+    const merged = mergeManualRituals(mined, [
+      {
+        trigger: "嗨",
+        variants: ["嗨"],
+        n: 1,
+        replies: [{ text: "在呢", n: 1, recordId: 0 }],
+        coverage: 1,
+        manual: true,
+      },
+    ]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.manual).toBe(true);
+    expect(merged[0]?.n).toBe(21);
+    expect(merged[0]?.replies.map((reply) => reply.text)).toEqual(
+      expect.arrayContaining(["你好", "在呢"]),
+    );
   });
 });
 
