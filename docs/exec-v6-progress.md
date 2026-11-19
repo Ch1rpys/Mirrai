@@ -1729,7 +1729,7 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 
 `corepack pnpm gate`（无 `--fast`、无 `DATABASE_URL`，Node v24.14.1）退出码 0：`Test Files  421 passed | 5 skipped (426)`，`Tests  3715 passed | 23 skipped (3738)`，`all six steps passed`。与本文件最新一行一致；通过数 3715 高于 §2.2 基线 2486。WP7 收尾时是 391/5 文件、3443/21 用例；当前多出的文件/用例来自 WP8 之后的工作包，跳过 23 比当时的 21 多 2，是 WP9 的 `db-push.test.ts`，WP7 提交范围没有新增 `skip`。WP7 相关 23 个测试文件 366 条全过。
 
-临时库 `mirrai_v6_verify`：`push --force` 后 `migrate` 应用到 `0052_emotional_state_since`（journal 53 条，当前分支到 `0055_reply_jobs`）；`--replay` 输出 `replayed 53 migration(s) — all of them ran again`。为让 0052 成为最新，先 `--rollback 4`，`personas.emotionalStateSince` 与 0053–0055 的对象一起消失；再 `migrate` 全部回来。升级路径 DROP `"emotionalStateSince"` 并删 `schema_migrations` 的 0052 后再 `migrate`，列回来。带 `DATABASE_URL` 跑 6 个数据库测试文件 24 条全过。库已 `dropdb`，`mirrai_live` 未碰。
+临时库 `mirrai_v6_verify`：`push --force` 后 `migrate` 应用到 `0055_reply_jobs`，其中包含 `0052_emotional_state_since`（journal 53 条）；`--replay` 输出 `replayed 53 migration(s) — all of them ran again`。为让 0052 成为最新，先 `--rollback 4`，`personas.emotionalStateSince` 与 0053–0055 的对象一起消失；再 `migrate` 全部回来。升级路径 DROP `"emotionalStateSince"` 并删 `schema_migrations` 的 0052 后再 `migrate`，列回来。带 `DATABASE_URL` 跑 6 个数据库测试文件 24 条全过。库已 `dropdb`，`mirrai_live` 未碰。
 
 提交范围 `4febb6c^..26984bd`（21 个提交，含 WP7 实现、进度和最后一轮修复）：没有 `Co-Authored-By`；`package.json`、`pnpm-lock.yaml` 零改动；没有改 `server/wechat/ilink`；`drizzle/` 只新增 `0052_emotional_state_since.sql` 并改 `schema.ts`，旧迁移零改动；测试 diff 没有删掉而不替代的 `it`/`expect`，没有新增 `skip`；`shared/emotion-dynamics.test.ts` 的下界从 240 收紧到 270；黄金快照最后一次改动仍是 `e506484`，本包范围没有快照提交。各提交的文件清单与提交信息对得上，没看到混进不相干的改动。
 
