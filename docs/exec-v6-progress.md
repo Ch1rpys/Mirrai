@@ -72,7 +72,7 @@
 | B4.6 | 🟡 | 07019c3 (measure); 0daab58 (prompt) | `shared/session-profile.test.ts` 6 通过：夹具 closers 前三句 晚安/安/睡啦，`closeByThemRate > 0.9`，`bedtime.median` 在 22:21 ±15；`shouldClose` 已收尾/很少收尾/超过 p90/睡点窗口/仍短 各 1 条。`generate.test.ts`：70 分钟超过合成 p90=40 时围栏外有 `prompt.closingOverlay`、围栏内有 `prompt.closingHeading` 和「晚安」；同一会话已有 `metadata.closing` 不再出现；`--without closing` 两者都没有。`service.test.ts` `lets them close a long session themselves instead of appending the care note`：`careNote.kind === "long_session"` 且 `text === ""`，落库不含 `labels.care.longSession`，`createSafetyEvent` 仍被调用，`metadata.closing === true`。`prompt-fences.test.ts` 敌意收尾句只在围栏内。`prompt-golden.test.ts` 10 通过、快照未改。`PersonaSwitches.test.tsx` 渲染「小满 会自己说「我先睡了」」。闸门 `389 passed \| 5 skipped (394)` 文件，`3424 passed \| 21 skipped (3445)` 用例。效果量见未验证清单。 |
 | B4.7 | 🟡 | 62acc48 | `shared/multi-point.test.ts` 3 通过：`splitPoints("到家了。今天好累！你吃了吗")` 得到 3 段；夹具 `samples === 40`、`coverageMedian === 1/3`、`preferLast === 1`；`mineMultiPoint` 一条 `multi_point` 候选，`pattern`「通常接最后一件」，3 条证据、`verified: false`。`fidelity-prompt.test.ts`：未确认提示词没有「只接其中一件」；确认后有、在减法围栏内。`suppressions.test.ts`、`copy.test.ts` 通过。`prompt-golden.test.ts` 10 通过、快照未改。闸门 `390 passed \| 5 skipped (395)` 文件，`3430 passed \| 21 skipped (3451)` 用例。效果量见未验证清单。 |
 | B4.8 | 🟡 | 4ad35f6; d29d4b2 (routine) | `shared/in-session.test.ts`：构造 200 个场景中段轮次、30 个自起话头，`selfStartRate === 0.15`。`generate.test.ts`：`selfStartRate === 1` 且已确认生活事件时围栏外有 `prompt.inSessionShare` 和「下周要答辩」；无材料时不出现；同一种子两次提示词相同；`--without act` 不出现。B6.3 补上作息：`can add the window as the one thing of their own mid-chat` 周三 15:00 已确认「周三下午上课」时围栏外有 `prompt.inSessionShare`。`prompt-golden.test.ts` 10 通过、快照未改。闸门见 B6.3。效果量见未验证清单。 |
-| B5.1 | ⬜ |  |  |
+| B5.1 | ✅ | b7f507c (inbox/server); bdab495 (client); 4e62c84 (channel) | `inbox.test.ts` 5 通过：`generating` 时 `arrive` abort、`reason` 为 `superseded`；`committing` 时不 abort；`isLatest` 三种情况；`leave` 旧 generation 不擦掉新的。`service.test.ts`：`answers a burst of three as one turn` — 前两次事件以 `superseded` 结束，第三次 `done`，`Promise.allSettled` 后 fulfilled 的模型调用 1 次，该次 `messages` 用户行 `["一","二","三"]`，库里 1 条 assistant，`incrementChatCount` 1 次；`does not store a half reply when a later message takes the turn away` — 半截「在」不落库，只有后一次的「在的。」；对照 `keeps a half reply when the user stops the turn` 半截「在」落库且无 `superseded`；`answers a crisis immediately and drops the ordinary reply` — 危机 `done.crisis` 为真、正文含 `12356`、普通回复被 `superseded`、assistant 1 条；`does not wait for a read window when timing is off` 假定时器 0ms 后已调用模型；`waits the read window when timing is on` 推进 `READ_WINDOW_MS - 1` 仍未调用，再 1ms 后调用。`Chat.test.tsx` 2 通过：回复途中输入框可用、可再发；`superseded` 后「在」消失、「一」还在。`chat-stream-e2e.test.ts` `hands a superseded event…` 调用 `onSuperseded`、不走 `onError`。`bridge.test.ts` `says nothing when a later message took the turn away` 返回 `null`。闸门 `411 passed \| 6 skipped (417)` 文件，`3582 passed \| 23 skipped (3605)` 用例，`all six steps passed`。 |
 | B5.2 | ⬜ |  |  |
 | B5.3 | ✅ | 59d801e | `shared/reply-delay.test.ts` 4 通过：夹具 `evening` 的 `exp(mu)` 在 32–48 秒、`afternoon` 在 95–145 秒，两档 `sigma` 在 0.65–0.95，`resolution` 为 `second`；细桶 n=5 时 `via` 为 `band|state|asking`；29 个样本 `null`；同一 `seededRandom` 种子两次相等，40 次抽样都在 1 秒到 6 小时。`service.test.ts`：`draws the delay from the measured bucket` 事件 `{ type: "delay", ms: 40000 }`，落库 `metadata.delay` 为 `{ ms: 40000, via: "band" }`；`keeps the old delay when nothing has been measured` 的毫秒数等于 `sampleReplyDelayMs` 的返回值且没有 `metadata.delay`；`does not delay a crisis, a weak signal, or someone saying they are sad` 对「我想死」「我好累」「我很难过」都没有 `delay` 事件。`DelayView.test.tsx` 渲染晚上「40 秒 / 20 次」、下午「2 分钟 / 12 次」，夜里和早上是「记录里没有」。闸门 `408 passed \| 6 skipped (414)` 文件，`3561 passed \| 23 skipped (3584)` 用例。 |
 | B5.4 | ✅ | 182da75 | `shared/routine-profile.test.ts` 5 通过：夹具睡眠窗盖住 01:00–07:00，`endMin` 在 450–480；59 天返回 `null`；全天有消息时 `sleep` 为 `undefined`。跨零点：上海 00:30 `isAsleep` 为真、21:00 为假，`nextWake` 等于 `parseZoneless("2024-06-02 07:00", "Asia/Shanghai")`。夏令时：纽约 `2024-03-10T06:30:00Z`（01:30 EST）在睡，`nextWake` 等于 `parseZoneless("2024-03-10 08:00", "America/New_York")`，08:30 已醒。`DelayView.test.tsx` 渲染「小满 一般 00:00 到 07:30 不在线」。`PersonaSwitches.test.tsx`：`asyncDelivery` 关着时「睡觉的时候不回」禁用；开着时可点，`updateSettings` 收到 `timing.sleep: true`，说明里有 00:00 和 07:30。排队行为按手册留在 B5.2。闸门 `409 passed \| 6 skipped (415)` 文件，`3568 passed \| 23 skipped (3591)` 用例。 |
@@ -361,6 +361,10 @@
 | 157 | B5.3 | 「难过的信号」没有点名函数 | 危机和 `weakSignal` 走 `detectCrisis`；难过走 `EMOTION_TRIGGER_PATTERNS` 的 melancholy（中文「难过\|伤心\|哭\|委屈\|不开心」，英文 sad 等） | 这三句都不延迟。手册没给第三类的词表。 |
 | 158 | B5.3 | 时段按哪一条的钟点没写 | 按用户那一轮最后一条的钟点，时区用分身时区，空则用户时区 | 延迟是从这句话算起的。回复只晚几十秒，换到回复时刻通常还在同一档。 |
 | 159 | B5.4 | 没量出睡眠窗时说明里仍要有起止 | 起止写成「—」；`asyncDelivery` 没开时开关置灰 | 开关在编辑页，画像可能还没有。排队仍等 B5.2。 |
+| 160 | B5.1 | `leave(key): void` | `leave(key, generation)`：generation 对不上就不改 phase | 旧一轮在 finally 里 leave 会把已经 `arrive` 的新一轮打回 idle，后面的 `enter(waiting)` 会被擦掉。 |
+| 161 | B5.1 | 「同一分身的轮次排队、连发三条依次三次回答」那条测试不改就过 | 换成「连发三条答一轮」；原先「runs the turns of one persona one after the other」删了 | 重叠的两次现在是后一次打断前一次，不再串行两次完整生成。 |
+| 162 | B5.1 | 「Chat 的组件测试」没给文件名 | `client/src/pages/Chat.test.tsx` | 仓库里原来只有 `Chat-failed-send` / `Chat-period` / `Chat-report`，没有整页 Chat 测试。 |
+| 163 | B5.1 | 生成中止只写 `signal` | `invokeAbortable` 的 `invokeWithProvider` 参数里显式写 `purpose: params.options?.purpose ?? "reply"` | `purpose.test.ts` 扫源码要有 `purpose:`。调用方本来就传了 `purpose: "reply"`。 |
 
 ## 未验证清单
 
@@ -1295,6 +1299,16 @@ B6.4 维持 🟡。B6.7 维持 ✅。B6.1、B6.2、B6.3、B6.5、B6.6、B6.8、B
 - 闸门 `409 passed | 6 skipped (415)` 文件，`3568 passed | 23 skipped (3591)` 用例，`all six steps passed`。相对 B5.3（408/6 文件、3561/23 用例）：通过文件 +1、通过用例 +7；跳过数不变。
 - 偏差 159。未验证清单、待用户决定无新增。
 - B5.4 标 ✅。下一条是 B5.1。本会话在这里停下。
+
+### WP9 · 实现会话 · 2026-11-19 · B5.1
+
+- 分支 `exec/v6`。独立验收留下的 `- [ ]` 无。没有「等 xxx」且依赖已完成的推后项。
+- `b7f507c`：每个用户×分身一个 inbox generation。收（存用户消息、危机）不进轮次队列；回在队列里。后到的消息 abort 还在 waiting/generating 的一轮；`committing` 之后不再打断。`timingEnabled` 时先等 2.5 秒读窗。被 supersede 的半截回答不落库、不计次数；用户自己停止仍保留半截。
+- `bdab495`：`handleSend` 不再因回复途中而拒发。每次发送自己的 AbortController 和流式气泡；停止中止最新的。`streamChat` 的 `onSuperseded` 只拿掉这次的流式气泡。
+- `4e62c84`：通道遇到 `superseded` 返回 `null`。
+- 闸门 `411 passed | 6 skipped (417)` 文件，`3582 passed | 23 skipped (3605)` 用例，`all six steps passed`。相对 B5.4（409/6 文件、3568/23 用例）：通过文件 +2、通过用例 +14；跳过数不变。
+- 偏差 160–163。未验证清单、待用户决定无新增。
+- B5.1 标 ✅。接着做 B5.2。
 
 
 
