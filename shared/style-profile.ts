@@ -8,6 +8,7 @@
  */
 import { normalizeStickerStats, type StickerStats } from "./sticker-stats";
 import { normalizeVoiceStats, type VoiceStats } from "./voice-stats";
+import { normalizeCallStats, type CallStats } from "./call-stats";
 import type { AddressEntry } from "./address-history";
 import { normalizeActClusters, type ActClusters } from "./act-clusters";
 import {
@@ -91,7 +92,7 @@ export interface StyleProfile {
   stickers?: StickerStats; // B7.1
   voice?: VoiceStats; // B7.4
   photos?: unknown; // 由 B7.9 填
-  calls?: unknown; // 由 B7.13 填
+  calls?: CallStats; // B7.13
   publicFingerprint?: unknown; // 由 B7.12 填
   writtenFingerprint?: unknown; // 由 C1.8 填
   group?: unknown; // 由 C9.8 填
@@ -195,6 +196,11 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
       if (key === "voice") {
         const voice = normalizeVoiceStats(source.voice);
         if (voice) profile.voice = voice;
+        continue;
+      }
+      if (key === "calls") {
+        const calls = normalizeCallStats(source.calls);
+        if (calls) profile.calls = calls;
         continue;
       }
       (profile as unknown as Record<string, unknown>)[key] = source[key];

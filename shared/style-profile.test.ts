@@ -178,4 +178,31 @@ describe("the style profile", () => {
     });
     expect(empty.inSession).toBeUndefined();
   });
+
+  it("keeps a call table and drops a broken one", () => {
+    const calls = {
+      samples: 20,
+      byDirection: { in: 14, out: 6, missed: 0 },
+      durationSec: { median: 1800, p90: 3000, total: 36000 },
+      perWeekMedian: 1,
+      answerSlots: [{ weekday: 0, hour: 21, n: 16 }],
+      longest: { recordId: 9, durationSec: 3600, at: "2024-06-02T13:00:00.000Z" },
+      first: { recordId: 1, at: "2022-03-06T13:00:00.000Z" },
+      last: { recordId: 20, at: "2024-09-29T13:00:00.000Z" },
+    };
+    const profile = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      calls,
+    });
+    expect(profile.calls).toEqual(calls);
+    const empty = normalizeStyleProfile({
+      version: 1,
+      measuredAt: "2026-01-15T12:00:00.000Z",
+      recordsVersion: "12:40",
+      calls: { samples: 2 },
+    });
+    expect(empty.calls).toBeUndefined();
+  });
 });

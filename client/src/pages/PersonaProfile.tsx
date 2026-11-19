@@ -20,6 +20,7 @@ import AddressHistoryView from "@/components/v6/AddressHistoryView";
 import DelayView, { SleepWindow } from "@/components/v6/DelayView";
 import TriggersView from "@/components/v6/TriggersView";
 import ProsodyView from "@/components/v6/ProsodyView";
+import CallsView from "@/components/v6/CallsView";
 import { Button } from "@/components/ui/button";
 import { resolveRelationshipPhase } from "@shared/user-side";
 
@@ -282,13 +283,14 @@ export default function PersonaProfile() {
           </motion.section>
         )}
 
-        {(styleProfile.replyDelay || styleProfile.routine?.sleep) ? (
+        {(styleProfile.replyDelay || styleProfile.routine?.sleep || styleProfile.calls) ? (
           <motion.section
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.112 }}
             className="surface p-5 sm:p-6"
           >
             <DelayView name={persona.name} replyDelay={styleProfile.replyDelay} />
             <SleepWindow name={persona.name} routine={styleProfile.routine} />
+            <CallsView name={persona.name} calls={styleProfile.calls} />
           </motion.section>
         ) : null}
 

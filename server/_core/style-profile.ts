@@ -51,6 +51,7 @@ import { measureTyping } from "@shared/typing-profile";
 import { measureQuirks } from "@shared/quirks-profile";
 import { measureStickers } from "@shared/sticker-stats";
 import { measureVoice } from "@shared/voice-stats";
+import { measureCalls } from "@shared/call-stats";
 import { measureDoubleText } from "@shared/double-text";
 import { toTurns } from "@shared/scenes";
 import { splitScenes } from "@shared/scenes";
@@ -84,6 +85,10 @@ export async function measureStyleProfile(params: {
       act: row.act,
       emotion: row.emotion,
       speaker: row.speaker,
+      meta:
+        row.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
+          ? (row.meta as Record<string, unknown>)
+          : null,
     });
   }
   const persona = await getPersonaById(personaId, userId);
@@ -146,6 +151,7 @@ export async function measureStyleProfile(params: {
   const doubleText = measureDoubleText(rows, rawData) ?? undefined;
   const stickers = measureStickers(rows) ?? undefined;
   const voice = measureVoice(rows) ?? undefined;
+  const calls = measureCalls(rows, sessionZone) ?? undefined;
   const multiPoint = measureMultiPoint(labelledScenes.flatMap((scene) => toTurns(scene)));
   const inSession = measureInSessionFromScenes(labelledScenes);
   const next = normalizeStyleProfile({
@@ -171,6 +177,7 @@ export async function measureStyleProfile(params: {
     ...(doubleText ? { doubleText } : { doubleText: undefined }),
     ...(stickers ? { stickers } : { stickers: undefined }),
     ...(voice ? { voice } : { voice: undefined }),
+    ...(calls ? { calls } : { calls: undefined }),
     ...(multiPoint ? { multiPoint } : { multiPoint: undefined }),
     ...(inSession ? { inSession } : { inSession: undefined }),
   });

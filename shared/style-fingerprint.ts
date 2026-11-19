@@ -185,6 +185,7 @@ export interface FingerprintRow {
   emotion?: string | null;
   speaker?: string | null;
   act?: string | null;
+  meta?: Record<string, unknown> | null;
 }
 
 export interface FingerprintPeriod {
