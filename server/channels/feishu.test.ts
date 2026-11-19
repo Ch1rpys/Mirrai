@@ -18,6 +18,18 @@ vi.mock("../db", () => ({
 
 vi.mock("./bridge", () => ({
   handleChannelChat: (...a: unknown[]) => handleChannelChat(...a),
+  sendChannelParts: async (
+    reply: { parts: string[]; gapsMs: number[] },
+    send: (part: string) => Promise<void>,
+  ) => {
+    for (let i = 0; i < reply.parts.length; i++) {
+      if (i > 0) {
+        const gap = reply.gapsMs[i - 1] ?? 0;
+        if (gap > 0) await new Promise((resolve) => setTimeout(resolve, gap));
+      }
+      await send(reply.parts[i]!);
+    }
+  },
 }));
 
 vi.mock("./commands", () => ({
@@ -70,7 +82,7 @@ describe("handleFeishuEvent", () => {
     getPersonaById.mockResolvedValue({ id: 7, graduationStatus: null });
     getActivePersonaId.mockReturnValue(7);
     handleCommand.mockResolvedValue({ handled: false });
-    handleChannelChat.mockResolvedValue("在的。");
+    handleChannelChat.mockResolvedValue({ parts: ["在的。"], gapsMs: [] });
   });
 
   it("sends the persona's reply back to the chat", async () => {
@@ -89,7 +101,52 @@ describe("handleFeishuEvent", () => {
     });
 
     expect(handleChannelChat).toHaveBeenCalled();
-    expect(sent).toContain("在的。");
+    expect(sent).toEqual(["在的。"]);
+  });
+
+  it("sends a burst one bubble at a time, with the farewell note only on the last", async () => {
+    vi.useFakeTimers();
+    handleChannelChat.mockResolvedValue({
+      parts: ["嗯", "好", "在。去设置里看毕业"],
+      gapsMs: [600, 800],
+    });
+    const sendText = vi.fn().mockResolvedValue(undefined);
+    const done = handleFeishuEvent({
+      userId: 1,
+      event: {
+        chat_id: "oc_abc",
+        chat_type: "p2p",
+        message: { message_type: "text", content: JSON.stringify({ text: "在吗" }) },
+      },
+      sendText,
+    });
+    await vi.waitFor(() => expect(sendText).toHaveBeenCalledTimes(1));
+    expect(sendText.mock.calls[0]?.[1]).toBe("嗯");
+    await vi.advanceTimersByTimeAsync(600);
+    expect(sendText).toHaveBeenCalledTimes(2);
+    expect(sendText.mock.calls[1]?.[1]).toBe("好");
+    await vi.advanceTimersByTimeAsync(800);
+    await done;
+    expect(sendText.mock.calls.map((call) => call[1])).toEqual(["嗯", "好", "在。去设置里看毕业"]);
+    expect(sendText.mock.calls[0]?.[1]).not.toContain("毕业");
+    expect(sendText.mock.calls[1]?.[1]).not.toContain("毕业");
+    vi.useRealTimers();
+  });
+
+  it("does not send a second silence notice the same day", async () => {
+    handleChannelChat
+      .mockResolvedValueOnce({ parts: ["这次先不回了。"], gapsMs: [] })
+      .mockResolvedValueOnce(null);
+    const sendText = vi.fn().mockResolvedValue(undefined);
+    const event = {
+      chat_id: "oc_abc",
+      chat_type: "p2p",
+      message: { message_type: "text", content: JSON.stringify({ text: "在吗" }) },
+    };
+    await handleFeishuEvent({ userId: 1, event, sendText });
+    await handleFeishuEvent({ userId: 1, event, sendText });
+    expect(sendText).toHaveBeenCalledTimes(1);
+    expect(sendText).toHaveBeenCalledWith("oc_abc", "这次先不回了。");
   });
 
   it("does not answer the bot's own message", async () => {

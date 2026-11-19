@@ -18,7 +18,7 @@
  */
 import { decryptSecret, encryptSecret } from "../_core/crypto";
 import * as db from "../db";
-import { handleChannelChat } from "./bridge";
+import { handleChannelChat, sendChannelParts } from "./bridge";
 import { clearAllActivePersonas, getActivePersonaId, handleCommand } from "./commands";
 import type { ChannelAdapter, ChannelId, ChannelStatus } from "./types";
 import { copy, detectLocale, type Locale } from "@shared/copy";
@@ -304,7 +304,7 @@ export async function handleFeishuEvent(params: {
    * It happens to be safe only because the chat ids are unique.
    */
   const personaId = getActivePersonaId(chatId, defaultPersonaId, userId);
-  let reply: string | null = null;
+  let reply: Awaited<ReturnType<typeof handleChannelChat>> = null;
   try {
     reply = await handleChannelChat({
       userId,
@@ -335,7 +335,7 @@ export async function handleFeishuEvent(params: {
   // It used to be appended twice — once by the bridge and once here —
   // so the user received two instructions to type "/毕业" at the end of
   // one message.
-  await sendText(chatId, reply);
+  await sendChannelParts(reply, (part) => sendText(chatId, part));
 }
 
 /**

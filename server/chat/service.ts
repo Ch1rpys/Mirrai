@@ -64,6 +64,7 @@ import {
   shouldOfferChoice,
 } from "../eval/ab-pairs";
 import {
+  CHANNEL_READ_WINDOW_MS,
   READ_WINDOW_MS,
   arrive,
   combineSignals,
@@ -797,9 +798,14 @@ export async function* runConversation(
     const timingEnabled =
       Boolean((options.persona as { timingEnabled?: boolean }).timingEnabled) &&
       Boolean(loadBehaviorProfile(options.persona));
-    if (timingEnabled) {
+    const waitMs = options.channel === "wechat" || options.channel === "feishu"
+      ? CHANNEL_READ_WINDOW_MS
+      : timingEnabled
+        ? READ_WINDOW_MS
+        : 0;
+    if (waitMs > 0) {
       try {
-        await waitAbortable(READ_WINDOW_MS, controller.signal);
+        await waitAbortable(waitMs, controller.signal);
       } catch {
         yield { type: "superseded" };
         return;
@@ -1156,7 +1162,8 @@ function melancholyOf(text: string): boolean {
     || EMOTION_TRIGGER_PATTERNS.en.melancholy.test(text);
 }
 
-function typingForTurn(persona: Persona) {
+function typingForTurn(persona: Persona, channel?: string) {
+  if (channel && channel !== "web") return null;
   if (!normalizePersonaSettings(persona.settings).timing.typing) return null;
   return normalizeTyping(effectiveStyleProfile(persona).typing);
 }
@@ -1908,7 +1915,7 @@ async function* runConversationTurn(
   if (typoStar) parts = [...parts, typoStar];
 
   if (delayMsForEvent != null) {
-    const typing = typingForTurn(persona);
+    const typing = typingForTurn(persona, options.channel);
     const typingMs = typing
       ? delayTypingMs(parts[0] ?? spoken, typing, delayMsForEvent)
       : undefined;
@@ -2043,7 +2050,7 @@ async function* runConversationTurn(
   }
   if (timingEnabled && behavior) {
     if (parts.length > 1) {
-      const typing = typingForTurn(persona);
+      const typing = typingForTurn(persona, options.channel);
       if (typing) {
         const timing = burstTypingMs(parts, typing, seededRandom(`${turnInput.seed}:typing`));
         yield { type: "burst", texts: parts, gapsMs: timing.gapsMs, typingMs: timing.typingMs };

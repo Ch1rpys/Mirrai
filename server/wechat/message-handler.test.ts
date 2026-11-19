@@ -60,7 +60,7 @@ beforeEach(() => {
   getWechatBindingByUserId.mockResolvedValue({ id: 1, personaId: 7, wechatUserId: "wx-user-1" });
   getPersonaById.mockResolvedValue({ id: 7, graduationStatus: null });
   handleCommand.mockResolvedValue({ handled: false });
-  handlePersonaChat.mockResolvedValue("我在呢");
+  handlePersonaChat.mockResolvedValue({ parts: ["我在呢"], gapsMs: [] });
   sendWeixinText.mockResolvedValue(true);
 });
 

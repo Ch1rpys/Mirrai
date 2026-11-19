@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import {
   arrive,
   enter,
+  fallbackChannelGapMs,
   isLatest,
   leave,
   resetInbox,
@@ -61,5 +62,13 @@ describe("waiting that can be taken away", () => {
     const waiting = waitAbortable(5_000, controller.signal);
     controller.abort("superseded");
     await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
+  });
+});
+
+describe("the gap between two channel bubbles", () => {
+  it("clamps a short line to 600 ms and a long one to 8 s", () => {
+    expect(fallbackChannelGapMs("嗯")).toBe(600);
+    expect(fallbackChannelGapMs("a".repeat(40))).toBe(8_000);
+    expect(fallbackChannelGapMs("你好呀")).toBe(750);
   });
 });

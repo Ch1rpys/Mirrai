@@ -148,7 +148,7 @@ import {
   clampTemperature,
   clampMaxTokens,
 } from "./service";
-import { READ_WINDOW_MS, resetInbox } from "./inbox";
+import { CHANNEL_READ_WINDOW_MS, READ_WINDOW_MS, resetInbox } from "./inbox";
 import * as rerankModel from "./rerank-model";
 import { buildRerankModel } from "./rerank-model";
 
@@ -1238,6 +1238,98 @@ describe("runConversation", () => {
     }
   });
 
+  it("waits the channel read window even when timing is off", async () => {
+    vi.useFakeTimers();
+    try {
+      let called = false;
+      invokeWithProvider.mockImplementation(async () => {
+        called = true;
+        return "在的。";
+      });
+      const running = (async () => {
+        for await (const _ of runConversation({
+          persona: persona(),
+          userId: 1,
+          message: "在吗",
+          mode: "once",
+          channel: "wechat",
+        })) {
+          /* drain */
+        }
+      })();
+      await vi.advanceTimersByTimeAsync(CHANNEL_READ_WINDOW_MS - 1);
+      expect(called).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await running;
+      expect(called).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("answers three channel messages two seconds apart as one turn", async () => {
+    vi.useFakeTimers();
+    try {
+      const store: Array<{ id: number; role: string; content: string }> = [];
+      let nextId = 1;
+      createMessage.mockImplementation(async (row: { role: string; content: string }) => {
+        const id = nextId++;
+        store.push({ id, role: row.role, content: row.content });
+        return id;
+      });
+      getMessagesByPersonaId.mockImplementation(async () => [...store]);
+
+      const events1: Array<{ type: string }> = [];
+      const events2: Array<{ type: string }> = [];
+      const events3: Array<{ type: string }> = [];
+      const first = (async () => {
+        for await (const event of runConversation({
+          persona: persona(),
+          userId: 1,
+          message: "一",
+          mode: "once",
+          channel: "wechat",
+        })) {
+          events1.push(event);
+        }
+      })();
+      await vi.advanceTimersByTimeAsync(2_000);
+      const second = (async () => {
+        for await (const event of runConversation({
+          persona: persona(),
+          userId: 1,
+          message: "二",
+          mode: "once",
+          channel: "wechat",
+        })) {
+          events2.push(event);
+        }
+      })();
+      await vi.advanceTimersByTimeAsync(2_000);
+      const third = (async () => {
+        for await (const event of runConversation({
+          persona: persona(),
+          userId: 1,
+          message: "三",
+          mode: "once",
+          channel: "wechat",
+        })) {
+          events3.push(event);
+        }
+      })();
+      await vi.advanceTimersByTimeAsync(CHANNEL_READ_WINDOW_MS);
+      await Promise.all([first, second, third]);
+      expect(events1.some((event) => event.type === "superseded")).toBe(true);
+      expect(events2.some((event) => event.type === "superseded")).toBe(true);
+      expect(events3.some((event) => event.type === "done")).toBe(true);
+      expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+      const assistant = store.filter((row) => row.role === "assistant");
+      expect(assistant).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("waits the read window when timing is on", async () => {
     vi.useFakeTimers();
     try {
@@ -1471,17 +1563,26 @@ describe("runConversation", () => {
   });
 
   it("does not offer a choice on a channel even when the switch is on", async () => {
-    for await (const _ of runConversation({
-      persona: persona({ chatCount: 8, settings: { layers: { abPairs: true } } }),
-      userId: 1,
-      message: "在吗",
-      mode: "once",
-      channel: "wechat",
-    })) {
-      // drain
+    vi.useFakeTimers();
+    try {
+      const running = (async () => {
+        for await (const _ of runConversation({
+          persona: persona({ chatCount: 8, settings: { layers: { abPairs: true } } }),
+          userId: 1,
+          message: "在吗",
+          mode: "once",
+          channel: "wechat",
+        })) {
+          // drain
+        }
+      })();
+      await vi.advanceTimersByTimeAsync(CHANNEL_READ_WINDOW_MS);
+      await running;
+      expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+      expect(createMessage.mock.calls.filter((call) => call[0].role === "assistant")).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
     }
-    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
-    expect(createMessage.mock.calls.filter((call) => call[0].role === "assistant")).toHaveLength(1);
   });
 
   it("stores the chosen line and a pair when the user picks", async () => {
@@ -1864,27 +1965,36 @@ describe("runConversation", () => {
   });
 
   it("does not run quirks on a channel", async () => {
-    invokeWithProvider.mockResolvedValue("今天好累");
-    const events: Array<{ type: string }> = [];
-    for await (const event of runConversation({
-      persona: quirksPersona({
-        typoFixes: [{ wrong: "雷", right: "累", n: 6 }],
-        typoRate: 1,
-        recallRate: 1,
-        patAfter: { ask: { pats: 5, turns: 5 } },
-      }, { rerankEnabled: true }),
-      userId: 1,
-      message: "在吗",
-      mode: "once",
-      channel: "wechat",
-    })) {
-      events.push(event);
+    vi.useFakeTimers();
+    try {
+      invokeWithProvider.mockResolvedValue("今天好累");
+      const events: Array<{ type: string }> = [];
+      const running = (async () => {
+        for await (const event of runConversation({
+          persona: quirksPersona({
+            typoFixes: [{ wrong: "雷", right: "累", n: 6 }],
+            typoRate: 1,
+            recallRate: 1,
+            patAfter: { ask: { pats: 5, turns: 5 } },
+          }, { rerankEnabled: true }),
+          userId: 1,
+          message: "在吗",
+          mode: "once",
+          channel: "wechat",
+        })) {
+          events.push(event);
+        }
+      })();
+      await vi.advanceTimersByTimeAsync(CHANNEL_READ_WINDOW_MS);
+      await running;
+      expect(events.some((event) => event.type === "recall" || event.type === "pat")).toBe(false);
+      const stored = createMessage.mock.calls
+        .filter((call) => call[0].role === "assistant")
+        .map((call) => call[0].content);
+      expect(stored).toEqual(["今天好累"]);
+    } finally {
+      vi.useRealTimers();
     }
-    expect(events.some((event) => event.type === "recall" || event.type === "pat")).toBe(false);
-    const stored = createMessage.mock.calls
-      .filter((call) => call[0].role === "assistant")
-      .map((call) => call[0].content);
-    expect(stored).toEqual(["今天好累"]);
   });
 });
 

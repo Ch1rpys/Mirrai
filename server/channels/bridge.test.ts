@@ -10,10 +10,13 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
  * one message.
  */
 const getPersonaById = vi.fn();
+const getUserTimezone = vi.fn();
 const runConversation = vi.fn();
+const claimSilenceNotice = vi.fn();
 
 vi.mock("../db", () => ({
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
+  getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
 }));
 
 vi.mock("../chat/service", async (importOriginal) => {
@@ -24,12 +27,22 @@ vi.mock("../chat/service", async (importOriginal) => {
   };
 });
 
-import { handleChannelChat } from "./bridge";
+vi.mock("../chat/silence-notice", () => ({
+  claimSilenceNotice: (...a: unknown[]) => claimSilenceNotice(...a),
+}));
+
+import { handleChannelChat, sendChannelParts } from "./bridge";
 import { copy } from "@shared/copy";
+import { fallbackChannelGapMs } from "../chat/inbox";
 
 /** The events a conversation yields when it answers. */
 async function* answers(text: string, graduationSuggested = false) {
   yield { type: "delta", text };
+  yield { type: "done", messageId: 1, graduationSuggested };
+}
+
+async function* burst(texts: string[], graduationSuggested = false, gapsMs?: number[]) {
+  yield { type: "burst", texts, ...(gapsMs ? { gapsMs } : {}) };
   yield { type: "done", messageId: 1, graduationSuggested };
 }
 
@@ -42,6 +55,8 @@ describe("the bridge", () => {
       analysisStatus: "ready",
       graduationStatus: null,
     });
+    getUserTimezone.mockResolvedValue("Asia/Shanghai");
+    claimSilenceNotice.mockResolvedValue(true);
   });
 
   it("mentions the ritual once when the app has decided a farewell is due", async () => {
@@ -57,8 +72,9 @@ describe("the bridge", () => {
     });
 
     const note = copy("zh", "channels.graduationNote");
-    expect(reply).toContain(note);
-    expect(reply!.split(note).length - 1).toBe(1);
+    expect(reply?.parts).toHaveLength(1);
+    expect(reply?.parts[0]).toContain(note);
+    expect(reply!.parts[0]!.split(note).length - 1).toBe(1);
   });
 
   it("mentions the ritual once when the persona is already waiting for one", async () => {
@@ -80,8 +96,8 @@ describe("the bridge", () => {
     });
 
     const note = copy("zh", "channels.graduationNote");
-    expect(reply).toContain(note);
-    expect(reply!.split(note).length - 1).toBe(1);
+    expect(reply?.parts[0]).toContain(note);
+    expect(reply!.parts[0]!.split(note).length - 1).toBe(1);
   });
 
   it("says nothing when a later message took the turn away", async () => {
@@ -114,6 +130,111 @@ describe("the bridge", () => {
       locale: "zh",
     });
 
-    expect(reply).toBe("在的。");
+    expect(reply).toEqual({ parts: ["在的。"], gapsMs: [] });
+  });
+
+  it("keeps a burst as separate parts", async () => {
+    runConversation.mockImplementation(() => burst(["嗯", "好", "在"]));
+
+    const reply = await handleChannelChat({
+      userId: 1,
+      conversationKey: "oc_abc",
+      personaId: 7,
+      messageText: "在吗",
+      channel: "feishu",
+      locale: "zh",
+    });
+
+    expect(reply?.parts).toEqual(["嗯", "好", "在"]);
+    expect(reply?.gapsMs).toHaveLength(2);
+    expect(reply?.gapsMs[0]).toBe(fallbackChannelGapMs("好"));
+    expect(reply?.gapsMs[1]).toBe(fallbackChannelGapMs("在"));
+  });
+
+  it("keeps a single line as one part", async () => {
+    runConversation.mockImplementation(() => answers("在的。"));
+
+    const reply = await handleChannelChat({
+      userId: 1,
+      conversationKey: "oc_abc",
+      personaId: 7,
+      messageText: "在吗",
+      channel: "feishu",
+      locale: "zh",
+    });
+
+    expect(reply?.parts).toEqual(["在的。"]);
+    expect(reply?.gapsMs).toEqual([]);
+  });
+
+  it("puts the farewell note only on the last bubble of a burst", async () => {
+    runConversation.mockImplementation(() => burst(["嗯", "好", "在"], true));
+
+    const reply = await handleChannelChat({
+      userId: 1,
+      conversationKey: "oc_abc",
+      personaId: 7,
+      messageText: "在吗",
+      channel: "feishu",
+      locale: "zh",
+    });
+
+    const note = copy("zh", "channels.graduationNote");
+    expect(reply?.parts[0]).toBe("嗯");
+    expect(reply?.parts[1]).toBe("好");
+    expect(reply?.parts[2]).toContain(note);
+    expect(reply?.parts[0]).not.toContain(note);
+  });
+
+  it("sends a silence notice once a day", async () => {
+    async function* silent() {
+      yield { type: "silence", notice: "这次先不回了。" };
+      yield { type: "done", messageId: 1, graduationSuggested: false };
+    }
+    runConversation.mockImplementation(() => silent());
+    claimSilenceNotice.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+    const first = await handleChannelChat({
+      userId: 1,
+      conversationKey: "oc_abc",
+      personaId: 7,
+      messageText: "在吗",
+      channel: "feishu",
+      locale: "zh",
+    });
+    expect(first?.parts).toEqual(["这次先不回了。"]);
+
+    const second = await handleChannelChat({
+      userId: 1,
+      conversationKey: "oc_abc",
+      personaId: 7,
+      messageText: "还在吗",
+      channel: "feishu",
+      locale: "zh",
+    });
+    expect(second).toBeNull();
+  });
+});
+
+describe("sending channel parts", () => {
+  it("waits the gap between bubbles", async () => {
+    vi.useFakeTimers();
+    const send = vi.fn().mockResolvedValue(undefined);
+    const done = sendChannelParts(
+      { parts: ["嗯", "好", "在"], gapsMs: [600, 800] },
+      send,
+    );
+    await Promise.resolve();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith("嗯");
+    await vi.advanceTimersByTimeAsync(599);
+    expect(send).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenLastCalledWith("好");
+    await vi.advanceTimersByTimeAsync(800);
+    await done;
+    expect(send.mock.calls.map((call) => call[0])).toEqual(["嗯", "好", "在"]);
+    vi.useRealTimers();
   });
 });

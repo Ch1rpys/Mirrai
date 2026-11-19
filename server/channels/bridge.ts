@@ -10,6 +10,9 @@ import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { runConversation, PersonaAsleepError } from "../chat/service";
 import { copy } from "@shared/copy";
+import { fallbackChannelGapMs, waitAbortable } from "../chat/inbox";
+import { claimSilenceNotice } from "../chat/silence-notice";
+import { zonedDateKey, localDateKey } from "@shared/timezone";
 
 export type ChannelId = "wechat" | "feishu";
 
@@ -31,21 +34,54 @@ export interface ChannelChatParams {
   locale?: "zh" | "en";
 }
 
+export interface ChannelReply {
+  parts: string[];
+  gapsMs: number[];
+}
+
+function gapsFor(parts: string[], given?: number[]): number[] {
+  if (parts.length <= 1) return [];
+  const out: number[] = [];
+  for (let i = 1; i < parts.length; i++) {
+    out.push(given?.[i - 1] ?? fallbackChannelGapMs(parts[i]!));
+  }
+  return out;
+}
+
+/**
+ * Sends each bubble, waiting the measured (or fallback) gap between them.
+ */
+export async function sendChannelParts(
+  reply: ChannelReply | null,
+  send: (text: string) => Promise<unknown>,
+): Promise<void> {
+  if (!reply || reply.parts.length === 0) return;
+  for (let i = 0; i < reply.parts.length; i++) {
+    if (i > 0) {
+      const gap = reply.gapsMs[i - 1] ?? fallbackChannelGapMs(reply.parts[i]!);
+      if (gap > 0) await waitAbortable(gap);
+    }
+    await send(reply.parts[i]!);
+  }
+}
+
 /**
  * Handles one inbound channel message against a persona.
  *
  * The persona id is resolved by the caller (default binding, or a
  * session-scoped override chosen with `/使用`).
  *
- * Returns null when the persona cannot answer — not ready, or gone.
+ * Returns null when the persona cannot answer — not ready, or gone, or
+ * a later message took the turn, or the reply was deferred.
  */
-export async function handleChannelChat(params: ChannelChatParams): Promise<string | null> {
+export async function handleChannelChat(params: ChannelChatParams): Promise<ChannelReply | null> {
   const { userId, personaId, messageText } = params;
 
   const persona = await db.getPersonaById(personaId, userId);
   if (!persona || persona.analysisStatus !== "ready") return null;
 
-  let reply: string | null = null;
+  let parts: string[] = [];
+  let gapsMs: number[] = [];
   let graduationSuggested = false;
 
   try {
@@ -60,14 +96,22 @@ export async function handleChannelChat(params: ChannelChatParams): Promise<stri
       locale: params.locale ?? "zh",
     })) {
       if (event.type === "delta") {
-        reply = (reply ?? "") + event.text;
+        parts = [(parts[0] ?? "") + event.text];
+        gapsMs = [];
       } else if (event.type === "delay") {
         const wait = Math.min(Math.max(0, event.ms), 90_000);
-        if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+        if (wait > 0) await waitAbortable(wait);
       } else if (event.type === "silence") {
-        reply = event.notice;
+        const zone = (persona as { timezone?: string | null }).timezone
+          || (await db.getUserTimezone(userId).catch(() => null))
+          || "UTC";
+        const day = zonedDateKey(new Date(), zone) || localDateKey(new Date());
+        if (!(await claimSilenceNotice(userId, persona.id, day))) return null;
+        parts = [event.notice];
+        gapsMs = [];
       } else if (event.type === "burst") {
-        reply = event.texts.join("\n\n");
+        parts = event.texts.filter((text) => text.length > 0);
+        gapsMs = gapsFor(parts, event.gapsMs);
       } else if (event.type === "error") {
         /**
          * A failure is a failure.
@@ -101,9 +145,13 @@ export async function handleChannelChat(params: ChannelChatParams): Promise<stri
      * sit there unanswered for ever, with no indication that the
      * persona was asleep.
      */
-    if (e instanceof PersonaAsleepError) return e.message;
+    if (e instanceof PersonaAsleepError) {
+      return { parts: [e.message], gapsMs: [] };
+    }
     throw e;
   }
+
+  if (parts.length === 0) return null;
 
   /**
    * The app may have decided that a farewell is due.
@@ -118,9 +166,10 @@ export async function handleChannelChat(params: ChannelChatParams): Promise<stri
    * type "/毕业" at the end of one message.
    */
   const farewellDue = graduationSuggested || persona.graduationStatus === "suggested";
-  if (farewellDue && reply) {
-    reply += copy(params.locale ?? "zh", "channels.graduationNote");
+  if (farewellDue) {
+    const last = parts.length - 1;
+    parts[last] = `${parts[last]}${copy(params.locale ?? "zh", "channels.graduationNote")}`;
   }
 
-  return reply;
+  return { parts, gapsMs: gapsFor(parts, gapsMs) };
 }

@@ -7,6 +7,7 @@
 import type { ParsedInbound } from "./ilink/parse";
 import { getActivePersonaId, handleCommand } from "./commands";
 import { handlePersonaChat } from "./persona-bridge";
+import { sendChannelParts } from "../channels/bridge";
 import * as db from "../db";
 import { copy } from "@shared/copy";
 
@@ -100,7 +101,7 @@ export async function handleWeixinMessage(
   // wrong persona id is then looked up with the caller's id, finds
   // nothing, and the message is never answered.
   const personaId = getActivePersonaId(parsed.fromUserId, defaultPersonaId, userId);
-  let reply: string | null = null;
+  let reply: Awaited<ReturnType<typeof handlePersonaChat>> = null;
   try {
     reply = await handlePersonaChat({
       userId,
@@ -140,7 +141,11 @@ export async function handleWeixinMessage(
    * had blocked the bot — nothing arrived, and the user was told
    * nothing at all.
    */
-  const delivered = await sendText(userId, parsed, reply);
+  let delivered = true;
+  await sendChannelParts(reply, async (part) => {
+    const ok = await sendText(userId, parsed, part);
+    if (!ok) delivered = false;
+  });
   if (!delivered) {
     const { noteDeliveryFailure } = await import("./bot");
     noteDeliveryFailure(

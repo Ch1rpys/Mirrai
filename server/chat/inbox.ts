@@ -6,6 +6,18 @@
  * phase is what says whether that reply can still be taken away.
  */
 export const READ_WINDOW_MS = 2500;
+/** Channels merge a burst even when timing is off: people there type in a row. */
+export const CHANNEL_READ_WINDOW_MS = 4000;
+
+/**
+ * How long to wait between two channel bubbles when typing was not measured.
+ *
+ * 250 ms a character, never shorter than 600 ms or longer than 8 s.
+ */
+export function fallbackChannelGapMs(text: string): number {
+  const chars = Array.from(text).length;
+  return Math.min(8_000, Math.max(600, chars * 250));
+}
 
 export type InboxPhase = "idle" | "waiting" | "generating" | "committing";
 

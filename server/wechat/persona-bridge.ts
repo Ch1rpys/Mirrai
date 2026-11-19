@@ -4,7 +4,7 @@
  * The conversation itself lives in `server/channels/bridge.ts` so that every
  * channel shares one implementation.
  */
-import { handleChannelChat } from "../channels/bridge";
+import { handleChannelChat, type ChannelReply } from "../channels/bridge";
 import * as db from "../db";
 
 /**
@@ -18,7 +18,7 @@ export async function handlePersonaChat(params: {
   wechatUserId: string;
   personaId: number;
   messageText: string;
-}): Promise<string | null> {
+}): Promise<ChannelReply | null> {
   return handleChannelChat({
     userId: params.userId,
     conversationKey: params.wechatUserId,
