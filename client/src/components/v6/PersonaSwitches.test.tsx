@@ -24,12 +24,24 @@ vi.mock("@/lib/trpc", () => ({
         useMutation: () => ({ mutate, isPending: false }),
       },
     },
+    chat: {
+      voices: {
+        useQuery: () => ({ data: { voices: [], enabled: true, engine: "edge", leavesMachine: true } }),
+      },
+    },
     style: {
       get: {
         useQuery: () => ({
           data: {
             profile: {
               routine: { days: 80, sleep: { startMin: 0, endMin: 450 } },
+              voice: {
+                samples: 12,
+                rate: 0.1,
+                durationSec: { median: 12, p90: 20 },
+                byState: { warm: { rate: 0.1, turns: 80 } },
+                afterMyVoiceRate: 0.4,
+              },
               doubleText: {
                 samples: 30,
                 opportunities: 40,
@@ -77,6 +89,7 @@ describe("the persona switches section", () => {
     expect(screen.getByText("小满 的情绪按 小满 的节奏变")).toBeInTheDocument();
     expect(screen.getByText("小满 会自己说「我先睡了」")).toBeInTheDocument();
     expect(screen.getByText("小满 可以发 小满 用过的表情")).toBeInTheDocument();
+    expect(screen.getByText("小满 有时候发语音")).toBeInTheDocument();
     expect(screen.getByText("分身提到往事时，标出记录里有没有")).toBeInTheDocument();
     expect(screen.getByText("偶尔让我二选一")).toBeInTheDocument();
     expect(screen.getByText("先想好说什么，再用 小满 的话说")).toBeInTheDocument();
@@ -85,6 +98,18 @@ describe("the persona switches section", () => {
     expect(screen.getByText("最多等多久")).toBeInTheDocument();
     expect(screen.getByText("小满 偶尔会打错字再补一句、撤回、拍一拍")).toBeInTheDocument();
     expect(screen.getByText("聊到一半我不回了，小满 可以追一句")).toBeInTheDocument();
+  });
+
+  it("turns voice notes on and says the voice leaves the machine on Edge", async () => {
+    const user = userEvent.setup();
+    render(<PersonaSwitches personaId={5} name="小满" />);
+    await user.click(screen.getByRole("checkbox", { name: /小满 有时候发语音/ }));
+    expect(mutate).toHaveBeenCalledWith({
+      id: 5,
+      patch: { layers: { voiceNotes: true } },
+    });
+    expect(screen.getByText(/文字会发给他们/)).toBeInTheDocument();
+    expect(screen.getByText(/每 10 轮里有 1 轮是语音/)).toBeInTheDocument();
   });
 
   it("turns the A/B pair on", async () => {

@@ -7,6 +7,7 @@
  * simply absent — there is no default to fill it with.
  */
 import { normalizeStickerStats, type StickerStats } from "./sticker-stats";
+import { normalizeVoiceStats, type VoiceStats } from "./voice-stats";
 import type { AddressEntry } from "./address-history";
 import { normalizeActClusters, type ActClusters } from "./act-clusters";
 import {
@@ -88,7 +89,7 @@ export interface StyleProfile {
   actClusters?: ActClusters;
   addressHistory?: AddressEntry[];
   stickers?: StickerStats; // B7.1
-  voice?: unknown; // 由 B7.4 填
+  voice?: VoiceStats; // B7.4
   photos?: unknown; // 由 B7.9 填
   calls?: unknown; // 由 B7.13 填
   publicFingerprint?: unknown; // 由 B7.12 填
@@ -189,6 +190,11 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
       if (key === "stickers") {
         const stickers = normalizeStickerStats(source.stickers);
         if (stickers) profile.stickers = stickers;
+        continue;
+      }
+      if (key === "voice") {
+        const voice = normalizeVoiceStats(source.voice);
+        if (voice) profile.voice = voice;
         continue;
       }
       (profile as unknown as Record<string, unknown>)[key] = source[key];

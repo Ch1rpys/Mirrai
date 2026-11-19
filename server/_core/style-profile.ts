@@ -50,6 +50,7 @@ import { measureRoutine } from "@shared/routine-profile";
 import { measureTyping } from "@shared/typing-profile";
 import { measureQuirks } from "@shared/quirks-profile";
 import { measureStickers } from "@shared/sticker-stats";
+import { measureVoice } from "@shared/voice-stats";
 import { measureDoubleText } from "@shared/double-text";
 import { toTurns } from "@shared/scenes";
 import { splitScenes } from "@shared/scenes";
@@ -144,6 +145,7 @@ export async function measureStyleProfile(params: {
   const quirks = measureQuirks(rows);
   const doubleText = measureDoubleText(rows, rawData) ?? undefined;
   const stickers = measureStickers(rows) ?? undefined;
+  const voice = measureVoice(rows) ?? undefined;
   const multiPoint = measureMultiPoint(labelledScenes.flatMap((scene) => toTurns(scene)));
   const inSession = measureInSessionFromScenes(labelledScenes);
   const next = normalizeStyleProfile({
@@ -168,6 +170,7 @@ export async function measureStyleProfile(params: {
     quirks,
     ...(doubleText ? { doubleText } : { doubleText: undefined }),
     ...(stickers ? { stickers } : { stickers: undefined }),
+    ...(voice ? { voice } : { voice: undefined }),
     ...(multiPoint ? { multiPoint } : { multiPoint: undefined }),
     ...(inSession ? { inSession } : { inSession: undefined }),
   });

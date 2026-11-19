@@ -35,6 +35,7 @@ import { copy, localizeScene } from "@shared/copy";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import { renderRecordContent } from "@shared/records";
 import { pickStickerForTurn } from "./sticker-turn";
+import { makeVoiceNote, pickVoiceNoteForTurn } from "./voice-note";
 import { asMaterial } from "../_core/material";
 import { buildPromptBundleForPersona } from "./prompt";
 import { splitBurst } from "./burst";
@@ -141,6 +142,8 @@ export type ChatEvent =
         content: string;
         mediaUrl?: string | null;
       }>;
+      /** This reply was sent as a voice note (B7.4). */
+      voice?: { url: string; durationSec: number };
     }
   | {
       /**
@@ -1493,6 +1496,25 @@ async function* runConversationTurn(
     return;
   }
 
+  /**
+   * Whether this turn is a voice note.
+   *
+   * Decided before the model is called: a voice-note turn does not
+   * stream, so the words must not reach the screen before it is known
+   * that they will be spoken.
+   */
+  const settingsForTurn = normalizePersonaSettings(persona.settings);
+  const voiceNoteDecision =
+    settingsForTurn.layers.voiceNotes === true && !options.fromReplyJob
+      ? pickVoiceNoteForTurn({
+          styleProfile: (persona as { styleProfile?: unknown }).styleProfile,
+          state: persona.emotionalState,
+          seed: turnInput.seed,
+          channel: options.channel ?? "web",
+          enabled: true,
+        })
+      : null;
+
   const provider =
     plan.kind === "ritual"
       ? null
@@ -1540,8 +1562,8 @@ async function* runConversationTurn(
    */
   if (plan.kind === "ritual") {
     replyText = plan.ritual?.reply ?? "";
-    if (!timingEnabled && replyText) yield { type: "delta", text: replyText };
-  } else if (!options.fromReplyJob && shouldOfferChoice(persona, options.channel ?? "web")) {
+    if (!timingEnabled && replyText && !voiceNoteDecision) yield { type: "delta", text: replyText };
+  } else if (!options.fromReplyJob && !voiceNoteDecision && shouldOfferChoice(persona, options.channel ?? "web")) {
     try {
       const first = (await collectPlanText(plan, turnInput, {
         provider: provider!,
@@ -1635,13 +1657,13 @@ async function* runConversationTurn(
       rerank: rerankEnabled,
       signal: options.signal,
       options: invokeOptions,
-      emitDeltas: !timingEnabled && !deferReplyForRecall,
+      emitDeltas: !timingEnabled && !deferReplyForRecall && !voiceNoteDecision,
     })) {
       if (event.type === "thinking") yield { type: "thinking" };
       if (event.type === "delta") {
         streamedText += event.text;
         replyText += event.text;
-        if (!timingEnabled) yield { type: "delta", text: event.text };
+        if (!timingEnabled && !voiceNoteDecision) yield { type: "delta", text: event.text };
       }
       if (event.type === "final") {
         replyText = event.text || replyText;
@@ -1946,6 +1968,24 @@ async function* runConversationTurn(
   }
   if (typoStar) parts = [...parts, typoStar];
 
+  /**
+   * A voice note is one message, and one voice: the text is not
+   * revealed first, and a typo fix has no meaning as audio.
+   */
+  let voiceNote: { url: string; durationSec: number } | null = null;
+  if (voiceNoteDecision) {
+    parts = [spoken];
+    typoStar = null;
+    voiceNote = await makeVoiceNote({
+      text: spoken,
+      userId,
+      stats: voiceNoteDecision.stats,
+    }).catch((error) => {
+      console.warn("[Chat] The voice note could not be made:", error);
+      return null;
+    });
+  }
+
   if (delayMsForEvent != null) {
     const typing = typingForTurn(persona, options.channel);
     const typingMs = typing
@@ -2075,7 +2115,9 @@ async function* runConversationTurn(
       showMs: recallShowMs(seededRandom(`${turnInput.seed}:recall-show`)),
     };
   }
-  if (!timingEnabled && (typoStar || deferReplyForRecall)) {
+  if (voiceNote) {
+    yield { type: "delta", text: spoken };
+  } else if (!timingEnabled && (typoStar || deferReplyForRecall)) {
     yield { type: "burst", texts: parts };
   } else if (!timingEnabled && spoken !== finalText) {
     yield { type: "replace", text: spoken };
@@ -2092,19 +2134,35 @@ async function* runConversationTurn(
     } else if (parts[0]) yield { type: "delta", text: parts[0] };
   }
   let messageId = 0;
-  for (const part of parts) {
+  if (voiceNote) {
     messageId = await db.createMessage({
       personaId: persona.id,
       userId,
       role: "assistant",
-      content: part,
+      content: spoken,
+      messageType: "voice",
+      mediaUrl: voiceNote.url,
+      mediaDuration: voiceNote.durationSec,
       emotionalState: newEmotionalState,
       channel: options.channel ?? "web",
-      // Which memories went into this turn, so the answer to "did it
-      // recall that, or invent it?" survives a reload.
       recalledMemoryIds: recalled.length > 0 ? JSON.stringify(recalled.map((m) => m.id)) : null,
-      metadata: storedTurnMeta,
+      metadata: { ...storedTurnMeta, kind: "voice-note" },
     });
+  } else {
+    for (const part of parts) {
+      messageId = await db.createMessage({
+        personaId: persona.id,
+        userId,
+        role: "assistant",
+        content: part,
+        emotionalState: newEmotionalState,
+        channel: options.channel ?? "web",
+        // Which memories went into this turn, so the answer to "did it
+        // recall that, or invent it?" survives a reload.
+        recalledMemoryIds: recalled.length > 0 ? JSON.stringify(recalled.map((m) => m.id)) : null,
+        metadata: storedTurnMeta,
+      });
+    }
   }
   if (messageId && !immediate) {
     await maybeScheduleFollowUp({
@@ -2366,6 +2424,7 @@ async function* runConversationTurn(
     ...(plan.routine ? { routine: plan.routine } : {}),
     ...(claims && claims.length > 0 ? { claims } : {}),
     ...(extra.length > 0 ? { extra } : {}),
+    ...(voiceNote ? { voice: voiceNote } : {}),
   };
 }
 

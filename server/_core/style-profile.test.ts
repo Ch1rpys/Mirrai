@@ -210,6 +210,34 @@ describe("measureStyleProfile", () => {
     expect(measured.stickers?.byState.distant?.rate).toBe(0);
   });
 
+  it("writes the voice table from the fixture", async () => {
+    getRecordsVersion.mockResolvedValue("3200:3200");
+    getPersonaStyleProfile.mockResolvedValue(null);
+    getPersonaById.mockResolvedValue({ id: 5, userId: 1, name: "小满", personaData: {} });
+    getUserById.mockResolvedValue({ id: 1, name: "阿树" });
+    const fixture = buildXiaomanRecords();
+    iterateRecords.mockImplementation(async function* () {
+      for (const row of fixture) {
+        yield {
+          id: row.id,
+          role: row.role,
+          content: row.content,
+          timestamp: row.timestamp,
+          kind: row.kind,
+          speaker: row.speaker,
+          emotion: row.truth.state,
+        };
+      }
+    });
+    const measured = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    expect(measured.voice?.durationSec.median).toBe(12);
+    expect(measured.voice?.byState.warm?.rate).toBeGreaterThan(0);
+  });
+
   it("writes acknowledge clusters whose every line is a true acknowledge", async () => {
     getRecordsVersion.mockResolvedValue("3200:3200");
     getPersonaStyleProfile.mockResolvedValue(null);

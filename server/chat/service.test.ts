@@ -45,7 +45,10 @@ const updateEmotionSnapshot = vi.fn();
 const deleteMessage = vi.fn();
 const iterateRecords = vi.fn();
 const listEnabledStickers = vi.fn();
+const generateTTS = vi.fn();
+const ttsEngineMock = vi.fn();
 const getLastExtractionAttemptAt = vi.fn();
+const getLastExtractionAt = vi.fn();
 const getRecordsVersion = vi.fn();
 const getCollectedMessagesForPersona = vi.fn();
 
@@ -101,6 +104,7 @@ vi.mock("../db", () => ({
   iterateRecords: (...a: unknown[]) => iterateRecords(...a),
   listEnabledStickers: (...a: unknown[]) => listEnabledStickers(...a),
   getLastExtractionAttemptAt: (...a: unknown[]) => getLastExtractionAttemptAt(...a),
+  getLastExtractionAt: (...a: unknown[]) => getLastExtractionAt(...a),
   getRecordsVersion: (...a: unknown[]) => getRecordsVersion(...a),
   getCollectedMessagesForPersona: (...a: unknown[]) => getCollectedMessagesForPersona(...a),
   cancelPendingReplyJobs: vi.fn().mockResolvedValue(0),
@@ -111,6 +115,12 @@ vi.mock("../db", () => ({
   claimReplyJob: vi.fn().mockResolvedValue(false),
   finishReplyJob: vi.fn().mockResolvedValue(true),
   retryReplyJob: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock("../_core/tts", () => ({
+  generateTTS: (...a: unknown[]) => generateTTS(...a),
+  ttsEngine: () => ttsEngineMock(),
+  DEFAULT_VOICE: "zh-CN-XiaoxiaoNeural",
 }));
 
 const invoke = vi.fn();
@@ -193,7 +203,7 @@ describe("runConversation", () => {
       incrementChatCount, updateMessageMetadata, createFidelityPair, clearMessagePendingChoice,
       getMessageById, updateEmotionSnapshot, searchRecordsLexical, deleteMessage,
       iterateRecords, getRecordsVersion, getCollectedMessagesForPersona, listEnabledStickers,
-      getLastExtractionAttemptAt,
+      getLastExtractionAttemptAt, getLastExtractionAt, generateTTS, ttsEngineMock,
       invoke, invokeWithProvider,
       streamWithProvider, resolveProviderForUser, resolveProviderForPurpose, inferEmotionalState,
     ]) {
@@ -266,6 +276,9 @@ describe("runConversation", () => {
     getCollectedMessagesForPersona.mockResolvedValue([]);
     listEnabledStickers.mockResolvedValue([]);
     getLastExtractionAttemptAt.mockResolvedValue(null);
+    getLastExtractionAt.mockResolvedValue(null);
+    generateTTS.mockResolvedValue("/uploads/tts/1/voice.mp3");
+    ttsEngineMock.mockReturnValue("edge");
   });
 
   it("stores the user's turn and the persona's reply", async () => {
@@ -519,6 +532,115 @@ describe("runConversation", () => {
       runs: { one: 20, two: 0, threePlus: 0 },
     },
   };
+
+  /**
+   * The voice note (B7.4).
+   *
+   * The frequency is the measured one; the length bound is the
+   * measured p90. These tests set the rate to 1 so the draw lands.
+   */
+  const VOICE_PROFILE = {
+    version: 1,
+    measuredAt: "2026-01-15T12:00:00.000Z",
+    recordsVersion: "100:100",
+    voice: {
+      samples: 20,
+      rate: 1,
+      durationSec: { median: 12, p90: 20 },
+      byState: { warm: { rate: 1, turns: 80 } },
+      afterMyVoiceRate: 0.4,
+    },
+  };
+
+  it("sends a short reply as a voice note when the record says they do", async () => {
+    invokeWithProvider.mockResolvedValue("在的。");
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona({
+        emotionalState: "warm",
+        styleProfile: VOICE_PROFILE,
+        settings: { layers: { voiceNotes: true } },
+      }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      events.push(event);
+    }
+
+    const assistant = createMessage.mock.calls
+      .map((call: unknown[]) => call[0] as Record<string, any>)
+      .filter((data) => data?.role === "assistant");
+    expect(assistant).toHaveLength(1);
+    expect(assistant[0]).toMatchObject({
+      content: "在的。",
+      messageType: "voice",
+      mediaUrl: "/uploads/tts/1/voice.mp3",
+      mediaDuration: 1,
+      metadata: { kind: "voice-note" },
+    });
+    expect(generateTTS).toHaveBeenCalledTimes(1);
+    // The words are not streamed first and turned into audio later.
+    expect(events.filter((event) => event.type === "delta")).toHaveLength(1);
+    const done = events.find((event) => event.type === "done") as any;
+    expect(done.voice).toEqual({
+      url: "/uploads/tts/1/voice.mp3",
+      durationSec: 1,
+    });
+  });
+
+  it("keeps a long reply as text, and does not synthesise it", async () => {
+    invokeWithProvider.mockResolvedValue("好".repeat(200));
+    for await (const _event of runConversation({
+      persona: persona({
+        emotionalState: "warm",
+        styleProfile: VOICE_PROFILE,
+        settings: { layers: { voiceNotes: true } },
+      }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      // drained
+    }
+    expect(generateTTS).not.toHaveBeenCalled();
+    const assistant = createMessage.mock.calls
+      .map((call: unknown[]) => call[0] as Record<string, any>)
+      .filter((data) => data?.role === "assistant");
+    expect(assistant[0]?.messageType).toBeUndefined();
+  });
+
+  it("does not make a voice note when the switch is off or playback is off", async () => {
+    invokeWithProvider.mockResolvedValue("在的。");
+    for await (const _event of runConversation({
+      persona: persona({ emotionalState: "warm", styleProfile: VOICE_PROFILE }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      // drained
+    }
+    expect(generateTTS).not.toHaveBeenCalled();
+
+    ttsEngineMock.mockReturnValue("off");
+    for await (const _event of runConversation({
+      persona: persona({
+        emotionalState: "warm",
+        styleProfile: VOICE_PROFILE,
+        settings: { layers: { voiceNotes: true } },
+      }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      // drained
+    }
+    expect(generateTTS).not.toHaveBeenCalled();
+  });
 
   it("sends the sticker the record says they send, after the words", async () => {
     inferEmotionalState.mockResolvedValue({ state: "happy", source: "heuristic" });

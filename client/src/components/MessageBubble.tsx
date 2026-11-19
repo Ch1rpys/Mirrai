@@ -398,6 +398,7 @@ export function MessageBubble({
   }, [unlikeOpen, pickedReason, rewriteDraft, personaId, messageId]);
   const mood = emotionOf(msg.emotionalState);
   const [imgExpanded, setImgExpanded] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
   /**
    * The lightbox.
    *
@@ -515,11 +516,34 @@ export function MessageBubble({
       );
     }
     if (msg.messageType === "voice" && msg.mediaUrl) {
+      /**
+       * A voice bubble says whether the voice is theirs.
+       *
+       * The read-aloud voice is synthesised and sounds like neither of
+       * them; a bubble that did not say so would be the one place the
+       * app pretends a recording is the person. The transcript is one
+       * tap away because listening is not always possible.
+       */
+      const synthesised = msg.kind === "voice-note";
       return (
         <div className="flex flex-col gap-1">
           <VoicePlayer url={msg.mediaUrl} duration={msg.mediaDuration} />
           {msg.content && msg.content !== t("chat.voiceMessage") && (
-            <p className="text-xs opacity-60 mt-1">{msg.content}</p>
+            <>
+              <button
+                type="button"
+                onClick={() => setShowTranscript((value) => !value)}
+                className="self-start text-[11px] text-muted-subtle hover:text-muted-foreground"
+              >
+                {t(showTranscript ? "chat.hideTranscript" : "chat.showTranscript")}
+              </button>
+              {showTranscript && (
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+              )}
+            </>
+          )}
+          {synthesised && (
+            <p className="text-[11px] text-muted-subtle">{t("chat.synthVoice")}</p>
           )}
         </div>
       );

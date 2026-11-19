@@ -168,6 +168,44 @@ describe("the message bubble", () => {
     expect(screen.getByText("［表情：猫猫叹气］")).toBeInTheDocument();
   });
 
+  it("says a voice note is synthesised, and shows its words on request", async () => {
+    const user = userEvent.setup();
+    render(
+      <MessageBubble
+        msg={makeMessage({
+          messageType: "voice",
+          mediaUrl: "/uploads/tts/1/voice.mp3",
+          mediaDuration: 4,
+          content: "在的呀",
+          kind: "voice-note",
+        })}
+        personaName="小A"
+        showMood={false}
+      />,
+    );
+    expect(screen.getByText(translate("zh", "chat.synthVoice"))).toBeInTheDocument();
+    expect(screen.queryByText("在的呀")).toBeNull();
+    await user.click(screen.getByText(translate("zh", "chat.showTranscript")));
+    expect(screen.getByText("在的呀")).toBeInTheDocument();
+  });
+
+  it("does not call the user's own voice note synthesised", () => {
+    render(
+      <MessageBubble
+        msg={makeMessage({
+          role: "user",
+          messageType: "voice",
+          mediaUrl: "/uploads/chat/1/voice.webm",
+          content: "我说的",
+        })}
+        personaName="小A"
+        showMood={false}
+      />,
+    );
+    expect(screen.queryByText(translate("zh", "chat.synthVoice"))).toBeNull();
+    expect(screen.getByText(translate("zh", "chat.showTranscript"))).toBeInTheDocument();
+  });
+
   it("does not offer to read a sticker aloud", () => {
     render(
       <MessageBubble

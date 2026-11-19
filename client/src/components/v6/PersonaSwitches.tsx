@@ -3,6 +3,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { toast } from "sonner";
 import { formatMinuteOfDay, normalizeRoutine } from "@shared/routine-profile";
 import { normalizeDoubleText } from "@shared/double-text";
+import { normalizeVoiceStats } from "@shared/voice-stats";
 
 /**
  * The per-persona switches for the sixth stage.
@@ -12,7 +13,7 @@ import { normalizeDoubleText } from "@shared/double-text";
  * user turns it on.
  */
 export default function PersonaSwitches(props: { personaId: number; name: string }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const settings = trpc.persona.getSettings.useQuery(
     { id: props.personaId },
     { enabled: props.personaId > 0 },
@@ -34,6 +35,7 @@ export default function PersonaSwitches(props: { personaId: number; name: string
   const abPairs = Boolean(settings.data?.layers?.abPairs);
   const twoStage = Boolean(settings.data?.layers?.twoStage);
   const factRewrite = Boolean(settings.data?.layers?.factRewrite);
+  const voiceNotes = Boolean(settings.data?.layers?.voiceNotes);
   const asyncDelivery = Boolean(settings.data?.timing?.asyncDelivery);
   const maxDelayMinutes = settings.data?.timing?.maxDelayMinutes ?? 30;
   const asleep = Boolean(settings.data?.timing?.sleep);
@@ -47,6 +49,14 @@ export default function PersonaSwitches(props: { personaId: number; name: string
   const sleepStart = sleepWindow ? formatMinuteOfDay(sleepWindow.startMin) : "—";
   const sleepEnd = sleepWindow ? formatMinuteOfDay(sleepWindow.endMin) : "—";
   const doubleText = normalizeDoubleText(style.data?.profile?.doubleText);
+  const voiceStats = normalizeVoiceStats(style.data?.profile?.voice);
+  const voiceEveryN = voiceStats && voiceStats.rate > 0
+    ? Math.max(1, Math.round(1 / voiceStats.rate))
+    : null;
+  const voicesInfo = trpc.chat.voices.useQuery(
+    { locale: locale === "en" ? "en" : "zh" },
+    { staleTime: 60_000 },
+  );
   const followExample = doubleText?.lines[0]?.text ?? "—";
   const followSamples = doubleText?.samples ?? 0;
   const followOpportunities = doubleText?.opportunities ?? 0;
@@ -295,6 +305,32 @@ export default function PersonaSwitches(props: { personaId: number; name: string
           <span className="block">{t("personaEdit.twoStage", { name: props.name })}</span>
           <span className="block text-xs text-muted-foreground leading-relaxed">
             {t("personaEdit.twoStageNote")}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={voiceNotes}
+          disabled={busy}
+          onChange={(event) =>
+            update.mutate({
+              id: props.personaId,
+              patch: { layers: { voiceNotes: event.target.checked } },
+            })
+          }
+          className="mt-0.5"
+        />
+        <span>
+          <span className="block">{t("personaEdit.voiceNotes", { name: props.name })}</span>
+          <span className="block text-xs text-muted-foreground leading-relaxed">
+            {voiceEveryN
+              ? t("personaEdit.voiceNotesNote", { name: props.name, n: voiceEveryN })
+              : t("personaEdit.voiceNotesUnknown", { name: props.name })}
+            {" "}
+            {voicesInfo.data?.leavesMachine
+              ? t("personaEdit.voiceNotesEdge")
+              : t("personaEdit.voiceNotesLocal")}
           </span>
         </span>
       </label>

@@ -54,6 +54,8 @@ export interface StreamDoneInfo {
     content: string;
     mediaUrl?: string | null;
   }>;
+  /** The reply was sent as a voice note (B7.4). */
+  voice?: { url: string; durationSec: number };
 }
 
 export interface StreamChatCallbacks {

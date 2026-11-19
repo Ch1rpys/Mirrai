@@ -932,6 +932,14 @@ export default function Chat() {
                       supported: row.supported,
                       date: row.source?.at ?? null,
                     })),
+                    ...(info.voice
+                      ? {
+                          messageType: "voice" as const,
+                          mediaUrl: info.voice.url,
+                          mediaDuration: info.voice.durationSec,
+                          kind: "voice-note",
+                        }
+                      : {}),
                   }
                 : m
               ), ...extraBubbles(info.extra, info.emotionalState)]);
@@ -1054,7 +1062,22 @@ export default function Chat() {
           return;
         }
         setMessages(prev => [...prev.map(m => m.id === streamId
-          ? { id: `ai-${Date.now()}`, role: "assistant" as const, content: result.reply, emotionalState: result.emotionalState, createdAt: new Date(), isStreaming: false }
+          ? {
+              id: `ai-${Date.now()}`,
+              role: "assistant" as const,
+              content: result.reply,
+              emotionalState: result.emotionalState,
+              createdAt: new Date(),
+              isStreaming: false,
+              ...(result.voice
+                ? {
+                    messageType: "voice" as const,
+                    mediaUrl: result.voice.url,
+                    mediaDuration: result.voice.durationSec,
+                    kind: "voice-note",
+                  }
+                : {}),
+            }
           : m
         ), ...extraBubbles((result as { extra?: ExtraMessage[] }).extra, result.emotionalState)]);
         setCurrentState(result.emotionalState);

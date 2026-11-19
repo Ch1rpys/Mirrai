@@ -243,6 +243,7 @@ async function handleChatStream(req: Request, res: Response): Promise<void> {
             // A sticker (B7.1) or a photograph (B7.9) arrives after the
             // words were written, as its own message.
             ...(event.extra ? { extra: event.extra } : {}),
+            ...(event.voice ? { voice: event.voice } : {}),
           });
         } else if (event.type === "error") {
           /**

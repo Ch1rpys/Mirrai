@@ -2440,6 +2440,7 @@ export const appRouter = router({
         let superseded = false;
         let deferred: { jobId: number; dueAt: string; reason: "delay" | "asleep" | "busy" } | null = null;
         let extra: ExtraMessage[] | null = null;
+        let voice: { url: string; durationSec: number } | null = null;
 
         /**
          * A persona that has said goodbye.
@@ -2488,6 +2489,7 @@ export const appRouter = router({
               careNote = event.careNote;
               crisis = event.crisis;
               if (event.extra && event.extra.length > 0) extra = event.extra;
+              if (event.voice) voice = event.voice;
             }
           }
         } catch (e) {
@@ -2577,6 +2579,7 @@ export const appRouter = router({
           failed: false,
           superseded,
           ...(extra ? { extra } : {}),
+          ...(voice ? { voice } : {}),
         };
       }),
 
@@ -2635,6 +2638,7 @@ export const appRouter = router({
         let superseded = false;
         let deferred: { jobId: number; dueAt: string; reason: "delay" | "asleep" | "busy" } | null = null;
         let extra: ExtraMessage[] | null = null;
+        let voice: { url: string; durationSec: number } | null = null;
 
         for await (const event of runConversation({
           persona,
@@ -2664,6 +2668,7 @@ export const appRouter = router({
             careNote = event.careNote;
             crisis = event.crisis;
             if (event.extra && event.extra.length > 0) extra = event.extra;
+            if (event.voice) voice = event.voice;
           }
         }
         // A failure is reported, not swallowed. See the note in `send`.
@@ -2696,6 +2701,7 @@ export const appRouter = router({
           crisis,
           superseded,
           ...(extra ? { extra } : {}),
+          ...(voice ? { voice } : {}),
         };
       }),
 
@@ -2794,6 +2800,7 @@ export const appRouter = router({
         let superseded = false;
         let deferred: { jobId: number; dueAt: string; reason: "delay" | "asleep" | "busy" } | null = null;
         let extra: ExtraMessage[] | null = null;
+        let voice: { url: string; durationSec: number } | null = null;
 
         for await (const event of runConversation({
           persona,
@@ -2823,6 +2830,7 @@ export const appRouter = router({
             careNote = event.careNote;
             crisis = event.crisis;
             if (event.extra && event.extra.length > 0) extra = event.extra;
+            if (event.voice) voice = event.voice;
           }
         }
         // A failure is reported, not swallowed. See the note in `send`.
@@ -2857,6 +2865,7 @@ export const appRouter = router({
           crisis,
           superseded,
           ...(extra ? { extra } : {}),
+          ...(voice ? { voice } : {}),
         };
       }),
 
