@@ -96,7 +96,7 @@
 | B7.5 | 🟡 | 36a6c0f | `shared/prosody.test.ts` 8 通过：`charsPerSec 5.04` → `ratePercent 20`；40 与 0.1 钳到 ±30；英文基准 15，18 → 20；「今天 好累」→「今天，好累」且 `markSpaces:false` 不动；`...`/`…` 在 `lengthenEllipsis` 下变 `……`；整理前后汉字逐一相同；`prosodyToTts(...).prepare("在吗 我到家了...")` 为「在吗，我到家了……」；无测量时 rate 0。`server/_core/prosody.test.ts` 4 通过（mock ffmpeg）：7 条时不产出、不调 `silenceRatio`；10 条时 `{charsPerSec: 5, pauseRatio: .3, tailSec: .4, samples: 10}` 并写回 `styleProfile.voice.prosody`；没有 ffmpeg 时只有 `charsPerSec`/`samples`，没有 `pauseRatio`/`tailSec`；没有 voice 画像时不写库。`server/routers.tts-prosody.test.ts` 3 通过：`chat.tts` 带 `personaId` 时 `generateTTS` 收到「在吗，我到家了……」与 `{ratePercent: 20}`；不带 persona 时中性；别人的分身 `NOT_FOUND` 且不合成。`ProsodyView.test.tsx` 3 通过：三个数、「没量到」而不是 0、量不够时说明。`PersonaProfile.test.tsx` 10 通过。闸门 `443 passed \| 7 skipped (450)` 文件，`3880 passed \| 28 skipped (3908)` 用例，`all six steps passed`。听感见未验证清单。 |
 | B7.6 | 🟡 | 69848c3 | `server/_core/tts.test.ts` 15 通过：默认 edge；`TTS_ENGINE=piper/http` 时 `ttsLeavesMachine()` 假；`TTS_ENABLED=false` 与 `TTS_ENGINE=off` 都抛 `/switched off/` 且不合成；edge 收到 `rate: "+10%"`、URL 为 `/uploads/tts/7/<hash>.mp3` 且文件在；同一句话换引擎或换 `ratePercent` 得到不同缓存键、同参数第二次不再调 edge；piper 的文本只在 stdin（`stdin: ["今天好累"]`），参数为 `--model`/`--output_file *.wav`/`--length_scale 0.909`，ffmpeg 转 mp3；没有 ffmpeg 时 URL 以 `.wav` 结尾且不调用 ffmpeg；http 引擎请求体 `input`/`speed 0.8`/`response_format mp3`；公网地址无 `ALLOW_REMOTE` 抛 `/not on this machine/` 且 `fetch` 0 次。`TtsNote.test.tsx` 4 通过：edge 时显示「微软」；`leavesMachine: false` 时没有「微软」字样、显示「在这台机器上合成」；off 时显示已关掉；未知时不渲染。`MessageBubble.test.tsx` 25 通过（`voices: []` 时仍不崩）；`chat.voices` 路由返回 `engine`/`leavesMachine`，非 edge 时 `voices: []`。`server/egress.test.ts` 4 通过：`server/_core/tts.ts` 已登记为本机 speech 出站。`.env.example` 增加 `TTS_ENGINE`/`PIPER_*`/`TTS_HTTP_*`。闸门见 B7.5 那一行。真机 piper 见未验证清单。 |
 | B7.7 | ⛔ |  |  |
-| B7.8 | ⬜ |  |  |
+| B7.8 | 🟡 | 0eac981; d53a429 (exifr); 3e080e2 (face-api) | 临时库 `mirrai_v6_scratch` 0058 四步+升级路径：`push --force` 后 `migrate` 到 `0058_memory_media`；`--replay` 全部重跑；`--rollback 1` 后 `to_regclass` 为空；再 `migrate` 表回来。升级路径 DROP `memory_media` 并删 `schema_migrations` 的 0058 后再 `migrate`，表出现。`db-memory-media.test.ts` 3 通过：同一对链接两次只一行、别人的 `userId` 看不到也删不掉、删来源文件与删分身都会带走链接。`db-media`、`db-stickers`、`db-records`、`db-delete-coverage` 通过。`image-exif.test.ts` 4 通过：样本 JPEG 的 `DateTimeOriginal` 在 `Asia/Shanghai` 读成 `2022-04-02T04:00:00.000Z`、GPS 31.2303/121.4739、4×4；无 EXIF 的图四项全空；非图片不抛错。`media.test.ts` 新增 3 条：导入图片读 EXIF；无 EXIF 退回消息时间；单独上传的图片按内容 hash 登记 `photo`（`recordId`/`fileId` 为空）。`persona-image.test.ts` 4 通过：PNG/JPEG/WebP 按 magic 认，SVG 与 GIF 拒绝，data URL 与裸 base64 都能解，空值和超限拒绝。`routers.avatar.test.ts` 6 通过：PNG 写 `personas/1/5/avatar-*.png`、别人 404、SVG 与 >1 MB 拒绝、换头像后删旧文件、`clearAvatar` 清字段并删文件。`face-models.test.ts` 2 通过：三个模型包内的六个文件都在，`../package.json` 与未列入的模型被拒。`face-clusters.test.ts` 5 通过：距离、0.5 阈值聚类、按簇大小排序、脸部方框外扩 40% 并夹在照片内。`AvatarPicker.test.tsx` 6 通过：当前头像与相册、无权重时不显示人脸按钮、渲染本身不加载 face-api、点相册照片进入裁剪、清除头像、相册失败给重试。`PhotoTimeline.test.tsx` 3 通过：按月分组、空状态、失败重试。`MemoryReview.test.tsx` 新增 2 条：挂着的照片可拿下来、按日期建议并挂上一张。`MessageBubble.test.tsx` 新增 1 条：召回记忆的真照片出现在「想起了什么」里。`client/src/egress.test.ts` 1 通过：client 里的 `https://` 只有两处用户输入占位符。`memory-date.test` 相关的新函数并入 `routers.memory-media.test.ts` 7 通过：同分身才可挂、非照片拒绝、记忆不存在不删、±3 天建议（6 号不出现、5 号出现）、无日期不猜、`memory.list` 带 `media`。`PersonaEdit`/`PersonaProfile`/`MessageBubble`/`MemoryReview`/`AvatarPicker` 的既有测试全过。闸门 `454 passed \| 8 skipped (462)` 文件，`3934 passed \| 31 skipped (3965)` 用例，`all six steps passed`。真实照片的 EXIF 与人脸聚类见未验证清单。 |
 | B7.9 | ⬜ |  |  |
 | B7.10 | ⬜ |  |  |
 | B7.11 | ⬜ |  |  |
@@ -424,6 +424,12 @@
 | 220 | B7.6 | `http` 引擎只写「指向 `/audio/speech`」 | 请求体发 `model`/`input`/`voice`/`response_format: mp3`，`ratePercent` 换算成 OpenAI 的 `speed`（0.25–4），可用 `TTS_HTTP_API_KEY` | OpenAI 语音接口的速率是倍数不是百分比；不换算的话 B7.5 算出来的 `ratePercent` 到这一路就丢了。 |
 | 221 | B7.1/B7.3 | 手册 2.3 的 `skipIf` 库测试 | 新增 `server/db-stickers.test.ts` 2 条、`server/db-media.test.ts` 3 条 `describe.skipIf(!DATABASE_URL)`；无 `DATABASE_URL` 时跳过文件 5→7、跳过用例 23→28 | 与偏差 20、47、49、51、69、77 同类：手册 2.3 要求需要数据库的测试这样写。带临时库分别跑过，5 条全过。 |
 
+| 222 | B7.8 | 提交粒度建议四个（EXIF 与相册、头像、人脸聚类、记忆挂接） | 一个提交 `0eac981`，依赖两个依赖提交 `d53a429`（exifr）与 `3e080e2`（face-api） | 四块共用一个 `media` 表、一组路由和同一个 `AvatarPicker`；按建议拆开会产生编译不过或功能半截的中间提交。证据按四块分别列出。 |
+| 223 | B7.8 | `memory_media` 只要求 `(memoryId, mediaId)` 唯一 | 另加 `memory_media_persona_idx`（`personaId,userId`）与 `memory_media_media_idx` | 列表按分身查、删来源文件按 `mediaId` 查。 |
+| 224 | B7.8 | 头像路由 `persona.uploadAvatar({ personaId, base64 })` | 同一路由上加了 `rateLimit(RATE_LIMITS.upload)`，`clearAvatar` 也按 `personaId` 命名 | 与 `file.upload` 的限流一致；已有 persona 路由多用 `id`，但这里按手册的字段名。 |
+| 225 | B7.8 | 人脸权重「确认 npm 包里带 model/ 目录」 | 已确认 1.7.15 的包里带 `model/` 六个文件；`/models/face/:name` 只答这六个，且不设登录（权重不是用户数据） | 模型来自本机包，浏览器不从 CDN 取；静态路由带一年缓存头。 |
+| 226 | B7.8 | `suggestMedia` 只写「记忆日期前后 3 天内」 | 完整日期按日历日 ±3 天；`MM-DD` 的纪念日按同一个年月日窗口跨年比较 | 记忆允许只有月日（A6/C2），不处理的话这类记忆永远建议不到照片。 |
+
 ## 未验证清单
 
 | 条目 | 缺什么 | 该跑的命令 | 谁来跑 |
@@ -475,6 +481,7 @@
 | B7.5 | 韵律映射的听感：`ratePercent` 的 ±30% 钳位与空格→逗号是否真的更像 TA。本机没有真实录音、没有 ffmpeg 以外的听感验证 | 在真实分身上 `media.measureProsody`，再点朗读 / 收语音条，和本人的原声对照 | 有真实录音和本机 TTS 的人 |
 | B7.6 | 真的装 piper 听一遍。本机没装 piper，单元测试 mock 了 `execFile` | 装好 piper 后 `TTS_ENGINE=piper PIPER_BIN=<bin> PIPER_MODEL=<model>` 起应用，点一次朗读，确认有声音、语速按 `ratePercent` 变化 | 装了 piper 的人 |
 | B7.13 | 真实记录上的电话习惯（谁打得多、一般打多久、通常什么钟点接）是否与本人一致。夹具只证明算法 | 在真实分身上执行 `style.measure` 后查看 `styleProfile.calls`，或与手机通话记录人工对照 | 有真实通话记录的人 |
+| B7.8 | 真实手机照片的 EXIF（拍摄时间、GPS、方向）与真实人脸的聚类效果。本机只用一张生成的 4×4 样本验证了标签读取，没有真实照片，也没有在浏览器里跑过 face-api | 在有真实照片的分身上打开编辑页，选一张照片裁剪成头像；再点「帮我找出 {{name}} 的脸」，看分组是否把人认成同一组 | 有真实照片、有图形浏览器的人 |
 
 ## 待用户决定
 
@@ -1937,7 +1944,7 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 - B7.4 语音条习惯 `9f6fa4c`：`shared/voice-stats.ts`、`server/chat/voice-note.ts`、服务端「先决定、后生成、不流式」、落库 `messageType: "voice"` + `metadata.kind: "voice-note"`、`done.voice`、气泡「转文字」与「合成的声音」、开关与说明。状态 🟡（真实语音与听感未验）。
 - B7.5 韵律参数 `36a6c0f`：`shared/prosody.ts`（`prosodyToTts`、文本整理、±30% 钳位）、`server/_core/prosody.ts`（charsPerSec/pauseRatio/tailSec，至少 8 条）、`chat.tts` 带 `personaId` 时按测量读、`ProsodyView` 档案页三项数与「量一下」。状态 🟡（听感未验）。
 
-**没有做**：B7.7 按第 1.2 节 ⛔；B7.8、B7.9、B7.10、B7.11、B7.12、B7.14、B7.15 仍是 ⬜（B7.13 已在 `7de23a6` 完成，见本文件前面的批次日志）。下一个会话从 B7.8 开始，B7.14 依赖 B7.2/B7.6/B7.13，工作量大。
+**没有做**：B7.7 按第 1.2 节 ⛔；B7.9、B7.10、B7.11、B7.12、B7.14、B7.15 仍是 ⬜（B7.13 在 `7de23a6`、B7.8 在 `0eac981` 完成，见本文件前面的批次日志）。下一个会话从 B7.9 开始，B7.14 依赖 B7.2/B7.6/B7.13，工作量大。
 
 **闸门**（无 `--fast`、无 `DATABASE_URL`，Node v24.14.1）：`corepack pnpm gate` 退出码 0，`Test Files  443 passed | 7 skipped (450)`，`Tests  3880 passed | 28 skipped (3908)`，`all six steps passed`。相对开工基线（423/5 文件、3741/23 用例）：通过文件 +20、通过用例 +139；跳过文件 +2、跳过用例 +5，全部是 `db-stickers.test.ts`（2）与 `db-media.test.ts`（3）按 2.3 写的 `skipIf`，见偏差 221。`audit-cn.ts` 为 `0 Chinese strings without an English counterpart, in 0 files.`；`fidelity-gate.ts` 7 条 ✓；P0.3 黄金快照未改（`prompt-golden.test.ts` 10 通过）。
 
@@ -1952,6 +1959,17 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 - 新增 i18n：`profile.callsTitle`、`callsNote`、`callsWho`、`callsDuration`、`callsWhen`、`callsSlot`、`callsJoin`，中英各一份。
 - 提交：`7de23a6`（代码与测试）。闸门 `445 passed | 7 skipped (452)` 文件，`3888 passed | 28 skipped (3916)` 用例，`all six steps passed`。相对开工（443/3880）：通过文件 +2、通过用例 +8，跳过数不变。
 - 效果量：夹具证明算法；真实记录上的电话习惯是否与本人一致，见未验证清单。
+
+### WP10 · 实现会话 · 2026-11-20 · B7.8 照片
+
+- 依赖：`d53a429` 加 `exifr`（MIT），`3e080e2` 加 `@vladmandic/face-api`（MIT，只在浏览器里懒加载）。
+- EXIF 与相册：`server/_core/image-exif.ts` 按用户的时区读 `DateTimeOriginal`、` latitude`/`longitude`、尺寸；`registerMedia` 对图片写 `at`/`width`/`height`/`exif`，`file.upload` 的 `image` 类型也登记一行；`media.listPhotos` 提供相册；`PhotoTimeline` 挂在档案页「更多」。
+- 头像：`persona.uploadAvatar` / `clearAvatar`，只收 JPEG/PNG/WebP、≤1 MB，写 `personas/<uid>/<pid>/avatar-*.ext`，旧的在新写成功后删；`AvatarPicker` 在浏览器里拖动正方形裁剪并导出 512 像素；`PersonaAvatar` 支持真图，聊天页、档案页、大厅用上。
+- 人脸聚类：`face-clusters.ts` 纯函数 + `AvatarPicker` 里点击才动态 import `@vladmandic/face-api`，权重从 `/models/face/` 本机提供；结果不落库。
+- 记忆挂接：`memory_media` 表与 0058 迁移、`linkMemoryMedia`/`unlinkMemoryMedia`/`listMemoryMedia`/`listMemoryMediaForMemories`；`memory.linkMedia`/`unlinkMedia`/`suggestMedia`；记忆面板可挂/取照片；`chat.getHistory` 给召回的记忆带缩略图，气泡里显示。
+- 删除覆盖：`memory_media` 进 `deletePersona`/`deleteUserAccount`，删来源文件时一并删；头像与背景图进 `collectStoredFiles`。
+- 测试与验证：见进度表 B7.8 行。闸门 `454 passed | 8 skipped (462)` 文件，`3934 passed | 31 skipped (3965)` 用例，`all six steps passed`。
+- 临时库用完已 `dropdb mirrai_v6_scratch`；`mirrai_live` 未连接。
 
 **遗留 / 下一次要注意**：
 - 表达式 `styleProfile.voice.prosody` 的测量目前要手动点「量一下」；转写任务完成后没有自动接上（偏差 215）。
