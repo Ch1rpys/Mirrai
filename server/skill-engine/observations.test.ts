@@ -66,6 +66,17 @@ describe("parseObservationCards", () => {
     expect(cards).toHaveLength(1);
     expect(cards[0].quotes).toEqual([10]);
   });
+
+  it("drops a card whose citations mix a line in the block with one outside it", () => {
+    const chunk = chunkWith([them, me]);
+    const cards = parseObservationCards(
+      JSON.stringify({
+        observations: [{ dimension: "care", claim: "混着编的引用", quotes: [10, 999] }],
+      }),
+      chunk,
+    );
+    expect(cards).toEqual([]);
+  });
 });
 
 describe("mapObservationCards", () => {

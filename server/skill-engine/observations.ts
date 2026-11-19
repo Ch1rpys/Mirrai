@@ -160,8 +160,17 @@ export function parseObservationCards(
     if (!item || typeof item !== "object") continue;
     const record = item as Record<string, unknown>;
     if (!isDimension(record.dimension)) continue;
-    const quotes = quoteIds(record.quotes).filter((id) => inChunk.has(id));
+    const rawQuotes = quoteIds(record.quotes);
+    const quotes = rawQuotes.filter((id) => inChunk.has(id));
     if (quotes.length === 0) continue;
+    /**
+     * Every quoted line has to be in this block.
+     *
+     * Keeping a card because one of its citations is valid lets an
+     * invented citation ride along with it. The handbook says each id
+     * must be in the block, so a card with a mix is dropped whole.
+     */
+    if (quotes.length !== rawQuotes.length) continue;
     if (record.dimension === "expression" || record.dimension === "habit") {
       const citesThem = quotes.some((id) => inChunk.get(id)?.role === "assistant");
       if (!citesThem) continue;
