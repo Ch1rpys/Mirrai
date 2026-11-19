@@ -147,6 +147,15 @@ describe("mentioning a confirmed person this turn", () => {
     expect(mentionedPeople([qiqi], ["琪琪来了吗"]).map((row) => row.name)).toEqual(["琪琪"]);
     expect(mentionedPeople([qiqi], ["吃饭了吗"])).toEqual([]);
     expect(mentionedPeople([{ ...qiqi, verified: false }], ["琪琪来了吗"])).toEqual([]);
+    const qiang = {
+      ...qiqi,
+      id: "p2",
+      name: "阿强",
+      aliases: ["强"],
+      relation: "同学",
+    };
+    expect(mentionedPeople([qiang], ["阿强来了"]).map((row) => row.name)).toEqual(["阿强"]);
+    expect(mentionedPeople([qiang], ["今天好坚强"])).toEqual([]);
   });
 
   it("renders the fenced heading the prompt uses", () => {

@@ -9,6 +9,7 @@
  */
 import { copy, type Locale } from "./copy";
 import { recordText, type RecordContentRow } from "./records";
+import { containsTerm } from "./term-match";
 
 export const PEOPLE_MIN_MENTIONS = 3;
 export const PEOPLE_PROMPT_CAP = 4;
@@ -198,7 +199,7 @@ function clusterNames(names: string[]): string[][] {
 }
 
 function mentionsName(text: string, name: string): boolean {
-  return Boolean(name) && text.includes(name);
+  return containsTerm(text, name);
 }
 
 function hitsFor(names: string[], rows: PersonRecordLine[]): PersonRecordLine[] {

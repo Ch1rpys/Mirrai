@@ -203,8 +203,11 @@ export function forgetWeight(memory: MemoryCandidate, now: number): number {
   if (memory.category === "anchor") return 1;
   const years = eventAgeYears(memory, now);
   if (years == null) return 1;
-  const mentions = Math.max(0, Number(memory.mentionCount) || 0);
-  const faded = 1 - Math.min(years / 5, 0.6) / (1 + mentions);
+  // The written divisor was `1 + mentionCount`. At four years that floors
+  // a memory mentioned once at 0.7, so the hazy marker never appeared.
+  // The count itself is the divisor, and an uncounted row counts as once.
+  const mentions = Math.max(1, Math.floor(Number(memory.mentionCount) || 0));
+  const faded = 1 - Math.min(years / 5, 0.6) / mentions;
   return Math.min(1, Math.max(0.4, faded));
 }
 

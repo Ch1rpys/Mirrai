@@ -572,6 +572,56 @@ describe("runConversation", () => {
     );
   });
 
+  it("supports a place that is only in the recalled memory's description", async () => {
+    getMemoriesByPersonaId.mockResolvedValue([
+      {
+        id: 9,
+        personaId: 1,
+        userId: 1,
+        title: "第一次见面",
+        description: "在拾光咖啡",
+        category: "memory",
+        date: "2022-03-12",
+        subject: "them",
+        messageId: null,
+        importance: 1,
+        isPinned: false,
+        lastRecalledAt: null,
+        factKey: null,
+        mentionCount: 1,
+        createdAt: new Date("2022-03-12T04:00:00Z"),
+      },
+    ]);
+    searchRecordsLexical.mockResolvedValue([]);
+    streamWithProvider.mockImplementation(async function* () {
+      yield { text: "我们去了拾光咖啡" };
+    });
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "第一次见面",
+      mode: "stream",
+    })) {
+      events.push(event);
+    }
+    expect(events.find((event) => event.type === "done")).toBeTruthy();
+    expect(updateMessageMetadata).toHaveBeenCalledWith(
+      99,
+      1,
+      1,
+      expect.objectContaining({
+        claims: expect.arrayContaining([
+          expect.objectContaining({
+            text: "拾光咖啡",
+            supported: true,
+            source: expect.objectContaining({ type: "memory", id: 9 }),
+          }),
+        ]),
+      }),
+    );
+  });
+
   it("still replies when the fact check throws", async () => {
     streamWithProvider.mockImplementation(async function* () {
       yield { text: "上次去拾光咖啡那天你迟到了" };

@@ -110,6 +110,10 @@ describe("mentioning a confirmed stance this turn", () => {
     expect(mentionedStances([cilantro], ["今晚别放香菜"]).map((row) => row.topic)).toEqual(["香菜"]);
     expect(mentionedStances([cilantro], ["吃饭了吗"])).toEqual([]);
     expect(mentionedStances([{ ...cilantro, verified: false }], ["今晚别放香菜"])).toEqual([]);
+    const sea = { ...cilantro, id: "s2", topic: "海", polarity: "like" as const, statement: "喜欢海" };
+    expect(mentionedStances([sea], ["我喜欢海"]).map((row) => row.topic)).toEqual(["海"]);
+    expect(mentionedStances([sea], ["我在上海"])).toEqual([]);
+    expect(mentionedStances([sea], ["海鲜"])).toEqual([]);
   });
 });
 

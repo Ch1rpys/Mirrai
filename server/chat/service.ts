@@ -75,7 +75,7 @@ export type ChatEvent =
       type: "done";
       messageId: number;
       /** The memories that were injected into this turn. */
-      recalled?: Array<{ id: number; title: string; subject: string }>;
+      recalled?: Array<{ id: number; title: string; subject: string; description?: string | null }>;
       /** Confirmed routine window this reply used. */
       routine?: string;
       /** Dates, places, and old days named in this reply. */
@@ -490,7 +490,7 @@ export async function composeMessages(params: {
   stancesSection?: string | null;
 }): Promise<{
   messages: LLMMessage[];
-  recalled: Array<{ id: number; title: string; subject: string }>;
+  recalled: Array<{ id: number; title: string; subject: string; description?: string | null }>;
 }> {
   const now = params.now ?? new Date();
   const locale = params.locale ?? "zh";
@@ -620,6 +620,7 @@ export async function composeMessages(params: {
       id: m.id,
       title: m.title,
       subject: (m as any).subject ?? "them",
+      description: m.description ?? null,
     })),
   };
 }
@@ -1855,7 +1856,11 @@ async function* runConversationTurn(
         ? await verifyClaims(extracted, {
             personaId: persona.id,
             userId,
-            memories: recalled.map((row) => ({ id: row.id, title: row.title })),
+            memories: recalled.map((row) => ({
+              id: row.id,
+              title: row.title,
+              description: row.description,
+            })),
           })
         : [];
       if (claims.length > 0) {

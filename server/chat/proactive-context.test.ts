@@ -229,4 +229,37 @@ describe("what a first word is allowed to be about", () => {
     expect(result?.opening).toBe("share");
     expect(invokeWithProvider).toHaveBeenCalled();
   });
+
+  it("reads the routine on the user's clock when the persona has no zone", async () => {
+    getUserById.mockResolvedValue({ timezone: "America/New_York" });
+    const result = await composeProactiveMessage({
+      persona: {
+        ...persona,
+        timezone: null,
+        personaData: {
+          lifeEvents: [{
+            id: "r1",
+            kind: "routine",
+            title: "周三下午上课",
+            detail: "",
+            whoSaid: "them",
+            closed: false,
+            source: "auto",
+            verified: true,
+            evidence: [],
+            schedule: { weekdays: [3], startHour: 14, endHour: 16 },
+          }],
+          openingProfile: {
+            samples: 20,
+            counts: { share: 20 },
+            rate: 0.4,
+            measuredAt: "2026-01-01T00:00:00Z",
+          },
+        },
+      },
+      userId: 1,
+      now: new Date("2026-11-18T19:00:00Z"),
+    });
+    expect(result?.opening).toBe("share");
+  });
 });

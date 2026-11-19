@@ -142,7 +142,7 @@ export interface TurnPlan {
   layersUsed: LayerId[];
   exemplarIds: number[];
   seedRecordIds: number[];
-  recalled: Array<{ id: number; title: string; subject: string }>;
+  recalled: Array<{ id: number; title: string; subject: string; description?: string | null }>;
   rng: () => number;
   reanchor?: ReanchorIssue[];
   /** This turn is closing the chat the way they used to. */
@@ -169,10 +169,29 @@ function actProfileForTurn(
   return (persona.personaData as { actProfile?: unknown } | null)?.actProfile ?? null;
 }
 
+async function clockZoneFor(input: TurnInput): Promise<string | null> {
+  const personaZone = (input.persona as { timezone?: string | null }).timezone ?? null;
+  if (typeof personaZone === "string" && personaZone.trim()) {
+    return preferredClockZone(personaZone, null);
+  }
+  let userZone: string | null = null;
+  try {
+    userZone = await db.getUserTimezone(input.userId);
+  } catch {
+    userZone = null;
+  }
+  return preferredClockZone(null, userZone);
+}
+
 export async function planTurn(input: TurnInput): Promise<TurnPlan> {
+  const clockZone = await clockZoneFor(input);
   input = {
     ...input,
-    persona: personaAsOfPeriod(input.persona, periodForTurn(input.persona, input.periodId ?? null)),
+    persona: personaAsOfPeriod(
+      input.persona,
+      periodForTurn(input.persona, input.periodId ?? null),
+      clockZone,
+    ),
   };
   const layers = applyLayerOverrides(layersFromSettings(input.persona), input.layerOverrides);
   let layersUsed = layersInEffect(layers, input.persona);
@@ -208,8 +227,8 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   const conflictTurn = conflictMaterialForTurn(input, layers.emotionInertia);
   if (conflictTurn.forceRepair) sampledAct = "repair";
   const closingTurn = await closingForTurn(input, layers.closing);
-  const inSessionShare = inSessionShareForTurn(input, layers.act);
-  const routineId = routineForTurn(input);
+  const inSessionShare = inSessionShareForTurn(input, layers.act, clockZone);
+  const routineId = routineForTurn(input, clockZone);
   const actMeta = {
     userAct,
     ...(sampled?.via ? { actVia: sampled.via } : {}),
@@ -540,17 +559,11 @@ function lengthCapForTurn(
   };
 }
 
-function routineForTurn(input: TurnInput): string | null {
+function routineForTurn(input: TurnInput, timeZone: string | null): string | null {
   const events = normalizeLifeEvents(
     (input.persona.personaData as { lifeEvents?: unknown } | null)?.lifeEvents,
   );
-  return (
-    currentRoutines(
-      events,
-      input.now,
-      (input.persona as { timezone?: string | null }).timezone,
-    )[0]?.id ?? null
-  );
+  return currentRoutines(events, input.now, timeZone)[0]?.id ?? null;
 }
 
 function peopleLayerOn(
@@ -804,7 +817,11 @@ async function ritualPlanForTurn(
   return { trigger: entry.trigger, reply: picked.text, recordId: picked.recordId };
 }
 
-function inSessionShareForTurn(input: TurnInput, enabled: boolean): string | null {
+function inSessionShareForTurn(
+  input: TurnInput,
+  enabled: boolean,
+  timeZone: string | null,
+): string | null {
   if (!enabled) return null;
   const profile = normalizeInSession(effectiveStyleProfile(input.persona).inSession);
   if (!profile) return null;
@@ -813,7 +830,7 @@ function inSessionShareForTurn(input: TurnInput, enabled: boolean): string | nul
   const raw = pickInSessionFact(
     normalizeLifeEvents((input.persona.personaData as { lifeEvents?: unknown } | null)?.lifeEvents),
     input.now,
-    (input.persona as { timezone?: string | null }).timezone,
+    timeZone,
   );
   const fact = raw ? clipPromptFact(raw) : null;
   if (!fact) return null;
@@ -978,7 +995,11 @@ function claimsContextFor(plan: TurnPlan, input: TurnInput): VerifyClaimsContext
   return {
     personaId: input.persona.id,
     userId: input.userId,
-    memories: plan.recalled.map((row) => ({ id: row.id, title: row.title })),
+    memories: plan.recalled.map((row) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+    })),
   };
 }
 
@@ -1185,7 +1206,16 @@ export async function* executePlan(
     return;
   }
 
-  if (io.mode === "stream" && voiceProvider.stream && voiceProvider.capabilities.streaming) {
+  // Two-stage plus a fact rewrite has to see the whole reply before it
+  // goes out. The web route always streams; that path still rewrites.
+  const rewriteTwoStage = plan.layersUsed.includes("factRewrite")
+    && plan.layersUsed.includes("twoStage");
+  if (
+    io.mode === "stream"
+    && voiceProvider.stream
+    && voiceProvider.capabilities.streaming
+    && !rewriteTwoStage
+  ) {
     let replyText = "";
     for await (const chunk of llmService.streamWithProvider(voiceProvider, {
       messages: replyMessages,

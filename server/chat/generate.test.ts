@@ -844,6 +844,59 @@ describe("the fact rewrite layer", () => {
     expect(rewriteCall).toBeTruthy();
     expect(final?.text).toBe("好吧");
   });
+
+  it("rewrites a two-stage reply when the chat itself is streaming", async () => {
+    const streaming: LLMProvider = {
+      name: "stream",
+      capabilities: { streaming: true, vision: false, tools: false, jsonMode: false },
+      isConfigured: () => true,
+      invoke: async () => "",
+      stream: async function* () {
+        yield { text: "上次去蓝湖餐厅那天你迟到了" };
+      },
+    };
+    invokeWithProvider.mockImplementation(async (_provider, args: {
+      messages?: Array<{ content?: string }>;
+      options?: { purpose?: string };
+    }) => {
+      const system = args.messages?.[0]?.content ?? "";
+      if (system.includes(copy("zh", "prompt.factRewrite"))) return "好吧";
+      if (args.options?.purpose === "plan") {
+        return JSON.stringify({ gist: "吃饭", mentions: [], length: "short" });
+      }
+      return "上次去蓝湖餐厅那天你迟到了";
+    });
+    const input = {
+      persona: {
+        ...persona(),
+        settings: { layers: { twoStage: true, factRewrite: true } },
+      },
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "fact-rewrite:stream-two-stage",
+      exclude: { texts: [HELD_OUT] },
+    };
+    const plan = await planTurn(input);
+    expect(plan.layersUsed).toContain("twoStage");
+    expect(plan.layersUsed).toContain("factRewrite");
+    let final = "";
+    for await (const event of executePlan(plan, input, {
+      provider: streaming,
+      mode: "stream",
+      rerank: false,
+      options: {},
+    })) {
+      if (event.type === "final") final = event.text;
+    }
+    expect(final).toBe("好吧");
+    expect(invokeWithProvider.mock.calls.some((call) => {
+      const system = (call[1] as { messages?: Array<{ content?: string }> })?.messages?.[0]?.content ?? "";
+      return system.includes(copy("zh", "prompt.factRewrite"));
+    })).toBe(true);
+  });
 });
 
 describe("the lexicon layer", () => {
@@ -2277,6 +2330,26 @@ describe("the daily rhythm", () => {
     const line = copy("zh", "prompt.timeRoutine", { title: "周三下午上课" });
     expect(prompt).toContain(line);
     expect(plan.routine).toBe("r1");
+  });
+
+  it("uses the user's clock when the persona has no zone of their own", async () => {
+    getUserTimezone.mockResolvedValue("America/New_York");
+    const row = personaWithRoutine(true);
+    row.timezone = null;
+    const plan = await planTurn({
+      persona: row,
+      userId: 1,
+      userMessage: "在吗",
+      history: CONTEXT,
+      now: new Date("2026-11-18T19:00:00Z"),
+      locale: "zh",
+      seed: "routine:user-zone",
+      exclude: { texts: [HELD_OUT] },
+    });
+    expect(plan.routine).toBe("r1");
+    expect(String(plan.messages[0]?.content ?? "")).toContain(
+      copy("zh", "prompt.timeRoutine", { title: "周三下午上课" }),
+    );
   });
 
   it("omits the line on another day, and when it is not confirmed", async () => {

@@ -7,6 +7,7 @@
  * that mentions the topic.
  */
 import { copy, type Locale } from "./copy";
+import { containsTerm } from "./term-match";
 
 export const STANCE_MIN_EVIDENCE = 2;
 export const STANCE_PROMPT_CAP = 4;
@@ -195,7 +196,7 @@ export function mentionedStances(
 ): Stance[] {
   const hits = stances.filter((row) => {
     if (!row.verified) return false;
-    return texts.some((text) => Boolean(row.topic) && text.includes(row.topic));
+    return texts.some((text) => containsTerm(text, row.topic));
   });
   return hits.slice(0, cap);
 }

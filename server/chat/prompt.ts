@@ -28,6 +28,7 @@ import type { SpeechAct } from "@shared/speech-acts";
 import { renderExemplars } from "./exemplars";
 import { retrieveExemplarsWithEmbed } from "./embeddings";
 import type { ReanchorIssue } from "@shared/style-reminder";
+import { preferredClockZone } from "@shared/timezone";
 
 /**
  * The user's own time zone, for the parts of the prompt that are about
@@ -196,9 +197,14 @@ export async function buildPromptBundleForPersona(
   const locale = context.locale ?? "zh";
   const now = context.now ?? new Date();
   const period = periodOf(context.persona, context.periodId);
-  const periodEnd = periodToInstant(period?.to);
-  const persona = personaAsOfPeriod(context.persona, period);
   const { userId } = context;
+  const theirZone = (context.persona as { timezone?: string | null }).timezone ?? null;
+  const userZone = typeof theirZone === "string" && theirZone.trim()
+    ? null
+    : await userTimeZone(context.persona, userId);
+  const clockZone = preferredClockZone(theirZone, userZone);
+  const periodEnd = periodToInstant(period?.to, clockZone);
+  const persona = personaAsOfPeriod(context.persona, period, clockZone);
 
   const memories = context.memories ?? await retrieveMemories({
     personaId: persona.id,
@@ -217,8 +223,9 @@ export async function buildPromptBundleForPersona(
   }).catch(() => []);
   const recordTimes = await recordTimesFor(memories, userId);
   const knownMemories = memories.filter((row) => memoryKnownBy(row, periodEnd, recordTimes));
-  const anchors = knownMemories.filter((m) => m.category === "anchor");
-  const ordinary = knownMemories.filter((m) => m.category !== "anchor");
+  const said = (row: { subject?: string }) => row.subject === "said";
+  const anchors = knownMemories.filter((row) => row.category === "anchor" && !said(row));
+  const ordinary = knownMemories.filter((row) => row.category !== "anchor" || said(row));
 
   const summary = periodEnd
     ? null
@@ -261,7 +268,7 @@ export async function buildPromptBundleForPersona(
       : context.summarySection ??
         (summary?.summary ? `${copy(locale, "prompt.summarySectionHeading")}\n${summary.summary}` : ""),
     realismLevel: (persona.personaData as any)?.realismLevel,
-    timeZone: (persona as any).timezone ?? (await db.getUserTimezone(userId)),
+    timeZone: clockZone,
     userContext,
     quotedSection: context.quotedSection ?? null,
     /**

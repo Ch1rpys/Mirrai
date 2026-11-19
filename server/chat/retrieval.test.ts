@@ -154,7 +154,7 @@ describe("forgetWeight", () => {
   const now = new Date("2025-01-01T00:00:00Z").getTime();
 
   it("is below 0.6 for a four-year-old memory mentioned once, and the prompt marks it", () => {
-    const memory = candidate({ date: "2021-01-01", mentionCount: 0 });
+    const memory = candidate({ date: "2021-01-01", mentionCount: 1 });
     expect(forgetWeight(memory, now)).toBeLessThan(0.6);
     const text = formatMemoriesForPrompt([{ ...memory, score: 1 }], "zh", now);
     expect(text).toContain("这件事过去很久了，你记得不太清");

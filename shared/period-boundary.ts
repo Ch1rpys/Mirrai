@@ -9,11 +9,15 @@ import { normalizeLexicon, type LexiconEntry } from "./lexicon";
 import { normalizeLifeEvents, type LifeEvent } from "./life-events";
 import { normalizePeople, type Person } from "./people";
 import { normalizeStances, type Stance } from "./stances";
+import { parseZoneless } from "./timezone";
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 const COMPLETE_DATE = /^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/;
 
-export function periodToInstant(to: string | null | undefined): Date | null {
+export function periodToInstant(
+  to: string | null | undefined,
+  timeZone?: string | null,
+): Date | null {
   const text = String(to ?? "").trim();
   if (!text) return null;
   const dateOnly = text.match(DATE_ONLY);
@@ -21,6 +25,14 @@ export function periodToInstant(to: string | null | undefined): Date | null {
     const year = Number(dateOnly[1]);
     const month = Number(dateOnly[2]);
     const day = Number(dateOnly[3]);
+    const zone = typeof timeZone === "string" ? timeZone.trim() : "";
+    if (zone) {
+      const end = parseZoneless(
+        `${dateOnly[1]}-${dateOnly[2]}-${dateOnly[3]} 23:59:59`,
+        zone,
+      );
+      if (end) return new Date(end.getTime() + 999);
+    }
     return new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
   }
   const parsed = new Date(text);
@@ -71,10 +83,11 @@ export function knownByFirstEvidence(
 export function clipTogetherTo(
   togetherTo: string | null | undefined,
   to: Date | null,
+  timeZone?: string | null,
 ): string {
   const text = String(togetherTo ?? "").trim();
   if (!text || !to) return text;
-  const instant = periodToInstant(text) ?? new Date(text);
+  const instant = periodToInstant(text, timeZone) ?? new Date(text);
   if (Number.isNaN(instant.getTime())) return text;
   return instant.getTime() > to.getTime() ? "" : text;
 }
@@ -127,13 +140,14 @@ export function personaAsOfPeriod<T extends {
 }>(
   persona: T,
   period: { from?: string; to?: string } | null | undefined,
+  timeZone?: string | null,
 ): T {
-  const to = periodToInstant(period?.to);
+  const to = periodToInstant(period?.to, timeZone);
   if (!to) return persona;
   const data = (persona.personaData ?? {}) as Record<string, unknown>;
   return {
     ...persona,
-    togetherTo: clipTogetherTo(persona.togetherTo, to) || null,
+    togetherTo: clipTogetherTo(persona.togetherTo, to, timeZone) || null,
     personaData: {
       ...data,
       lifeEvents: normalizeLifeEvents(data.lifeEvents).filter((row) =>

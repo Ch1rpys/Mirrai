@@ -23,7 +23,7 @@ import { buildSystemPrompt } from "../_core/persona-utils";
 import { llmService, type LLMProvider } from "../llm";
 import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 import { buildUserContextBlock, isUserMood } from "@shared/user-side";
-import { zonedHour, zonedOffsetHours } from "@shared/timezone";
+import { preferredClockZone, zonedHour, zonedOffsetHours } from "@shared/timezone";
 import { mayReachOut, type Presence } from "@shared/graduation-mode";
 import type { BehaviorProfile } from "@shared/behavior-profile";
 import { seededRandom } from "../_core/behavior-profile";
@@ -183,10 +183,16 @@ async function pickProactiveMaterial(params: {
   const data = (params.persona.personaData as any) ?? {};
   const events = normalizeLifeEvents(data.lifeEvents);
   const loops = openLoops(events);
+  const personaZone = (params.persona as { timezone?: string | null }).timezone ?? null;
+  let userZone: string | null = null;
+  if (!(typeof personaZone === "string" && personaZone.trim())) {
+    const user = await db.getUserById(params.userId).catch(() => null);
+    userZone = user?.timezone ?? null;
+  }
   const lives = inProgressLife(
     events,
     params.now,
-    (params.persona as { timezone?: string | null }).timezone,
+    preferredClockZone(personaZone, userZone),
   );
   const openingProfile = normalizeOpeningProfile(data.openingProfile);
   const recent = await db.getMessagesByPersonaId(params.persona.id, params.userId, 40).catch(() => []);

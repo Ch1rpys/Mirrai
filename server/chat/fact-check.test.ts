@@ -16,6 +16,18 @@ describe("extractClaims", () => {
   it("does not treat a tagged question as a claim", () => {
     expect(extractClaims("我们是不是去过拾光咖啡？", "zh")).toEqual([]);
   });
+
+  it("keeps the place name and skips a drink", () => {
+    const named = extractClaims("我们去了拾光咖啡", "zh");
+    expect(named.some((row) => row.kind === "place" && row.text === "拾光咖啡")).toBe(true);
+    expect(named.some((row) => row.text === "我们去了拾光咖啡")).toBe(false);
+    expect(extractClaims("我喝咖啡", "zh").filter((row) => row.kind === "place")).toEqual([]);
+  });
+
+  it("still reads a Chinese place when the interface is English", () => {
+    const claims = extractClaims("上次去拾光咖啡那天你迟到了", "en");
+    expect(claims.some((row) => row.kind === "place" && row.text === "拾光咖啡")).toBe(true);
+  });
 });
 
 describe("verifyClaims on the Xiaoman fixture", () => {
@@ -62,5 +74,19 @@ describe("verifyClaims on the Xiaoman fixture", () => {
       id: 17,
       at: XIAOMAN_TRUTH.factCafe.date,
     });
+  });
+
+  it("supports a place that is only in the memory description", async () => {
+    const claims = extractClaims("我们去了拾光咖啡", "zh");
+    const verified = await verifyClaims(claims, {
+      personaId: 1,
+      userId: 1,
+      memories: [{ id: 9, title: "第一次见面", description: "在拾光咖啡", date: "2022-03-12" }],
+      records,
+    });
+    const place = verified.find((row) => row.kind === "place");
+    expect(place?.text).toBe("拾光咖啡");
+    expect(place?.supported).toBe(true);
+    expect(place?.source).toEqual({ type: "memory", id: 9, at: "2022-03-12" });
   });
 });

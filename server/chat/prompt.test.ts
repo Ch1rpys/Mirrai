@@ -294,4 +294,69 @@ describe("a stretch of the same person", () => {
     expect(built).toContain("置顶");
     expect(built).not.toContain("时期之后的事");
   });
+
+  it("drops a record from the next morning in the persona's zone", async () => {
+    retrieveMemories.mockResolvedValue([
+      {
+        id: 8,
+        title: "第二天清晨的事",
+        description: "刚过午夜",
+        category: "memory",
+        date: null,
+        recordId: 4,
+        isPinned: false,
+        subject: "them",
+      },
+    ]);
+    getRecordsByIds.mockResolvedValue([
+      { id: 4, timestamp: new Date("2022-06-01T16:30:00.000Z") },
+    ]);
+    const withPeriods = {
+      ...persona,
+      personaData: {
+        ...persona.personaData,
+        periods: [{ id: "period-1", from: "2022-01-01", to: "2022-06-01" }],
+      },
+    };
+    const built = await buildPromptForPersona({
+      persona: withPeriods,
+      userId: 1,
+      locale: "zh",
+      periodId: "period-1",
+    });
+    expect(built).not.toContain("第二天清晨的事");
+  });
+
+  it("keeps something the persona said out of the anchor block", async () => {
+    retrieveMemories.mockResolvedValue([
+      {
+        id: 1,
+        title: "周三下午有课",
+        description: "我周三下午有课",
+        category: "anchor",
+        subject: "said",
+        date: null,
+        isPinned: false,
+      },
+      {
+        id: 2,
+        title: "生日是5月21号",
+        description: "她说过",
+        category: "anchor",
+        subject: "them",
+        date: "2022-05-21",
+        isPinned: false,
+      },
+    ]);
+    const built = await buildPromptForPersona({ persona, userId: 1, locale: "zh" });
+    const anchorAt = built.indexOf("【事实锚点（不得违背）】");
+    const memoryAt = built.indexOf("【相关记忆】");
+    expect(anchorAt).toBeGreaterThan(-1);
+    expect(memoryAt).toBeGreaterThan(anchorAt);
+    const anchorBlock = built.slice(anchorAt, memoryAt);
+    expect(anchorBlock).toContain("生日是5月21号");
+    expect(anchorBlock).not.toContain("周三下午有课");
+    expect(built).toContain("这是你在这里说过的话，不是记录里的事实");
+    expect(built).toContain("周三下午有课");
+  });
 });

@@ -76,18 +76,25 @@ function atOf(value: Date | string | null | undefined): string | undefined {
   return value.toISOString().slice(0, 10);
 }
 
+function hasHan(text: string): boolean {
+  return /[\u4e00-\u9fff]/.test(text);
+}
+
+function hasLatin(text: string): boolean {
+  return /[A-Za-z]/.test(text);
+}
+
 // i18n:allow-input — particles that mark a question in what they typed
 function isQuestionClause(clause: string, locale: "zh" | "en"): boolean {
   if (/[？?]/.test(clause)) return true;
   const trimmed = clause.replace(/[。！!…\s]+$/g, "");
-  if (locale === "zh") {
-    if (trimmed.endsWith("吗")) return true;
-    if (clause.includes("是不是")) return true;
-    return false;
+  if (trimmed.endsWith("吗") || clause.includes("是不是")) return true;
+  if (locale === "en" || hasLatin(trimmed)) {
+    return /^(did|do|does|is|are|were|was|have|has|had|can|could|would|will)\b/i.test(
+      trimmed,
+    );
   }
-  return /^(did|do|does|is|are|were|was|have|has|had|can|could|would|will)\b/i.test(
-    trimmed,
-  );
+  return false;
 }
 
 function splitClauses(reply: string): Array<{ text: string; start: number }> {
@@ -143,14 +150,18 @@ const PLACE_SUFFIXES = [
   "路",
   "街",
 ];
-const PLACE_LEAD = /^(上次|那次|那天|那年|第一次|还记得|去|在|到|从|的|了)+/;
+// i18n:allow-input — function words that sit in front of a place name, not inside it
+const PLACE_STOP = new Set(Array.from("我你他她们的了在到从去和与喝吃过来吧呢啊呀嘛是不没很也就都还又把被让给对想要这那个过吗"));
 const QUOTED_RE = /[「『“"]([^」』”"]{1,12})[」』”"]/g;
 const EVENT_RE = /上次|那次|那天|那年|第一次|还记得/g;
 const EN_EVENT_RE = /\b(?:last time|that time|that day|the first time|remember when)\b/gi;
 const EN_PLACE_RE = /\b([A-Za-z][A-Za-z'’\-]*(?:\s+[A-Za-z][A-Za-z'’\-]*){0,3}\s+(?:cafe|café|street|road|park|school|hospital|airport|station|restaurant))\b/gi;
 
 function extractDates(clause: string, start: number, locale: "zh" | "en"): Claim[] {
-  const patterns = locale === "zh" ? DATE_RES : EN_DATE_RES;
+  const patterns = [
+    ...(locale === "zh" || hasHan(clause) ? DATE_RES : []),
+    ...(locale === "en" || hasLatin(clause) ? EN_DATE_RES : []),
+  ];
   const out: Claim[] = [];
   for (const pattern of patterns) {
     pattern.lastIndex = 0;
@@ -171,12 +182,18 @@ function extractDates(clause: string, start: number, locale: "zh" | "en"): Claim
 
 function placeFromSuffix(clause: string, suffixAt: number, suffix: string): string | null {
   const end = suffixAt + suffix.length;
-  const begin = Math.max(0, end - 8);
-  let text = clause.slice(begin, end);
-  text = text.replace(PLACE_LEAD, "");
+  let begin = end - suffix.length;
+  while (begin > 0 && end - (begin - 1) <= 8) {
+    const prev = clause.charAt(begin - 1);
+    if (!/^[\u4e00-\u9fff]$/.test(prev) || PLACE_STOP.has(prev)) break;
+    begin -= 1;
+  }
+  const text = clause.slice(begin, end);
   if (text.length < 2 || text.length > 8) return null;
   if (!/^[\u4e00-\u9fff]+$/.test(text)) return null;
   if (!text.endsWith(suffix)) return null;
+  // 「咖啡」by itself is the drink. A place needs a name in front of it.
+  if (suffix.length >= 2 && text === suffix) return null;
   return text;
 }
 
@@ -194,7 +211,7 @@ function extractPlaces(clause: string, start: number, locale: "zh" | "en"): Clai
       end: start + quoted.index + quoted[0]!.length - 1,
     });
   }
-  if (locale === "zh") {
+  if (locale === "zh" || hasHan(clause)) {
     for (const suffix of PLACE_SUFFIXES) {
       let from = 0;
       while (from < clause.length) {
@@ -213,37 +230,46 @@ function extractPlaces(clause: string, start: number, locale: "zh" | "en"): Clai
         from = at + 1;
       }
     }
-    return out.filter((claim, _, all) =>
-      !all.some((other) => other !== claim && other.kind === "place" && other.text.includes(claim.text) && other.text !== claim.text),
-    );
   }
-  EN_PLACE_RE.lastIndex = 0;
-  let en: RegExpExecArray | null;
-  while ((en = EN_PLACE_RE.exec(clause))) {
-    const text = en[1]!.trim();
-    if (!text) continue;
-    pushClaim(out, {
-      text,
-      kind: "place",
-      start: start + en.index,
-      end: start + en.index + text.length,
-    });
+  if (locale === "en" || hasLatin(clause)) {
+    EN_PLACE_RE.lastIndex = 0;
+    let en: RegExpExecArray | null;
+    while ((en = EN_PLACE_RE.exec(clause))) {
+      const text = en[1]!.trim();
+      if (!text) continue;
+      pushClaim(out, {
+        text,
+        kind: "place",
+        start: start + en.index,
+        end: start + en.index + text.length,
+      });
+    }
   }
-  return out;
+  return out.filter((claim, _, all) =>
+    !all.some((other) => other !== claim && other.kind === "place" && other.text.includes(claim.text) && other.text !== claim.text),
+  );
 }
 
 function extractEvents(clause: string, start: number, locale: "zh" | "en"): Claim[] {
-  const pattern = locale === "zh" ? EVENT_RE : EN_EVENT_RE;
-  pattern.lastIndex = 0;
-  const match = pattern.exec(clause);
-  if (!match) return [];
-  const text = clause.slice(match.index).trim();
+  const patterns = [
+    ...(locale === "zh" || hasHan(clause) ? [EVENT_RE] : []),
+    ...(locale === "en" || hasLatin(clause) ? [EN_EVENT_RE] : []),
+  ];
+  let earliest: RegExpExecArray | null = null;
+  for (const pattern of patterns) {
+    pattern.lastIndex = 0;
+    const match = pattern.exec(clause);
+    if (!match) continue;
+    if (!earliest || match.index < earliest.index) earliest = match;
+  }
+  if (!earliest) return [];
+  const text = clause.slice(earliest.index).trim();
   if (!text) return [];
   return [
     {
       text,
       kind: "event",
-      start: start + match.index,
+      start: start + earliest.index,
       end: start + clause.length,
     },
   ];
