@@ -1318,6 +1318,19 @@ export const en = {
     },
   },
 
+  stickerLibrary: {
+    title: "Stickers",
+    hint: "Every sticker here is one {{name}} really sent. A sticker that is off is never sent.",
+    empty: "The record has no sticker from {{name}} yet. An export that carries them will show up here.",
+    loadFailed: "The stickers could not be read.",
+    count: "{{n}} / {{max}}",
+    uses: "sent {{n}} times",
+    enabled: "Can send",
+    noImage: "No picture",
+    unnamed: "Sticker",
+    addImage: "Add a picture",
+    uploadFailed: "The picture was not saved.",
+  },
   personaEdit: {
     title: "Edit persona",
     name: "Name",
@@ -1379,6 +1392,8 @@ export const en = {
     emotionInertiaNote: "In the record, {{name}} usually stayed angry for a while. On, a joke will not end that stretch at once.",
     closing: "{{name}} will say “I'm turning in” themselves",
     closingNote: "When you've talked longer than {{name}} used to, or it's the hour {{name}} used to go to sleep, the persona closes in {{name}}'s way. You can keep talking after that.",
+    stickers: "{{name}} can send the stickers {{name}} used",
+    stickersNote: "Only the stickers {{name}} really sent, as often as {{name}} sent them.",
     factAnnotate: "When they mention something from the past, mark whether it is in the record",
     factAnnotateNote: "No extra model call. After the reply is stored it is checked against the record: supported claims show their source, unsupported ones are marked.",
     abPairs: "Offer me a choice now and then",

@@ -118,6 +118,9 @@ vi.mock("@/components/v6/WorldEditors", () => ({
 vi.mock("@/components/v6/PersonaSampling", () => ({
   default: () => <div data-testid="persona-sampling" />,
 }));
+vi.mock("@/components/v6/StickerLibrary", () => ({
+  default: () => <div data-testid="sticker-library" />,
+}));
 vi.mock("@/components/v6/VersionHistory", () => ({
   default: () => <div data-testid="version-history" />,
 }));

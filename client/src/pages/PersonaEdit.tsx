@@ -26,6 +26,7 @@ import V5FidelityEditors from "@/components/V5FidelityEditors";
 import LexiconEditor from "@/components/v6/LexiconEditor";
 import WorldEditors from "@/components/v6/WorldEditors";
 import PersonaSwitches from "@/components/v6/PersonaSwitches";
+import StickerLibrary from "@/components/v6/StickerLibrary";
 import PersonaSampling from "@/components/v6/PersonaSampling";
 import HarmNotice from "@/components/v6/HarmNotice";
 import VersionHistory from "@/components/v6/VersionHistory";
@@ -573,6 +574,7 @@ export default function PersonaEdit() {
             </label>
             <PersonaSwitches personaId={personaId} name={name} />
             <PersonaSampling personaId={personaId} />
+            <StickerLibrary personaId={personaId} name={name} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="persona-reachability" className="text-xs text-muted-foreground">{t("reachability.label")}</Label>

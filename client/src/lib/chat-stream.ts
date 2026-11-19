@@ -42,6 +42,18 @@ export interface StreamDoneInfo {
     showBanner: boolean;
   } | null;
   crisis: boolean;
+  /**
+   * Messages the reply carried besides its words (B7.1 stickers).
+   *
+   * They are stored after the text, so they arrive after it and are
+   * appended as further bubbles.
+   */
+  extra?: Array<{
+    messageId: number;
+    kind: string;
+    content: string;
+    mediaUrl?: string | null;
+  }>;
 }
 
 export interface StreamChatCallbacks {

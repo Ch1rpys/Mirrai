@@ -76,6 +76,7 @@ describe("the persona switches section", () => {
     expect(screen.getByText("做同一件事时，照 小满 做过的样子")).toBeInTheDocument();
     expect(screen.getByText("小满 的情绪按 小满 的节奏变")).toBeInTheDocument();
     expect(screen.getByText("小满 会自己说「我先睡了」")).toBeInTheDocument();
+    expect(screen.getByText("小满 可以发 小满 用过的表情")).toBeInTheDocument();
     expect(screen.getByText("分身提到往事时，标出记录里有没有")).toBeInTheDocument();
     expect(screen.getByText("偶尔让我二选一")).toBeInTheDocument();
     expect(screen.getByText("先想好说什么，再用 小满 的话说")).toBeInTheDocument();
@@ -93,6 +94,16 @@ describe("the persona switches section", () => {
     expect(mutate).toHaveBeenCalledWith({
       id: 5,
       patch: { layers: { abPairs: true } },
+    });
+  });
+
+  it("turns stickers off", async () => {
+    const user = userEvent.setup();
+    render(<PersonaSwitches personaId={5} name="小满" />);
+    await user.click(screen.getByRole("checkbox", { name: /小满 可以发 小满 用过的表情/ }));
+    expect(mutate).toHaveBeenCalledWith({
+      id: 5,
+      patch: { layers: { stickers: false } },
     });
   });
 

@@ -140,6 +140,45 @@ describe("the message bubble", () => {
     expect(screen.queryByText("[图片]")).toBeNull();
   });
 
+  it("renders a sticker as a picture when it has one, and as a name when it does not", () => {
+    const { unmount } = render(
+      <MessageBubble
+        msg={makeMessage({
+          kind: "sticker",
+          content: "[sticker:狗狗探头]",
+          mediaUrl: "/uploads/personas/1/2/stickers/abc.png",
+        })}
+        personaName="小A"
+        showMood={false}
+      />,
+    );
+    expect(screen.getByAltText("［表情：狗狗探头］")).toHaveAttribute(
+      "src",
+      "/uploads/personas/1/2/stickers/abc.png",
+    );
+    unmount();
+
+    render(
+      <MessageBubble
+        msg={makeMessage({ kind: "sticker", content: "[sticker:猫猫叹气]" })}
+        personaName="小A"
+        showMood={false}
+      />,
+    );
+    expect(screen.getByText("［表情：猫猫叹气］")).toBeInTheDocument();
+  });
+
+  it("does not offer to read a sticker aloud", () => {
+    render(
+      <MessageBubble
+        msg={makeMessage({ kind: "sticker", content: "[sticker:狗狗探头]" })}
+        personaName="小A"
+        showMood={false}
+      />,
+    );
+    expect(screen.queryByLabelText(translate("zh", "chat.tts"))).toBeNull();
+  });
+
   it("shows the time in the user's own clock", () => {
     /**
      * Ten at night in New York is three in the morning there, and two

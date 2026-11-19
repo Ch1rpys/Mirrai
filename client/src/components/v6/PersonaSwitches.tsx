@@ -29,6 +29,7 @@ export default function PersonaSwitches(props: { personaId: number; name: string
   const actClusters = settings.data?.layers?.actClusters !== false;
   const emotionInertia = settings.data?.layers?.emotionInertia !== false;
   const closing = settings.data?.layers?.closing !== false;
+  const stickers = settings.data?.layers?.stickers !== false;
   const factAnnotate = settings.data?.layers?.factAnnotate !== false;
   const abPairs = Boolean(settings.data?.layers?.abPairs);
   const twoStage = Boolean(settings.data?.layers?.twoStage);
@@ -214,6 +215,26 @@ export default function PersonaSwitches(props: { personaId: number; name: string
           <span className="block">{t("personaEdit.closing", { name: props.name })}</span>
           <span className="block text-xs text-muted-foreground leading-relaxed">
             {t("personaEdit.closingNote", { name: props.name })}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={stickers}
+          disabled={busy}
+          onChange={(event) =>
+            update.mutate({
+              id: props.personaId,
+              patch: { layers: { stickers: event.target.checked } },
+            })
+          }
+          className="mt-0.5"
+        />
+        <span>
+          <span className="block">{t("personaEdit.stickers", { name: props.name })}</span>
+          <span className="block text-xs text-muted-foreground leading-relaxed">
+            {t("personaEdit.stickersNote", { name: props.name })}
           </span>
         </span>
       </label>

@@ -15,6 +15,7 @@ import { SAFE_REHYPE_PLUGINS } from "@/lib/safe-markdown";
 import { formatTimeInZone } from "@/lib/dates";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { FEEDBACK_REASONS } from "@shared/speech-acts";
+import { renderRecordContent } from "@shared/records";
 
 /**
  * A message in the conversation.
@@ -64,6 +65,11 @@ export interface Message {
   routine?: string | null;
   /** An unanswered A/B pair sitting on the user's own message. */
   pendingChoice?: { options: [string, string] } | null;
+  /**
+   * What the message is besides words: a sticker (B7.1), a photograph
+   * they sent (B7.9), a voice note.
+   */
+  kind?: "sticker" | "photo" | "voice-note" | string | null;
 }
 /** The state of a message, or `null` when it is not a known state. */
 export function emotionOf(state: string | null | undefined): EmotionDefinition | null {
@@ -419,7 +425,30 @@ export function MessageBubble({
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState(msg.content);
 
+  const isSticker = msg.kind === "sticker";
   const renderContent = () => {
+    /**
+     * A sticker is a picture, or — when the export only carried the
+     * name — the name in brackets. It has no bubble background: a
+     * sticker is not a sentence.
+     */
+    if (isSticker) {
+      const label = renderRecordContent({ kind: "sticker", content: msg.content }, locale);
+      if (msg.mediaUrl) {
+        return (
+          <img
+            src={msg.mediaUrl}
+            alt={label}
+            className="max-w-[160px] max-h-[160px] rounded-md"
+          />
+        );
+      }
+      return (
+        <span className="inline-block rounded-md border border-border/70 px-2 py-1 text-xs text-muted-foreground">
+          {label}
+        </span>
+      );
+    }
     if (msg.messageType === "image" && msg.mediaUrl) {
       return (
         <>
@@ -600,7 +629,10 @@ export function MessageBubble({
             ))}
           </ul>
         )}
-        <div className={`px-3.5 py-2.5 text-sm leading-relaxed ${isUser ? "bubble-user" : "bubble-ai"}`}>
+        <div className={isSticker
+          ? "text-sm leading-relaxed"
+          : `px-3.5 py-2.5 text-sm leading-relaxed ${isUser ? "bubble-user" : "bubble-ai"}`}>
+
           {msg.replyToContent && !editing && (
             <div className="mb-2 pl-2 border-l-2 border-current/25 text-xs text-current/60 line-clamp-2">
               {msg.replyToContent}
@@ -679,7 +711,7 @@ export function MessageBubble({
              */}
             {formatTimeInZone(msg.createdAt, locale, timezone)}
             {msg.channel === "wechat" && <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-mood-happy/10 text-mood-happy">{t("chat.channelWechat")}</span>}
-            {!isUser && msg.messageType !== "voice" && <TTSButton text={msg.content} />}
+            {!isUser && msg.messageType !== "voice" && !isSticker && <TTSButton text={msg.content} />}
             {/* A message is the user's own. Being able to fix, repeat or
                 remove one is what makes it a conversation rather than a
                 transcript. */}

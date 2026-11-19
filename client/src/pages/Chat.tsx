@@ -33,6 +33,22 @@ import ChoiceBubble from "@/components/v6/ChoiceBubble";
 import PendingReply from "@/components/v6/PendingReply";
 import { useTypingReveal, waitMs } from "@/components/v6/useTypingReveal";
 
+/** A message the reply carried besides its words (B7.1). */
+type ExtraMessage = { messageId: number; kind: string; content: string; mediaUrl?: string | null };
+
+function extraBubbles(extra: ExtraMessage[] | undefined, emotionalState: string): Message[] {
+  return (extra ?? []).map((row) => ({
+    id: row.messageId,
+    role: "assistant" as const,
+    content: row.kind === "sticker" ? `[sticker:${row.content}]` : row.content,
+    kind: row.kind,
+    mediaUrl: row.mediaUrl ?? null,
+    emotionalState,
+    createdAt: new Date(),
+    isStreaming: false,
+  }));
+}
+
 /**
  * The largest picture the chat will send.
  *
@@ -632,6 +648,7 @@ export default function Chat() {
     const fromServer = history.map((m: any) => ({
       id: m.id, role: m.role as "user" | "assistant",
       content: m.content, messageType: m.messageType, mediaUrl: m.mediaUrl, mediaDuration: m.mediaDuration,
+      kind: m.metadata?.kind ?? null,
       emotionalState: m.emotionalState, channel: m.channel, createdAt: m.createdAt,
       origin: originFromHistory(m),
       replyToId: m.replyToId ?? null,
@@ -900,7 +917,7 @@ export default function Chat() {
               setMessages((prev) => prev.filter((m) => m.id !== streamId));
             },
             onDone: (info) => {
-              setMessages(prev => prev.map(m => m.id === streamId
+              setMessages(prev => [...prev.map(m => m.id === streamId
                 ? {
                     ...m,
                     id: `ai-${info.messageId}`,
@@ -917,7 +934,7 @@ export default function Chat() {
                     })),
                   }
                 : m
-              ));
+              ), ...extraBubbles(info.extra, info.emotionalState)]);
               setCurrentState(info.emotionalState);
               if (info.graduationSuggested) setShowGraduation(true);
               if (info.careNote?.showBanner) toast.info(careBannerText(info.careNote, t));
@@ -1036,10 +1053,10 @@ export default function Chat() {
           setMessages((prev) => prev.filter((m) => m.id !== streamId));
           return;
         }
-        setMessages(prev => prev.map(m => m.id === streamId
-          ? { id: `ai-${Date.now()}`, role: "assistant", content: result.reply, emotionalState: result.emotionalState, createdAt: new Date(), isStreaming: false }
+        setMessages(prev => [...prev.map(m => m.id === streamId
+          ? { id: `ai-${Date.now()}`, role: "assistant" as const, content: result.reply, emotionalState: result.emotionalState, createdAt: new Date(), isStreaming: false }
           : m
-        ));
+        ), ...extraBubbles((result as { extra?: ExtraMessage[] }).extra, result.emotionalState)]);
         setCurrentState(result.emotionalState);
         if (result.graduationSuggested) setShowGraduation(true);
         /**
@@ -1286,7 +1303,8 @@ export default function Chat() {
             .map((m) => ({
               id: m.id, role: m.role as "user" | "assistant",
               content: m.content, messageType: m.messageType, mediaUrl: m.mediaUrl,
-              mediaDuration: m.mediaDuration, emotionalState: m.emotionalState,
+              mediaDuration: m.mediaDuration, kind: m.metadata?.kind ?? null,
+              emotionalState: m.emotionalState,
               channel: m.channel, createdAt: m.createdAt,
             }));
           return [...fresh, ...prev];
@@ -1418,10 +1436,10 @@ export default function Chat() {
           setMessages((prev) => prev.filter((m) => m.id !== streamId));
           if (result.deferred) void utils.chat.pendingReply.invalidate({ personaId });
         } else {
-          setMessages(prev => prev.map(m => m.id === streamId
-            ? { id: `ai-${Date.now()}`, role: "assistant", content: result.reply, emotionalState: result.emotionalState, createdAt: new Date(), isStreaming: false }
+          setMessages(prev => [...prev.map(m => m.id === streamId
+            ? { id: `ai-${Date.now()}`, role: "assistant" as const, content: result.reply, emotionalState: result.emotionalState, createdAt: new Date(), isStreaming: false }
             : m
-          ));
+          ), ...extraBubbles((result as { extra?: ExtraMessage[] }).extra, result.emotionalState)]);
           setCurrentState(result.emotionalState);
           if (result.careNote?.showBanner) toast.info(careBannerText(result.careNote, t));
           if (result.crisis) setShowCrisis(true);
@@ -1526,11 +1544,11 @@ export default function Chat() {
               if (result.deferred) void utils.chat.pendingReply.invalidate({ personaId });
               return;
             }
-            setMessages(prev => prev.map(m => {
-              if (m.id === streamId) return { id: `ai-${Date.now()}`, role: "assistant", content: result.reply, emotionalState: result.emotionalState, createdAt: new Date(), isStreaming: false };
+            setMessages(prev => [...prev.map(m => {
+              if (m.id === streamId) return { id: `ai-${Date.now()}`, role: "assistant" as const, content: result.reply, emotionalState: result.emotionalState, createdAt: new Date(), isStreaming: false };
               if (m === userMsg) return { ...m, content: result.transcription || t("chat.voiceMessage") };
               return m;
-            }));
+            }), ...extraBubbles((result as { extra?: ExtraMessage[] }).extra, result.emotionalState)]);
             setCurrentState(result.emotionalState);
             if (result.careNote?.showBanner) toast.info(careBannerText(result.careNote, t));
             if (result.crisis) setShowCrisis(true);

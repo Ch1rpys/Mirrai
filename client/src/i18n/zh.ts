@@ -1319,6 +1319,19 @@ export const zh = {
     },
   },
 
+  stickerLibrary: {
+    title: "表情",
+    hint: "这里都是记录里 {{name}} 真的发过的表情。停用的不会发出来。",
+    empty: "记录里还没有 {{name}} 用过的表情。带表情的导出会出现在这里。",
+    loadFailed: "表情没读出来。",
+    count: "{{n}} / {{max}}",
+    uses: "发过 {{n}} 次",
+    enabled: "可以发",
+    noImage: "没有图",
+    unnamed: "表情",
+    addImage: "补一张图",
+    uploadFailed: "这张图没存上。",
+  },
   personaEdit: {
     title: "编辑人设",
     name: "名字",
@@ -1380,6 +1393,8 @@ export const zh = {
     emotionInertiaNote: "记录里 {{name}} 生气一般要过一阵才好。打开后，分身不会因为一句玩笑就立刻翻篇。",
     closing: "{{name}} 会自己说「我先睡了」",
     closingNote: "聊得比 {{name}} 平时久了，或者到了 {{name}} 平时睡觉的点，分身会用 {{name}} 的方式收尾。之后你还可以接着说。",
+    stickers: "{{name}} 可以发 {{name}} 用过的表情",
+    stickersNote: "只从记录里 {{name}} 真的发过的表情里选，按 {{name}} 发表情的频率。",
     factAnnotate: "分身提到往事时，标出记录里有没有",
     factAnnotateNote: "不调模型。回复落库之后对照记录，有依据的标出处，没有的标出来。",
     abPairs: "偶尔让我二选一",
