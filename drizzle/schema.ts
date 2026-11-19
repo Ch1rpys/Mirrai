@@ -1706,3 +1706,39 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
 
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type InsertPushSubscription = typeof pushSubscriptions.$inferInsert;
+
+/**
+ * A reply that will be written later.
+ *
+ * The row is the moment they look at their phone, not a pre-written
+ * answer. When it comes due, the turn answers every user message that
+ * is still waiting. One persona has at most one pending reply.
+ */
+export const replyJobs = pgTable("reply_jobs", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  kind: varchar("kind", { length: 16 }).notNull(),
+  status: varchar("status", { length: 16 }).notNull(),
+  reason: varchar("reason", { length: 16 }).notNull(),
+  dueAt: timestamp("dueAt").notNull(),
+  channel: varchar("channel", { length: 16 }).notNull(),
+  targetId: varchar("targetId", { length: 255 }),
+  locale: varchar("locale", { length: 8 }).notNull(),
+  periodId: varchar("periodId", { length: 64 }),
+  attempts: integer("attempts").default(0).notNull(),
+  claimedAt: timestamp("claimedAt"),
+  payload: jsonb("payload"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  finishedAt: timestamp("finishedAt"),
+}, (table) => ({
+  onePendingReply: uniqueIndex("reply_jobs_one_pending_reply_idx")
+    .on(table.userId, table.personaId)
+    .where(sql`${table.status} IN ('pending', 'running') AND ${table.kind} = 'reply'`),
+  dueIdx: index("reply_jobs_due_idx")
+    .on(table.dueAt)
+    .where(sql`${table.status} = 'pending'`),
+}));
+
+export type ReplyJob = typeof replyJobs.$inferSelect;
+export type InsertReplyJob = typeof replyJobs.$inferInsert;

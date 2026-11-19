@@ -189,7 +189,7 @@ describe("the migrations cover the schema", () => {
       // A created table brings all of its columns with it.
       expect(columns.length).toBeGreaterThan(0);
     }
-    for (const table of ["eval_cases", "eval_runs", "outbound_letters"]) {
+    for (const table of ["eval_cases", "eval_runs", "outbound_letters", "reply_jobs"]) {
       expect(created.has(table), `${table} is never created by a migration`).toBe(true);
     }
   });

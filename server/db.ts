@@ -25,6 +25,7 @@ import {
   InsertBlindSession, InsertRecordEmbedding,
   userMoods, relationshipEvents, letters, memoryExtractions,
   InsertUserMood, InsertRelationshipEvent, InsertLetter,
+  replyJobs, InsertReplyJob, ReplyJob,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
@@ -1096,6 +1097,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(personaTemplates).where(eq(personaTemplates.userId, id));
     await tx.delete(personaVersions).where(eq(personaVersions.userId, id));
     await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, id));
+    await tx.delete(replyJobs).where(eq(replyJobs.userId, id));
     await tx.delete(recordEmbeddings).where(eq(recordEmbeddings.userId, id));
     await tx.delete(relationshipEvents).where(eq(relationshipEvents.userId, id));
     await tx.delete(reminderDeliveries).where(eq(reminderDeliveries.userId, id));
@@ -1442,6 +1444,9 @@ export async function updatePersona(
     .set(patch)
     .where(and(eq(personas.id, id), eq(personas.userId, userId)))
     .returning({ id: personas.id });
+  if (rows.length > 0 && patch.presence === "asleep") {
+    await cancelPendingReplyJobs(id, userId);
+  }
   return rows.length > 0;
 }
 
@@ -1502,6 +1507,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(safetyEvents).where(and(eq(safetyEvents.personaId, id), eq(safetyEvents.userId, userId)));
     await tx.delete(skillJobs).where(and(eq(skillJobs.personaId, id), eq(skillJobs.userId, userId)));
     await tx.delete(letters).where(and(eq(letters.personaId, id), eq(letters.userId, userId)));
+    await tx.delete(replyJobs).where(and(eq(replyJobs.personaId, id), eq(replyJobs.userId, userId)));
     await tx.delete(wechatBindings).where(and(eq(wechatBindings.personaId, id), eq(wechatBindings.userId, userId)));
     await tx.delete(personas).where(and(eq(personas.id, id), eq(personas.userId, userId)));
   });
@@ -1928,6 +1934,173 @@ export async function markPushFailure(userId: number, endpoint: string): Promise
     .update(pushSubscriptions)
     .set({ failCount: sql`${pushSubscriptions.failCount} + 1` })
     .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)));
+}
+
+/**
+ * How long a reply-job claim is allowed to sit.
+ *
+ * The handbook asked for five minutes, the same wording it used for
+ * letters. Letters moved to fifteen after five minutes went stale
+ * while a model call was still running. A reply job makes the same
+ * call, so it uses the same window.
+ */
+export const REPLY_JOB_CLAIM_STALE_MS = 15 * 60_000;
+
+function isPgUniqueViolation(error: unknown): boolean {
+  return (error as { code?: unknown })?.code === "23505";
+}
+
+export async function createReplyJob(data: InsertReplyJob): Promise<ReplyJob> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  try {
+    const [row] = await db.insert(replyJobs).values(data).returning();
+    if (!row) throw new Error("DB not available");
+    return row;
+  } catch (error) {
+    if (!isPgUniqueViolation(error)) throw error;
+    const existing = await getPendingReplyJob(data.personaId, data.userId, data.kind);
+    if (existing) return existing;
+    throw error;
+  }
+}
+
+export async function getReplyJobById(id: number, userId: number): Promise<ReplyJob | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .select()
+    .from(replyJobs)
+    .where(and(eq(replyJobs.id, id), eq(replyJobs.userId, userId)))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function getPendingReplyJob(
+  personaId: number,
+  userId: number,
+  kind = "reply",
+): Promise<ReplyJob | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .select()
+    .from(replyJobs)
+    .where(and(
+      eq(replyJobs.personaId, personaId),
+      eq(replyJobs.userId, userId),
+      eq(replyJobs.kind, kind),
+      inArray(replyJobs.status, ["pending", "running"]),
+    ))
+    .orderBy(asc(replyJobs.dueAt))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function listDueReplyJobs(now: Date, limit = 20): Promise<ReplyJob[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const staleBefore = new Date(now.getTime() - REPLY_JOB_CLAIM_STALE_MS);
+  return db
+    .select()
+    .from(replyJobs)
+    .where(and(
+      lte(replyJobs.dueAt, now),
+      or(
+        and(
+          eq(replyJobs.status, "pending"),
+          or(
+            isNull(replyJobs.claimedAt),
+            lt(replyJobs.claimedAt, staleBefore),
+          ),
+        ),
+        and(
+          eq(replyJobs.status, "running"),
+          lt(replyJobs.claimedAt, staleBefore),
+        ),
+      ),
+    ))
+    .orderBy(asc(replyJobs.dueAt))
+    .limit(limit);
+}
+
+export async function claimReplyJob(id: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const staleBefore = new Date(Date.now() - REPLY_JOB_CLAIM_STALE_MS);
+  const [row] = await db
+    .update(replyJobs)
+    .set({ status: "running", claimedAt: new Date() })
+    .where(and(
+      eq(replyJobs.id, id),
+      eq(replyJobs.userId, userId),
+      or(
+        and(
+          eq(replyJobs.status, "pending"),
+          or(
+            isNull(replyJobs.claimedAt),
+            lt(replyJobs.claimedAt, staleBefore),
+          ),
+        ),
+        and(
+          eq(replyJobs.status, "running"),
+          lt(replyJobs.claimedAt, staleBefore),
+        ),
+      ),
+    ))
+    .returning({ id: replyJobs.id });
+  return Boolean(row);
+}
+
+export async function finishReplyJob(
+  id: number,
+  userId: number,
+  status: "done" | "failed" | "cancelled",
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .update(replyJobs)
+    .set({ status, finishedAt: new Date(), claimedAt: null })
+    .where(and(eq(replyJobs.id, id), eq(replyJobs.userId, userId)))
+    .returning({ id: replyJobs.id });
+  return rows.length > 0;
+}
+
+export async function retryReplyJob(
+  id: number,
+  userId: number,
+  dueAt: Date,
+  attempts: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .update(replyJobs)
+    .set({
+      status: "pending",
+      dueAt,
+      attempts,
+      claimedAt: null,
+    })
+    .where(and(eq(replyJobs.id, id), eq(replyJobs.userId, userId)))
+    .returning({ id: replyJobs.id });
+  return rows.length > 0;
+}
+
+export async function cancelPendingReplyJobs(personaId: number, userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows = await db
+    .update(replyJobs)
+    .set({ status: "cancelled", finishedAt: new Date(), claimedAt: null })
+    .where(and(
+      eq(replyJobs.personaId, personaId),
+      eq(replyJobs.userId, userId),
+      inArray(replyJobs.status, ["pending", "running"]),
+    ))
+    .returning({ id: replyJobs.id });
+  return rows.length;
 }
 
 export async function upsertRecordEmbedding(data: InsertRecordEmbedding) {
@@ -4195,6 +4368,9 @@ export async function setGraduationStatus(
   }
   await db.update(personas).set(data)
     .where(and(eq(personas.id, personaId), eq(personas.userId, userId)));
+  if (status === "graduated") {
+    await cancelPendingReplyJobs(personaId, userId);
+  }
 }
 
 
