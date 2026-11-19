@@ -511,6 +511,20 @@ describe("queued replies", () => {
     expect(jobs).toHaveLength(0);
   });
 
+  it("does not queue a crisis or someone saying they are sad", async () => {
+    for (const message of ["我想死", "我很难过"]) {
+      resetInbox();
+      stored.length = 0;
+      nextMessageId = 1;
+      jobs = [];
+      nextJobId = 1;
+      invokeWithProvider.mockClear();
+      const events = await drain(persona(), message);
+      expect(events.some((event) => event.type === "deferred"), message).toBe(false);
+      expect(jobs, message).toHaveLength(0);
+    }
+  });
+
   it("lets only one of two overlapping claims call the model", async () => {
     await drain(persona(), "在吗");
     const id = jobs[0]!.id;
