@@ -174,15 +174,15 @@ export function parseFactCards(
 /**
  * Which blocks the fact pass will actually send.
  *
- * Deep mode reads them all. Every other preset only sends a block that
- * already looks like it holds a date, a person, a like or a place.
+ * Deep mode reads them all. Every other preset — including the public
+ * figure flow, whose map stage reads every block — only sends a block
+ * that already looks like it holds a date, a person, a like or a place.
  */
 export function chunksForFactExtraction(
   chunks: RecordChunk[],
   mode?: DistillationMode | null,
 ): RecordChunk[] {
-  const preset = getDistillationPreset(mode);
-  if (preset.chunkBudget === "all") return chunks;
+  if (getDistillationPreset(mode).id === "deep") return chunks;
   return chunks.filter(chunkHasFactCue);
 }
 
@@ -202,10 +202,40 @@ function sameContent(
   );
 }
 
+/**
+ * A stable identity for a card, so a re-run does not write it again.
+ *
+ * Observation cards are reused by block hash; the people and stance
+ * cards are written by the fact pass, which runs every time. Without
+ * this key the same person gained one more card per re-run, and the
+ * stance evidence count grew with it.
+ */
+function cardKey(row: {
+  kind?: string | null;
+  chunkHash?: string | null;
+  claim?: string | null;
+  payload?: unknown;
+}): string {
+  const payload =
+    row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+      ? (row.payload as Record<string, unknown>)
+      : {};
+  const quote = payload.quote ?? payload.quotes ?? "";
+  return [row.kind ?? "", row.chunkHash ?? "", row.claim ?? "", JSON.stringify(quote)].join("|");
+}
+
 function mentionCountFor(title: string, rows: RecordLine[]): number {
+  const titleTokens = tokenize(title);
   let count = 0;
   for (const row of rows) {
-    if (keywordCoverage(title, tokenize(row.content)) >= MENTION_COVERAGE) count += 1;
+    /**
+     * `keywordCoverage(memoryText, messageTokens)` divides by the
+     * message's tokens. The "memory" here is the title and the
+     * "message" is the line, so the arguments go line-first —
+     * the other order divides by the line's length and a normal
+     * sentence almost never reaches 0.5.
+     */
+    if (keywordCoverage(row.content, titleTokens) >= MENTION_COVERAGE) count += 1;
   }
   return count;
 }
@@ -378,42 +408,71 @@ export async function extractFactsFromRecords(
 
   const saveCard = dbFn("createDistillationCard");
   if (typeof saveCard === "function") {
-    for (const person of collected.people) {
+    const listCards = dbFn("listDistillationCards") as
+      | ((
+          personaId: number,
+          userId: number,
+          options?: { kind?: string },
+        ) => Promise<Array<{
+          kind?: string | null;
+          chunkHash?: string | null;
+          claim?: string | null;
+          payload?: unknown;
+        }>>)
+      | undefined;
+    const existingCards = new Set<string>();
+    if (typeof listCards === "function") {
       try {
-        await saveCard({
-          userId: input.userId,
-          personaId: input.personaId,
-          chunkHash: person.chunkHash,
-          periodId: person.periodId,
-          kind: "person",
-          dimension: person.side,
-          claim: person.name,
-          payload: {
-            relation: person.relation,
-            side: person.side,
-            quote: person.quote,
-          },
-        } as never);
+        const rows = await listCards(input.personaId, input.userId);
+        for (const row of rows) existingCards.add(cardKey(row));
+      } catch {
+        // A read that fails only means the dedupe is not available.
+      }
+    }
+    for (const person of collected.people) {
+      const row = {
+        userId: input.userId,
+        personaId: input.personaId,
+        chunkHash: person.chunkHash,
+        periodId: person.periodId,
+        kind: "person",
+        dimension: person.side,
+        claim: person.name,
+        payload: {
+          relation: person.relation,
+          side: person.side,
+          quote: person.quote,
+        },
+      };
+      const key = cardKey(row);
+      if (existingCards.has(key)) continue;
+      try {
+        await saveCard(row as never);
+        existingCards.add(key);
       } catch {
         // skip
       }
     }
     for (const stance of collected.stances) {
+      const row = {
+        userId: input.userId,
+        personaId: input.personaId,
+        chunkHash: stance.chunkHash,
+        periodId: stance.periodId,
+        kind: "stance",
+        dimension: stance.polarity,
+        claim: stance.statement,
+        payload: {
+          topic: stance.topic,
+          polarity: stance.polarity,
+          quote: stance.quote,
+        },
+      };
+      const key = cardKey(row);
+      if (existingCards.has(key)) continue;
       try {
-        await saveCard({
-          userId: input.userId,
-          personaId: input.personaId,
-          chunkHash: stance.chunkHash,
-          periodId: stance.periodId,
-          kind: "stance",
-          dimension: stance.polarity,
-          claim: stance.statement,
-          payload: {
-            topic: stance.topic,
-            polarity: stance.polarity,
-            quote: stance.quote,
-          },
-        } as never);
+        await saveCard(row as never);
+        existingCards.add(key);
       } catch {
         // skip
       }

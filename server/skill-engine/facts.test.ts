@@ -3,11 +3,13 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const createMemory = vi.fn();
 const getMemoriesByPersonaId = vi.fn();
 const createDistillationCard = vi.fn();
+const listDistillationCards = vi.fn();
 
 vi.mock("../db", () => ({
   createMemory: (...a: unknown[]) => createMemory(...a),
   getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
   createDistillationCard: (...a: unknown[]) => createDistillationCard(...a),
+  listDistillationCards: (...a: unknown[]) => listDistillationCards(...a),
 }));
 
 import { chunkRecords } from "./chunks";
@@ -16,6 +18,7 @@ import {
   parseFactCards,
   extractFactsFromRecords,
 } from "./facts";
+import { chunkHasFactCue } from "@shared/fact-cues";
 import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
 
 const TIME_ZONE = "Asia/Shanghai";
@@ -142,6 +145,13 @@ describe("chunksForFactExtraction", () => {
     const skipped = chunks.filter((chunk) => !hashes.has(chunk.hash));
     expect(skipped.length).toBeGreaterThan(0);
   });
+
+  it("does not send an uncued block in the public figure flow either", () => {
+    const selected = chunksForFactExtraction(chunks, "celebrity");
+    expect(selected.length).toBeGreaterThan(0);
+    expect(selected.length).toBeLessThan(chunks.length);
+    expect(selected.every((chunk) => chunkHasFactCue(chunk))).toBe(true);
+  });
 });
 
 describe("extractFactsFromRecords", () => {
@@ -149,9 +159,11 @@ describe("extractFactsFromRecords", () => {
     createMemory.mockReset();
     getMemoriesByPersonaId.mockReset();
     createDistillationCard.mockReset();
+    listDistillationCards.mockReset();
     createMemory.mockResolvedValue(1);
     getMemoriesByPersonaId.mockResolvedValue([]);
     createDistillationCard.mockResolvedValue(undefined);
+    listDistillationCards.mockResolvedValue([]);
   });
 
   const chunk = chunkWith([{ id: 11, role: "user", content: "我生日是5月21号" }]);
@@ -179,6 +191,56 @@ describe("extractFactsFromRecords", () => {
         importance: 5,
       }),
     );
+  });
+
+  it("counts the lines that mention the fact's title", async () => {
+    const chunk = chunkWith([
+      { id: 11, role: "user", content: "我生日是5月21号" },
+      { id: 12, role: "assistant", content: "生日快乐呀" },
+      { id: 13, role: "assistant", content: "今天天气不错" },
+      { id: 14, role: "assistant", content: "生日快乐" },
+    ]);
+    await extractFactsFromRecords({
+      ...base,
+      chunks: [chunk],
+      rows: chunk.rows,
+    });
+    expect(createMemory).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "生日", mentionCount: 3 }),
+    );
+  });
+
+  it("does not write the same person or stance card twice on a re-run", async () => {
+    const chunk = chunkWith([
+      { id: 11, role: "user", content: "我讨厌香菜" },
+      { id: 12, role: "assistant", content: "琪琪今天也在" },
+    ]);
+    const store: Array<{
+      kind: string;
+      chunkHash: string;
+      claim: string;
+      payload: { quote: number };
+    }> = [];
+    createDistillationCard.mockImplementation(async (row: (typeof store)[number]) => {
+      store.push(row);
+    });
+    listDistillationCards.mockImplementation(async () => store);
+    const invoke = async () =>
+      JSON.stringify({
+        facts: [],
+        people: [{ name: "琪琪", relation: "室友", side: "them", quote: 12 }],
+        stances: [{ topic: "香菜", polarity: "dislike", statement: "讨厌香菜", quote: 11 }],
+      });
+    const input = {
+      ...base,
+      chunks: [chunk],
+      rows: chunk.rows,
+      invoke,
+    };
+    await extractFactsFromRecords(input);
+    await extractFactsFromRecords(input);
+    expect(store).toHaveLength(2);
+    expect(createDistillationCard).toHaveBeenCalledTimes(2);
   });
 
   it("does not write the same fact twice", async () => {
