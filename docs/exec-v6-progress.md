@@ -101,7 +101,7 @@
 | B7.10 | ⬜ |  |  |
 | B7.11 | ⬜ |  |  |
 | B7.12 | ⬜ |  |  |
-| B7.13 | ⬜ |  |  |
+| B7.13 | 🟡 | 7de23a6 | `shared/call-stats.test.ts` 4 通过：夹具 `samples === 20`、`byDirection.in` 14（±3）、`answerSlots[0]` 周日 21 点且 `n >= 16`、`durationSec.median` 600–3600、`first <= last`、`perWeekMedian >= 1`；4 条 `null`、5 条非空；缺 `meta.direction` 的旧行按角色读成 in/out、missed 不进时长；`normalizeCallStats` 原样读回、`samples: 4` 与缺字段的丢掉。`server/_core/style-profile.test.ts` `writes the call table from the fixture`：`measureStyleProfile` 写回 `calls.samples 20`、`in >= 11`、周日 21 点。`shared/style-profile.test.ts` 读写回与坏形状。`CallsView.test.tsx` 2 通过：四句陈述（谁打来、一般打多久、通常接在周日 21 点与周三 20 点）、无测量时不渲染。`PersonaProfile.tsx` 把电话一栏放进节奏区；`PersonaProfile.test.tsx` 10 通过。空库/无迁移。闸门 `445 passed \| 7 skipped (452)` 文件，`3888 passed \| 28 skipped (3916)` 用例，`all six steps passed`。效果量见未验证清单。 |
 | B7.14 | ⬜ |  |  |
 | B7.15 | ⬜ |  |  |
 | B8.1 | 🟡 | e61eca3 (model); cc0fa59 (CLI/UI) | `discriminator.test.ts`：200 句真句 vs 末尾加「。」AUC > 0.95，前三特征含 `ending.period` 且 `side === "persona"`；同一池随机对分 AUC 在 0.4–0.6；59 对 `insufficient` 且不训练；同输入同种子两次 AUC 全等；`splitPairFolds` 同一对不会跨训练/测试折。`compare-cli.test.ts`：源码含 `--discriminator`、`pairsFromEvalRuns(historical, version?.createdAt ?? null)`。`DiscriminatorView.test.tsx` 渲染「以句号结尾」和 AUC 文案；59 对显示「样本不够（59 / 60）。」。`FidelityPanel.test.tsx`：最近一次带 `metricsJson.discriminator` 时显示 AUC。闸门 `343 passed \| 4 skipped (347)` 文件，`3067 passed \| 18 skipped (3085)` 用例。特征 id 见偏差 73。 |
@@ -474,6 +474,7 @@
 | B7.4 | 真实记录上的语音条频率与时长，以及合成出来的语音听感（是否 4 字/秒估算得住、TTS 音色是否可接受）。本机没有真实语音，也没有配 piper/本机 TTS | 真实分身上 `style.measure` 后打开「{{name}} 有时候发语音」，聊 20 轮听一遍；本地引擎可用时用 `TTS_ENGINE=piper` | 有真实语音记录、装了本机 TTS 的人 |
 | B7.5 | 韵律映射的听感：`ratePercent` 的 ±30% 钳位与空格→逗号是否真的更像 TA。本机没有真实录音、没有 ffmpeg 以外的听感验证 | 在真实分身上 `media.measureProsody`，再点朗读 / 收语音条，和本人的原声对照 | 有真实录音和本机 TTS 的人 |
 | B7.6 | 真的装 piper 听一遍。本机没装 piper，单元测试 mock 了 `execFile` | 装好 piper 后 `TTS_ENGINE=piper PIPER_BIN=<bin> PIPER_MODEL=<model>` 起应用，点一次朗读，确认有声音、语速按 `ratePercent` 变化 | 装了 piper 的人 |
+| B7.13 | 真实记录上的电话习惯（谁打得多、一般打多久、通常什么钟点接）是否与本人一致。夹具只证明算法 | 在真实分身上执行 `style.measure` 后查看 `styleProfile.calls`，或与手机通话记录人工对照 | 有真实通话记录的人 |
 
 ## 待用户决定
 
@@ -1936,11 +1937,21 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 - B7.4 语音条习惯 `9f6fa4c`：`shared/voice-stats.ts`、`server/chat/voice-note.ts`、服务端「先决定、后生成、不流式」、落库 `messageType: "voice"` + `metadata.kind: "voice-note"`、`done.voice`、气泡「转文字」与「合成的声音」、开关与说明。状态 🟡（真实语音与听感未验）。
 - B7.5 韵律参数 `36a6c0f`：`shared/prosody.ts`（`prosodyToTts`、文本整理、±30% 钳位）、`server/_core/prosody.ts`（charsPerSec/pauseRatio/tailSec，至少 8 条）、`chat.tts` 带 `personaId` 时按测量读、`ProsodyView` 档案页三项数与「量一下」。状态 🟡（听感未验）。
 
-**没有做**：B7.7 按第 1.2 节 ⛔；B7.8、B7.9、B7.10、B7.11、B7.12、B7.13、B7.14、B7.15 仍是 ⬜。下一个会话从 B7.8 开始，B7.13（通话记录）只依赖 C1.3，可以先做；B7.14 依赖 B7.2/B7.6/B7.13，工作量大。
+**没有做**：B7.7 按第 1.2 节 ⛔；B7.8、B7.9、B7.10、B7.11、B7.12、B7.14、B7.15 仍是 ⬜（B7.13 已在 `7de23a6` 完成，见本文件前面的批次日志）。下一个会话从 B7.8 开始，B7.14 依赖 B7.2/B7.6/B7.13，工作量大。
 
 **闸门**（无 `--fast`、无 `DATABASE_URL`，Node v24.14.1）：`corepack pnpm gate` 退出码 0，`Test Files  443 passed | 7 skipped (450)`，`Tests  3880 passed | 28 skipped (3908)`，`all six steps passed`。相对开工基线（423/5 文件、3741/23 用例）：通过文件 +20、通过用例 +139；跳过文件 +2、跳过用例 +5，全部是 `db-stickers.test.ts`（2）与 `db-media.test.ts`（3）按 2.3 写的 `skipIf`，见偏差 221。`audit-cn.ts` 为 `0 Chinese strings without an English counterpart, in 0 files.`；`fidelity-gate.ts` 7 条 ✓；P0.3 黄金快照未改（`prompt-golden.test.ts` 10 通过）。
 
 **数据库**：两个迁移都在临时库 `mirrai_v6_scratch` 上按 2.3 走过四步（push → migrate → replay → rollback → migrate）和升级路径（DROP 对象 + 删 `schema_migrations` 行 + migrate），0056 重放 54 条、0057 重放 55 条；`db-stickers.test.ts` 2 条、`db-media.test.ts` 3 条带 `DATABASE_URL` 全过。每次用完都 `dropdb mirrai_v6_scratch`；`mirrai_live` 未连接。
+
+### WP10 · 实现会话 · 2026-11-19 · B7.13 通话记录
+
+- 顺序说明：B7.13 只依赖 C1.3（已完成），先做了它；B7.8–B7.12、B7.14、B7.15 仍未开始。
+- `shared/call-stats.ts` + `shared/call-stats.test.ts`：`measureCalls(rows, timeZone)` 从 `kind === "call"` 的行数出 `samples`、`byDirection`、时长中位/p90/总和、每通电话的周中位、按 TA 时区的接听时段（`weekday × hour`，至少 2 次）、最长一通和首末两通（带 `recordId` 与 ISO 时间）。少于 5 通返回 `null`。`normalizeCallStats` 读回并丢掉坏形状。
+- `shared/style-profile.ts` 把 `calls` 从 `unknown` 改成 `CallStats` 并接上归一；`FingerprintRow` 增加可选 `meta`，`server/_core/style-profile.ts` 把行的 `meta` 一起传给测量并写回 `styleProfile.calls`。
+- `client/src/components/v6/CallsView.tsx` + 测试：四句陈述，没测量时不出现；挂进 `PersonaProfile.tsx` 的节奏区（`replyDelay`/`routine.sleep`/`calls` 任一存在就显示该区）。
+- 新增 i18n：`profile.callsTitle`、`callsNote`、`callsWho`、`callsDuration`、`callsWhen`、`callsSlot`、`callsJoin`，中英各一份。
+- 提交：`7de23a6`（代码与测试）。闸门 `445 passed | 7 skipped (452)` 文件，`3888 passed | 28 skipped (3916)` 用例，`all six steps passed`。相对开工（443/3880）：通过文件 +2、通过用例 +8，跳过数不变。
+- 效果量：夹具证明算法；真实记录上的电话习惯是否与本人一致，见未验证清单。
 
 **遗留 / 下一次要注意**：
 - 表达式 `styleProfile.voice.prosody` 的测量目前要手动点「量一下」；转写任务完成后没有自动接上（偏差 215）。
