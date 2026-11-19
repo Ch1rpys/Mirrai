@@ -103,7 +103,7 @@
 | B7.12 | 🟡 | aad6930 | `server/importers/moments.test.ts` 5 通过：段落切分、给定日期从 12:00 每条 +1 分钟、无日期 `at` 为空、写入 `role: assistant` + `meta.register: public`、两张截图里重复的动态只留一条、一张读不成不影响另一张。`routers.screenshot.test.ts` 新增 2 条：粘贴动态不需要 provider 且不写库；确认后 `source: "moments"`、`meta.register: "public"`。`public-voice.test.ts` 3 通过：只读 `register: "public"` 的 TA 文本；20 条起才调模型，超过 300 字截断，提示词带围栏；19 条不调。`server/_core/style-profile.test.ts`：60 条公开动态后 `publicFingerprint` 存在，39 条时不存在；私下的 `fingerprint`/`samplePool`/`actClusters`/`replyDelay` 与没有公开动态时 `toEqual`。`server/chat/prompt.test.ts`：`publicVoice` 的标记串不出现在一对一提示词里。`server/db-records.test.ts` 新增 `iterateRecords` 三种 register 的断言（带临时库跑）。`Upload.test.tsx` 8 通过（新增 `MomentsImport` 后仍过）。闸门 `465 passed \| 8 skipped (473)` 文件，`3988 passed \| 31 skipped (4019)` 用例，`all six steps passed`。效果量见未验证清单；事实卡读公开行见偏差 238。 |
 | B7.13 | 🟡 | 7de23a6 | `shared/call-stats.test.ts` 4 通过：夹具 `samples === 20`、`byDirection.in` 14（±3）、`answerSlots[0]` 周日 21 点且 `n >= 16`、`durationSec.median` 600–3600、`first <= last`、`perWeekMedian >= 1`；4 条 `null`、5 条非空；缺 `meta.direction` 的旧行按角色读成 in/out、missed 不进时长；`normalizeCallStats` 原样读回、`samples: 4` 与缺字段的丢掉。`server/_core/style-profile.test.ts` `writes the call table from the fixture`：`measureStyleProfile` 写回 `calls.samples 20`、`in >= 11`、周日 21 点。`shared/style-profile.test.ts` 读写回与坏形状。`CallsView.test.tsx` 2 通过：四句陈述（谁打来、一般打多久、通常接在周日 21 点与周三 20 点）、无测量时不渲染。`PersonaProfile.tsx` 把电话一栏放进节奏区；`PersonaProfile.test.tsx` 10 通过。空库/无迁移。闸门 `445 passed \| 7 skipped (452)` 文件，`3888 passed \| 28 skipped (3916)` 用例，`all six steps passed`。效果量见未验证清单。 |
 | B7.14 | ⬜ |  |  |
-| B7.15 | ⬜ |  |  |
+| B7.15 | 🟡 | 6e8afd3 | `TimeBar.test.tsx` 3 通过：间隔 6 分钟出现「12:10」、4 分钟不出现、`classic` 不出现。`skins.test.ts` 1 通过：`skins.css` 与 `SkinPicker.tsx` 不含微信/wechat/weixin/imessage/telegram/whatsapp/qq/line（ASCII 按整词）。`SkinPicker.test.tsx` 3 通过：三个中性版式、点「绿色气泡」写 `skin: { theme: "im-green", alias: "" }`、备注名写入、移除背景图调 `clearBackground`。`Chat.test.tsx` 新增 2 条：`settings.skin = { theme: "im-green", alias: "阿满" }` 时根容器 `data-skin` 是 `im-green`、一级标题是「阿满」、「数字分身」仍在；默认是 `classic`。`routers.avatar.test.ts` 新增 3 条：背景写成 `personas/1/5/bg-*.png` 并删旧图；>2 MB 与 SVG 被拒；清除背景写回 `null` 并删旧图。`PersonaEdit.test.tsx` 13 通过（新组件挂载后字段都有可读名字）。`MessageBubble` 在 IM 版式下给「我」这一侧也画头像（classic 不画）。`index.css` 引入 `styles/skins.css`。闸门 `468 passed \| 8 skipped (476)` 文件，`4000 passed \| 31 skipped (4031)` 用例，`all six steps passed`。真实观感见未验证清单。 |
 | B8.1 | 🟡 | e61eca3 (model); cc0fa59 (CLI/UI) | `discriminator.test.ts`：200 句真句 vs 末尾加「。」AUC > 0.95，前三特征含 `ending.period` 且 `side === "persona"`；同一池随机对分 AUC 在 0.4–0.6；59 对 `insufficient` 且不训练；同输入同种子两次 AUC 全等；`splitPairFolds` 同一对不会跨训练/测试折。`compare-cli.test.ts`：源码含 `--discriminator`、`pairsFromEvalRuns(historical, version?.createdAt ?? null)`。`DiscriminatorView.test.tsx` 渲染「以句号结尾」和 AUC 文案；59 对显示「样本不够（59 / 60）。」。`FidelityPanel.test.tsx`：最近一次带 `metricsJson.discriminator` 时显示 AUC。闸门 `343 passed \| 4 skipped (347)` 文件，`3067 passed \| 18 skipped (3085)` 用例。特征 id 见偏差 73。 |
 | B8.2 | 🟡 | 3e0eedf (verify fix); c74ebb7 (server); 906d812 (page); 9936193 (guest) | `routers.blind.test.ts`：`does not tell the sitter which line is real` 序列化不含 `real`/`said`/`expected`/`generated`；别人的分身 `NOT_FOUND`；对子不足返回「先跑一次评测。」。访客：坏 token `NOT_FOUND`、过期/已完成拒绝；token A 不能写进另一场；第 11 次 `guestLoad` 为 `TOO_MANY_REQUESTS`。`finish` 三比例之和为 1。`exportRecord` 不含原文「我今天去了拾光咖啡喝桂花拿铁」。`BlindTest.test.tsx` / `BlindGuest.test.tsx`：答完一组才出现下一组，全部答完才出现结果。临时库 `mirrai_v6_scratch` 0048 四步+升级路径：push 后 migrate 应用到 `0048_blind_sessions`；`--replay` `replayed 46 migration(s)`；`--rollback 1` 后无 `blind_sessions`；再 migrate 回来；DROP 表并删 journal 后再 migrate，表出现。库已 `dropdb`。`db-delete-coverage` 通过。`git show c74ebb7 -- docs/eval/blind-test.md` 只有追加。闸门 `347 passed \| 4 skipped (351)` 文件，`3087 passed \| 18 skipped (3105)` 用例。 |
 | B8.3 | 🟡 | 9babf31 | `drift.test.ts`：`rises after twenty in-character turns, and does not write` 通过，`slope > 0`、`firstWindowOver === 2`、写库 helper 0 次；`stays flat when every reply is one of theirs` 通过，`|slope| < 0.01`、`firstWindowOver === null`。`puts the sample lines inside the material fence` 与 `prompt-fences.test.ts` `keeps the other person's lines inside the fence`：`sampleLines` 只在 `MATERIAL>>>` 围栏内。`compare-cli.test.ts`：源码含 `--drift`、`variant: "drift"`。闸门 `348 passed \| 4 skipped (352)` 文件，`3094 passed \| 18 skipped (3112)` 用例。 |
@@ -447,6 +447,12 @@
 | 238 | B7.12 | B1.3 的事实卡也读公开的行，来源标注为动态 | 公开行目前只进 `publicFingerprint` 与蒸馏的 `publicVoice`；事实卡仍只读私下行 | 事实卡是分块的、按 chunk 记账；把公开行混进同一批 chunk 会让 `source: "records"` 的来源标注失真。要单独一批公开 chunk 和 `source: "moments"`，留到后续补，不阻塞本条验收。 |
 | 239 | B7.12 | 动态截图走 B7.11 的流程 | 单独 `momentsPreview`/`readMomentScreenshots`，输出 `{posts}`，与截图消息的 `{messages}` 分开 | 动态没有左右两侧，合并逻辑也不同。 |
 
+| 240 | B7.15 | 工作包表顺序第 14 是 B7.14 电话、第 15 是 B7.15 皮肤 | 先做 B7.15，再做 B7.14 | B7.15 只依赖 P0.4，四条验收都能在现有页面上做完；B7.14 依赖 WebSocket、转写与朗读，工作量最大。 |
+| 241 | B7.15 | `skin` 走 `persona.updateSettings` | 主题与备注名走 `updateSettings`；背景图另走 `persona.uploadBackground`，用 `setPersonaBackground` 只写 `{skin,background}` 一个键 | 上传路由已经拿着文件；再读整份 settings 并整体写回会让并发编辑更容易互相覆盖。 |
+| 242 | B7.15 | 时间条「三种皮肤共用」 | `TimeBar` 组件存在，但 `classic` 返回 `null`，IM 两版式才显示 | 手册同时写「classic 下保持现有的时间显示方式」；classic 的现有时间显示不改。 |
+| 243 | B7.15 | IM 版式下双方都显示头像 | 「我」这一侧用用户名首字母，不用图片 | 应用没有用户头像字段；凭空取一张照片会变成另一种「生成的脸」。 |
+| 244 | B7.15 | 备注名放在 `skin.alias`，聊天页顶栏显示 | 顶栏标题与气泡里的名字都用备注名；`DigitalPersonaBadge` 仍用 `persona.name` 之外的固定文案 | 备注名是用户给 TA 的称呼，不改变分身本身。 |
+
 ## 未验证清单
 
 | 条目 | 缺什么 | 该跑的命令 | 谁来跑 |
@@ -503,6 +509,7 @@
 | B7.10 | 真实视频的画面描述与声音转写。本机用 ffmpeg 跑过 5 秒 640×360 的测试视频（3 帧 data URL、时长与尺寸正确），但没有视觉模型描述画面，也没有本机转写引擎听声音 | 配一个能看图的模型并（可选）装 whisper.cpp 后，上传一段真实视频再蒸馏，看「视频里的画面」和「视频里说的话」两段材料 | 有真实视频、配了视觉模型的人 |
 | B7.11 | 真实截图的识别率：本机没有视觉模型，测试用桩 provider 证明提示词、JSON 解析、失败隔离和校对页；没有真实聊天截图 | 配一个能看图的模型后，选一组真实截图导入，逐条校对，记录识别错的条数 | 有真实截图和视觉模型的人 |
 | B7.12 | 真实动态上的公开语气描述是否像本人、以及公开动态的截图识别率。本机没有真实记录、没有视觉模型 | 在真实分身上导入 60 条动态后跑蒸馏，看档案页的「对所有人说话的样子」；再把它与本人动态人工对照 | 有真实动态、配了视觉模型的人 |
+| B7.15 | 三种版式在真实浏览器与真实数据上的观感（气泡尾巴、头像间距、背景图可读性）。本机 jsdom 只能证明 `data-skin`、组件与结构测试 | 在浏览器里打开同一段对话，依次切三种版式、设备注名、换一张背景图，检查 `classic` 与改动前一致 | 有图形浏览器的人 |
 
 ## 待用户决定
 
@@ -1965,7 +1972,7 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 - B7.4 语音条习惯 `9f6fa4c`：`shared/voice-stats.ts`、`server/chat/voice-note.ts`、服务端「先决定、后生成、不流式」、落库 `messageType: "voice"` + `metadata.kind: "voice-note"`、`done.voice`、气泡「转文字」与「合成的声音」、开关与说明。状态 🟡（真实语音与听感未验）。
 - B7.5 韵律参数 `36a6c0f`：`shared/prosody.ts`（`prosodyToTts`、文本整理、±30% 钳位）、`server/_core/prosody.ts`（charsPerSec/pauseRatio/tailSec，至少 8 条）、`chat.tts` 带 `personaId` 时按测量读、`ProsodyView` 档案页三项数与「量一下」。状态 🟡（听感未验）。
 
-**没有做**：B7.7 按第 1.2 节 ⛔；B7.14、B7.15 仍是 ⬜（B7.13 在 `7de23a6`、B7.8 在 `0eac981`、B7.9 在 `36fd07f`、B7.10 在 `835e76e`、B7.11 在 `4e22470`、B7.12 在 `aad6930` 完成）。B7.14 依赖 B7.2/B7.6/B7.13，工作量大。
+**没有做**：B7.7 按第 1.2 节 ⛔；B7.14 仍是 ⬜（B7.13 在 `7de23a6`、B7.8 在 `0eac981`、B7.9 在 `36fd07f`、B7.10 在 `835e76e`、B7.11 在 `4e22470`、B7.12 在 `aad6930`、B7.15 在 `6e8afd3` 完成）。B7.14 依赖 B7.2/B7.6/B7.13，工作量最大。
 
 **闸门**（无 `--fast`、无 `DATABASE_URL`，Node v24.14.1）：`corepack pnpm gate` 退出码 0，`Test Files  443 passed | 7 skipped (450)`，`Tests  3880 passed | 28 skipped (3908)`，`all six steps passed`。相对开工基线（423/5 文件、3741/23 用例）：通过文件 +20、通过用例 +139；跳过文件 +2、跳过用例 +5，全部是 `db-stickers.test.ts`（2）与 `db-media.test.ts`（3）按 2.3 写的 `skipIf`，见偏差 221。`audit-cn.ts` 为 `0 Chinese strings without an English counterpart, in 0 files.`；`fidelity-gate.ts` 7 条 ✓；P0.3 黄金快照未改（`prompt-golden.test.ts` 10 通过）。
 
@@ -2023,6 +2030,13 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 - `PersonaData.publicVoice`：蒸馏时从公开行读，至少 20 条才调一次 `purpose: "distill"`，最多 300 字，引用原话；档案页显示，一对一提示词里没有。
 - 动态导入：粘贴文本按段落，或导入截图（新提示词与 `{posts}` 形状）；确认后以 `source: "moments"`、`meta.register: "public"` 写入。`MomentsImport` 挂在上传页。
 - 测试与闸门见进度表 B7.12 行。闸门 `465 passed | 8 skipped (473)` 文件，`3988 passed | 31 skipped (4019)` 用例，`all six steps passed`。
+
+### WP10 · 实现会话 · 2026-11-20 · B7.15 界面也是像的一部分
+
+- `client/src/styles/skins.css`：`im-green` / `im-blue` 两种中性版式（气泡颜色与圆角、双方头像、时间条、输入区），`classic` 保持现有样式；不出现任何聊天软件的商标或名字。
+- `settings.skin = { theme, alias?, background? }`：`SkinPicker` 挂在编辑页，三个版式、备注名、背景图；`persona.uploadBackground` / `clearBackground` 按头像同样的规则收 JPEG/PNG/WebP，≤2 MB，写 `personas/<uid>/<pid>/bg-*.ext`，旧的在新图写成后删。
+- 聊天页：根容器 `data-skin` 与背景图；顶栏显示备注名；`TimeBar` 在 IM 版式下间隔超过 5 分钟显示；`MessageBubble` 在 IM 版式下给双方画头像；`DigitalPersonaBadge` 始终在。
+- 测试与闸门见进度表 B7.15 行。闸门 `468 passed | 8 skipped (476)` 文件，`4000 passed | 31 skipped (4031)` 用例，`all six steps passed`。
 
 **遗留 / 下一次要注意**：
 - 表达式 `styleProfile.voice.prosody` 的测量目前要手动点「量一下」；转写任务完成后没有自动接上（偏差 215）。
