@@ -31,7 +31,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import MemoryReview from "@/components/v6/MemoryReview";
 import ChoiceBubble from "@/components/v6/ChoiceBubble";
 import PendingReply from "@/components/v6/PendingReply";
-import { useTypingReveal } from "@/components/v6/useTypingReveal";
+import { useTypingReveal, waitMs } from "@/components/v6/useTypingReveal";
 
 /**
  * The largest picture the chat will send.
@@ -106,6 +106,30 @@ function claimsFromMetadata(
     out.push({ text, supported, date });
   }
   return out;
+}
+
+function originFromHistory(m: {
+  origin?: unknown;
+  content?: unknown;
+  metadata?: unknown;
+}): Message["origin"] {
+  if (
+    m.origin === "letter"
+    || m.origin === "proactive"
+    || m.origin === "system-notice"
+    || m.origin === "recall"
+    || m.origin === "pat"
+  ) {
+    return m.origin;
+  }
+  const metadata = m.metadata;
+  const kind = metadata && typeof metadata === "object" && !Array.isArray(metadata)
+    ? (metadata as { kind?: unknown }).kind
+    : null;
+  if (kind === "recall" || kind === "pat") return kind;
+  if (m.content === "[recall]") return "recall";
+  if (m.content === "[pat]") return "pat";
+  return typeof m.origin === "string" ? (m.origin as Message["origin"]) : null;
 }
 
 function pendingChoiceFromMetadata(metadata: unknown): { options: [string, string] } | null {
@@ -607,7 +631,7 @@ export default function Chat() {
       id: m.id, role: m.role as "user" | "assistant",
       content: m.content, messageType: m.messageType, mediaUrl: m.mediaUrl, mediaDuration: m.mediaDuration,
       emotionalState: m.emotionalState, channel: m.channel, createdAt: m.createdAt,
-      origin: m.origin ?? null,
+      origin: originFromHistory(m),
       replyToId: m.replyToId ?? null,
       replyToContent: m.replyToId ? (byId.get(m.replyToId)?.content ?? null) : null,
       recalled: (m.recalled ?? []).filter((r: any) => r.title),
@@ -911,6 +935,51 @@ export default function Chat() {
             onDeferred: () => {
               setMessages((prev) => prev.filter((m) => m.id !== streamId));
               void utils.chat.pendingReply.invalidate({ personaId });
+            },
+            onRecall: async (text, showMs) => {
+              const recallId = `recall-${streamId}`;
+              const name = persona?.name || "?";
+              setMessages((prev) => {
+                const without = prev.filter((m) => m.id !== recallId);
+                const idx = without.findIndex((m) => m.id === streamId);
+                const bubble: Message = {
+                  id: recallId,
+                  role: "assistant",
+                  content: text,
+                  isStreaming: false,
+                  createdAt: new Date(),
+                };
+                if (idx < 0) return [...without, bubble];
+                return [...without.slice(0, idx), bubble, ...without.slice(idx)];
+              });
+              await waitMs(showMs, controller.signal);
+              setMessages((prev) => prev.map((m) => (
+                m.id !== recallId
+                  ? m
+                  : {
+                      ...m,
+                      content: t("chat.recallNotice", { name }),
+                      origin: "recall",
+                    }
+              )));
+            },
+            onPat: () => {
+              const patId = `pat-${streamId}`;
+              const name = persona?.name || "?";
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === patId)) return prev;
+                const idx = prev.findIndex((m) => m.id === streamId);
+                const bubble: Message = {
+                  id: patId,
+                  role: "assistant",
+                  content: t("chat.patNotice", { name }),
+                  origin: "pat",
+                  isStreaming: false,
+                  createdAt: new Date(),
+                };
+                if (idx < 0) return [...prev, bubble];
+                return [...prev.slice(0, idx), bubble, ...prev.slice(idx)];
+              });
             },
           },
         });

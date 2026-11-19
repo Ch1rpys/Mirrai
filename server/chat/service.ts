@@ -21,7 +21,7 @@ import * as db from "../db";
 import { computeIntimacy, getEmotionalStateDesc } from "../_core/persona-utils";
 import { inferEmotionalState, isEmotionalState } from "../_core/emotion";
 import { applyInertia, decayState, normalizeEmotionDynamics } from "@shared/emotion-dynamics";
-import { isUserAsking, labelUserActByRule } from "@shared/speech-acts";
+import { isUserAsking, labelUserActByRule, type UserAct } from "@shared/speech-acts";
 import { layersFromSettings } from "@shared/layers";
 import { effectiveStyleProfile } from "@shared/style-profile";
 import { retrieveMemories } from "./retrieval";
@@ -38,11 +38,20 @@ import { buildPromptBundleForPersona } from "./prompt";
 import { splitBurst } from "./burst";
 import { loadBehaviorProfile, seededRandom } from "../_core/behavior-profile";
 import { planTurn, executePlan } from "./generate";
+import type { RerankResult } from "./rerank";
 import { extractClaims, verifyClaims } from "./fact-check";
 import type { ReanchorIssue } from "@shared/style-reminder";
 import { sampleBurstSize, sampleReplyDelayMs } from "@shared/behavior-profile";
 import { bandOf, pickDelayBucket, sampleDelayMs } from "@shared/reply-delay";
 import { burstTypingMs, delayTypingMs, normalizeTyping } from "@shared/typing-profile";
+import {
+  applyTypoFix,
+  normalizeQuirks,
+  recallShowMs,
+  rejectedCandidate,
+  shouldPat,
+  shouldRecall,
+} from "@shared/quirks-profile";
 import { EMOTION_TRIGGER_PATTERNS } from "@shared/emotion-triggers";
 import { localDateKey, zonedDateKey, zonedDayStart } from "@shared/timezone";
 import { extractMemories, isExtractionDue } from "./memory-extract";
@@ -554,7 +563,7 @@ export async function composeMessages(params: {
   const locale = params.locale ?? "zh";
   const contextLimit = Math.max(4, params.contextLimit);
   const history = (await db.getMessagesByPersonaId(params.persona.id, params.userId, 200))
-    .filter((row) => row.origin !== "system-notice");
+    .filter((row) => row.origin !== "system-notice" && !quirkKindOf(row));
 
   const scene = params.persona.activeSceneId
     ? await db.getSceneById(params.persona.activeSceneId, params.userId)
@@ -1151,6 +1160,27 @@ function typingForTurn(persona: Persona) {
   return normalizeTyping(effectiveStyleProfile(persona).typing);
 }
 
+function quirksForTurn(
+  persona: Persona,
+  channel: string | undefined,
+) {
+  if (channel && channel !== "web") return null;
+  if (!normalizePersonaSettings(persona.settings).timing.recall) return null;
+  return normalizeQuirks(effectiveStyleProfile(persona).quirks);
+}
+
+function quirkKindOf(row: { content?: string | null; metadata?: unknown }): "recall" | "pat" | null {
+  const metadata = row.metadata;
+  if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+    const kind = (metadata as { kind?: unknown }).kind;
+    if (kind === "recall" || kind === "pat") return kind;
+  }
+  const content = typeof row.content === "string" ? row.content.trim() : "";
+  if (content === "[recall]") return "recall";
+  if (content === "[pat]") return "pat";
+  return null;
+}
+
 async function* runConversationTurn(
   options: ConversationOptions & { mode: ChatMode },
 ): AsyncGenerator<ChatEvent> {
@@ -1447,7 +1477,7 @@ async function* runConversationTurn(
   let replyText = "";
   let streamedText = "";
   let projection: string[] = [];
-  let rerank: unknown;
+  let rerank: RerankResult | undefined;
   let twoStage: "ok" | "fallback" | undefined;
   let failed = false;
   let failureMessage = "";
@@ -1830,6 +1860,16 @@ async function* runConversationTurn(
     appended.push(worseningTrajectoryNote(locale));
   }
   const finalText = appended.length > 0 ? `${baseText}\n\n${appended.join("\n\n")}` : baseText;
+  const quirks = quirksForTurn(persona, options.channel);
+  let spoken = finalText;
+  let typoStar: string | null = null;
+  if (quirks) {
+    const fix = applyTypoFix(spoken, quirks, seededRandom(`${turnInput.seed}:typo`));
+    if (fix) {
+      spoken = fix.text;
+      typoStar = fix.star;
+    }
+  }
 
   // A crisis already returned. Weak distress and "I'm sad" do not wait.
   let delayMsForEvent: number | null = null;
@@ -1860,15 +1900,16 @@ async function* runConversationTurn(
     }
   }
 
-  let parts = [finalText];
+  let parts = [spoken];
   if (timingEnabled && behavior) {
-    parts = splitBurst(finalText, sampleBurstSize(behavior, rng));
+    parts = splitBurst(spoken, sampleBurstSize(behavior, rng));
   }
+  if (typoStar) parts = [...parts, typoStar];
 
   if (delayMsForEvent != null) {
     const typing = typingForTurn(persona);
     const typingMs = typing
-      ? delayTypingMs(parts[0] ?? finalText, typing, delayMsForEvent)
+      ? delayTypingMs(parts[0] ?? spoken, typing, delayMsForEvent)
       : undefined;
     yield typingMs != null
       ? { type: "delay", ms: delayMsForEvent, typingMs }
@@ -1952,9 +1993,52 @@ async function* runConversationTurn(
       ? { deferred: { jobId: options.fromReplyJob.jobId, reason: options.fromReplyJob.reason } }
       : {}),
   };
+  const userAct: UserAct = plan.userAct ?? labelUserActByRule(message) ?? "other";
+  const recallText = quirks && rerank && shouldRecall(quirks, seededRandom(`${turnInput.seed}:recall`))
+    ? rejectedCandidate(rerank, rerank.text)
+    : null;
+  const patThisTurn = Boolean(
+    quirks && shouldPat(userAct, quirks, seededRandom(`${turnInput.seed}:pat`)),
+  );
+  const storedTurnMeta = recallText
+    ? Object.fromEntries(Object.entries(turnMeta).filter(([key]) => key !== "rerank"))
+    : turnMeta;
   if (!beginCommit()) {
     yield { type: "superseded" };
     return;
+  }
+  if (patThisTurn) {
+    await db.createMessage({
+      personaId: persona.id,
+      userId,
+      role: "assistant",
+      content: "[pat]",
+      emotionalState: newEmotionalState,
+      channel: options.channel ?? "web",
+      metadata: { kind: "pat" },
+    });
+    yield { type: "pat" };
+  }
+  if (recallText) {
+    await db.createMessage({
+      personaId: persona.id,
+      userId,
+      role: "assistant",
+      content: "[recall]",
+      emotionalState: newEmotionalState,
+      channel: options.channel ?? "web",
+      metadata: { kind: "recall" },
+    });
+    yield {
+      type: "recall",
+      text: recallText,
+      showMs: recallShowMs(seededRandom(`${turnInput.seed}:recall-show`)),
+    };
+  }
+  if (!timingEnabled && typoStar) {
+    yield { type: "burst", texts: parts };
+  } else if (!timingEnabled && spoken !== finalText) {
+    yield { type: "replace", text: spoken };
   }
   if (timingEnabled && behavior) {
     if (parts.length > 1) {
@@ -1979,7 +2063,7 @@ async function* runConversationTurn(
       // Which memories went into this turn, so the answer to "did it
       // recall that, or invent it?" survives a reload.
       recalledMemoryIds: recalled.length > 0 ? JSON.stringify(recalled.map((m) => m.id)) : null,
-      metadata: turnMeta,
+      metadata: storedTurnMeta,
     });
   }
 

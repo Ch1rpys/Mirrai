@@ -43,6 +43,9 @@ const clearMessagePendingChoice = vi.fn();
 const getMessageById = vi.fn();
 const updateEmotionSnapshot = vi.fn();
 const deleteMessage = vi.fn();
+const iterateRecords = vi.fn();
+const getRecordsVersion = vi.fn();
+const getCollectedMessagesForPersona = vi.fn();
 
 const storageToDataUrl = vi.fn();
 vi.mock("../storage", () => ({
@@ -93,6 +96,9 @@ vi.mock("../db", () => ({
   getMessageById: (...a: unknown[]) => getMessageById(...a),
   updateEmotionSnapshot: (...a: unknown[]) => updateEmotionSnapshot(...a),
   deleteMessage: (...a: unknown[]) => deleteMessage(...a),
+  iterateRecords: (...a: unknown[]) => iterateRecords(...a),
+  getRecordsVersion: (...a: unknown[]) => getRecordsVersion(...a),
+  getCollectedMessagesForPersona: (...a: unknown[]) => getCollectedMessagesForPersona(...a),
   cancelPendingReplyJobs: vi.fn().mockResolvedValue(0),
   getPendingReplyJob: vi.fn().mockResolvedValue(null),
   createReplyJob: vi.fn(),
@@ -143,6 +149,8 @@ import {
   clampMaxTokens,
 } from "./service";
 import { READ_WINDOW_MS, resetInbox } from "./inbox";
+import * as rerankModel from "./rerank-model";
+import { buildRerankModel } from "./rerank-model";
 
 function persona(overrides: Record<string, unknown> = {}) {
   return {
@@ -180,6 +188,7 @@ describe("runConversation", () => {
       getSessionStartAt, getUserMessageCountSince, getDailyUserChatCounts, hasSafetyEventSince,
       incrementChatCount, updateMessageMetadata, createFidelityPair, clearMessagePendingChoice,
       getMessageById, updateEmotionSnapshot, searchRecordsLexical, deleteMessage,
+      iterateRecords, getRecordsVersion, getCollectedMessagesForPersona,
       invoke, invokeWithProvider,
       streamWithProvider, resolveProviderForUser, resolveProviderForPurpose, inferEmotionalState,
     ]) {
@@ -247,6 +256,9 @@ describe("runConversation", () => {
     getMessageById.mockResolvedValue(null);
     updateEmotionSnapshot.mockResolvedValue(undefined);
     deleteMessage.mockResolvedValue(true);
+    iterateRecords.mockImplementation(async function* (): AsyncGenerator<unknown> {});
+    getRecordsVersion.mockResolvedValue("0:0");
+    getCollectedMessagesForPersona.mockResolvedValue([]);
   });
 
   it("stores the user's turn and the persona's reply", async () => {
@@ -1713,6 +1725,167 @@ describe("runConversation", () => {
       vi.useRealTimers();
     }
   });
+
+  const quirksPersona = (quirks: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+    persona({
+      settings: { timing: { recall: true } },
+      styleProfile: {
+        version: 1,
+        measuredAt: "2026-01-01T00:00:00.000Z",
+        recordsVersion: "40:40",
+        quirks,
+      },
+      ...extra,
+    });
+
+  it("stores a typo and the starred fix when the reply contains a word they used to mistype", async () => {
+    invokeWithProvider.mockResolvedValue("今天好累");
+    for await (const _event of runConversation({
+      persona: quirksPersona({
+        typoFixes: [{ wrong: "雷", right: "累", n: 6 }],
+        typoRate: 1,
+        recallRate: 0,
+        patAfter: {},
+      }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+    })) {
+      /* drain */
+    }
+    const stored = createMessage.mock.calls
+      .filter((call) => call[0].role === "assistant")
+      .map((call) => call[0].content);
+    expect(stored).toEqual(["今天好雷", "*累"]);
+  });
+
+  it("does not invent a typo when the reply has none of their rights", async () => {
+    invokeWithProvider.mockResolvedValue("在的。");
+    for await (const _event of runConversation({
+      persona: quirksPersona({
+        typoFixes: [{ wrong: "雷", right: "累", n: 6 }],
+        typoRate: 1,
+        recallRate: 0,
+        patAfter: {},
+      }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+    })) {
+      /* drain */
+    }
+    const stored = createMessage.mock.calls
+      .filter((call) => call[0].role === "assistant")
+      .map((call) => call[0].content);
+    expect(stored).toEqual(["在的。"]);
+  });
+
+  it("does not recall when rerank is off, and does not call the model extra times", async () => {
+    invokeWithProvider.mockResolvedValue("在的呀");
+    const events: Array<{ type: string }> = [];
+    for await (const event of runConversation({
+      persona: quirksPersona({
+        typoFixes: [],
+        typoRate: 0,
+        recallRate: 1,
+        patAfter: {},
+      }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+    })) {
+      events.push(event);
+    }
+    expect(events.some((event) => event.type === "recall")).toBe(false);
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+  });
+
+  it("recalls a rejected candidate then stores only a placeholder", async () => {
+    const corpus = Array.from({ length: 40 }, () => "在的呀");
+    iterateRecords.mockImplementation(async function* () {
+      for (const text of corpus) {
+        yield { role: "assistant", content: text, kind: "text" };
+      }
+    });
+    const spy = vi.spyOn(rerankModel, "getRerankModel").mockResolvedValue(buildRerankModel(corpus));
+    invokeWithProvider
+      .mockResolvedValueOnce("落选候选原文")
+      .mockResolvedValueOnce("在的呀")
+      .mockResolvedValueOnce("嗯嗯")
+      .mockResolvedValueOnce("好的呀");
+    const events: Array<{ type: string; text?: string }> = [];
+    for await (const event of runConversation({
+      persona: quirksPersona({
+        typoFixes: [],
+        typoRate: 0,
+        recallRate: 1,
+        patAfter: {},
+      }, { rerankEnabled: true }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+    })) {
+      events.push(event);
+    }
+    spy.mockRestore();
+    const types = events.map((event) => event.type);
+    expect(types.indexOf("recall")).toBeGreaterThanOrEqual(0);
+    expect(types.indexOf("recall")).toBeLessThan(types.lastIndexOf("done"));
+    const recall = events.find((event) => event.type === "recall");
+    expect(typeof recall?.text).toBe("string");
+    expect(recall?.text).toBeTruthy();
+    const stored = createMessage.mock.calls.map((call) => JSON.stringify(call[0]));
+    expect(stored.some((row) => row.includes("[recall]"))).toBe(true);
+    expect(stored.some((row) => row.includes(String(recall?.text)))).toBe(false);
+  });
+
+  it("pats before the reply when that user act used to be tapped", async () => {
+    invokeWithProvider.mockResolvedValue("在的。");
+    const events: Array<{ type: string }> = [];
+    for await (const event of runConversation({
+      persona: quirksPersona({
+        typoFixes: [],
+        typoRate: 0,
+        recallRate: 0,
+        patAfter: { ask: { pats: 5, turns: 5 } },
+      }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+    })) {
+      events.push(event);
+    }
+    expect(events.some((event) => event.type === "pat")).toBe(true);
+    const stored = createMessage.mock.calls
+      .filter((call) => call[0].role === "assistant")
+      .map((call) => call[0].content);
+    expect(stored[0]).toBe("[pat]");
+    expect(stored.at(-1)).toBe("在的。");
+  });
+
+  it("does not run quirks on a channel", async () => {
+    invokeWithProvider.mockResolvedValue("今天好累");
+    const events: Array<{ type: string }> = [];
+    for await (const event of runConversation({
+      persona: quirksPersona({
+        typoFixes: [{ wrong: "雷", right: "累", n: 6 }],
+        typoRate: 1,
+        recallRate: 1,
+        patAfter: { ask: { pats: 5, turns: 5 } },
+      }, { rerankEnabled: true }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      channel: "wechat",
+    })) {
+      events.push(event);
+    }
+    expect(events.some((event) => event.type === "recall" || event.type === "pat")).toBe(false);
+    const stored = createMessage.mock.calls
+      .filter((call) => call[0].role === "assistant")
+      .map((call) => call[0].content);
+    expect(stored).toEqual(["今天好累"]);
+  });
 });
 
 describe("composeMessages", () => {
@@ -1789,6 +1962,23 @@ describe("composeMessages", () => {
     });
     const spoken = messages.filter((row) => row.role !== "system").map((row) => String(row.content)).join("\n");
     expect(spoken).not.toContain("TA 这会儿没回");
+  });
+
+  it("does not hand a recalled placeholder back to the model", async () => {
+    getMessagesByPersonaId.mockResolvedValue([
+      { id: 1, role: "user", content: "在吗", origin: null },
+      { id: 2, role: "assistant", content: "[recall]", metadata: { kind: "recall" } },
+      { id: 3, role: "assistant", content: "在的呀" },
+    ]);
+    const { messages } = await composeMessages({
+      persona: persona(),
+      userId: 1,
+      userMessage: "那你呢",
+      contextLimit: 20,
+    });
+    const spoken = messages.filter((row) => row.role !== "system").map((row) => String(row.content)).join("\n");
+    expect(spoken).not.toContain("[recall]");
+    expect(spoken).toContain("在的呀");
   });
 
   it("includes the retrieved memories", async () => {

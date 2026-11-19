@@ -35,6 +35,7 @@ export default function PersonaSwitches(props: { personaId: number; name: string
   const asyncDelivery = Boolean(settings.data?.timing?.asyncDelivery);
   const maxDelayMinutes = settings.data?.timing?.maxDelayMinutes ?? 30;
   const asleep = Boolean(settings.data?.timing?.sleep);
+  const recall = Boolean(settings.data?.timing?.recall);
   const style = trpc.style.get.useQuery(
     { personaId: props.personaId },
     { enabled: props.personaId > 0 },
@@ -352,6 +353,26 @@ export default function PersonaSwitches(props: { personaId: number; name: string
           <span className="block">{t("personaEdit.sleep", { name: props.name })}</span>
           <span className="block text-xs text-muted-foreground leading-relaxed">
             {t("personaEdit.sleepNote", { name: props.name, start: sleepStart, end: sleepEnd })}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={recall}
+          disabled={busy}
+          onChange={(event) =>
+            update.mutate({
+              id: props.personaId,
+              patch: { timing: { recall: event.target.checked } },
+            })
+          }
+          className="mt-0.5"
+        />
+        <span>
+          <span className="block">{t("personaEdit.recall", { name: props.name })}</span>
+          <span className="block text-xs text-muted-foreground leading-relaxed">
+            {t("personaEdit.recallNote", { name: props.name })}
           </span>
         </span>
       </label>

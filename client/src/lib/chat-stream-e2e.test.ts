@@ -142,6 +142,42 @@ describe("streamChat", () => {
     expect(errors).toEqual([]);
   });
 
+  it("hands a recall event to the caller", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      mockSseResponse([
+        'event: recall\ndata: {"text":"落选候选原文","showMs":2500}\n\n',
+      ]),
+    );
+    globalThis.fetch = fetchMock as any;
+    const recalled: Array<{ text: string; showMs: number }> = [];
+    await streamChat({
+      personaId: 1,
+      message: "在吗",
+      callbacks: {
+        onDelta: () => {},
+        onRecall: (text, showMs) => { recalled.push({ text, showMs }); },
+      },
+    });
+    expect(recalled).toEqual([{ text: "落选候选原文", showMs: 2500 }]);
+  });
+
+  it("hands a pat event to the caller", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      mockSseResponse(["event: pat\ndata: {}\n\n"]),
+    );
+    globalThis.fetch = fetchMock as any;
+    let pats = 0;
+    await streamChat({
+      personaId: 1,
+      message: "在吗",
+      callbacks: {
+        onDelta: () => {},
+        onPat: () => { pats += 1; },
+      },
+    });
+    expect(pats).toBe(1);
+  });
+
   it("posts the message and the locale", async () => {
     const fetchMock = vi.fn().mockResolvedValue(mockSseResponse([]));
     globalThis.fetch = fetchMock as any;

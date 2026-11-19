@@ -75,6 +75,7 @@ describe("the persona switches section", () => {
     expect(screen.getByText("提到了记录里没有的往事，就让它重说")).toBeInTheDocument();
     expect(screen.getByText("小满 可以晚点回")).toBeInTheDocument();
     expect(screen.getByText("最多等多久")).toBeInTheDocument();
+    expect(screen.getByText("小满 偶尔会打错字再补一句、撤回、拍一拍")).toBeInTheDocument();
   });
 
   it("turns the A/B pair on", async () => {
@@ -166,5 +167,16 @@ describe("the persona switches section", () => {
       patch: { timing: { sleep: true } },
     });
     settingsState.data = { layers: { abPairs: false } };
+  });
+
+  it("turns the recall quirks on", async () => {
+    const user = userEvent.setup();
+    settingsState.data = { layers: { abPairs: false } };
+    render(<PersonaSwitches personaId={5} name="小满" />);
+    await user.click(screen.getByRole("checkbox", { name: /小满 偶尔会打错字再补一句、撤回、拍一拍/ }));
+    expect(mutate).toHaveBeenCalledWith({
+      id: 5,
+      patch: { timing: { recall: true } },
+    });
   });
 });

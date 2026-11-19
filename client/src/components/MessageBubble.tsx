@@ -54,7 +54,7 @@ export interface Message {
    * "letter" — the answer to a letter the user wrote.
    * "proactive" — the persona spoke first.
    */
-  origin?: "letter" | "proactive" | "system-notice" | null;
+  origin?: "letter" | "proactive" | "system-notice" | "recall" | "pat" | null;
   /**
    * A confirmed routine window this reply used.
    *
@@ -336,7 +336,9 @@ export function MessageBubble({
     onError: (e: any) => toast.error(e.message),
   });
   const messageId = numericMessageId(msg.id);
-  const isNotice = msg.origin === "system-notice";
+  const isQuirkNotice = msg.origin === "recall" || msg.origin === "pat"
+    || msg.content === "[recall]" || msg.content === "[pat]";
+  const isNotice = msg.origin === "system-notice" || isQuirkNotice;
   /**
    * The user's own clock.
    *
@@ -515,6 +517,15 @@ export function MessageBubble({
       >{msg.content}</Streamdown>
     );
   };
+
+  if (isQuirkNotice) {
+    const kind = msg.origin === "pat" || msg.content === "[pat]" ? "pat" : "recall";
+    return (
+      <p className="text-center text-[11px] text-muted-foreground my-2">
+        {t(kind === "pat" ? "chat.patNotice" : "chat.recallNotice", { name: personaName })}
+      </p>
+    );
+  }
 
   return (
     <div className={`flex gap-2.5 ${isUser ? "flex-row-reverse" : "flex-row"} mb-4 animate-fade-in-up`}>

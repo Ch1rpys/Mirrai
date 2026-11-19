@@ -67,6 +67,10 @@ export interface StreamChatCallbacks {
     dueAt: string;
     reason: "delay" | "asleep" | "busy";
   }) => void;
+  /** A line they took back. Shown briefly, then a notice. */
+  onRecall?: (text: string, showMs: number) => void | Promise<void>;
+  /** A tap on the shoulder, before the reply. */
+  onPat?: () => void;
 }
 
 export interface StreamChatOptions {
@@ -353,6 +357,14 @@ async function handleEvent(
           reason: data.reason,
         });
       }
+      break;
+    case "recall":
+      if (typeof data?.text === "string" && typeof data?.showMs === "number") {
+        await callbacks.onRecall?.(data.text, data.showMs);
+      }
+      break;
+    case "pat":
+      callbacks.onPat?.();
       break;
     case "error":
       /**

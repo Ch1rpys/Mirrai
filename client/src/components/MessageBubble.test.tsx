@@ -529,4 +529,36 @@ describe("the message bubble", () => {
     expect(screen.queryByLabelText(translate("zh", "chat.unlike"))).toBeNull();
     expect(screen.queryByLabelText(translate("zh", "chat.regenerate"))).toBeNull();
   });
+
+  it("renders a recalled line as a small notice, not as something they said", () => {
+    render(
+      <MessageBubble
+        msg={makeMessage({ origin: "recall", content: "[recall]" })}
+        personaName="小A"
+        showMood={false}
+        personaId={3}
+        onRegenerate={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("小A 撤回了一条消息")).toBeInTheDocument();
+    expect(screen.queryByText("[recall]")).toBeNull();
+    expect(screen.queryByLabelText(translate("zh", "chat.unlike"))).toBeNull();
+    expect(screen.queryByLabelText(translate("zh", "chat.regenerate"))).toBeNull();
+  });
+
+  it("renders a tap as a small notice, not as something they said", () => {
+    render(
+      <MessageBubble
+        msg={makeMessage({ origin: "pat", content: "[pat]" })}
+        personaName="小A"
+        showMood={false}
+        personaId={3}
+        onRegenerate={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("小A 拍了拍你")).toBeInTheDocument();
+    expect(screen.queryByText("[pat]")).toBeNull();
+    expect(screen.queryByLabelText(translate("zh", "chat.unlike"))).toBeNull();
+    expect(screen.queryByLabelText(translate("zh", "chat.regenerate"))).toBeNull();
+  });
 });

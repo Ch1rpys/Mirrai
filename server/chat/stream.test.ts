@@ -353,6 +353,35 @@ describe("POST /api/chat/stream", () => {
     });
   });
 
+  it("forwards a recall event", async () => {
+    runConversation.mockImplementation(async function* () {
+      yield { type: "recall", text: "落选候选原文", showMs: 2500 };
+    });
+
+    const res = await fetch(`${baseUrl}/api/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personaId: 1, message: "在吗" }),
+    });
+    const frames = await readFrames(res);
+    expect(frames.map((frame) => frame.event)).toEqual(["recall"]);
+    expect(frames[0].data).toEqual({ text: "落选候选原文", showMs: 2500 });
+  });
+
+  it("forwards a pat event", async () => {
+    runConversation.mockImplementation(async function* () {
+      yield { type: "pat" };
+    });
+
+    const res = await fetch(`${baseUrl}/api/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personaId: 1, message: "在吗" }),
+    });
+    const frames = await readFrames(res);
+    expect(frames.map((frame) => frame.event)).toEqual(["pat"]);
+  });
+
   it("reports a mid-stream failure as an error event and keeps the partial text", async () => {
     runConversation.mockImplementation(async function* () {
       yield { type: "delta", text: "我在" };
