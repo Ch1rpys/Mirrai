@@ -14,6 +14,7 @@ import { translate } from "@/i18n";
 
 const upload = vi.fn();
 const refetchFiles = vi.fn();
+const capabilities = vi.hoisted(() => ({ ffmpeg: true }));
 const distillPage = vi.hoisted(() => ({
   status: "ready" as string,
   files: [] as unknown[],
@@ -65,6 +66,11 @@ vi.mock("@/lib/trpc", () => ({
     },
     collector: {
       preview: { useQuery: () => ({ data: { total: distillPage.collected } }) },
+    },
+    system: {
+      capabilities: {
+        useQuery: () => ({ data: { ffmpeg: capabilities.ffmpeg }, isLoading: false }),
+      },
     },
     useUtils: () => ({
       persona: {
@@ -135,6 +141,7 @@ describe("the files that are on their way", () => {
     vi.clearAllMocks();
     distillPage.status = "ready";
     distillPage.files = [];
+    capabilities.ffmpeg = true;
     distillPage.estimate = { chunks: 0, chars: 0, mapCalls: 0, reduceCalls: 0, calls: 4 };
     distillPage.collected = 0;
     distillPage.confirm = true;
@@ -175,6 +182,25 @@ describe("the files that are on their way", () => {
     await waitFor(() => {
       expect(screen.getAllByText("chat.txt").length).toBe(2);
     });
+  });
+
+  it("says a video is stored but not read when ffmpeg is missing", async () => {
+    capabilities.ffmpeg = false;
+    distillPage.files = [
+      {
+        id: 1,
+        fileType: "video",
+        originalName: "clip.mp4",
+        fileSize: 1024,
+        fileUrl: "/uploads/personas/1/1/clip.mp4",
+        parseStatus: "done",
+      },
+    ];
+    render(<Upload />);
+    expect(screen.getByText("clip.mp4")).toBeInTheDocument();
+    expect(
+      screen.getByText(/这台机器上没有 ffmpeg，视频目前只存不读/),
+    ).toBeInTheDocument();
   });
 
   it("offers to try a failed upload again", async () => {

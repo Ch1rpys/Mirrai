@@ -26,6 +26,7 @@ import { resolveProviderForUser } from "../llm/user-provider";
 import type { LLMMessage, LLMOptions } from "../llm/types";
 import { loadPrompt } from "./prompts";
 import { asMaterial, fencedName } from "./material";
+import { appendVideoMaterial } from "./video-materials";
 import { runPythonTool } from "./runner";
 import { extractJsonObject } from "../_core/json";
 import {
@@ -188,6 +189,12 @@ export type PipelineInput = {
   timeZone?: string | null;
   /** Image URLs to describe and fold into the persona memories. */
   imageUrls?: string[];
+  /** Video frames as data URLs (B7.10); described with their own cap. */
+  videoFrames?: string[];
+  /** What was said in the videos, when a local engine could hear it. */
+  videoTranscripts?: string[];
+  /** Videos over the per-run limit, for the report. */
+  videoSkipped?: number;
   intakeMeta?: Record<string, unknown>;
   /** Explicit LLM provider override; falls back to the registry default. */
   provider?: string;
@@ -1323,6 +1330,7 @@ async function runSkillPipelineOnce(
     const hasMaterial =
       chatContent.trim().length > 0 ||
       (input.imageUrls?.length ?? 0) > 0 ||
+      (input.videoFrames?.length ?? 0) > 0 ||
       recordLines.length > 0;
     const intakeMessage = hasMaterial
       ? copy(locale, "skill.takingStock")
@@ -1596,6 +1604,22 @@ async function runSkillPipelineOnce(
     );
     await setPersonaProgress(stageProgress.structuring, copy(locale, "skill.integrating"));
 
+    /**
+     * The words said in the videos (B7.10).
+     *
+     * They are material, not instruction, and they are fenced. The
+     * structurer reads them even when the analysis went through the
+     * chunked path, which reads the record table and not `chatContent`.
+     */
+    analysisResult = appendVideoMaterial(
+      analysisResult,
+      {
+        transcripts: input.videoTranscripts ?? [],
+        skipped: input.videoSkipped ?? 0,
+      },
+      locale,
+    );
+
     const structurerPrompt = loadPrompt(characterFamily, "structurer", effectiveProfile);
     const structuredRaw = await invokePipeline({
       userId,
@@ -1630,14 +1654,29 @@ async function runSkillPipelineOnce(
       locale,
       userId,
     );
+    /**
+     * Video frames have their own budget (B7.10): four videos, three
+     * frames each. They do not take seats from the photos.
+     */
+    const videoNote = await describeImages(
+      name,
+      input.videoFrames ?? [],
+      input.provider,
+      12,
+      locale,
+      userId,
+    );
     const baseData = normalizePersonaData(parsed, { name, locale });
+    const memoryParts = [baseData.memories];
+    if (imageNote) {
+      memoryParts.push(`${copy(locale, "skillPrompts.pipeline.photoMemories")}${imageNote}`);
+    }
+    if (videoNote) {
+      memoryParts.push(`${copy(locale, "skillPrompts.pipeline.videoFrameMemories")}${videoNote}`);
+    }
     const enrichedData: PersonaData = {
-      ...(imageNote
-        ? {
-            ...baseData,
-            memories: `${baseData.memories}\n\n${copy(locale, "skillPrompts.pipeline.photoMemories")}${imageNote}`.trim(),
-          }
-        : baseData),
+      ...baseData,
+      memories: memoryParts.filter((part) => part.trim().length > 0).join("\n\n").trim(),
       ...(harmReport ? { harmReport } : {}),
     };
 

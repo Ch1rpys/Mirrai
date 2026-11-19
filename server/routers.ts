@@ -131,6 +131,7 @@ import { isChatImportFileType, startImport } from "./importers";
 import { registerUploadedImage } from "./importers/media";
 import { importUnpackRelKey } from "./importers/archive";
 import { afterRecordsRemoved } from "./_core/style-profile";
+import { prepareVideoMaterial } from "./skill-engine/video";
 import { transcribeAudio } from "./_core/stt";
 import { asMaterial } from "./_core/material";
 import {
@@ -548,6 +549,18 @@ async function startPersonaDistillation(params: {
       .map((f) => f.fileUrl)
       .filter(Boolean);
 
+    /**
+     * The frames and the spoken words of the videos (B7.10).
+     *
+     * ffmpeg is optional: without it this is empty and the run goes on
+     * with what it has. The temporary files are removed inside the
+     * helper before the pipeline starts.
+     */
+    const videoMaterial = await prepareVideoMaterial({ personaId, userId }).catch((error) => {
+      console.warn("[SkillEngine] The videos could not be read:", error);
+      return { frameDataUrls: [], transcripts: [], skipped: 0 };
+    });
+
     let timezone: string | null = null;
     try {
       timezone = await getUserTimezone(userId);
@@ -574,7 +587,13 @@ async function startPersonaDistillation(params: {
      * net under them, because the check is a database read and the
      * material can be deleted between the check and the run.
      */
-    if (!chatContent && imageUrls.length === 0 && material.collectedCount === 0) {
+    if (
+      !chatContent
+      && imageUrls.length === 0
+      && videoMaterial.frameDataUrls.length === 0
+      && videoMaterial.transcripts.length === 0
+      && material.collectedCount === 0
+    ) {
       console.warn(
         `[SkillEngine] Persona ${personaId} has no material to distil — nothing was written.`,
       );
@@ -611,6 +630,9 @@ async function startPersonaDistillation(params: {
       name,
       chatContent,
       imageUrls,
+      videoFrames: videoMaterial.frameDataUrls,
+      videoTranscripts: videoMaterial.transcripts,
+      videoSkipped: videoMaterial.skipped,
       researchProfile: params.researchProfile ?? undefined,
       mode: params.mode ?? undefined,
       // The persona's own provider — the one the user chose for it.

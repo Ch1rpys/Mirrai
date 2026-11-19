@@ -2796,6 +2796,26 @@ export async function setMediaTranscript(
   return Boolean(row);
 }
 
+/** Fills in what ffmpeg learned about a video, without touching the rest. */
+export async function setMediaVideoMeta(
+  id: number,
+  userId: number,
+  meta: { durationSec: number | null; width: number | null; height: number | null },
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .update(media)
+    .set({
+      durationSec: meta.durationSec,
+      width: meta.width,
+      height: meta.height,
+    })
+    .where(and(eq(media.id, id), eq(media.userId, userId)))
+    .returning({ id: media.id });
+  return rows.length > 0;
+}
+
 export async function countMedia(
   personaId: number,
   userId: number,

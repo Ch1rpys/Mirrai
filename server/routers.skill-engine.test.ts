@@ -36,9 +36,17 @@ vi.mock("./db", () => ({
   setPersonaSettings: (...a: unknown[]) => setPersonaSettings(...a),
   getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
   iterateRecords: (...a: unknown[]) => iterateRecords(...a),
+  listMedia: async () => [],
+  upsertMedia: vi.fn().mockResolvedValue({ id: 1 }),
+  setMediaTranscript: vi.fn().mockResolvedValue(true),
+  setMediaVideoMeta: vi.fn().mockResolvedValue(true),
 }));
 
 const runSkillPipeline = vi.fn();
+
+vi.mock("./skill-engine/video", () => ({
+  prepareVideoMaterial: async () => ({ frameDataUrls: [], transcripts: [], skipped: 0 }),
+}));
 
 vi.mock("./skill-engine/pipeline", () => ({
   runSkillPipeline: (...a: unknown[]) => runSkillPipeline(...a),

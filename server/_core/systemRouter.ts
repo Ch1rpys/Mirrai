@@ -2,6 +2,9 @@ import { z } from "zod";
 import { notifyOwner } from "./notification";
 import { adminProcedure, publicProcedure, router } from "./trpc";
 import { registry } from "../llm";
+import { hasFfmpeg } from "./ffmpeg";
+import { sttIsLocal, sttEngine } from "./stt";
+import { ttsEngine } from "./tts";
 
 export const systemRouter = router({
   health: publicProcedure
@@ -21,12 +24,24 @@ export const systemRouter = router({
    * to the ordinary request — without having to discover the answer by
    * making a request that fails.
    */
-  capabilities: publicProcedure.query(() => ({
-    streaming: true,
-    /** The provider that would be used when the client does not choose one. */
-    defaultProvider: registry.getDefaultName() || null,
-    providers: registry.list().filter((p) => p.configured).map((p) => p.name),
-  })),
+  capabilities: publicProcedure.query(async () => {
+    const configured = registry.list().filter((p) => p.configured);
+    return {
+      streaming: true,
+      /** The provider that would be used when the client does not choose one. */
+      defaultProvider: registry.getDefaultName() || null,
+      providers: configured.map((p) => p.name),
+      /** The optional local tools (B7.10). Missing is not a failure. */
+      ffmpeg: await hasFfmpeg(),
+      sttLocal: sttIsLocal(),
+      sttEngine: sttEngine(),
+      ttsEngine: ttsEngine(),
+      /** The configured providers that can look at a picture (B7.11). */
+      visionProviders: configured
+        .filter((p) => registry.get(p.name)?.capabilities.vision)
+        .map((p) => p.name),
+    };
+  }),
 
   notifyOwner: adminProcedure
     .input(

@@ -4,6 +4,18 @@
 import type { CopyTable } from "./index";
 
 export const V6 = {
+  "skillPrompts.pipeline.videoTranscriptsHeading": {
+    zh: "视频里说的话：",
+    en: "What was said in the videos:",
+  },
+  "skillPrompts.pipeline.videoFrameMemories": {
+    zh: "视频里的画面：",
+    en: "Frames from the videos:",
+  },
+  "skillPrompts.pipeline.videoSkipped": {
+    zh: "还有 {{n}} 个视频没有读：一次蒸馏最多读 {{max}} 个。",
+    en: "{{n}} more videos were not read: one distillation reads at most {{max}}.",
+  },
   "errors.recordsLimit": {
     zh: "这个分身已经有 {{current}} 条记录，再写入 {{incoming}} 条会超过上限 {{max}}。",
     en: "This persona already has {{current}} records; writing {{incoming}} more would go past the limit of {{max}}.",

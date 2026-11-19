@@ -1152,6 +1152,7 @@ export const zh = {
     dropLabel: "上传文件：拖拽文件到这里，或按回车选择文件",
     dropTitle: "拖拽文件到这里，或点击选择",
     formatsHint: "能读：{{formats}}。图片和视频也可以。",
+    videoNoFfmpeg: "这台机器上没有 ffmpeg，视频目前只存不读。装上之后重新蒸馏，就会读视频里的画面和声音。",
     uploadedFiles: "已上传文件",
     fileCount: "{{count}} 个文件",
     uploaded: "已上传",

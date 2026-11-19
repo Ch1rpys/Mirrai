@@ -1157,6 +1157,7 @@ export const en = {
     dropLabel: "Upload files: drop them here, or press enter to choose files",
     dropTitle: "Drop files here, or click to choose",
     formatsHint: "Reads: {{formats}}. Images and video too.",
+    videoNoFfmpeg: "ffmpeg is not installed on this machine, so videos are stored but not read. Install it and distil again to read their frames and sound.",
     uploadedFiles: "Uploaded files",
     fileCount: "{{count}} files",
     uploaded: "Uploaded",

@@ -417,6 +417,7 @@ export default function Upload() {
   );
   /* The preset is remembered on the persona, so a re-run of the
      distillation keeps the same choice. */
+  const capabilities = trpc.system.capabilities.useQuery();
   const saveModeMutation = trpc.persona.update.useMutation({
     onSuccess: () => {
       // The persona carries the preset, so the copy of it the page
@@ -832,6 +833,11 @@ export default function Upload() {
                       <Check className="w-3 h-3" />{t("upload.uploaded")}
                     </span>
                   </div>
+                  {f.fileType === "video" && capabilities.data?.ffmpeg === false && (
+                    <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
+                      {t("upload.videoNoFfmpeg")}
+                    </p>
+                  )}
                   {isChatImportFileType(f.fileType) && (
                     <ImportWizard
                       fileId={f.id}
@@ -842,6 +848,12 @@ export default function Upload() {
                   )}
                 </div>
               ))}
+              {pendingUploads.some(([, entry]) => entry.file && detectFileType(entry.file) === "video")
+                && capabilities.data?.ffmpeg === false && (
+                <p className="py-2 text-[11px] text-muted-foreground leading-relaxed">
+                  {t("upload.videoNoFfmpeg")}
+                </p>
+              )}
               {pendingUploads.map(([key, entry]) => (
                 <div key={key} className="flex items-center gap-3 py-3 border-t border-border">
                   <span className="text-sm text-muted-foreground flex-1 truncate">
