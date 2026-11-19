@@ -64,6 +64,10 @@ import {
   leave,
   waitAbortable,
 } from "./inbox";
+import {
+  cancelPendingReplyJobs,
+  maybeDeferReply,
+} from "./reply-jobs";
 
 export type ChatMode = "stream" | "once";
 
@@ -271,6 +275,15 @@ export interface ConversationOptions {
   providerName?: string;
   /** Channel the message arrived on. */
   channel?: "web" | "wechat" | "feishu";
+  /** The conversation identifier on that channel. Empty on the web. */
+  conversationKey?: string;
+  /**
+   * This turn is the execution of a queued reply.
+   *
+   * The wait already happened as `dueAt`, so the turn does not queue
+   * again and does not wait in the connection.
+   */
+  fromReplyJob?: { jobId: number; reason: "delay" | "asleep" | "busy" };
   /** Whether the user message has already been stored. */
   /**
    * Whether the user's message is already stored.
@@ -1091,7 +1104,7 @@ async function* admitUserMessage(
       severity: "critical",
       excerpt: crisis.matched.join(", "),
     }).catch((e) => console.warn("[Safety] Failed to record crisis event:", e));
-    // B5.2 fills this in: a crisis cancels a queued reply.
+    await cancelPendingReplyJobs(persona.id, userId).catch(() => {});
     arrive(inboxKey(userId, persona.id));
 
     yield { type: "delta", text: replyText };
@@ -1308,6 +1321,56 @@ async function* runConversationTurn(
     if (inbox) enter(inbox.key, "committing");
     return true;
   };
+  const immediate = crisis.weakSignal
+    || batch.some((text) => detectCrisis(text).weakSignal || melancholyOf(text));
+  if (immediate) {
+    await cancelPendingReplyJobs(persona.id, userId).catch(() => {});
+  }
+  let queuedDelayMs: number | null = null;
+  let delayMeta: { ms: number; via: string } | null = null;
+  if (!options.fromReplyJob && timingEnabled && behavior && !immediate) {
+    const settings = normalizePersonaSettings(persona.settings);
+    if (settings.timing.asyncDelivery) {
+      const measured = effectiveStyleProfile(persona).replyDelay;
+      const zone = (persona as { timezone?: string | null }).timezone
+        || (await db.getUserTimezone(userId).catch(() => null))
+        || "UTC";
+      let delayMs: number;
+      if (measured) {
+        const picked = pickDelayBucket(measured, {
+          band: bandOf(now, zone),
+          state: persona.emotionalState ?? undefined,
+          asking: isUserAsking(message),
+          media: Boolean(options.media),
+        });
+        delayMs = sampleDelayMs(picked.bucket, seededRandom(`${turnInput.seed}:delay`));
+        delayMeta = { ms: delayMs, via: picked.via };
+      } else {
+        delayMs = sampleReplyDelayMs(behavior, seededRandom(`${turnInput.seed}:delay`));
+      }
+      queuedDelayMs = delayMs;
+      const decision = await maybeDeferReply({
+        persona,
+        userId,
+        batch,
+        now,
+        delayMs,
+        channel: options.channel,
+        targetId: options.conversationKey,
+        locale,
+        periodId: options.periodId ?? null,
+      });
+      if (decision && decision !== "in-connection") {
+        yield {
+          type: "deferred",
+          jobId: decision.jobId,
+          dueAt: decision.dueAt.toISOString(),
+          reason: decision.reason,
+        };
+        return;
+      }
+    }
+  }
   const plan = await planTurn(turnInput);
   if (dropped()) {
     yield { type: "superseded" };
@@ -1763,30 +1826,31 @@ async function* runConversationTurn(
   const finalText = appended.length > 0 ? `${baseText}\n\n${appended.join("\n\n")}` : baseText;
 
   // A crisis already returned. Weak distress and "I'm sad" do not wait.
-  const immediate = crisis.weakSignal
-    || batch.some((text) => detectCrisis(text).weakSignal || melancholyOf(text));
-  let delayMeta: { ms: number; via: string } | null = null;
-  if (timingEnabled && behavior && !immediate) {
-    const measured = effectiveStyleProfile(persona).replyDelay;
-    const zone = (persona as { timezone?: string | null }).timezone
-      || (await db.getUserTimezone(userId).catch(() => null))
-      || "UTC";
-    let delayMs: number;
-    if (measured) {
-      const picked = pickDelayBucket(measured, {
-        band: bandOf(now, zone),
-        state: persona.emotionalState ?? undefined,
-        asking: isUserAsking(message),
-        media: Boolean(options.media),
-      });
-      // The plan rng has already been drawn on. A second seed keeps
-      // this draw repeatable without moving the burst sample.
-      delayMs = sampleDelayMs(picked.bucket, seededRandom(`${turnInput.seed}:delay`));
-      delayMeta = { ms: delayMs, via: picked.via };
+  if (timingEnabled && behavior && !immediate && !options.fromReplyJob) {
+    if (queuedDelayMs != null) {
+      yield { type: "delay", ms: queuedDelayMs };
     } else {
-      delayMs = sampleReplyDelayMs(behavior, rng);
+      const measured = effectiveStyleProfile(persona).replyDelay;
+      const zone = (persona as { timezone?: string | null }).timezone
+        || (await db.getUserTimezone(userId).catch(() => null))
+        || "UTC";
+      let delayMs: number;
+      if (measured) {
+        const picked = pickDelayBucket(measured, {
+          band: bandOf(now, zone),
+          state: persona.emotionalState ?? undefined,
+          asking: isUserAsking(message),
+          media: Boolean(options.media),
+        });
+        // The plan rng has already been drawn on. A second seed keeps
+        // this draw repeatable without moving the burst sample.
+        delayMs = sampleDelayMs(picked.bucket, seededRandom(`${turnInput.seed}:delay`));
+        delayMeta = { ms: delayMs, via: picked.via };
+      } else {
+        delayMs = sampleReplyDelayMs(behavior, rng);
+      }
+      yield { type: "delay", ms: delayMs };
     }
-    yield { type: "delay", ms: delayMs };
   }
 
   // The emotional state is inferred *before* the reply is stored. It used
@@ -1862,6 +1926,9 @@ async function* runConversationTurn(
     ...(plan.closing ? { closing: true } : {}),
     ...(plan.routine ? { routine: plan.routine } : {}),
     ...(delayMeta ? { delay: delayMeta } : {}),
+    ...(options.fromReplyJob
+      ? { deferred: { jobId: options.fromReplyJob.jobId, reason: options.fromReplyJob.reason } }
+      : {}),
   };
   if (!beginCommit()) {
     yield { type: "superseded" };

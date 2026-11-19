@@ -749,4 +749,8 @@ export const V6 = {
     zh: "这是一条测试通知。",
     en: "This is a test notification.",
   },
+  "chat.replyFailedNotice": {
+    zh: "这条没回成。可以再发一次，或者到设置里看看模型是不是通的。",
+    en: "That reply did not go through. Send it again, or check in settings that the model is reachable.",
+  },
 } as const satisfies CopyTable;

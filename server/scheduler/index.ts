@@ -15,6 +15,7 @@
 import { runReminderSweep } from "./reminders";
 import { answerDueLetters } from "../chat/letters";
 import { runProactiveSweep } from "../chat/proactive-sweep";
+import { sweepReplyJobs } from "../chat/reply-jobs";
 import { connectRedis, withRedisLock, isRedisUsable } from "../_core/redis";
 
 const TICK_INTERVAL_MS = 60_000;
@@ -65,11 +66,12 @@ async function tick(): Promise<void> {
     answerDueLetters(),
     // The personas that are due to speak first.
     runProactiveSweep(),
+    sweepReplyJobs(),
   ]);
   results.forEach((result, index) => {
     if (result.status === "rejected") {
       console.warn(
-        `[Scheduler] The ${["reminder", "letter", "proactive"][index]} sweep failed:`,
+        `[Scheduler] The ${["reminder", "letter", "proactive", "reply"][index]} sweep failed:`,
         result.reason instanceof Error ? result.reason.message : String(result.reason),
       );
     }

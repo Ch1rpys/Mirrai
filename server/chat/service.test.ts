@@ -93,6 +93,14 @@ vi.mock("../db", () => ({
   getMessageById: (...a: unknown[]) => getMessageById(...a),
   updateEmotionSnapshot: (...a: unknown[]) => updateEmotionSnapshot(...a),
   deleteMessage: (...a: unknown[]) => deleteMessage(...a),
+  cancelPendingReplyJobs: vi.fn().mockResolvedValue(0),
+  getPendingReplyJob: vi.fn().mockResolvedValue(null),
+  createReplyJob: vi.fn(),
+  getReplyJobById: vi.fn().mockResolvedValue(null),
+  listDueReplyJobs: vi.fn().mockResolvedValue([]),
+  claimReplyJob: vi.fn().mockResolvedValue(false),
+  finishReplyJob: vi.fn().mockResolvedValue(true),
+  retryReplyJob: vi.fn().mockResolvedValue(true),
 }));
 
 const invoke = vi.fn();

@@ -50,6 +50,10 @@ export function isLatest(key: string, generation: number): boolean {
   return inboxOf(key).generation === generation;
 }
 
+export function currentGeneration(key: string): number {
+  return inboxOf(key).generation;
+}
+
 export function enter(
   key: string,
   phase: InboxPhase,

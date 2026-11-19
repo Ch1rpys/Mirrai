@@ -55,6 +55,7 @@ export async function handleChannelChat(params: ChannelChatParams): Promise<stri
       message: messageText,
       providerName: (persona as any).llmProvider || undefined,
       channel: params.channel,
+      conversationKey: params.conversationKey,
       mode: "once",
       locale: params.locale ?? "zh",
     })) {
@@ -78,6 +79,8 @@ export async function handleChannelChat(params: ChannelChatParams): Promise<stri
          */
         throw new Error(event.message || "The reply could not be produced.");
       } else if (event.type === "superseded") {
+        return null;
+      } else if (event.type === "deferred") {
         return null;
       } else if (event.type === "done") {
         graduationSuggested = event.graduationSuggested;

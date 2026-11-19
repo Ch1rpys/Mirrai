@@ -1,0 +1,568 @@
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { parseZoneless } from "@shared/timezone";
+import { READ_WINDOW_MS, resetInbox } from "./inbox";
+
+const stored: Array<Record<string, unknown>> = [];
+let nextMessageId = 1;
+
+type Job = {
+  id: number;
+  userId: number;
+  personaId: number;
+  kind: string;
+  status: string;
+  reason: string;
+  dueAt: Date;
+  channel: string;
+  targetId: string | null;
+  locale: string;
+  periodId: string | null;
+  attempts: number;
+  claimedAt: Date | null;
+  payload: unknown;
+  createdAt: Date;
+  finishedAt: Date | null;
+};
+
+let jobs: Job[] = [];
+let nextJobId = 1;
+
+const createMessage = vi.fn(async (row: Record<string, unknown>) => {
+  const id = nextMessageId++;
+  stored.push({ id, ...row });
+  return id;
+});
+const getMessagesByPersonaId = vi.fn(async () => stored.slice());
+const getDefaultLlmConfig = vi.fn();
+const getTodaySnapshot = vi.fn();
+const createEmotionSnapshot = vi.fn();
+const getIntimacyData = vi.fn();
+const updateIntimacy = vi.fn();
+const updatePersona = vi.fn();
+const incrementChatCount = vi.fn();
+const getPersonaById = vi.fn();
+const getMemoriesByPersonaId = vi.fn();
+const getFilesByPersonaId = vi.fn();
+const getSceneById = vi.fn();
+const getLatestChatSummary = vi.fn();
+const createChatSummary = vi.fn();
+const getRecentEmotionTrend = vi.fn();
+const getMessageCountInRange = vi.fn();
+const setGraduationStatus = vi.fn();
+const getLatestGraduationAssessment = vi.fn();
+const createGraduationAssessment = vi.fn();
+const getMessagesSince = vi.fn();
+const getRecentMessages = vi.fn();
+const touchMemoryRecalled = vi.fn();
+const createSafetyEvent = vi.fn();
+const hasSafetyEventSince = vi.fn();
+const getLastMessageAt = vi.fn();
+const getMessageCountSince = vi.fn();
+const getDailyChatCounts = vi.fn();
+const getSessionStartAt = vi.fn();
+const getUserMessageCountSince = vi.fn();
+const getUserMessageCountForPersonaSince = vi.fn();
+const getDailyUserChatCounts = vi.fn();
+const getUserTimezone = vi.fn();
+const getUserById = vi.fn();
+const getRecentUserMood = vi.fn();
+const getRelationshipEvents = vi.fn();
+const updateMessageMetadata = vi.fn();
+const searchRecordsLexical = vi.fn();
+const createFidelityPair = vi.fn();
+const clearMessagePendingChoice = vi.fn();
+const getMessageById = vi.fn();
+const updateEmotionSnapshot = vi.fn();
+const deleteMessage = vi.fn();
+
+const createReplyJob = vi.fn(async (data: Omit<Job, "id" | "createdAt" | "finishedAt" | "claimedAt"> & Partial<Job>) => {
+  const existing = jobs.find((job) =>
+    job.userId === data.userId
+    && job.personaId === data.personaId
+    && job.kind === "reply"
+    && (job.status === "pending" || job.status === "running"),
+  );
+  if (existing) return existing;
+  const row: Job = {
+    id: nextJobId++,
+    userId: data.userId,
+    personaId: data.personaId,
+    kind: data.kind ?? "reply",
+    status: data.status ?? "pending",
+    reason: data.reason ?? "delay",
+    dueAt: data.dueAt,
+    channel: data.channel ?? "web",
+    targetId: data.targetId ?? null,
+    locale: data.locale ?? "zh",
+    periodId: data.periodId ?? null,
+    attempts: data.attempts ?? 0,
+    claimedAt: null,
+    payload: data.payload ?? {},
+    createdAt: new Date(),
+    finishedAt: null,
+  };
+  jobs.push(row);
+  return row;
+});
+const getReplyJobById = vi.fn(async (id: number, userId: number) =>
+  jobs.find((job) => job.id === id && job.userId === userId) ?? null,
+);
+const getPendingReplyJob = vi.fn(async (personaId: number, userId: number, kind = "reply") =>
+  jobs.find((job) =>
+    job.personaId === personaId
+    && job.userId === userId
+    && job.kind === kind
+    && (job.status === "pending" || job.status === "running"),
+  ) ?? null,
+);
+const listDueReplyJobs = vi.fn(async (now: Date) =>
+  jobs.filter((job) => job.status === "pending" && job.dueAt.getTime() <= now.getTime()),
+);
+const claimReplyJob = vi.fn(async (id: number, userId: number) => {
+  const job = jobs.find((row) => row.id === id && row.userId === userId);
+  if (!job || job.status !== "pending") return false;
+  job.status = "running";
+  job.claimedAt = new Date();
+  return true;
+});
+const finishReplyJob = vi.fn(async (id: number, userId: number, status: string) => {
+  const job = jobs.find((row) => row.id === id && row.userId === userId);
+  if (!job) return false;
+  job.status = status;
+  job.finishedAt = new Date();
+  job.claimedAt = null;
+  return true;
+});
+const retryReplyJob = vi.fn(async (id: number, userId: number, dueAt: Date, attempts: number) => {
+  const job = jobs.find((row) => row.id === id && row.userId === userId);
+  if (!job) return false;
+  job.status = "pending";
+  job.dueAt = dueAt;
+  job.attempts = attempts;
+  job.claimedAt = null;
+  return true;
+});
+const cancelPendingReplyJobs = vi.fn(async (personaId: number, userId: number) => {
+  let n = 0;
+  for (const job of jobs) {
+    if (job.personaId === personaId && job.userId === userId
+      && (job.status === "pending" || job.status === "running")) {
+      job.status = "cancelled";
+      job.finishedAt = new Date();
+      n += 1;
+    }
+  }
+  return n;
+});
+
+vi.mock("../storage", () => ({
+  storageToDataUrl: vi.fn(),
+}));
+
+vi.mock("../db", () => ({
+  createMessage: (...a: unknown[]) => (createMessage as (...args: unknown[]) => unknown)(...a),
+  getDefaultLlmConfig: (...a: unknown[]) => getDefaultLlmConfig(...a),
+  getTodaySnapshot: (...a: unknown[]) => getTodaySnapshot(...a),
+  createEmotionSnapshot: (...a: unknown[]) => createEmotionSnapshot(...a),
+  getIntimacyData: (...a: unknown[]) => getIntimacyData(...a),
+  updateIntimacy: (...a: unknown[]) => updateIntimacy(...a),
+  updatePersona: (...a: unknown[]) => updatePersona(...a),
+  incrementChatCount: (...a: unknown[]) => incrementChatCount(...a),
+  getPersonaById: (...a: unknown[]) => getPersonaById(...a),
+  getMessagesByPersonaId: (...a: unknown[]) => (getMessagesByPersonaId as (...args: unknown[]) => unknown)(...a),
+  getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
+  getFilesByPersonaId: (...a: unknown[]) => getFilesByPersonaId(...a),
+  getSceneById: (...a: unknown[]) => getSceneById(...a),
+  getLatestChatSummary: (...a: unknown[]) => getLatestChatSummary(...a),
+  createChatSummary: (...a: unknown[]) => createChatSummary(...a),
+  getRecentEmotionTrend: (...a: unknown[]) => getRecentEmotionTrend(...a),
+  getMessageCountInRange: (...a: unknown[]) => getMessageCountInRange(...a),
+  setGraduationStatus: (...a: unknown[]) => setGraduationStatus(...a),
+  getLatestGraduationAssessment: (...a: unknown[]) => getLatestGraduationAssessment(...a),
+  createGraduationAssessment: (...a: unknown[]) => createGraduationAssessment(...a),
+  getMessagesSince: (...a: unknown[]) => getMessagesSince(...a),
+  getRecentMessages: (...a: unknown[]) => getRecentMessages(...a),
+  touchMemoryRecalled: (...a: unknown[]) => touchMemoryRecalled(...a),
+  createSafetyEvent: (...a: unknown[]) => createSafetyEvent(...a),
+  hasSafetyEventSince: (...a: unknown[]) => hasSafetyEventSince(...a),
+  getLastMessageAt: (...a: unknown[]) => getLastMessageAt(...a),
+  getMessageCountSince: (...a: unknown[]) => getMessageCountSince(...a),
+  getDailyChatCounts: (...a: unknown[]) => getDailyChatCounts(...a),
+  getSessionStartAt: (...a: unknown[]) => getSessionStartAt(...a),
+  getUserMessageCountSince: (...a: unknown[]) => getUserMessageCountSince(...a),
+  getUserMessageCountForPersonaSince: (...a: unknown[]) => getUserMessageCountForPersonaSince(...a),
+  getDailyUserChatCounts: (...a: unknown[]) => getDailyUserChatCounts(...a),
+  getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
+  getUserById: (...a: unknown[]) => getUserById(...a),
+  getRecentUserMood: (...a: unknown[]) => getRecentUserMood(...a),
+  getRelationshipEvents: (...a: unknown[]) => getRelationshipEvents(...a),
+  updateMessageMetadata: (...a: unknown[]) => updateMessageMetadata(...a),
+  searchRecordsLexical: (...a: unknown[]) => searchRecordsLexical(...a),
+  createFidelityPair: (...a: unknown[]) => createFidelityPair(...a),
+  clearMessagePendingChoice: (...a: unknown[]) => clearMessagePendingChoice(...a),
+  getMessageById: (...a: unknown[]) => getMessageById(...a),
+  updateEmotionSnapshot: (...a: unknown[]) => updateEmotionSnapshot(...a),
+  deleteMessage: (...a: unknown[]) => deleteMessage(...a),
+  createReplyJob: (...a: unknown[]) => (createReplyJob as (...args: unknown[]) => unknown)(...a),
+  getReplyJobById: (...a: unknown[]) => (getReplyJobById as (...args: unknown[]) => unknown)(...a),
+  getPendingReplyJob: (...a: unknown[]) => (getPendingReplyJob as (...args: unknown[]) => unknown)(...a),
+  listDueReplyJobs: (...a: unknown[]) => (listDueReplyJobs as (...args: unknown[]) => unknown)(...a),
+  claimReplyJob: (...a: unknown[]) => (claimReplyJob as (...args: unknown[]) => unknown)(...a),
+  finishReplyJob: (...a: unknown[]) => (finishReplyJob as (...args: unknown[]) => unknown)(...a),
+  retryReplyJob: (...a: unknown[]) => (retryReplyJob as (...args: unknown[]) => unknown)(...a),
+  cancelPendingReplyJobs: (...a: unknown[]) => (cancelPendingReplyJobs as (...args: unknown[]) => unknown)(...a),
+}));
+
+const invoke = vi.fn();
+const invokeWithProvider = vi.fn();
+const streamWithProvider = vi.fn();
+const resolveProviderForUser = vi.fn();
+const resolveProviderForPurpose = vi.fn();
+
+vi.mock("../llm", () => ({
+  llmService: {
+    invoke: (...a: unknown[]) => invoke(...a),
+    invokeWithProvider: (...a: unknown[]) => invokeWithProvider(...a),
+    streamWithProvider: (...a: unknown[]) => streamWithProvider(...a),
+  },
+}));
+
+vi.mock("../llm/user-provider", () => ({
+  resolveProviderForUser: (...a: unknown[]) => resolveProviderForUser(...a),
+  resolveProviderForPurpose: (...a: unknown[]) => resolveProviderForPurpose(...a),
+  resolveProviderForPurposeWithOwnership: async (params: unknown) => ({
+    provider: await resolveProviderForPurpose(params as any),
+    owned: false,
+  }),
+}));
+
+const inferEmotionalState = vi.fn();
+vi.mock("../_core/emotion", () => ({
+  inferEmotionalState: (...a: unknown[]) => inferEmotionalState(...a),
+}));
+
+const pushToUser = vi.fn();
+vi.mock("../_core/push", () => ({
+  pushToUser: (...a: unknown[]) => pushToUser(...a),
+}));
+
+const send = vi.fn();
+vi.mock("../channels", () => ({
+  getChannelAdapter: (id: string) => (
+    id === "feishu" || id === "wechat" ? { send } : undefined
+  ),
+}));
+
+import { runConversation } from "./service";
+import {
+  clearReplyJobTimers,
+  computeReplyDue,
+  replyNow,
+  runReplyJob,
+  sweepReplyJobs,
+} from "./reply-jobs";
+
+const NOW = new Date("2024-06-01T12:00:00.000Z");
+
+function persona(extra: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    userId: 1,
+    name: "小A",
+    relationshipDesc: "前任",
+    togetherFrom: "2021-05",
+    togetherTo: null,
+    personaData: { personality: "温柔" },
+    analysisStatus: "ready",
+    emotionalState: "warm",
+    chatCount: 10,
+    intimacyScore: 120,
+    intimacyLevel: "familiar",
+    graduationStatus: null,
+    llmProvider: null,
+    activeSceneId: null,
+    presence: "active",
+    timingEnabled: true,
+    timezone: "Asia/Shanghai",
+    behaviorProfile: {
+      samples: 20,
+      replyGapMedianSec: 90,
+      replyGapLogSigma: 0.8,
+      burstSizes: [1],
+      measuredAt: "2026-01-01T00:00:00.000Z",
+    },
+    settings: { timing: { asyncDelivery: true, maxDelayMinutes: 30, sleep: false } },
+    styleProfile: {
+      version: 1,
+      measuredAt: "2026-01-01T00:00:00.000Z",
+      recordsVersion: "40:40",
+      replyDelay: {
+        samples: 40,
+        resolution: "second",
+        buckets: {
+          all: { n: 40, mu: Math.log(1200), sigma: 0 },
+        },
+      },
+    },
+    ...extra,
+  } as any;
+}
+
+function delayProfile(seconds: number) {
+  return {
+    version: 1,
+    measuredAt: "2026-01-01T00:00:00.000Z",
+    recordsVersion: "40:40",
+    replyDelay: {
+      samples: 40,
+      resolution: "second",
+      buckets: { all: { n: 40, mu: Math.log(seconds), sigma: 0 } },
+    },
+  };
+}
+
+async function drain(personaRow: unknown, message: string, now = NOW) {
+  const events: Array<Record<string, unknown>> = [];
+  const running = (async () => {
+    for await (const event of runConversation({
+      persona: personaRow as any,
+      userId: 1,
+      message,
+      mode: "once",
+      now,
+    })) {
+      events.push(event as Record<string, unknown>);
+    }
+  })();
+  await vi.advanceTimersByTimeAsync(READ_WINDOW_MS);
+  await running;
+  return events;
+}
+
+describe("queued replies", () => {
+  beforeEach(() => {
+    resetInbox();
+    clearReplyJobTimers();
+    stored.length = 0;
+    nextMessageId = 1;
+    jobs = [];
+    nextJobId = 1;
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+
+    getDefaultLlmConfig.mockResolvedValue(null);
+    getTodaySnapshot.mockResolvedValue(undefined);
+    getIntimacyData.mockResolvedValue({
+      chatCount: 10, totalMessages: 20, memoryCount: 3,
+      emotionVariety: 3, daysSinceCreation: 100, consecutiveDays: 2,
+    });
+    getMemoriesByPersonaId.mockResolvedValue([]);
+    getFilesByPersonaId.mockResolvedValue([]);
+    getSceneById.mockResolvedValue(null);
+    getLatestChatSummary.mockResolvedValue(undefined);
+    getRecentEmotionTrend.mockResolvedValue([]);
+    getMessageCountInRange.mockResolvedValue(0);
+    getLatestGraduationAssessment.mockResolvedValue(undefined);
+    createGraduationAssessment.mockResolvedValue(1);
+    getMessagesSince.mockResolvedValue([]);
+    getRecentMessages.mockResolvedValue([]);
+    getLastMessageAt.mockResolvedValue(new Date());
+    getMessageCountSince.mockResolvedValue(1);
+    getDailyChatCounts.mockResolvedValue([]);
+    getSessionStartAt.mockResolvedValue(new Date());
+    getUserTimezone.mockResolvedValue("Asia/Shanghai");
+    getUserById.mockResolvedValue({ id: 1, trajectoryAssessment: "auto" });
+    getRecentUserMood.mockResolvedValue(null);
+    getRelationshipEvents.mockResolvedValue([]);
+    getUserMessageCountSince.mockResolvedValue(1);
+    getUserMessageCountForPersonaSince.mockResolvedValue(1);
+    getDailyUserChatCounts.mockResolvedValue([]);
+    createSafetyEvent.mockResolvedValue(1);
+    hasSafetyEventSince.mockResolvedValue(false);
+    touchMemoryRecalled.mockResolvedValue(undefined);
+    inferEmotionalState.mockResolvedValue({ state: "warm", source: "heuristic" });
+    resolveProviderForUser.mockResolvedValue({
+      name: "Test",
+      isConfigured: () => true,
+      capabilities: { streaming: true, vision: true, tools: false, jsonMode: false },
+      invoke,
+      stream: async function* () { yield { text: "" }; },
+    });
+    resolveProviderForPurpose.mockImplementation((...a: unknown[]) => resolveProviderForUser(...a));
+    invokeWithProvider.mockResolvedValue("在的。");
+    updateMessageMetadata.mockResolvedValue(true);
+    searchRecordsLexical.mockResolvedValue([]);
+    createFidelityPair.mockResolvedValue({ id: 1 });
+    clearMessagePendingChoice.mockResolvedValue(true);
+    incrementChatCount.mockResolvedValue(11);
+    getMessageById.mockResolvedValue(null);
+    updateEmotionSnapshot.mockResolvedValue(undefined);
+    deleteMessage.mockResolvedValue(true);
+    getPersonaById.mockImplementation(async () => persona());
+    pushToUser.mockResolvedValue(1);
+    send.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    clearReplyJobTimers();
+    vi.useRealTimers();
+  });
+
+  it("queues a twenty-minute delay instead of calling the model", async () => {
+    const events = await drain(persona(), "在吗");
+    expect(events.map((event) => event.type)).toEqual(["deferred"]);
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+    expect(jobs).toHaveLength(1);
+    expect(jobs[0]?.status).toBe("pending");
+    expect(jobs[0]?.dueAt.getTime()).toBe(NOW.getTime() + 1_200_000);
+  });
+
+  it("writes the reply, marks the job done, and pushes when the wait is over", async () => {
+    const events = await drain(persona(), "在吗");
+    const deferred = events[0] as { jobId: number; dueAt: string };
+    vi.setSystemTime(new Date(deferred.dueAt));
+    await runReplyJob(deferred.jobId, 1);
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+    const assistant = stored.filter((row) => row.role === "assistant");
+    expect(assistant).toHaveLength(1);
+    expect(assistant[0]?.metadata).toMatchObject({
+      deferred: { jobId: deferred.jobId, reason: "delay" },
+    });
+    expect(pushToUser).toHaveBeenCalledWith(1, expect.objectContaining({
+      kind: "reply",
+      personaId: 1,
+      personaName: "小A",
+    }));
+    expect(jobs[0]?.status).toBe("done");
+  });
+
+  it("keeps one job when more messages arrive while waiting, and answers all of them", async () => {
+    await drain(persona(), "一");
+    await drain(persona(), "二");
+    await drain(persona(), "三");
+    expect(jobs).toHaveLength(1);
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+    vi.setSystemTime(jobs[0]!.dueAt);
+    await runReplyJob(jobs[0]!.id, 1);
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+    const call = invokeWithProvider.mock.calls[0]?.[1] as {
+      messages?: Array<{ role: string; content: string }>;
+    };
+    const userLines = (call?.messages ?? [])
+      .filter((row) => row.role === "user")
+      .map((row) => row.content);
+    expect(userLines).toEqual(["一", "二", "三"]);
+  });
+
+  it("does not queue a forty-second delay", async () => {
+    const events = await drain(persona({ styleProfile: delayProfile(40) }), "在吗");
+    expect(events.some((event) => event.type === "deferred")).toBe(false);
+    expect(events.some((event) => event.type === "delay" && event.ms === 40_000)).toBe(true);
+    expect(jobs).toHaveLength(0);
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+  });
+
+  it("caps an ordinary delay at maxDelayMinutes", async () => {
+    const events = await drain(persona({
+      settings: { timing: { asyncDelivery: true, maxDelayMinutes: 5, sleep: false } },
+      styleProfile: delayProfile(3 * 3600),
+    }), "在吗");
+    expect(events[0]?.type).toBe("deferred");
+    expect(jobs[0]?.dueAt.getTime()).toBe(NOW.getTime() + 5 * 60_000);
+  });
+
+  it("does not cap sleep, and does cap when sleep is off", async () => {
+    const night = parseZoneless("2024-06-02 00:30", "Asia/Shanghai")!;
+    vi.setSystemTime(night);
+    const asleep = persona({
+      settings: { timing: { asyncDelivery: true, maxDelayMinutes: 5, sleep: true } },
+      styleProfile: {
+        ...delayProfile(1200),
+        routine: { days: 80, sleep: { startMin: 0, endMin: 450 } },
+      },
+    });
+    const slept = await drain(asleep, "在吗", night);
+    const wake = parseZoneless("2024-06-02 07:30", "Asia/Shanghai")!;
+    expect(slept[0]?.type).toBe("deferred");
+    expect(jobs[0]?.reason).toBe("asleep");
+    expect(jobs[0]?.dueAt.getTime()).toBe(wake.getTime() + 1_200_000);
+
+    jobs = [];
+    nextJobId = 1;
+    stored.length = 0;
+    nextMessageId = 1;
+    resetInbox();
+    const awake = await drain(persona({
+      settings: { timing: { asyncDelivery: true, maxDelayMinutes: 5, sleep: false } },
+      styleProfile: {
+        ...delayProfile(1200),
+        routine: { days: 80, sleep: { startMin: 0, endMin: 450 } },
+      },
+    }), "在吗", night);
+    expect(awake[0]?.type).toBe("deferred");
+    expect(jobs[0]?.reason).toBe("delay");
+    expect(jobs[0]?.dueAt.getTime()).toBe(night.getTime() + 5 * 60_000);
+  });
+
+  it("does not queue a weak signal", async () => {
+    const events = await drain(persona(), "我好累");
+    expect(events.some((event) => event.type === "deferred")).toBe(false);
+    expect(invokeWithProvider).toHaveBeenCalled();
+    expect(jobs).toHaveLength(0);
+  });
+
+  it("lets only one of two overlapping claims call the model", async () => {
+    await drain(persona(), "在吗");
+    const id = jobs[0]!.id;
+    vi.setSystemTime(jobs[0]!.dueAt);
+    const first = runReplyJob(id, 1);
+    const second = runReplyJob(id, 1);
+    await Promise.all([first, second]);
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks the job failed after three model errors and leaves a notice", async () => {
+    await drain(persona(), "在吗");
+    const id = jobs[0]!.id;
+    invokeWithProvider.mockRejectedValue(new Error("down"));
+    await runReplyJob(id, 1);
+    await runReplyJob(id, 1);
+    await runReplyJob(id, 1);
+    expect(jobs[0]?.status).toBe("failed");
+    const notice = stored.find((row) => row.origin === "system-notice");
+    expect(notice?.content).toBe("这条没回成。可以再发一次，或者到设置里看看模型是不是通的。");
+  });
+
+  it("runs a pending job immediately on replyNow", async () => {
+    await drain(persona(), "在吗");
+    expect(jobs[0]?.status).toBe("pending");
+    await replyNow(1, 1);
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+    expect(jobs[0]?.status).toBe("done");
+  });
+
+  it("picks up a due job after the in-process timers are gone", async () => {
+    await drain(persona(), "在吗");
+    clearReplyJobTimers();
+    vi.setSystemTime(jobs[0]!.dueAt);
+    await sweepReplyJobs(jobs[0]!.dueAt);
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+    expect(jobs[0]?.status).toBe("done");
+  });
+
+  it("computes busy as the window end plus the delay, capped", () => {
+    const now = NOW;
+    const busyUntil = new Date(now.getTime() + 40 * 60_000);
+    const due = computeReplyDue({
+      now,
+      delayMs: 20 * 60_000,
+      maxDelayMinutes: 30,
+      sleep: false,
+      asleep: false,
+      wakeAt: null,
+      busyUntil,
+    });
+    expect(due.reason).toBe("busy");
+    expect(due.dueAt.getTime()).toBe(now.getTime() + 30 * 60_000);
+  });
+});

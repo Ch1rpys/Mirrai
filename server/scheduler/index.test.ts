@@ -27,6 +27,7 @@ vi.mock("../_core/redis", () => ({
 const runReminderSweep = vi.fn();
 const answerDueLetters = vi.fn();
 const runProactiveSweep = vi.fn();
+const sweepReplyJobs = vi.fn();
 
 vi.mock("./reminders", () => ({
   runReminderSweep: (...a: unknown[]) => runReminderSweep(...a),
@@ -37,6 +38,9 @@ vi.mock("../chat/letters", () => ({
 vi.mock("../chat/proactive-sweep", () => ({
   runProactiveSweep: (...a: unknown[]) => runProactiveSweep(...a),
 }));
+vi.mock("../chat/reply-jobs", () => ({
+  sweepReplyJobs: (...a: unknown[]) => sweepReplyJobs(...a),
+}));
 
 import { runSchedulerTick } from "./index";
 
@@ -46,13 +50,14 @@ describe("the scheduler tick", () => {
   beforeEach(() => {
     for (const fn of [
       connectRedis, withRedisLock, isRedisUsable,
-      runReminderSweep, answerDueLetters, runProactiveSweep,
+      runReminderSweep, answerDueLetters, runProactiveSweep, sweepReplyJobs,
     ]) {
       fn.mockReset();
     }
     runReminderSweep.mockResolvedValue([]);
     answerDueLetters.mockResolvedValue([]);
     runProactiveSweep.mockResolvedValue([]);
+    sweepReplyJobs.mockResolvedValue(0);
   });
 
   it("sweeps when there is no shared store", async () => {
@@ -63,6 +68,7 @@ describe("the scheduler tick", () => {
     expect(runReminderSweep).toHaveBeenCalled();
     expect(answerDueLetters).toHaveBeenCalled();
     expect(runProactiveSweep).toHaveBeenCalled();
+    expect(sweepReplyJobs).toHaveBeenCalled();
   });
 
   it("sweeps when the shared store is there but dead", async () => {
@@ -75,6 +81,7 @@ describe("the scheduler tick", () => {
     expect(runReminderSweep).toHaveBeenCalled();
     expect(answerDueLetters).toHaveBeenCalled();
     expect(runProactiveSweep).toHaveBeenCalled();
+    expect(sweepReplyJobs).toHaveBeenCalled();
   });
 
   it("sweeps when the store dies between the check and the lock", async () => {
@@ -89,6 +96,7 @@ describe("the scheduler tick", () => {
     expect(runReminderSweep).toHaveBeenCalled();
     expect(answerDueLetters).toHaveBeenCalled();
     expect(runProactiveSweep).toHaveBeenCalled();
+    expect(sweepReplyJobs).toHaveBeenCalled();
   });
 
   it("does not sweep when another copy of the app holds the lock", async () => {
@@ -102,6 +110,7 @@ describe("the scheduler tick", () => {
     expect(runReminderSweep).not.toHaveBeenCalled();
     expect(answerDueLetters).not.toHaveBeenCalled();
     expect(runProactiveSweep).not.toHaveBeenCalled();
+    expect(sweepReplyJobs).not.toHaveBeenCalled();
   });
 
   it("sweeps under the lock when the lock is taken", async () => {
@@ -117,5 +126,6 @@ describe("the scheduler tick", () => {
     expect(runReminderSweep).toHaveBeenCalled();
     expect(answerDueLetters).toHaveBeenCalled();
     expect(runProactiveSweep).toHaveBeenCalled();
+    expect(sweepReplyJobs).toHaveBeenCalled();
   });
 });

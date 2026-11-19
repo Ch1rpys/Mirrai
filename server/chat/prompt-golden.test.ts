@@ -102,6 +102,9 @@ vi.mock("../db", () => ({
   updateMessageMetadata: vi.fn().mockResolvedValue(true),
   createFidelityPair: vi.fn(),
   clearMessagePendingChoice: vi.fn().mockResolvedValue(true),
+  cancelPendingReplyJobs: vi.fn().mockResolvedValue(0),
+  getPendingReplyJob: vi.fn().mockResolvedValue(null),
+  createReplyJob: vi.fn(),
 }));
 
 const invoke = vi.fn();
