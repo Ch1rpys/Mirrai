@@ -77,6 +77,8 @@ export async function handleChannelChat(params: ChannelChatParams): Promise<stri
          * their message sit there unanswered.
          */
         throw new Error(event.message || "The reply could not be produced.");
+      } else if (event.type === "superseded") {
+        return null;
       } else if (event.type === "done") {
         graduationSuggested = event.graduationSuggested;
       }

@@ -84,6 +84,24 @@ describe("the bridge", () => {
     expect(reply!.split(note).length - 1).toBe(1);
   });
 
+  it("says nothing when a later message took the turn away", async () => {
+    async function* superseded() {
+      yield { type: "superseded" };
+    }
+    runConversation.mockImplementation(() => superseded());
+
+    const reply = await handleChannelChat({
+      userId: 1,
+      conversationKey: "oc_abc",
+      personaId: 7,
+      messageText: "在吗",
+      channel: "feishu",
+      locale: "zh",
+    });
+
+    expect(reply).toBeNull();
+  });
+
   it("says nothing about the ritual when no farewell is due", async () => {
     runConversation.mockImplementation(() => answers("在的。"));
 
