@@ -22,6 +22,14 @@ export interface RunBinaryOptions {
   maxBuffer?: number;
   env?: NodeJS.ProcessEnv;
   /**
+   * Text handed to the process on standard input.
+   *
+   * Piper reads what it should say from stdin, and putting the sentence
+   * in the argument list would both leak it into the process list and
+   * hit the argument-length limit on a long reply.
+   */
+  stdin?: string;
+  /**
    * Resolve on a non-zero exit instead of rejecting.
    *
    * `ffmpeg -i <file>` is how a file is probed, and it answers with
@@ -69,7 +77,7 @@ export function runBinary(
 ): Promise<RunBinaryResult> {
   return new Promise((resolve, reject) => {
     const timeout = options.timeoutMs ?? BINARY_TIMEOUT_MS;
-    execFile(
+    const child = execFile(
       bin,
       args,
       {
@@ -118,5 +126,12 @@ export function runBinary(
         );
       },
     );
+    /**
+     * A process that reads stdin never gets past its first read until
+     * the write half is closed here. `execFile` leaves it open.
+     */
+    if (options.stdin !== undefined) {
+      child.stdin?.end(options.stdin);
+    }
   });
 }

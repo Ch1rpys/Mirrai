@@ -243,15 +243,18 @@ function TTSButton({ text }: { text: string }) {
       className="text-muted-subtle hover:text-muted-foreground transition-colors disabled:opacity-30 p-1.5 -m-1">
       {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Volume2 className={`w-3 h-3 ${playing ? "text-foreground" : ""}`} />}
     </button>
-    <button
-      onClick={() => setShowVoices((value) => !value)}
-      title={t("chat.ttsVoice")}
-      aria-label={t("chat.ttsVoice")}
-      className="text-muted-subtle hover:text-muted-foreground transition-colors p-1 -m-1"
-    >
-      <ChevronDown className="w-2.5 h-2.5" />
-    </button>
-    {showVoices && (
+    {/* A voice name only means something to the online service. */}
+    {(voiceData?.voices?.length ?? 0) > 0 && (
+      <button
+        onClick={() => setShowVoices((value) => !value)}
+        title={t("chat.ttsVoice")}
+        aria-label={t("chat.ttsVoice")}
+        className="text-muted-subtle hover:text-muted-foreground transition-colors p-1 -m-1"
+      >
+        <ChevronDown className="w-2.5 h-2.5" />
+      </button>
+    )}
+    {showVoices && (voiceData?.voices?.length ?? 0) > 0 && (
       <div className="absolute z-20 mt-1 min-w-[160px] rounded-lg border border-border bg-elevated shadow-lg py-1">
         {(voiceData?.voices ?? []).map((option) => (
           <button

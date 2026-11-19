@@ -2883,18 +2883,29 @@ export const appRouter = router({
     voices: publicProcedure
       .input(z.object({ locale: z.enum(["zh", "en"]).default("zh") }))
       .query(async ({ input }) => {
-        const { voicesForLocale } = await import("./_core/tts");
-        const { ENV } = await import("./_core/env");
+        const { voicesForLocale, ttsEngine, ttsLeavesMachine } = await import("./_core/tts");
+        const engine = ttsEngine();
         return {
-          voices: voicesForLocale(input.locale),
           /**
-           * Whether the read-aloud may be used.
-           *
-           * The voice is an online service — the text of the reply goes
-           * to Microsoft. So the button is hidden when the operator has
-           * switched it off, rather than offering a button that fails.
+           * A voice name only means something to the Edge service. A
+           * local piper model or a local speech endpoint has its own
+           * voice, so the picker is empty rather than offering names
+           * that do nothing.
            */
-          enabled: ENV.ttsEnabled,
+          voices: engine === "edge" ? voicesForLocale(input.locale) : [],
+          /**
+           * Whether the read-aloud may be used at all.
+           *
+           * The button is hidden when the operator has switched it off,
+           * rather than offering a button that fails.
+           */
+          enabled: engine !== "off",
+          engine,
+          /**
+           * Whether pressing the button sends the text to somebody
+           * else. The interface has to say which one it is.
+           */
+          leavesMachine: ttsLeavesMachine(),
         };
       }),
 

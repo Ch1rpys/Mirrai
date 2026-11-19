@@ -33,6 +33,7 @@ import DistillationModePicker from "@/components/DistillationModePicker";
 import { useLocale } from "@/contexts/LocaleContext";
 import SafetyTransparency from "@/components/SafetyTransparency";
 import EgressList from "@/components/v6/EgressList";
+import TtsNote from "@/components/v6/TtsNote";
 import PushSettings from "@/components/v6/PushSettings";
 import EmbedStatus from "@/components/v6/EmbedStatus";
 import ExtraBodyEditor from "@/components/v6/ExtraBodyEditor";
@@ -602,19 +603,10 @@ function ProfileTab() {
           {/**
            * The read-aloud, said plainly.
            *
-           * The voice is Microsoft's online speech service — the text of
-           * the reply goes to them. The section above says the model is
-           * the only place content is handed to; that was not true, and
-           * the person reading it had no way to know.
+           * Which engine it runs on is the server's answer: the online
+           * voice sends the text to Microsoft, a local one does not.
            */}
-          <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
-            <p className="text-xs font-medium text-foreground/80 mb-1.5">
-              {t("localFirst.ttsTitle")}
-            </p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {t("localFirst.ttsNote")}
-            </p>
-          </div>
+          <TtsNote />
         </div>
       </section>
 

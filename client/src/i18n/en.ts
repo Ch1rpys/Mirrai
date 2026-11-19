@@ -1918,7 +1918,7 @@ export const en = {
   },
   localFirst: {
     title: "Local first",
-    note: "Your data stays on this machine. Below is the only place anything is handed to a model; the read-aloud hands the reply to Microsoft's online speech service.",
+    note: "Your data stays on this machine. Below is the only place anything is handed to a model.",
     trajectoryTitle: "Emotional trajectory assessment",
     trajectoryAuto: "Follow the graduation mode (suggest)",
     trajectoryOn: "Always assess",
@@ -1926,6 +1926,8 @@ export const en = {
     trajectoryNote: "The assessment hands roughly a month of conversation to the model to read the direction your mood is moving. It is the only place that does this — with it off, the graduation mechanism still works; it simply stops reading your messages.",
     ttsTitle: "Read aloud",
     ttsNote: "The read-aloud uses Microsoft's online speech service: the text of the reply is sent to them and the audio comes back. It is the only place content leaves this machine — set TTS_ENABLED=false in .env to switch it off entirely, and the button is gone from the interface.",
+    ttsLocalNote: "The read-aloud is synthesised on this machine: the text is not sent anywhere. Choose the local engine with TTS_ENGINE in .env.",
+    ttsOffNote: "The read-aloud is switched off (TTS_ENABLED=false or TTS_ENGINE=off). No read-aloud button is shown while it is off.",
   },
   consent: {
     notice: "Mirrai is a private tool for you. The chat history you upload stays on this machine; it is never published, and never used to contact or impersonate anybody. The text used to read the person out is handed to the model service you configured — or to this instance's own, if you have not configured one.",
