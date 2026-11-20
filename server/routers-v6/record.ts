@@ -34,6 +34,7 @@ import { afterRecordsRemoved } from "../_core/style-profile";
 import { renderRecordContent } from "@shared/records";
 import { findHarmKind, normalizeHarmReport } from "@shared/harm";
 import { findNearest } from "../records/nearest";
+import { decodeLine } from "../records/decode";
 import { onThisDay } from "../records/on-this-day";
 import { buildReport } from "../records/report";
 import { buildTimeline } from "../records/timeline";
@@ -390,6 +391,18 @@ export const recordRouter = router({
     }),
 
   /** C2.1: the same calendar day in the years before. */
+  decode: protectedProcedure
+    .input(z.object({ personaId: z.number(), text: z.string().trim().min(1).max(500) }))
+    .query(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      return decodeLine({
+        personaId: input.personaId,
+        userId: ctx.user.id,
+        text: input.text,
+      });
+    }),
+
   onThisDay: protectedProcedure
     .input(z.object({ personaId: z.number() }))
     .query(async ({ ctx, input }) => {
