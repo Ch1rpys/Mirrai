@@ -1593,6 +1593,19 @@ export const en = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  counselor: {
+    title: "Take it to a counsellor",
+    note: "For a counsellor or a doctor. By default it holds only curves and dates, and no conversation at all.",
+    open: "Export a one-page summary",
+    range: "Time range",
+    range30: "The last 30 days",
+    range90: "The last 90 days",
+    rangeAll: "All of it",
+    includeThemes: "Include the words I used often",
+    includeJournal: "Include my own diary",
+    build: "Build and open",
+  },
+
   roleplay: {
     title: "Swap places",
     topNote: "You are {{name}} now, and the other side is “you”, rebuilt from the record. This is a practice: at most 15 minutes, once a day.",

@@ -12,6 +12,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { EMOTIONS, EMOTION_KEYS, emotionColor } from "@/lib/emotions";
 import WellbeingTrends from "@/components/v6/WellbeingTrends";
 import GraduationReasons from "@/components/v6/GraduationReasons";
+import CounselorExport from "@/components/v6/CounselorExport";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -375,6 +376,10 @@ export default function Analytics() {
               })()}
             </div>
           )}
+        </ChartCard>
+
+        <ChartCard title={t("counselor.title")}>
+          <CounselorExport />
         </ChartCard>
 
         <ChartCard title={t("wellbeing.title")}>

@@ -18,6 +18,7 @@ vi.mock("@/lib/trpc", () => ({
     user: {
       getAccountStats: { useQuery: () => accountStats },
       deleteAccount: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      exportCounselorSummary: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     chat: {
       exportAll: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },

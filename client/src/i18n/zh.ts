@@ -1594,6 +1594,19 @@ export const zh = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  counselor: {
+    title: "带去给咨询师",
+    note: "想带给咨询师或医生看的时候用。默认只有曲线和日期，没有任何聊天内容。",
+    open: "导出一页摘要",
+    range: "时间范围",
+    range30: "最近 30 天",
+    range90: "最近 90 天",
+    rangeAll: "全部",
+    includeThemes: "加上我自己说过的高频词",
+    includeJournal: "加上我自己写的日记",
+    build: "生成并打开",
+  },
+
   roleplay: {
     title: "角色互换",
     topNote: "现在你是 {{name}}，对面是按记录重建的「你」。这是一次练习，最多 15 分钟，一天一次。",

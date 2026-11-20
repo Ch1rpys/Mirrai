@@ -31,6 +31,7 @@ import GraduationModeSelect, {
 } from "@/components/GraduationModeSelect";
 import DistillationModePicker from "@/components/DistillationModePicker";
 import { useLocale } from "@/contexts/LocaleContext";
+import CounselorExport from "@/components/v6/CounselorExport";
 import SafetyTransparency from "@/components/SafetyTransparency";
 import EgressList from "@/components/v6/EgressList";
 import TtsNote from "@/components/v6/TtsNote";
@@ -1435,6 +1436,8 @@ export function DataManagementTab() {
 
   return (
     <div className="space-y-5">
+      <CounselorExport />
+
       {/* Storage Overview */}
       {accountStats && (
         <section className="surface p-5 sm:p-6">

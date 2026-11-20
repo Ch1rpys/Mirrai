@@ -35,6 +35,10 @@ vi.mock("@/components/v6/GraduationReasons", () => ({
   default: () => <div data-testid="graduation-reasons" />,
 }));
 
+vi.mock("@/components/v6/CounselorExport", () => ({
+  default: () => <div data-testid="counselor-export" />,
+}));
+
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     analytics: {
