@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import {
   acceptPersonaShare,
@@ -23,6 +23,21 @@ import { resolveRecordScope } from "@shared/persona-sharing";
 import { createPersonaFile, createOutboundLetter, getOutboundLetters } from "./db";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
+
+const llmInvoke = vi.hoisted(() => vi.fn());
+vi.mock("./llm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./llm")>();
+  return {
+    ...actual,
+    llmService: {
+      ...actual.llmService,
+      invoke: llmInvoke,
+      invokeWithProvider: llmInvoke,
+    },
+  };
+});
+
+import { runConversation } from "./chat/service";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -154,6 +169,29 @@ describe.skipIf(!DATABASE_URL)("sharing a persona with family (C7.2)", () => {
       expect(await getMemoriesByPersonaId(memberPersonaId, ownerId)).toHaveLength(0);
       expect(await getMemoriesByPersonaId(memberPersonaId, memberId)).toHaveLength(1);
 
+      // The member chats one turn: the personas' own words are read from
+      // the owner's records, and the new messages belong to the member.
+      const captured: any[] = [];
+      llmInvoke.mockImplementation(async (_provider: unknown, params: any) => {
+        captured.push(params);
+        return "在的呀";
+      });
+      const events: any[] = [];
+      for await (const event of runConversation({
+        persona: reread!,
+        userId: memberId,
+        message: "在吗",
+        mode: "once",
+      })) {
+        events.push(event);
+      }
+      expect(events.some((event) => event.type === "error")).toBe(false);
+      const promptText = JSON.stringify(captured);
+      expect(promptText).toContain("在的呀");
+      const memberMessages = await getMessagesByPersonaId(memberPersonaId, memberId);
+      expect(memberMessages.length).toBeGreaterThanOrEqual(2);
+      expect(memberMessages.every((row) => row.userId === memberId)).toBe(true);
+
       // The member may read the persona, not the record or the rules.
       const memberCaller = appRouter.createCaller(ctxFor(memberId));
       await expect(
@@ -197,7 +235,8 @@ describe.skipIf(!DATABASE_URL)("sharing a persona with family (C7.2)", () => {
       // Revoking closes the chat, not the history.
       expect(await revokePersonaShare(shareId, ownerId)).toBe(true);
       expect(await getActiveShareForMemberPersona(memberPersonaId, memberId)).toBeUndefined();
-      expect(await getMessagesByPersonaId(memberPersonaId, memberId)).toHaveLength(1);
+      expect((await getMessagesByPersonaId(memberPersonaId, memberId)).length)
+        .toBeGreaterThanOrEqual(2);
 
       // Deleting the owner's persona leaves the member's row.
       await deletePersona(ownerPersonaId, ownerId);
