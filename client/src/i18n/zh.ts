@@ -1594,6 +1594,23 @@ export const zh = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  roleplay: {
+    title: "角色互换",
+    topNote: "现在你是 {{name}}，对面是按记录重建的「你」。这是一次练习，最多 15 分钟，一天一次。",
+    remaining: "还剩 {{time}}",
+    turnsLeft: "还能说 {{n}} 轮",
+    start: "换一次位置",
+    youAreThem: "你（{{name}}）",
+    rebuiltYou: "按记录重建的「你」",
+    placeholder: "以 {{name}} 的身份说一句",
+    send: "说",
+    end: "结束这次练习",
+    endCard: "换回来了。站在 {{name}} 那边的时候，有什么不一样吗？想写就写。",
+    notePlaceholder: "想写就写，不写也行。",
+    saveNote: "写下来",
+    saved: "写下来了。",
+  },
+
   mirror: {
     title: "镜子",
     note: "同一批记录里，你自己的样子。只有你看得到。",

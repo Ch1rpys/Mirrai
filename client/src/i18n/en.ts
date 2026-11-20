@@ -1593,6 +1593,23 @@ export const en = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  roleplay: {
+    title: "Swap places",
+    topNote: "You are {{name}} now, and the other side is “you”, rebuilt from the record. This is a practice: at most 15 minutes, once a day.",
+    remaining: "{{time}} left",
+    turnsLeft: "{{n}} turns left",
+    start: "Swap once",
+    youAreThem: "You ({{name}})",
+    rebuiltYou: "“You”, rebuilt from the record",
+    placeholder: "Say it as {{name}}",
+    send: "Say it",
+    end: "End this practice",
+    endCard: "Back in your own place. Standing on {{name}}'s side, was anything different? Write it down if you want.",
+    notePlaceholder: "Write it down if you want. You do not have to.",
+    saveNote: "Write it down",
+    saved: "Written.",
+  },
+
   mirror: {
     title: "Mirror",
     note: "The same records, seen from your side. Only you can see this.",
