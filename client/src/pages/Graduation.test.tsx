@@ -44,6 +44,17 @@ vi.mock("@/lib/trpc", () => ({
         useQuery: () => ({ data: { exact: [], similar: null }, isLoading: false }),
       },
     },
+    unsaid: {
+      list: {
+        useQuery: () => ({
+          data: { items: [] },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+      complete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     useUtils: () => ({ persona: { get: { invalidate: vi.fn() } } }),
   },
 }));

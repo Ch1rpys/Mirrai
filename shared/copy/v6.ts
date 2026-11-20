@@ -1022,4 +1022,16 @@ export const V6 = {
     zh: "上一句替对方做了决定。重写这一句：只表达你自己这一侧的话，不要替对方答应、原谅、决定或作出承诺。",
     en: "The previous line decided something on their behalf. Rewrite it: speak only for your own side, and do not agree, forgive, decide or promise for them.",
   },
+  "prompt.unsaidGuard": {
+    zh: "你续写的这句话只给使用者自己看。不要写成可以转交给别人的话，不要替 {{name}} 做任何决定或承诺。",
+    en: "What you write here is for the user alone. Do not write a line that could be handed to anyone else. Do not make any decision or promise on {{name}}'s behalf.",
+  },
+  "prompts.unsaidComplete": {
+    zh: "记录里，这句话起了个头，然后就没了下文。用你自己的语气补一句，把这句话说完。只写这一句，不要解释。",
+    en: "In the record this line starts a thought and then goes no further. Finish it in your own voice. Write only that one line, with no explanation.",
+  },
+  "errors.unsaidLine": {
+    zh: "这只能是记录里 TA 说的一句文字。",
+    en: "That can only be a line of text they said in the record.",
+  },
 } as const satisfies CopyTable;

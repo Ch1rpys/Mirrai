@@ -2072,6 +2072,16 @@ export const zh = {
     takeItWithYou: "把这些带走",
     backHome: "回到首页",
   },
+  unsaid: {
+    title: "{{name}} 起了头、没说完的话",
+    note: "这些是记录里 {{name}} 起了头、没有说下去的话。都是原话。",
+    complete: "让分身试着把它说完",
+    writing: "正在写…",
+    reconstructedTitle: "分身续的，不是 {{name}} 说的",
+    cannot: "这一句没续成。",
+    loading: "正在看记录…",
+    failed: "记录没读出来。",
+  },
   letters: {
     title: "信",
     note: "有些话没法对着聊天框说。写下来吧——写完可以选择不发送，也可以交给 TA。",

@@ -456,3 +456,26 @@ describe("a line they would never say", () => {
     expect(unfenced(prompt)).not.toContain(HOSTILE_NOTE);
   });
 });
+
+describe("a record line being finished for the user (C6.5)", () => {
+  it("reaches the model only inside the material fence", async () => {
+    const { buildUnsaidMessages } = await import("./chat/unsaid");
+    const messages = buildUnsaidMessages({
+      persona: persona(),
+      line: HOSTILE_NOTE,
+      context: ["在吗"],
+    });
+    const user = messages.find((message) => message.role === "user")!;
+    expect(user.content).toContain(HOSTILE_NOTE);
+    const unfencedUser = user.content.replace(
+      /MATERIAL>>>:[0-9a-f]+\n[\s\S]*?<<<END MATERIAL>>>:[0-9a-f]+/g,
+      "",
+    );
+    expect(unfencedUser).not.toContain(HOSTILE_NOTE);
+    // The guard is an instruction, so it is in the system prompt, outside
+    // the persona data block.
+    const system = messages.find((message) => message.role === "system")!;
+    expect(system.content).toContain("不要替");
+    expect(unfenced(system.content)).toContain("不要替");
+  });
+});

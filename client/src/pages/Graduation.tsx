@@ -14,6 +14,7 @@ import GraduationReasons from "@/components/v6/GraduationReasons";
 import SealSettings from "@/components/v6/SealSettings";
 import KeepThree from "@/components/v6/KeepThree";
 import GraduationKindPicker from "@/components/v6/GraduationKindPicker";
+import UnfinishedWords from "@/components/v6/UnfinishedWords";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -451,6 +452,15 @@ export default function Graduation() {
           className="surface p-6 sm:p-8"
         >
           <GraduationReasons personaId={personaId} />
+        </motion.section>
+
+        {/* What they started and never finished (C6.5). Their own words,
+            and one optional reconstructed line that is never stored. */}
+        <motion.section
+          initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }}
+          className="surface p-6 sm:p-8"
+        >
+          <UnfinishedWords personaId={personaId} name={persona.name} />
         </motion.section>
 
         {/* The exit.

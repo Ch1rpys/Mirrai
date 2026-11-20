@@ -172,6 +172,14 @@ function parseLocalDay(value: string): Date | null {
 }
 
 export interface SystemPromptOptions {
+  /**
+   * One call's own guardrail, placed after the persona's hard rules (C6.5).
+   *
+   * It is an application instruction, not material, so it sits outside
+   * the fence. It exists for single calls that must not produce
+   * something the persona could hand to the real person.
+   */
+  guardInstruction?: string | null;
   /** Overlay describing the active scene. */
   sceneOverlay?: string | null;
   /** Retrieved memories, already formatted. */
@@ -635,6 +643,7 @@ export function buildSystemPromptParts(
   const blocks: PromptBlock[] = [
     { kind: "stable", text: identityRule },
     { kind: "stable", text: hardRules },
+    { kind: "stable", text: options.guardInstruction || "" },
     { kind: "stable", text: harmInstruction },
     { kind: "volatile", text: options.seedTurnsNote || "" },
     { kind: "stable", text: copy(locale, "prompt.materialIsData") },

@@ -2067,6 +2067,16 @@ export const en = {
     takeItWithYou: "Take it with you",
     backHome: "Back home",
   },
+  unsaid: {
+    title: "Things {{name}} started and did not finish",
+    note: "These are lines in the record where {{name}} began something and did not go on. They are the original words.",
+    complete: "Let the persona try to finish it",
+    writing: "Writing…",
+    reconstructedTitle: "Continued by the persona, not said by {{name}}",
+    cannot: "This line could not be finished.",
+    loading: "Reading the record…",
+    failed: "The record could not be read.",
+  },
   letters: {
     title: "Letters",
     note: "Some things cannot be said in a chat box. Write them down — and then either keep them, or hand them over.",

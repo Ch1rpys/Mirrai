@@ -174,6 +174,7 @@ import { scheduledRouter } from "./routers-v6/scheduled";
 import { emailRouter } from "./routers-v6/email";
 import { stickerRouter } from "./routers-v6/sticker";
 import { mediaRouter } from "./routers-v6/media";
+import { unsaidRouter } from "./routers-v6/unsaid";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { stateRulesFromTranscript } from "./skill-engine/state-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
@@ -7582,6 +7583,7 @@ export const appRouter = router({
   email: emailRouter,
   sticker: stickerRouter,
   media: mediaRouter,
+  unsaid: unsaidRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {
