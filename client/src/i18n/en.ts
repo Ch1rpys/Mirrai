@@ -1590,6 +1590,19 @@ export const en = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  waitGauge: {
+    title: "How long {{name}} usually takes to reply",
+    summary: "From the records, at this hour {{name}} replies: half within {{median}}, nine in ten within {{p90}}.",
+    note: "This is what happened before, not a promise. The most common reason for no reply is that they are busy.",
+    empty: "There are too few exchanges in the record to measure this.",
+    insufficient: "Too little to measure",
+    medianCell: "Half within {{value}}",
+    p90Cell: "Nine in ten within {{value}}",
+    samplesCell: "{{n}} times",
+    seconds: "{{n}}s",
+    minutes: "{{n}} min",
+  },
+
   outbound: {
     title: "Words to take back",
     editLabel: "These words",

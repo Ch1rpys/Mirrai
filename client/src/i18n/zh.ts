@@ -1591,6 +1591,19 @@ export const zh = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  waitGauge: {
+    title: "{{name}} 一般多久回",
+    summary: "按记录，这个钟点 {{name}} 回消息：一半在 {{median}} 之内，九成在 {{p90}} 之内。",
+    note: "这是过去的统计，不是保证。没回，最常见的原因是在忙。",
+    empty: "记录里的往来太少，量不出来。",
+    insufficient: "记录太少",
+    medianCell: "一半 {{value}} 之内",
+    p90Cell: "九成 {{value}} 之内",
+    samplesCell: "{{n}} 次",
+    seconds: "{{n}} 秒",
+    minutes: "{{n}} 分钟",
+  },
+
   outbound: {
     title: "带回去的话",
     editLabel: "这句话",

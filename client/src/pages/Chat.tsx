@@ -35,6 +35,7 @@ import ChoiceBubble from "@/components/v6/ChoiceBubble";
 import PendingReply from "@/components/v6/PendingReply";
 import OutboundEntry from "@/components/v6/OutboundEntry";
 import OutboundDrawer from "@/components/v6/OutboundDrawer";
+import WaitGauge from "@/components/v6/WaitGauge";
 import { useTypingReveal, waitMs } from "@/components/v6/useTypingReveal";
 
 /** A message the reply carried besides its words (B7.1). */
@@ -410,6 +411,7 @@ export default function Chat() {
    * drawer here too.
    */
   const [showOutbound, setShowOutbound] = useState(false);
+  const [showWaitGauge, setShowWaitGauge] = useState(false);
   const collectOutbound = trpc.outbound.addFromMessage.useMutation({
     onSuccess: () => toast.success(t("outbound.keep")),
     onError: (e: any) => toast.error(e.message),
@@ -1922,6 +1924,11 @@ export default function Chat() {
                       memorial={memorialMode}
                       onOpen={() => { setShowOutbound(true); setShowMenu(false); }}
                     />
+                    <button onClick={() => { setShowWaitGauge(true); setShowMenu(false); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors text-left">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      {t("waitGauge.title", { name: displayName || t("common.them") })}
+                    </button>
                     <button onClick={() => { navigate(`/diary`); setShowMenu(false); }}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors">
                       <BookOpen className="w-4 h-4 text-muted-foreground" />{t("diary.title")}
@@ -2114,6 +2121,32 @@ export default function Chat() {
         open={showOutbound}
         onClose={() => setShowOutbound(false)}
       />
+
+      {showWaitGauge && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/40 flex items-center justify-center p-4"
+          onClick={() => setShowWaitGauge(false)}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={t("waitGauge.title", { name: displayName || t("common.them") })}
+            className="surface relative w-full max-w-md max-h-[80vh] overflow-y-auto p-5"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowWaitGauge(false)}
+              aria-label={t("common.close")}
+              className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <WaitGauge personaId={personaId} name={displayName || t("common.them")} timezone={persona?.timezone} />
+          </div>
+        </div>
+      )}
 
       {showCrisis && <CrisisCard onClose={() => setShowCrisis(false)} />}
 

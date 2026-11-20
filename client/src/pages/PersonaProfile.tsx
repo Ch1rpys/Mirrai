@@ -18,6 +18,7 @@ import { normalizeAddressHistory } from "@shared/address-history";
 import { normalizeStyleProfile } from "@shared/style-profile";
 import AddressHistoryView from "@/components/v6/AddressHistoryView";
 import DelayView, { SleepWindow } from "@/components/v6/DelayView";
+import WaitGauge from "@/components/v6/WaitGauge";
 import TriggersView from "@/components/v6/TriggersView";
 import ProsodyView from "@/components/v6/ProsodyView";
 import CallsView from "@/components/v6/CallsView";
@@ -308,6 +309,11 @@ export default function PersonaProfile() {
             className="surface p-5 sm:p-6"
           >
             <DelayView name={persona.name} replyDelay={styleProfile.replyDelay} />
+            <WaitGauge
+              personaId={persona.id}
+              name={persona.name}
+              timezone={persona.timezone}
+            />
             <SleepWindow name={persona.name} routine={styleProfile.routine} />
             <CallsView name={persona.name} calls={styleProfile.calls} />
           </motion.section>

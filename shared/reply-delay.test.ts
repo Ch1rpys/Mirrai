@@ -8,6 +8,7 @@ import {
   sampleDelayMs,
   type DelayBuckets,
   type DelayRow,
+  delayQuantiles,
 } from "./reply-delay";
 
 function gaps(count: number, seconds: number, band: "evening" | "afternoon"): DelayRow[] {
@@ -76,6 +77,14 @@ describe("conditional reply delay", () => {
   it("returns null below thirty gaps", () => {
     const measured = measureReplyDelay(gaps(29, 40, "evening"), "Asia/Shanghai");
     expect(measured).toBeNull();
+  });
+
+  it("gives the median and the ninetieth percentile the gauge shows", () => {
+    const bucket = { n: 40, mu: Math.log(40), sigma: 0.8 };
+    const { medianSec, p90Sec } = delayQuantiles(bucket);
+    expect(medianSec).toBeCloseTo(40, 6);
+    expect(p90Sec).toBeGreaterThan(109);
+    expect(p90Sec).toBeLessThan(113);
   });
 
   it("draws the same delay twice from one seed, inside an hour and six", () => {

@@ -55,6 +55,11 @@ vi.mock("@/lib/trpc", () => ({
         }),
       },
     },
+    style: {
+      get: {
+        useQuery: () => ({ data: { profile: null }, isLoading: false, isError: false, refetch: vi.fn() }),
+      },
+    },
     media: {
       measureProsody: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       listPhotos: {

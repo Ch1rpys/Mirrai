@@ -168,6 +168,22 @@ export function pickDelayBucket(
   return { bucket: fallback, via: "all" };
 }
 
+/**
+ * The two numbers the waiting gauge shows (C3.1).
+ *
+ * The bucket is a log-normal, so the median is exp(mu) and the ninetieth
+ * percentile is exp(mu + 1.2816 sigma). Both are seconds.
+ */
+export function delayQuantiles(bucket: DelayBucket): {
+  medianSec: number;
+  p90Sec: number;
+} {
+  return {
+    medianSec: Math.exp(bucket.mu),
+    p90Sec: Math.exp(bucket.mu + 1.2816 * bucket.sigma),
+  };
+}
+
 function standardNormal(rng: () => number): number {
   const u1 = Math.min(1 - Number.EPSILON, Math.max(Number.EPSILON, rng()));
   const u2 = rng();
