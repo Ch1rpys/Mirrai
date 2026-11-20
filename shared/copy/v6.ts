@@ -946,6 +946,14 @@ export const V6 = {
     zh: "今天已经换过一次了。明天可以再来。",
     en: "You have already swapped once today. Come back tomorrow.",
   },
+  "scheduled.pastDate": {
+    zh: "这个日子已经过去了。",
+    en: "That day has already passed.",
+  },
+  "scheduled.alreadyDone": {
+    zh: "这一条已经送出去了，或者已经取消了。",
+    en: "This one has already been delivered or cancelled.",
+  },
   "errors.weatherDisabled": {
     zh: "天气功能没有打开。",
     en: "Weather is switched off.",

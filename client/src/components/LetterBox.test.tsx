@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
@@ -15,6 +15,7 @@ const write = vi.fn();
 const remove = vi.fn();
 const setDone = vi.fn();
 const invalidate = vi.fn();
+const scheduledCreate = vi.fn();
 
 let letters: any[] = [];
 let todos: any[] = [];
@@ -43,6 +44,7 @@ vi.mock("@/lib/trpc", () => ({
         },
         todos: { invalidate },
       },
+      scheduled: { list: { invalidate } },
     }),
     letter: {
       list: { useQuery: () => ({ data: listData }) },
@@ -62,6 +64,20 @@ vi.mock("@/lib/trpc", () => ({
           mutate: (values: any) => {
             setDone(values);
             options?.onSuccess?.();
+          },
+          isPending: false,
+        }),
+      },
+    },
+    scheduled: {
+      list: { useQuery: () => ({ data: { items: [] }, isLoading: false, isError: false }) },
+      cancel: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      open: { useQuery: () => ({ data: null }) },
+      create: {
+        useMutation: (options: any) => ({
+          mutate: (values: any) => {
+            scheduledCreate(values);
+            options?.onSuccess?.({ created: true });
           },
           isPending: false,
         }),
@@ -190,6 +206,48 @@ describe("the letters", () => {
         deliver: true,
       }),
     );
+  });
+
+  it("schedules a letter for a day instead of handing it over now", async () => {
+    const user = userEvent.setup();
+    render(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
+
+    await user.click(screen.getByText(translate("zh", "letters.write")));
+    await user.type(screen.getByPlaceholderText(translate("zh", "letters.placeholder")), "那天再说。");
+    await user.click(screen.getByText(translate("zh", "scheduled.scheduleToggle")));
+    fireEvent.change(screen.getByLabelText(translate("zh", "scheduled.dateInput")), {
+      target: { value: "2099-01-01T20:00" },
+    });
+    await user.click(screen.getByText(translate("zh", "letters.deliver")));
+
+    expect(scheduledCreate).toHaveBeenCalledWith({
+      personaId: 1,
+      kind: "letter",
+      body: "那天再说。",
+      dueAt: new Date("2099-01-01T20:00").toISOString(),
+    });
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it("writes a capsule to the user's own future self", async () => {
+    const user = userEvent.setup();
+    render(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
+
+    await user.click(screen.getByText(translate("zh", "letters.write")));
+    await user.type(screen.getByPlaceholderText(translate("zh", "letters.placeholder")), "给两年后的我。");
+    await user.click(screen.getByText(translate("zh", "letters.kindCapsule")));
+    fireEvent.change(screen.getByLabelText(translate("zh", "scheduled.dateInput")), {
+      target: { value: "2099-01-01T20:00" },
+    });
+    await user.click(screen.getByText(translate("zh", "scheduled.send")));
+
+    expect(scheduledCreate).toHaveBeenCalledWith({
+      personaId: 1,
+      kind: "capsule",
+      body: "给两年后的我。",
+      dueAt: new Date("2099-01-01T20:00").toISOString(),
+    });
+    expect(write).not.toHaveBeenCalled();
   });
 
   it("keeps a note for later as a note, not as a letter", async () => {

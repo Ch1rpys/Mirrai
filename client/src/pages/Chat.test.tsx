@@ -112,6 +112,10 @@ vi.mock("@/lib/trpc", () => ({
       status: { useQuery: () => ({ data: { enabled: true } }) },
       weather: { useQuery: () => ({ data: null }) },
     },
+    scheduled: {
+      list: { useQuery: () => ({ data: { items: [] }, isError: false }) },
+      create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     useUtils: () => ({
       persona: {
         get: { invalidate: vi.fn() },
@@ -122,6 +126,7 @@ vi.mock("@/lib/trpc", () => ({
         pendingReply: { invalidate: vi.fn() },
       },
       client: { mutation: vi.fn() },
+      scheduled: { list: { invalidate: vi.fn() } },
     }),
   },
 }));

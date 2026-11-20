@@ -175,6 +175,7 @@ export const zh = {
   },
 
   chat: {
+    scheduledSend: "定时发送",
     /**
      * The label that says what this is.
      *
@@ -2077,6 +2078,7 @@ export const zh = {
     kindLetter: "写给 TA 的信",
     kindLabel: "这封信是什么",
     kindTodo: "等 TA 回来再说",
+    kindCapsule: "给以后的自己",
     todoTitle: "等 {{name}} 回来再说（{{open}} 件没说）",
     todoDone: "把这件事勾掉",
     todoUndo: "取消勾选",
@@ -2864,6 +2866,33 @@ export const zh = {
       storm: "雷雨",
       unknown: "天气不明",
     },
+  },
+  scheduled: {
+    title: "还没到时间的",
+    pendingCapsule: "{{date}} 才能打开",
+    pendingLetter: "{{date}} 会送出一封信",
+    pendingMessage: "{{date}} 会发一句话",
+    cancelled: "{{date}} 那条没有送出去：{{reason}}。",
+    reasonAsleep: "{{name}} 那时已经休眠了",
+    reasonSealed: "{{name}} 那时是封存状态",
+    reasonClosed: "那天不能聊",
+    reasonDeleted: "{{name}} 那时已经不在了",
+    open: "打开",
+    close: "收起来",
+    cancel: "取消",
+    sendTitle: "定时发送",
+    sendHint: "到那天，这句话会作为你说的发出去，{{name}} 照常回。",
+    messagePlaceholder: "想在那天说的一句话",
+    dateLabel: "什么时候发",
+    send: "定下来",
+    created: "定好了。",
+    dateFirst: "先选一个日子。",
+    crisisTitle: "先等一下",
+    capsuleHint: "写给以后的自己。到那天之前，连你自己也打不开。",
+    scheduleToggle: "定个日子再送",
+    scheduleHint: "到那天，这封信会交给 {{name}}，像平时一样回。",
+    dateInput: "哪一天",
+    loadFailed: "没有读到还没到时间的东西。",
   },
   material: {
     title: "材料够不够",

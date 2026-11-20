@@ -5,12 +5,14 @@ import { PenLine, Send, Trash2, Clock, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { USER_MOODS, isUserMood, type UserMood } from "@shared/user-side";
 import { formatInstantInZone } from "@/lib/dates";
 import { useAuth } from "@/_core/hooks/useAuth";
 import CrisisCard from "@/components/CrisisCard";
 import { useConfirm } from "@/components/ConfirmDialog";
+import ScheduledList from "@/components/v6/ScheduledList";
 
 /**
  * The letters.
@@ -60,7 +62,10 @@ export default function LetterBox({ personaId, personaName }: { personaId: numbe
   const [showWrite, setShowWrite] = useState(false);
   const [body, setBody] = useState("");
   const [mood, setMood] = useState<UserMood | "">("");
-  const [kind, setKind] = useState<"letter" | "todo">("letter");
+  const [kind, setKind] = useState<"letter" | "todo" | "capsule">("letter");
+  /** A day the letter should go out on, or empty for "now" (C5.3). */
+  const [scheduleOn, setScheduleOn] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState("");
   /**
    * The support resources.
    *
@@ -118,6 +123,35 @@ export default function LetterBox({ personaId, personaName }: { personaId: numbe
     },
     onError: (e) => toast.error(e.message),
   });
+  /**
+   * Something that arrives later (C5.3).
+   *
+   * A capsule is not a letter: it is not delivered, not answered, and
+   * cannot be read until its day. A letter with a day is delivered then.
+   */
+  const createScheduled = trpc.scheduled.create.useMutation({
+    onSuccess: (result) => {
+      if (!result.created) {
+        setShowCrisis(true);
+        return;
+      }
+      utils.scheduled.list.invalidate({ personaId });
+      setBody("");
+      setMood("");
+      setScheduleOn(false);
+      setScheduleAt("");
+      setShowWrite(false);
+      toast.success(t("scheduled.created"));
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  function dueIso(value: string): string | null {
+    if (!value) return null;
+    const at = new Date(value);
+    return Number.isFinite(at.getTime()) ? at.toISOString() : null;
+  }
+
   /**
    * Ticking a note off (C3.7).
    *
@@ -218,6 +252,7 @@ export default function LetterBox({ personaId, personaName }: { personaId: numbe
   return (
     <div className="space-y-4">
       {showCrisis && <CrisisCard onClose={() => setShowCrisis(false)} />}
+      <ScheduledList personaId={personaId} name={personaName} />
       {letters.length === 0 && !showWrite && (
         <p className="text-xs text-muted-foreground leading-relaxed">
           {/* "No letters yet" while the letters are still on their way
@@ -454,6 +489,18 @@ export default function LetterBox({ personaId, personaName }: { personaId: numbe
             >
               {t("letters.kindTodo")}
             </button>
+            <button
+              type="button"
+              aria-pressed={kind === "capsule"}
+              onClick={() => setKind("capsule")}
+              className={`text-[0.625rem] px-2.5 py-1 rounded border transition-colors ${
+                kind === "capsule"
+                  ? "border-primary/50 text-foreground"
+                  : "border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t("letters.kindCapsule")}
+            </button>
           </div>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label={t("moodCheckIn.title")}>
             {USER_MOODS.map((option) => (
@@ -472,6 +519,40 @@ export default function LetterBox({ personaId, personaName }: { personaId: numbe
               </button>
             ))}
           </div>
+          {kind !== "todo" && (
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                {kind === "capsule" ? (
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{t("scheduled.capsuleHint")}</span>
+                  </label>
+                ) : (
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={scheduleOn}
+                      onChange={(event) => setScheduleOn(event.target.checked)}
+                    />
+                    {t("scheduled.scheduleToggle")}
+                  </label>
+                )}
+                {(kind === "capsule" || scheduleOn) && (
+                  <Input
+                    type="datetime-local"
+                    aria-label={t("scheduled.dateInput")}
+                    value={scheduleAt}
+                    onChange={(event) => setScheduleAt(event.target.value)}
+                    className="w-56"
+                  />
+                )}
+              </div>
+              {scheduleOn && kind === "letter" && (
+                <p className="text-[0.625rem] text-muted-subtle leading-relaxed">
+                  {t("scheduled.scheduleHint", { name: personaName || t("common.them") })}
+                </p>
+              )}
+            </div>
+          )}
           <div className="flex flex-wrap gap-2">
             {kind === "todo" ? (
               <Button
@@ -488,6 +569,22 @@ export default function LetterBox({ personaId, personaName }: { personaId: numbe
                 })}
               >
                 <Clock className="w-3.5 h-3.5" /> {t("letters.saveTodo")}
+              </Button>
+            ) : kind === "capsule" ? (
+              <Button
+                size="sm"
+                className="rounded-md px-4"
+                disabled={!body.trim() || createScheduled.isPending}
+                onClick={() => {
+                  const dueAt = dueIso(scheduleAt);
+                  if (!dueAt) {
+                    toast.error(t("scheduled.dateFirst"));
+                    return;
+                  }
+                  createScheduled.mutate({ personaId, kind: "capsule", body: body.trim(), dueAt });
+                }}
+              >
+                <Clock className="w-3.5 h-3.5" /> {t("scheduled.send")}
               </Button>
             ) : (
               <>
@@ -509,14 +606,25 @@ export default function LetterBox({ personaId, personaName }: { personaId: numbe
                   size="sm"
                   variant="outline"
                   className="rounded-md px-4 bg-transparent"
-                  disabled={!body.trim() || write.isPending}
-                  onClick={() => write.mutate({
-                    personaId,
-                    body: body.trim(),
-                    mood: mood || undefined,
-                    deliver: true,
-                    locale: locale === "en" ? "en" : "zh",
-                  })}
+                  disabled={!body.trim() || write.isPending || createScheduled.isPending}
+                  onClick={() => {
+                    if (scheduleOn) {
+                      const dueAt = dueIso(scheduleAt);
+                      if (!dueAt) {
+                        toast.error(t("scheduled.dateFirst"));
+                        return;
+                      }
+                      createScheduled.mutate({ personaId, kind: "letter", body: body.trim(), dueAt });
+                      return;
+                    }
+                    write.mutate({
+                      personaId,
+                      body: body.trim(),
+                      mood: mood || undefined,
+                      deliver: true,
+                      locale: locale === "en" ? "en" : "zh",
+                    });
+                  }}
                 >
                   <Send className="w-3.5 h-3.5" /> {t("letters.deliver")}
                 </Button>
@@ -527,7 +635,7 @@ export default function LetterBox({ personaId, personaName }: { personaId: numbe
             </Button>
           </div>
           <p className="text-[0.625rem] text-muted-subtle leading-relaxed">
-            {t(kind === "todo" ? "letters.todoNote" : "letters.deliverNote")}
+            {t(kind === "todo" ? "letters.todoNote" : kind === "capsule" ? "scheduled.capsuleHint" : "letters.deliverNote")}
           </p>
         </div>
       ) : (

@@ -7,7 +7,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import {
   ArrowLeft, Send, ChevronDown, Trash2, MoreVertical,
   Plus, Image, Mic, X, Clock, BarChart3, Search, BookOpen, Theater,
-  Download, Check, HeartCrack, UserRound, Moon, CornerUpLeft,
+  Download, Check, HeartCrack, UserRound, Moon, CornerUpLeft, CalendarClock,
 } from "lucide-react";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
 import { MessageBubble, emotionOf, type Message } from "@/components/MessageBubble";
@@ -39,6 +39,7 @@ import WaitGauge from "@/components/v6/WaitGauge";
 import MeetDayNote from "@/components/v6/MeetDayNote";
 import MeetCountdown from "@/components/v6/MeetCountdown";
 import TheirSide from "@/components/v6/TheirSide";
+import ScheduledSend from "@/components/v6/ScheduledSend";
 import AfterChat from "@/components/v6/AfterChat";
 import { useTypingReveal, waitMs } from "@/components/v6/useTypingReveal";
 
@@ -416,6 +417,7 @@ export default function Chat() {
    */
   const [showOutbound, setShowOutbound] = useState(false);
   const [showWaitGauge, setShowWaitGauge] = useState(false);
+  const [showScheduled, setShowScheduled] = useState(false);
   const collectOutbound = trpc.outbound.addFromMessage.useMutation({
     onSuccess: () => toast.success(t("outbound.keep")),
     onError: (e: any) => toast.error(e.message),
@@ -1945,6 +1947,11 @@ export default function Chat() {
                       <Clock className="w-4 h-4 text-muted-foreground" />
                       {t("waitGauge.title", { name: displayName || t("common.them") })}
                     </button>
+                    <button onClick={() => { setShowScheduled(true); setShowMenu(false); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors text-left">
+                      <CalendarClock className="w-4 h-4 text-muted-foreground" />
+                      {t("chat.scheduledSend")}
+                    </button>
                     <button onClick={() => { navigate(`/persona/${personaId}/decode`); setShowMenu(false); }}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors text-left">
                       <Search className="w-4 h-4 text-muted-foreground" />
@@ -2193,6 +2200,13 @@ export default function Chat() {
           </div>
         </div>
       )}
+
+      <ScheduledSend
+        personaId={personaId}
+        name={displayName || t("common.them")}
+        open={showScheduled}
+        onClose={() => setShowScheduled(false)}
+      />
 
       {showCrisis && <CrisisCard onClose={() => setShowCrisis(false)} />}
 

@@ -43,6 +43,7 @@ const DATABASE_TEST_FILES = new Set([
   "server/db-timeline.test.ts",
   "server/db-record-report.test.ts",
   "server/db-records.test.ts",
+  "server/db-scheduled.test.ts",
   "server/db-search.test.ts",
   "server/db-stickers.test.ts",
   "server/db-unique-indexes.test.ts",

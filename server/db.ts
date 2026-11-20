@@ -35,6 +35,7 @@ import {
   sessionCheckinPrompts, InsertSessionCheckinPrompt,
   userJournal, InsertUserJournalEntry,
   roleplaySessions, InsertRoleplaySession,
+  scheduledItems, InsertScheduledItem, ScheduledItem,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
@@ -1248,6 +1249,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(sessionCheckinPrompts).where(eq(sessionCheckinPrompts.userId, id));
     await tx.delete(userJournal).where(eq(userJournal.userId, id));
     await tx.delete(roleplaySessions).where(eq(roleplaySessions.userId, id));
+    await tx.delete(scheduledItems).where(eq(scheduledItems.userId, id));
     await tx.delete(personaFiles).where(eq(personaFiles.userId, id));
     await tx.delete(personaQuestionnaireAnswers).where(eq(personaQuestionnaireAnswers.userId, id));
     await tx.delete(personaTemplates).where(eq(personaTemplates.userId, id));
@@ -1680,6 +1682,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(sessionCheckinPrompts).where(and(eq(sessionCheckinPrompts.personaId, id), eq(sessionCheckinPrompts.userId, userId)));
     await tx.delete(userJournal).where(and(eq(userJournal.personaId, id), eq(userJournal.userId, userId)));
     await tx.delete(roleplaySessions).where(and(eq(roleplaySessions.personaId, id), eq(roleplaySessions.userId, userId)));
+    await tx.delete(scheduledItems).where(and(eq(scheduledItems.personaId, id), eq(scheduledItems.userId, userId)));
     await tx.delete(personaFiles).where(and(eq(personaFiles.personaId, id), eq(personaFiles.userId, userId)));
     await tx.delete(personaQuestionnaireAnswers).where(and(eq(personaQuestionnaireAnswers.personaId, id), eq(personaQuestionnaireAnswers.userId, userId)));
     await tx.delete(personaVersions).where(and(eq(personaVersions.personaId, id), eq(personaVersions.userId, userId)));
@@ -9169,4 +9172,150 @@ export async function getEvalRunsByIds(ids: number[], userId: number) {
     .select()
     .from(evalRuns)
     .where(and(eq(evalRuns.userId, userId), inArray(evalRuns.id, ids)));
+}
+
+// ─── Scheduled items (C5.3) ────────────────────────────────────────────────
+
+/**
+ * How old a claim has to be before another sweep may take it.
+ *
+ * A claim is a lock, not a state: the row stays `scheduled` until the
+ * delivery actually finishes. A process that died mid-delivery leaves a
+ * claim behind, and after this long the next sweep tries again.
+ */
+const SCHEDULED_ITEM_CLAIM_STALE_MS = 5 * 60 * 1000;
+
+export async function createScheduledItem(data: InsertScheduledItem): Promise<ScheduledItem> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [row] = await db.insert(scheduledItems).values(data).returning();
+  if (!row) throw new Error("DB not available");
+  return row;
+}
+
+/** The scheduled items of one persona, oldest first. */
+export async function listScheduledItems(
+  personaId: number,
+  userId: number,
+  limit = 50,
+): Promise<ScheduledItem[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(scheduledItems)
+    .where(and(eq(scheduledItems.personaId, personaId), eq(scheduledItems.userId, userId)))
+    .orderBy(asc(scheduledItems.dueAt), asc(scheduledItems.id))
+    .limit(limit);
+}
+
+export async function getScheduledItem(
+  id: number,
+  userId: number,
+): Promise<ScheduledItem | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .select()
+    .from(scheduledItems)
+    .where(and(eq(scheduledItems.id, id), eq(scheduledItems.userId, userId)))
+    .limit(1);
+  return row ?? null;
+}
+
+/** Cancels a still-scheduled item. Delivered items are left alone. */
+export async function cancelScheduledItem(
+  id: number,
+  userId: number,
+  reason: string | null = null,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .update(scheduledItems)
+    .set({ status: "cancelled", cancelReason: reason, claimedAt: null })
+    .where(and(
+      eq(scheduledItems.id, id),
+      eq(scheduledItems.userId, userId),
+      eq(scheduledItems.status, "scheduled"),
+    ))
+    .returning({ id: scheduledItems.id });
+  return rows.length > 0;
+}
+
+/** The items whose day has come and that nobody has delivered yet. */
+export async function listDueScheduledItems(now: Date, limit = 20): Promise<ScheduledItem[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const staleBefore = new Date(now.getTime() - SCHEDULED_ITEM_CLAIM_STALE_MS);
+  return db
+    .select()
+    .from(scheduledItems)
+    .where(and(
+      lte(scheduledItems.dueAt, now),
+      eq(scheduledItems.status, "scheduled"),
+      or(
+        isNull(scheduledItems.claimedAt),
+        lt(scheduledItems.claimedAt, staleBefore),
+      ),
+    ))
+    .orderBy(asc(scheduledItems.dueAt))
+    .limit(limit);
+}
+
+export async function claimScheduledItem(id: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const staleBefore = new Date(Date.now() - SCHEDULED_ITEM_CLAIM_STALE_MS);
+  const [row] = await db
+    .update(scheduledItems)
+    .set({ claimedAt: new Date() })
+    .where(and(
+      eq(scheduledItems.id, id),
+      eq(scheduledItems.userId, userId),
+      eq(scheduledItems.status, "scheduled"),
+      or(
+        isNull(scheduledItems.claimedAt),
+        lt(scheduledItems.claimedAt, staleBefore),
+      ),
+    ))
+    .returning({ id: scheduledItems.id });
+  return Boolean(row);
+}
+
+export async function finishScheduledItem(
+  id: number,
+  userId: number,
+  status: "delivered" | "cancelled",
+  options: { reason?: string | null; at?: Date } = {},
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .update(scheduledItems)
+    .set({
+      status,
+      cancelReason: status === "cancelled" ? options.reason ?? null : null,
+      deliveredAt: status === "delivered" ? options.at ?? new Date() : null,
+      claimedAt: null,
+    })
+    .where(and(eq(scheduledItems.id, id), eq(scheduledItems.userId, userId)))
+    .returning({ id: scheduledItems.id });
+  return rows.length > 0;
+}
+
+/** Gives a claimed item back to the next sweep after a failed delivery. */
+export async function releaseScheduledItem(id: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .update(scheduledItems)
+    .set({ claimedAt: null })
+    .where(and(
+      eq(scheduledItems.id, id),
+      eq(scheduledItems.userId, userId),
+      eq(scheduledItems.status, "scheduled"),
+    ))
+    .returning({ id: scheduledItems.id });
+  return rows.length > 0;
 }

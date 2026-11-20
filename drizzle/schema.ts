@@ -2093,3 +2093,47 @@ export const recordReports = pgTable("record_reports", {
 
 export type RecordReportRow = typeof recordReports.$inferSelect;
 export type InsertRecordReport = typeof recordReports.$inferInsert;
+
+/**
+ * Something the user scheduled to arrive later (C5.3).
+ *
+ * Three kinds, one table:
+ *
+ *   - `capsule` — a letter to the user's own future self. Its body is
+ *     not returned before the day; after it, the letter box can open it.
+ *   - `message` — a line to the persona, sent at that moment. It enters
+ *     the conversation as the user's own message and the persona answers
+ *     as usual.
+ *   - `letter` — a letter to the persona, written now and delivered on
+ *     the day. It becomes a normal letter and gets a normal answer.
+ *
+ * `claimedAt` is the lock that keeps two sweeps from delivering the same
+ * thing twice, the same way `reply_jobs` does it.
+ */
+export const scheduledItems = pgTable("scheduled_items", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  kind: varchar("kind", { length: 16 }).notNull(),
+  body: text("body").notNull(),
+  dueAt: timestamp("dueAt").notNull(),
+  /** `scheduled`, `delivered` or `cancelled`. */
+  status: varchar("status", { length: 16 }).default("scheduled").notNull(),
+  /**
+   * Why a scheduled item was called off.
+   *
+   * `asleep`, `sealed`, `closed` (the taper says no chat that day) or
+   * `deleted`. The interface says the reason instead of an empty state.
+   */
+  cancelReason: varchar("cancelReason", { length: 16 }),
+  claimedAt: timestamp("claimedAt"),
+  deliveredAt: timestamp("deliveredAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userDueIdx: index("scheduled_items_user_due_idx").on(table.userId, table.status, table.dueAt),
+  personaIdx: index("scheduled_items_persona_idx").on(table.personaId, table.userId),
+  dueIdx: index("scheduled_items_due_idx").on(table.dueAt),
+}));
+
+export type ScheduledItem = typeof scheduledItems.$inferSelect;
+export type InsertScheduledItem = typeof scheduledItems.$inferInsert;
