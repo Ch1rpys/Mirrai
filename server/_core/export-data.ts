@@ -122,6 +122,22 @@ export interface ExportBundle {
   /** The user's own moods, across every persona's time. */
   moods: Array<{ date: string; mood: UserMood; note: string | null }>;
   /**
+   * The user's own diary (C4.5).
+   *
+   * The one part of the bundle that was never shown to a model. It is
+   * exported like everything else — it is the user's data, and "all of
+   * my data" has to mean it.
+   */
+  journal: Array<{
+    id: number;
+    personaId: number | null;
+    body: string;
+    mood: string | null;
+    entryDate: string;
+    createdAt: Date;
+    updatedAt: Date;
+  }>;
+  /**
    * What the export could not carry.
    *
    * The bundle is held in memory and then serialised into one string,
@@ -150,6 +166,7 @@ export async function buildExportBundle(userId: number): Promise<ExportBundle | 
 
   const personaList = await db.getPersonasByUserId(userId);
   const moods = await db.getUserMoods(userId, 3650);
+  const journal = await db.getUserJournal(userId);
 
   const personas: ExportBundle["personas"] = [];
   const truncated: ExportBundle["truncated"] = [];
@@ -278,6 +295,15 @@ export async function buildExportBundle(userId: number): Promise<ExportBundle | 
     },
     personas,
     moods: moods.map((m) => ({ date: m.date, mood: m.mood as UserMood, note: m.note })),
+    journal: journal.map((row) => ({
+      id: row.id,
+      personaId: row.personaId,
+      body: row.body,
+      mood: row.mood,
+      entryDate: row.entryDate,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    })),
   };
 }
 

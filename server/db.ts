@@ -32,6 +32,7 @@ import {
   memoryMedia, InsertMemoryMedia, MemoryMedia,
   rehearsals, InsertRehearsal,
   sessionCheckins, InsertSessionCheckin,
+  userJournal, InsertUserJournalEntry,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
@@ -1237,6 +1238,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(outboundLetters).where(eq(outboundLetters.userId, id));
     await tx.delete(rehearsals).where(eq(rehearsals.userId, id));
     await tx.delete(sessionCheckins).where(eq(sessionCheckins.userId, id));
+    await tx.delete(userJournal).where(eq(userJournal.userId, id));
     await tx.delete(personaFiles).where(eq(personaFiles.userId, id));
     await tx.delete(personaQuestionnaireAnswers).where(eq(personaQuestionnaireAnswers.userId, id));
     await tx.delete(personaTemplates).where(eq(personaTemplates.userId, id));
@@ -1666,6 +1668,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(outboundLetters).where(and(eq(outboundLetters.personaId, id), eq(outboundLetters.userId, userId)));
     await tx.delete(rehearsals).where(and(eq(rehearsals.personaId, id), eq(rehearsals.userId, userId)));
     await tx.delete(sessionCheckins).where(and(eq(sessionCheckins.personaId, id), eq(sessionCheckins.userId, userId)));
+    await tx.delete(userJournal).where(and(eq(userJournal.personaId, id), eq(userJournal.userId, userId)));
     await tx.delete(personaFiles).where(and(eq(personaFiles.personaId, id), eq(personaFiles.userId, userId)));
     await tx.delete(personaQuestionnaireAnswers).where(and(eq(personaQuestionnaireAnswers.personaId, id), eq(personaQuestionnaireAnswers.userId, userId)));
     await tx.delete(personaVersions).where(and(eq(personaVersions.personaId, id), eq(personaVersions.userId, userId)));
@@ -8335,6 +8338,95 @@ export async function countUserMessagesSince(
     gte(messages.createdAt, since),
   ));
   return Number(row?.n ?? 0);
+}
+
+// ─── The user's own diary ──────────────────────────────────────────────────
+
+export async function createJournalEntry(data: {
+  userId: number;
+  personaId?: number | null;
+  body: string;
+  mood?: string | null;
+  entryDate: string;
+}): Promise<number | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const now = new Date();
+  const [row] = await db.insert(userJournal).values({
+    userId: data.userId,
+    personaId: data.personaId ?? null,
+    body: data.body,
+    mood: data.mood ?? null,
+    entryDate: data.entryDate,
+    createdAt: now,
+    updatedAt: now,
+  }).returning({ id: userJournal.id });
+  return row?.id;
+}
+
+/** One page of the user's own entries, newest day first. */
+export async function listJournalEntries(params: {
+  userId: number;
+  personaId?: number | null;
+  cursor?: number | null;
+  limit?: number;
+}) {
+  const db = await getDb();
+  if (!db) return [];
+  const limit = Math.max(1, Math.min(100, params.limit ?? 30));
+  return db.select().from(userJournal).where(and(
+    eq(userJournal.userId, params.userId),
+    ...(params.personaId != null ? [eq(userJournal.personaId, params.personaId)] : []),
+    ...(params.cursor != null ? [lt(userJournal.id, params.cursor)] : []),
+  )).orderBy(desc(userJournal.entryDate), desc(userJournal.id)).limit(limit);
+}
+
+/** All of them, for the export. */
+export async function getUserJournal(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(userJournal)
+    .where(eq(userJournal.userId, userId))
+    .orderBy(desc(userJournal.entryDate), desc(userJournal.id));
+}
+
+export async function getJournalEntryById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(userJournal).where(and(
+    eq(userJournal.id, id),
+    eq(userJournal.userId, userId),
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function updateJournalEntry(
+  id: number,
+  userId: number,
+  patch: { body?: string; mood?: string | null; entryDate?: string },
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(userJournal).set({
+    ...(patch.body !== undefined ? { body: patch.body } : {}),
+    ...(patch.mood !== undefined ? { mood: patch.mood } : {}),
+    ...(patch.entryDate !== undefined ? { entryDate: patch.entryDate } : {}),
+    updatedAt: new Date(),
+  }).where(and(
+    eq(userJournal.id, id),
+    eq(userJournal.userId, userId),
+  )).returning({ id: userJournal.id });
+  return rows.length > 0;
+}
+
+export async function deleteJournalEntry(id: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.delete(userJournal).where(and(
+    eq(userJournal.id, id),
+    eq(userJournal.userId, userId),
+  )).returning({ id: userJournal.id });
+  return rows.length > 0;
 }
 
 // ─── Distillation blocks and cards ────────────────────────────────────────

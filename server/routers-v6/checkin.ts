@@ -17,6 +17,7 @@ import {
 import {
   createSessionCheckin,
   getPersonaById,
+  getRecentCheckinAnswers,
 } from "../db";
 
 export const checkinRouter = router({
@@ -79,6 +80,15 @@ export const checkinRouter = router({
         answer: input.answer,
       });
       return { success: true };
+    }),
+
+  /** The recent answers, for the personal timeline (C4.5). */
+  recent: protectedProcedure
+    .input(z.object({ personaId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      return { answers: await getRecentCheckinAnswers(ctx.user.id, input.personaId, 20) };
     }),
 
   /** Remembers that the "three worse" card was shown. */

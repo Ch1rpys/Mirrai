@@ -96,7 +96,18 @@ function bundle(): ExportBundle {
         ],
       },
     ],
-    moods: [
+    journal: [
+    {
+      id: 1,
+      personaId: 1,
+      body: "今天想起第一次见面。",
+      mood: "nostalgic",
+      entryDate: "2026-03-01",
+      createdAt: new Date("2026-03-01T10:00:00Z"),
+      updatedAt: new Date("2026-03-01T10:00:00Z"),
+    },
+  ],
+  moods: [
       { date: "2024-01-01", mood: "down", note: "说不出来" },
       { date: "2024-01-02", mood: "okay", note: null },
     ],
@@ -144,6 +155,9 @@ describe("the export", () => {
     expect(parsed.personas[0].diaries).toHaveLength(1);
     expect(parsed.personas[0].events[0].kind).toBe("breakup");
     expect(parsed.moods).toHaveLength(2);
+    // The user's own diary goes with everything else (C4.5).
+    expect(parsed.journal).toHaveLength(1);
+    expect(parsed.journal[0].body).toBe("今天想起第一次见面。");
   });
 
   it("writes the farewell letter into the Markdown", () => {

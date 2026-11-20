@@ -1697,6 +1697,33 @@ export type SessionCheckin = typeof sessionCheckins.$inferSelect;
 export type InsertSessionCheckin = typeof sessionCheckins.$inferInsert;
 
 /**
+ * The user's own diary (C4.5).
+ *
+ * `diary_entries` is the app's summary of a conversation. This is the
+ * other thing: what the person wrote themselves. It is not sent to a
+ * model, not extracted for memories, and not part of the persona — it
+ * exists for the user to read back, and in the export.
+ */
+export const userJournal = pgTable("user_journal", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  /** Optional: a note can belong to one persona or to no one. */
+  personaId: integer("personaId"),
+  body: text("body").notNull(),
+  mood: varchar("mood", { length: 16 }),
+  /** The day, in the writer's own time zone. */
+  entryDate: varchar("entryDate", { length: 10 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  userDateIdx: index("user_journal_user_date_idx").on(table.userId, table.entryDate),
+  personaDateIdx: index("user_journal_persona_date_idx").on(table.personaId, table.entryDate),
+}));
+
+export type UserJournalEntry = typeof userJournal.$inferSelect;
+export type InsertUserJournalEntry = typeof userJournal.$inferInsert;
+
+/**
  * A reply the user marked as not sounding like them.
  *
  * The reason is a closed set: the action was wrong, it was too

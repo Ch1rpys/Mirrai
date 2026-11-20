@@ -164,6 +164,7 @@ import { materialRouter } from "./routers-v6/material";
 import { pushRouter } from "./routers-v6/push";
 import { rehearsalRouter } from "./routers-v6/rehearsal";
 import { checkinRouter } from "./routers-v6/checkin";
+import { journalRouter } from "./routers-v6/journal";
 import { stickerRouter } from "./routers-v6/sticker";
 import { mediaRouter } from "./routers-v6/media";
 import { mineMicroRules } from "./skill-engine/micro-rules";
@@ -7240,6 +7241,7 @@ export const appRouter = router({
   push: pushRouter,
   rehearsal: rehearsalRouter,
   checkin: checkinRouter,
+  journal: journalRouter,
   sticker: stickerRouter,
   media: mediaRouter,
 
