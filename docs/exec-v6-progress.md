@@ -146,7 +146,7 @@
 | C4.2 | ✅ | fa06008 (server); cf86f46 (UI) | 临时库 `mirrai_v6_scratch` 0067 四步：push 后 migrate 应用（journal 65）、`--replay` 65 条、`--rollback 1` 后表消失、再 migrate 回来；升级路径后表回来；`db-delete-coverage` 9 通过。`checkins.test.ts` 12 通过：会话太新/超过 48h/用户少于 6 条/本会话已答/今天已问/没有会话各返回 `null`；正常会话返回 `sessionStartAt`；`isWorseStreak` 忽略 `skipped`、被 `better` 打断；三次 `worse` 返回建议、有安全事件后不再建议。`routers.checkin.test.ts` 4 通过：pending 返回 ISO、answer 写入、过期会话 `BAD_REQUEST` 不写、acknowledge 记录。`graduation-checkins.test.ts` 2 通过：`worseStreak: 3` 否决不毕业；2 次不改变原判定。`AfterChat.test.tsx` 5 通过：四个按钮任一按下后消失、`skipped` 也写、三次 worse 卡片出现且 `acknowledge` 一次、「先缓一缓」写 `presence: "quiet"`、源码没有 `pushToUser`/定时器。闸门全绿：`520 passed | 13 skipped (533)`、`4338 passed | 56 skipped (4394)`。 |
 | C4.3 | ⬜ |  |  |
 | C4.4 | ⬜ |  |  |
-| C4.5 | ⬜ |  |  |
+| C4.5 | ✅ | f98561b (server); ca77708 (UI) | 临时库 `mirrai_v6_scratch` 0068 四步：push 后 migrate 应用（journal 66）、`--replay` 66 条、`--rollback 1` 后表消失、再 migrate 回来；升级路径后表回来；`db-delete-coverage` 9 通过。`routers.journal.test.ts` 4 通过：创建默认 entryDate 是 `YYYY-MM-DD`、别人的分身 `NOT_FOUND`、list 按 userId 过滤、别人的条目改/删 `NOT_FOUND`。`journal-no-model.test.ts` 通过：`server/chat/**`、`server/skill-engine/**`、`server/llm/**` 源码里没有 `user_journal`/`userJournal`/`journal.`。`export.test.ts` 13 通过：bundle 的 `journal` 有 1 条且 body 正确。`MyJournal.test.tsx` 4 通过：隐私说明在、写入、列表+编辑、确认后删除。`PersonalTimeline.test.tsx` 2 通过：四种条目按日期从新到旧、各自带 `data-timeline-kind`。Diary 页三个分页：对话日记 / 我写的 / 放在一起看。闸门全绿：`524 passed | 13 skipped (537)`、`4351 passed | 56 skipped (4407)`。 |
 | C4.6 | ⬜ |  |  |
 | C5.1 | ⬜ |  |  |
 | C5.2 | ⬜ |  |  |
@@ -2374,3 +2374,4 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 - C3.2 `ab5b167` + `93dea5d` + `e0ae176`：`shared/rehearsal.ts`（承诺类问题/替对方答应的回复词表、前三动作与占比）；`TurnInput.forcedAct`；`rehearsals` 表（迁移 0065）、`rehearsal.run/keep/list/delete`（每日 20 次、危机卡片、`my_side_only` 不调模型、两次承诺检测、只写一行 rehearsals）；`/persona/:id/rehearsal` 页面与聊天页入口。
 - C3.7 `85e42ff`：`letters.doneAt`（迁移 0066）、`letter.setDone`（只对 `todo`）、`LetterBox` 的「等 TA 回来再说」变可勾清单（未勾在上、勾了划掉沉底、复制成文字）、聊天页见面当天一行入口。`db-behaviour` 的 notes 排序断言按 C3.7 改成两段排序。
 - C4.2 `fa06008` + `cf86f46`：`session_checkins`（迁移 0067）、`pendingCheckin`/`worseSuggestion`、`checkin.pending/answer/acknowledgeWorse`、`checkGraduationEligibility` 加 `worseStreak` 否决、聊天页上方 `AfterChat`（一行四键 + 三次更难受的缓一缓卡片）。多个既有测试的 `vi.mock("../db")` 补 `getRecentCheckinAnswers`（mock 补全，不改断言）。
+- C4.5 `f98561b` + `ca77708`：`user_journal`（迁移 0068）、`journal.list/create/update/delete`（personaId 可空、entryDate 按用户时区）、`checkin.recent`、导出 bundle 加 `journal`、账号/分身删除覆盖；Diary 页「我写的」「放在一起看」分页，`MyJournal` 与 `PersonalTimeline`（日记/心情/关系事件/聊完回答按日期排）。
