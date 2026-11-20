@@ -131,6 +131,7 @@ describe("the call protocol", () => {
       server.server.close();
     };
     await expect(connect(port, "http://evil.example")).rejects.toThrow(/http 403/);
+    await expect(connect(port, `ftp://127.0.0.1:${port}`)).rejects.toThrow(/http 403/);
   });
 
   it("refuses a persona that is not the user's", async () => {

@@ -202,6 +202,8 @@ export const en = {
     silence: "(silence)",
     attachImage: "Send an image",
     tts: "Read aloud",
+    ttsDestLeaves: "Read aloud sends the text to Microsoft's online service",
+    ttsDestLocal: "Read aloud is synthesised on this machine",
     ttsVoice: "Change the voice",
     theirClock: "Their side: {{time}}",
     theirClockHint: "This is the clock where they are.",

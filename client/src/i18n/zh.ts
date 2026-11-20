@@ -201,6 +201,8 @@ export const zh = {
     silence: "（沉默）",
     attachImage: "发送图片",
     tts: "朗读",
+    ttsDestLeaves: "朗读会把文字发给微软的在线服务",
+    ttsDestLocal: "朗读在这台机器上合成",
     ttsVoice: "换个声音",
     theirClock: "TA 那边 {{time}}",
     theirClockHint: "这是 TA 那边的时钟。",

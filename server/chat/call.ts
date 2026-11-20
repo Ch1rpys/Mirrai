@@ -136,6 +136,9 @@ function originAllowed(origin: string | undefined, host: string | undefined): bo
   if (!origin) return false;
   try {
     const parsed = new URL(origin);
+    // A browser sends an http(s) origin. Comparing only the host let
+    // `ftp://same-host` through the same check.
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
     if (host && parsed.host === host) return true;
     return ENV.allowedOrigins.some((allowed) => allowed.replace(/\/$/, "") === origin.replace(/\/$/, ""));
   } catch {

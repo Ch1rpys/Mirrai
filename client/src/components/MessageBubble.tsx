@@ -261,7 +261,12 @@ function TTSButton({ text, personaId }: { text: string; personaId?: number }) {
 
   return (
     <span className="relative inline-flex items-center" ref={menuRef}>
-    <button onClick={handlePlay} disabled={loading} title={t("chat.tts")} aria-label={t("chat.tts")}
+    <button
+      onClick={handlePlay}
+      disabled={loading}
+      // The button says where the words go as well as what it does.
+      title={`${t("chat.tts")} · ${voiceData.leavesMachine ? t("chat.ttsDestLeaves") : t("chat.ttsDestLocal")}`}
+      aria-label={t("chat.tts")}
       className="text-muted-subtle hover:text-muted-foreground transition-colors disabled:opacity-30 p-1.5 -m-1">
       {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Volume2 className={`w-3 h-3 ${playing ? "text-foreground" : ""}`} />}
     </button>

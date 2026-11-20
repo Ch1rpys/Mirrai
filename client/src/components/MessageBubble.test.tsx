@@ -20,12 +20,15 @@ import { formatInstantInZone } from "@/lib/dates";
  * persona's side can be repeated while the user's side cannot.
  */
 const markUnlike = vi.fn();
+const voiceInfo = vi.hoisted(() => ({
+  value: { voices: [] as unknown[], enabled: true, leavesMachine: true },
+}));
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     chat: {
       tts: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
-      voices: { useQuery: () => ({ data: { voices: [] } }) },
+      voices: { useQuery: () => ({ data: voiceInfo.value }) },
     },
     fidelity: {
       mark: {
@@ -112,6 +115,7 @@ function callbacks() {
 describe("the message bubble", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    voiceInfo.value = { voices: [], enabled: true, leavesMachine: true };
     locale = "zh";
   });
 
@@ -205,6 +209,24 @@ describe("the message bubble", () => {
     );
     expect(screen.queryByText(translate("zh", "chat.synthVoice"))).toBeNull();
     expect(screen.getByText(translate("zh", "chat.showTranscript"))).toBeInTheDocument();
+  });
+
+  it("says where the read-aloud sends the words", () => {
+    const assistant = makeMessage({ role: "assistant", content: "在的" });
+    const first = render(
+      <MessageBubble msg={assistant} personaName="小A" showMood={false} />,
+    );
+    expect(screen.getByLabelText(translate("zh", "chat.tts"))).toHaveAttribute(
+      "title",
+      expect.stringContaining("微软"),
+    );
+    first.unmount();
+
+    voiceInfo.value = { voices: [], enabled: true, leavesMachine: false };
+    render(<MessageBubble msg={assistant} personaName="小A" showMood={false} />);
+    const button = screen.getByLabelText(translate("zh", "chat.tts"));
+    expect(button.getAttribute("title")).toContain("这台机器");
+    expect(button.getAttribute("title")).not.toContain("微软");
   });
 
   it("does not offer to read a sticker aloud", () => {
