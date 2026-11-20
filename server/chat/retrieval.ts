@@ -527,7 +527,17 @@ export async function retrieveMemories(params: {
    */
   markRecalled?: boolean;
 }): Promise<ScoredMemory[]> {
-  const rows = await db.getMemoriesByPersonaId(params.personaId, params.userId);
+  /**
+   * A memory the user decided against does not count.
+   *
+   * Adjudication marks the losing row `superseded` rather than deleting
+   * it, so the record of what was said remains — but the row still
+   * reached the prompt, and the persona kept saying both sides of a
+   * thing the user had already settled (C7.4's conflict panel uses the
+   * same verdict).
+   */
+  const rows = (await db.getMemoriesByPersonaId(params.personaId, params.userId))
+    .filter((row) => row.status !== "superseded");
   const hasRecordMemories = rows.some((row) => row.source === "records");
   const eventByRecord = await eventTimesFor(rows, params.userId);
   const candidates: MemoryCandidate[] = rows.map((row) => ({

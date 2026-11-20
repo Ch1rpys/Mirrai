@@ -474,6 +474,43 @@ describe("file summaries", () => {
     expect(touchMemoryRecalled).not.toHaveBeenCalled();
   });
 
+  it("leaves out a memory the user decided against", async () => {
+    getMemoriesByPersonaId.mockResolvedValue([
+      {
+        id: 1,
+        title: "讨厌香菜",
+        description: "每次点外卖都备注",
+        category: "memory",
+        date: null,
+        isPinned: true,
+        importance: 5,
+        lastRecalledAt: null,
+        createdAt: new Date("2025-01-01T00:00:00Z"),
+        status: "active",
+      },
+      {
+        id: 2,
+        title: "喜欢香菜",
+        description: "每次都要加",
+        category: "memory",
+        date: null,
+        isPinned: true,
+        importance: 5,
+        lastRecalledAt: null,
+        createdAt: new Date("2025-01-01T00:00:00Z"),
+        status: "superseded",
+      },
+    ]);
+
+    const memories = await retrieveMemories({
+      personaId: 1,
+      userId: 1,
+      userMessage: "香菜",
+    });
+
+    expect(memories.map((row) => row.title)).toEqual(["讨厌香菜"]);
+  });
+
   it("does not offer a file summary when the persona already has memories from the records", async () => {
     getMemoriesByPersonaId.mockResolvedValue([
       {

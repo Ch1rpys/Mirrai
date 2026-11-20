@@ -12,6 +12,7 @@ import {
   getOralMemories,
   listOralAccounts,
   listSubmittedOralAccounts,
+  supersedeMemory,
   updateOralAccount,
 } from "./db";
 
@@ -121,7 +122,7 @@ describe.skipIf(!DATABASE_URL)("what people remember, in the database (C7.4)", (
 
       // Oral memories are the extractor's, and they stay apart from the
       // chat's memories of the same persona.
-      await createMemory({
+      const fear = await createMemory({
         personaId: ownerPersonaId,
         userId: ownerId,
         title: "怕黑。",
@@ -139,8 +140,32 @@ describe.skipIf(!DATABASE_URL)("what people remember, in the database (C7.4)", (
         source: "records",
         subject: "them",
       });
+      // Only what people told us is the oral extractor's business; the
+      // memory mined from the records stays out of it.
+      expect((await getOralMemories(ownerPersonaId, ownerId)).map((row) => row.factKey))
+        .toEqual(["fear_of_dark"]);
+
+      // Two accounts disagree, and the owner picks one: the other row is
+      // kept, marked superseded, and no longer counts.
+      const rival = await createMemory({
+        personaId: ownerPersonaId,
+        userId: ownerId,
+        title: "晚上不怕黑。",
+        description: "来自 阿树 的讲述：「他晚上不怕黑」",
+        factKey: "fear_of_dark",
+        source: "oral",
+        subject: "them",
+      });
+      await supersedeMemory({
+        loserId: rival,
+        winnerId: fear,
+        personaId: ownerPersonaId,
+        userId: ownerId,
+      });
       const oral = await getOralMemories(ownerPersonaId, ownerId);
-      expect(oral.map((row) => row.factKey)).toEqual(["fear_of_dark"]);
+      expect(oral.map((row) => row.factKey)).toEqual(["fear_of_dark", "fear_of_dark"]);
+      expect(oral.find((row) => row.id === fear)?.status).toBe("active");
+      expect(oral.find((row) => row.id === rival)?.status).toBe("superseded");
       expect(await getOralMemories(ownerPersonaId, memberId)).toEqual([]);
     } finally {
       if (memberPersonaId) await deleteUserAccount(memberId);
