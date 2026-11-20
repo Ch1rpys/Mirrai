@@ -1591,6 +1591,38 @@ export const zh = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  rehearsal: {
+    title: "排练",
+    topNote: "有话想对 {{name}} 说又不敢？先在这里说一遍。下面是按记录推的几种可能，不是 {{name}} 的回答。",
+    unavailable: "这个分身已经休眠或封存，排练不可用。",
+    placeholder: "想对 {{name}} 说的那句话",
+    cost: "每排练一次会调用模型两到三次。",
+    run: "排一遍",
+    running: "正在排…",
+    card: "大约十次里有 {{n}} 次 · {{act}}",
+    silent: "{{name}} 可能不回",
+    notGenerated: "这一种没推出来。",
+    mySideOnly: "这句话的答案只有 {{name}} 能给，这里不替 {{name}} 回答。能练的是你这一侧：怎么把它说出口。",
+    keep: "收进清单",
+    sayAnotherWay: "换个说法",
+    editAgain: "再改改这句话",
+    keepLine: "把这句话收进「想对 {{name}} 说的话」",
+    kept: "收好了。它只在你这里。",
+    acts: {
+      answer: "回答",
+      acknowledge: "应一声",
+      comfort: "安慰",
+      tease: "逗你",
+      affection: "亲近",
+      advise: "建议",
+      logistics: "说安排",
+      deflect: "岔开",
+      repair: "和好",
+      share: "讲自己的事",
+      silence: "不回",
+    },
+  },
+
   decode: {
     title: "读懂这一句",
     placeholder: "把 {{name}} 刚发来的那句话贴在这里",

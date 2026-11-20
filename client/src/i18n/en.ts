@@ -1590,6 +1590,38 @@ export const en = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  rehearsal: {
+    title: "Rehearsal",
+    topNote: "Something you want to say to {{name}} and do not dare to? Say it here first. These are a few possibilities read from the record — not {{name}}'s answers.",
+    unavailable: "This persona is asleep or sealed, so the rehearsal room is closed.",
+    placeholder: "The thing you want to say to {{name}}",
+    cost: "One rehearsal calls the model two or three times.",
+    run: "Rehearse it",
+    running: "Rehearsing…",
+    card: "About {{n}} times in ten · {{act}}",
+    silent: "{{name}} might not reply",
+    notGenerated: "This one could not be generated.",
+    mySideOnly: "Only {{name}} can answer that. This room will not answer for {{name}}. What you can practise is your side: how to say it.",
+    keep: "Keep it on the list",
+    sayAnotherWay: "Say it another way",
+    editAgain: "Change this sentence",
+    keepLine: "Keep this in “things to say to {{name}}”",
+    kept: "Kept. It stays with you.",
+    acts: {
+      answer: "answer",
+      acknowledge: "acknowledge",
+      comfort: "comfort",
+      tease: "tease",
+      affection: "affection",
+      advise: "advice",
+      logistics: "logistics",
+      deflect: "change the subject",
+      repair: "make peace",
+      share: "talk about themselves",
+      silence: "not reply",
+    },
+  },
+
   decode: {
     title: "Read this line",
     placeholder: "Paste the line {{name}} just sent",
