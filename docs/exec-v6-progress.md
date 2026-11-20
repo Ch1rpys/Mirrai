@@ -148,7 +148,7 @@
 | C4.4 | 🟡 | e05ab99 (server); 9a7b266 (page) | 临时库 `mirrai_v6_scratch` 0069 四步：push 后 migrate 应用（journal 67）、`--replay` 67 条、`--rollback 1` 后表消失、再 migrate 回来；升级路径后表回来；`db-delete-coverage` 9 通过。`chat/roleplay.test.ts` 4 通过：`buildSelfPrompt` 说清谁扮谁、用户原话在 material 围栏内（围栏外没有敌意句）、用上测量散文与代表句；`remainingMs` 从 15 分钟倒数、不为负。`routers.roleplay.test.ts` 9 通过：用户行 <200 → `BAD_REQUEST`；同一天第二次 → `TOO_MANY_REQUESTS`；start 返回 900 秒/30 轮；第 31 轮与第 16 分钟都 `ended: true` 且 0 次模型调用；正常一轮系统提示词含用户原话且在围栏内；危机词结束且 0 次模型调用；`end` 带 note → 写一篇 `user_journal`；源码没有 `createMessage`/`updatePersona`/`incrementChatCount`/记忆抽取/情绪写入。`Roleplay.test.tsx` 4 通过：说明与徽章、服务器给的 15:00 与 30 轮、两边标识、结束前没有写笔记的框。闸门全绿：`531 passed | 13 skipped (544)`、`4388 passed | 56 skipped (4444)`。 |
 | C4.5 | ✅ | f98561b (server); ca77708 (UI) | 临时库 `mirrai_v6_scratch` 0068 四步：push 后 migrate 应用（journal 66）、`--replay` 66 条、`--rollback 1` 后表消失、再 migrate 回来；升级路径后表回来；`db-delete-coverage` 9 通过。`routers.journal.test.ts` 4 通过：创建默认 entryDate 是 `YYYY-MM-DD`、别人的分身 `NOT_FOUND`、list 按 userId 过滤、别人的条目改/删 `NOT_FOUND`。`journal-no-model.test.ts` 通过：`server/chat/**`、`server/skill-engine/**`、`server/llm/**` 源码里没有 `user_journal`/`userJournal`/`journal.`。`export.test.ts` 13 通过：bundle 的 `journal` 有 1 条且 body 正确。`MyJournal.test.tsx` 4 通过：隐私说明在、写入、列表+编辑、确认后删除。`PersonalTimeline.test.tsx` 2 通过：四种条目按日期从新到旧、各自带 `data-timeline-kind`。Diary 页三个分页：对话日记 / 我写的 / 放在一起看。闸门全绿：`524 passed | 13 skipped (537)`、`4351 passed | 56 skipped (4407)`。 |
 | C4.6 | 🟡 | 6c9f0f8 (generator); 74f9457 (UI) | `export-html.test.ts` 15 通过（新增 4 条）：默认输出里消息哨兵、分身回复哨兵、日记哨兵都不出现；`includeJournal: true` 时只有日记哨兵出现，分身回复哨兵仍不出现；输出没有 `http(s)://` 资源地址、`<script>` 被转义、页脚「不是诊断」在；文件没有 llm import。`routers.counselor.test.ts` 2 通过：以 user 2 调用时 `getUserMoods(2,30,…)`、`listCheckinAnswersSince(2,…)`、`getPersonasByUserId(2)`、`getRelationshipEvents(5,2,…)`，返回 HTML；带 `includeThemes/includeJournal` 时模型 0 次调用。`CounselorExport.test.tsx` 3 通过：两个可选项默认关、范围与可选项传对、成功后 Blob 新标签页打开。入口：设置「数据管理」与 Analytics。闸门全绿：`533 passed | 13 skipped (546)`、`4397 passed | 56 skipped (4453)`。 |
-| C5.1 | ⬜ |  |  |
+| C5.1 | ✅ | 9bfe1a5 | `shared/persona-state.test.ts` 11 通过：`opens on the sealed day in the user's own calendar`（同一时刻 `2026-03-19T16:30Z` 在上海已是 20 日、洛杉矶还是 19 日）；`counts the days to the meeting on the user's calendar`（`2026-03-01T23:30Z` 上海算「今天」、洛杉矶算「还有 1 天」）。`MeetCountdown.test.tsx` 6 通过：未来「还有 3 天见面（2026-03-04）」、当天「今天见面」、无日期和过期时 inline 不渲染；过期 banner 的三个按钮都清日期（`persona.updateSettings` 收到 `{ ldr: { nextMeetAt: null } }`），「见到了」另调 `relationship.add`（`kind: "meetup"`、`happenedAt` 为原日期），点击后问题消失。`LdrSettings.test.tsx` 2 通过：保存与清除。`server/chat/prompt.test.ts` `adds the meeting countdown only when a date is set (C5.1)`：设了日期含「你们约好 2026-03-02 见面，还有 1 天。」、当天含「你们约好今天见面。」、没设两句都没有；`prompt-golden.test.ts` 10 通过、快照未改。`lobby-eligibility.test.ts` 8 通过（新增纪念、封存、只写信三条），`mayFeature` 调 `isMemorial` / `sealState` / `taperStage`。C3.7 的入口沿用聊天页已有的 `MeetDayNote`，C5.1 只加倒计时与过期询问。闸门 `537 passed \| 13 skipped (550)` 文件、`4446 passed \| 57 skipped (4503)` 用例，`all six steps passed`。 |
 | C5.2 | ⬜ |  |  |
 | C5.3 | ⬜ |  |  |
 | C5.4 | ⬜ |  |  |
@@ -579,6 +579,8 @@
 | 条目 | 问题 | 两个选项各自的后果 |
 |---|---|---|
 | A7 | 亲密度 `computeIntimacy` 里含连续对话天数（`consecutiveDays * 10`，最高 100 分），是否拿掉 | 拿掉：毕业门槛少这一项输入，已有分身的亲密度分数会下降，可能改变毕业建议。留着：大厅已经没有打卡，分数里仍奖励连续聊。手册 A7 边界写明这一条不动它，等决定。 |
+
+| 288 | C5.1 | 设置补丁里 `ldr` 的部分字段 | `ldr.weather` 原为必填、`nextMeetAt` 只收字符串；改成 `weather` 可选、`nextMeetAt` 可传 `null`，`city` 也可传 `null` | 深层部分更新必须能单独改日期和清日期，否则每次清日期都要把整个 `ldr` 抄一遍。归一函数本来就把 `null` 当「没设」。 |
 
 ## 批次日志
 
@@ -2477,3 +2479,7 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 - **数据库**：临时库 `mirrai_v6_verify` 上 `push` 后 `migrate` 到 0070、`--replay` 68 条；0070 单独 `--rollback 1` 表消失、`migrate` 回来；「DROP 表 + 删 journal 行 + migrate」升级路径表与 4 个索引回来；带库跑 `db-records`（含新的 20+1 待办测试）、`db-unique-indexes`、`idempotency-db` 全过。库已 `dropdb`，`mirrai_live` 未连接。
 - **闸门**（无 `--fast`、无 `DATABASE_URL`）：`corepack pnpm gate` 退出码 0，`Test Files 534 passed | 13 skipped (547)`、`Tests 4423 passed | 57 skipped (4480)`、`all six steps passed`；`audit-cn` 0 条，`fidelity-gate` 7 条 ✓。相对修复前：文件 +1（`server/routers.wellbeing.test.ts`）、通过用例 +26、跳过 +1（`db-records` 的新库测试）。没有新增依赖，没有 `Co-Authored-By`，没有动 `server/wechat/ilink/**`、旧迁移或黄金快照。
 - **状态**：C3.5、C3.7、C4.2、C4.5 回 ✅；C3.1、C3.2、C4.4 回 🟡；C3.4、C3.6、C4.1、C4.3、C4.6 维持 🟡；C10.4、C3.3 维持 ✅。C4.1 的门槛 6 仍是偏差 275（未改夹具）；C3.7 的第二个入口仍等 WP13（偏差 276）；C4.6 的主题词 10,000 条上限仍在存疑。
+
+### WP13 · 实现会话 · 2026-11-20
+
+- C5.1 `9bfe1a5`：`shared/persona-state.ts`（`isMemorial` / `taperStage` / `sealState` / `mayChatNow` / `meetCountdown`）与 `shared/persona-state.test.ts`；`MeetCountdown`（顶栏倒计时 + 过期的一次性询问，三个按钮）、`LdrSettings`（日期选择与清除），分别挂到 `Chat.tsx` 和 `PersonaEdit.tsx`；`prompt.nextMeet` / `prompt.nextMeetToday` 写进时间感知段；`mayFeature` 改调 persona-state。偏差 288。
