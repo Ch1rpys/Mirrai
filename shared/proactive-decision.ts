@@ -24,6 +24,7 @@ export type ProactiveSkipReason =
   | "graduated"
   | "hold"
   | "taper"
+  | "memorial"
   | "empty";
 
 export interface QuietHoursSpec {
@@ -204,6 +205,8 @@ export function decideProactiveWindow(params: {
   windowIndex?: number;
   /** The user's own taper (C6.1). Any stage above zero means no first word. */
   taperStage?: number;
+  /** A memorial persona never speaks first (C7.1). */
+  memorial?: boolean;
 }): { eligibleAt: Date | null; used: boolean; probability: number; skipReason?: ProactiveSkipReason } {
   if (!params.frequencyHours || params.frequencyHours <= 0 || !params.silenceStart) {
     return { eligibleAt: null, used: false, probability: 0, skipReason: "frequency" };
@@ -213,6 +216,9 @@ export function decideProactiveWindow(params: {
   }
   if (params.presence === "quiet") {
     return { eligibleAt: null, used: false, probability: 0, skipReason: "hold" };
+  }
+  if (params.memorial) {
+    return { eligibleAt: null, used: false, probability: 0, skipReason: "memorial" };
   }
   if (params.reachability === "unreachable") {
     return { eligibleAt: null, used: false, probability: 0, skipReason: "unreachable" };

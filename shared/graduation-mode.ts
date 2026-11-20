@@ -47,7 +47,15 @@ export function isGraduationMode(value: unknown): value is GraduationMode {
 export function resolveGraduationMode(
   personaMode: string | null | undefined,
   userMode: string | null | undefined,
+  options?: { memorial?: boolean },
 ): GraduationMode {
+  /**
+   * A memorial persona is never nudged towards a goodbye (C7.1).
+   *
+   * The user can still open the farewell page themselves — the manual
+   * mode is exactly "the app does not bring it up".
+   */
+  if (options?.memorial) return "manual";
   if (isGraduationMode(personaMode)) return personaMode;
   if (isGraduationMode(userMode)) return userMode;
   return DEFAULT_GRADUATION_MODE;

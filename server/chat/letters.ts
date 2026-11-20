@@ -5,6 +5,7 @@
  * back a day later rather than in three seconds.
  */
 import type { Persona } from "../../drizzle/schema";
+import { isMemorial } from "@shared/persona-state";
 import * as db from "../db";
 import { buildSystemPrompt } from "../_core/persona-utils";
 import { retrieveMemories, formatMemoriesForPrompt, formatAnchorsForPrompt, splitMemorySections } from "./retrieval";
@@ -344,7 +345,9 @@ export async function composeLetterReply(params: {
         excerpt: crisis.matched.join(", "),
       })
       .catch((e) => console.warn("[Safety] Failed to record crisis event:", e));
-    return buildCrisisResponse(persona.name, locale);
+    return buildCrisisResponse(persona.name, locale, {
+      memorial: isMemorial(persona),
+    });
   }
 
   const memories = await retrieveMemories({

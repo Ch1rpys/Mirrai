@@ -25,6 +25,14 @@ export const REMINDERS = {
     zh: "那张照片",
     en: "that photo",
   },
+  "reminders.memorialBirthday": {
+    zh: "今天是 {{name}} 的生日。",
+    en: "Today is {{name}}'s birthday.",
+  },
+  "reminders.memorialDeathday": {
+    zh: "今天是 {{name}} 离开的日子。",
+    en: "Today is the day {{name}} died.",
+  },
   "reminders.graduationRevisit": {
     zh: "和 {{name}} 告别 {{days}} 天了。这里还需要留着吗？",
     en: "It has been {{days}} days since you said goodbye to {{name}}. Does this still need to stay?",

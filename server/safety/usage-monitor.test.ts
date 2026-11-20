@@ -18,6 +18,7 @@ import {
 } from "./usage-monitor";
 import { isQuietHour, collectReminders } from "../scheduler/reminders";
 import { localDateKey } from "@shared/timezone";
+import { copy } from "@shared/copy";
 
 function signals(overrides: Partial<UsageSignals> = {}): UsageSignals {
   return {
@@ -79,6 +80,14 @@ describe("pickCareNote", () => {
     const note = pickCareNote(signals({ dependencyRising: true }));
     expect(note?.kind).toBe("dependency");
     expect(note?.showBanner).toBe(true);
+  });
+
+  it("uses the memorial wording for a memorial persona (C7.1)", () => {
+    const note = pickCareNote(signals({ sessionDurationMs: 3 * 60 * 60 * 1000 }), "zh", {
+      memorial: true,
+    });
+    expect(note?.textKey).toBe("safety.care.longSession.memorial");
+    expect(note?.text).toBe(copy("zh", "labels.care.longSession.memorial"));
   });
 
   it("prefers the dependency note over the others", () => {

@@ -252,21 +252,40 @@ export function detectCrisis(text: string): CrisisDetection {
  * the app is calling the user by the AI's name. The name stays in the
  * signature for compatibility with the existing callers.
  */
-export function buildCrisisResponse(_personaName: string, locale: "zh" | "en" = "zh"): string {
+export function buildCrisisResponse(
+  _personaName: string,
+  locale: "zh" | "en" = "zh",
+  options: { memorial?: boolean } = {},
+): string {
   const resources = formatResources(getCrisisResources(), locale);
+  const keys = options.memorial
+    ? {
+        stop: "safety.crisisStop.memorial" as const,
+        body: "safety.crisisBody.memorial" as const,
+        lead: "safety.crisisResourcesLead.memorial" as const,
+        ready: "safety.crisisIfReady.memorial" as const,
+        still: "safety.crisisStillHere.memorial" as const,
+      }
+    : {
+        stop: "safety.crisisStop" as const,
+        body: "safety.crisisBody" as const,
+        lead: "safety.crisisResourcesLead" as const,
+        ready: "safety.crisisIfReady" as const,
+        still: "safety.crisisStillHere" as const,
+      };
 
   return [
-    copy(locale, "safety.crisisStop"),
+    copy(locale, keys.stop),
     "",
-    copy(locale, "safety.crisisBody"),
+    copy(locale, keys.body),
     "",
-    copy(locale, "safety.crisisResourcesLead"),
+    copy(locale, keys.lead),
     "",
     resources,
     "",
-    copy(locale, "safety.crisisIfReady"),
+    copy(locale, keys.ready),
     "",
-    copy(locale, "safety.crisisStillHere"),
+    copy(locale, keys.still),
   ].join("\n");
 }
 
@@ -276,6 +295,13 @@ export function buildCrisisResponse(_personaName: string, locale: "zh" | "en" = 
  * Like the crisis reply it speaks in the persona's first person instead of
  * calling the user by the persona's name.
  */
-export function buildGentleCheckIn(_personaName: string, locale: "zh" | "en" = "zh"): string {
-  return copy(locale, "safety.crisisGentle");
+export function buildGentleCheckIn(
+  _personaName: string,
+  locale: "zh" | "en" = "zh",
+  options: { memorial?: boolean } = {},
+): string {
+  return copy(
+    locale,
+    options.memorial ? "safety.crisisGentle.memorial" : "safety.crisisGentle",
+  );
 }

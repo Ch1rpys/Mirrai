@@ -11,6 +11,7 @@
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { isMemorial } from "@shared/persona-state";
 import { copy } from "@shared/copy";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
@@ -116,7 +117,9 @@ export const scheduledRouter = router({
         return {
           created: false as const,
           crisis: true as const,
-          help: buildCrisisResponse(persona.name, ctx.locale === "en" ? "en" : "zh"),
+          help: buildCrisisResponse(persona.name, ctx.locale === "en" ? "en" : "zh", {
+            memorial: isMemorial(persona),
+          }),
         };
       }
 

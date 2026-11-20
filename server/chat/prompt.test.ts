@@ -450,3 +450,63 @@ describe("the turning points stay out of the prompt", () => {
     expect(prompt).not.toContain("charsMedian");
   });
 });
+
+describe("a memorial persona's prompt (C7.1)", () => {
+  const routine = {
+    id: "routine-1",
+    kind: "routine",
+    title: "周三下午上课",
+    detail: "",
+    whoSaid: "them",
+    closed: false,
+    source: "manual",
+    verified: true,
+    evidence: [],
+    schedule: { weekdays: [3], startHour: 14, endHour: 16 },
+  };
+
+  it("has the guard, and does not get the routine line", () => {
+    const memorial = {
+      ...persona,
+      settings: { mode: "memorial" },
+      personaData: { ...persona.personaData, lifeEvents: [routine] },
+    };
+    const prompt = buildSystemPrompt(memorial, {
+      now: new Date("2026-06-03T07:00:00Z"),
+      timeZone: "Asia/Shanghai",
+    });
+    expect(prompt).toContain(copy("zh", "prompt.memorialGuard", { name: "小A" }));
+    expect(prompt).not.toContain(copy("zh", "prompt.timeRoutine", { title: "周三下午上课" }));
+
+    // The same persona without the memorial setting gets the routine line.
+    const ordinary = {
+      ...persona,
+      settings: {},
+      personaData: { ...persona.personaData, lifeEvents: [routine] },
+    };
+    const ordinaryPrompt = buildSystemPrompt(ordinary, {
+      now: new Date("2026-06-03T07:00:00Z"),
+      timeZone: "Asia/Shanghai",
+    });
+    expect(ordinaryPrompt).toContain(
+      copy("zh", "prompt.timeRoutine", { title: "周三下午上课" }),
+    );
+    expect(ordinaryPrompt).not.toContain(copy("zh", "prompt.memorialGuard", { name: "小A" }));
+  });
+
+  it("does not inject a memory from after the deathday", async () => {
+    retrieveMemories.mockResolvedValue([
+      { id: 1, title: "告别前的事", description: "春天", category: "memory", date: "2023-12-31", subject: "them" },
+      { id: 2, title: "告别后的事", description: "夏天", category: "memory", date: "2024-06-01", subject: "them" },
+    ]);
+    const built = await buildPromptForPersona({
+      persona: {
+        ...persona,
+        settings: { mode: "memorial", memorial: { deathday: "2024-01-01" } },
+      },
+      userId: 1,
+    });
+    expect(built).toContain("告别前的事");
+    expect(built).not.toContain("告别后的事");
+  });
+});

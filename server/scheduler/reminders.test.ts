@@ -432,6 +432,54 @@ describe("deliverReminder", () => {
   });
 });
 
+describe("the memorial days (C7.1)", () => {
+  const memorial = (overrides: Record<string, unknown> = {}) =>
+    collectReminders({
+      persona: persona({
+        togetherFrom: "2020-05-20",
+        settings: { mode: "memorial", memorial: { birthday: "05-21", deathday: "2024-05-20" } },
+        ...overrides,
+      }),
+      anniversaries: [{ id: 1, title: "第一次见面", date: "05-20" }],
+      locale: "zh",
+      timezone: "Asia/Shanghai",
+      now: new Date(2024, 4, 20, 10, 0),
+    });
+
+  it("places the deathday quietly, and keeps the shared anniversaries away", () => {
+    const reminders = memorial();
+    expect(reminders).toHaveLength(1);
+    expect(reminders[0]).toMatchObject({
+      kind: "memorial_deathday",
+      silent: true,
+      dedupeKey: "memorial_deathday:1:2024-05-20",
+    });
+    expect(reminders[0].text).toContain("离开的日子");
+    expect(reminders.some((reminder) => reminder.kind === "anniversary")).toBe(false);
+    expect(reminders.some((reminder) => reminder.kind === "together_years")).toBe(false);
+  });
+
+  it("places the birthday on its own day", () => {
+    const reminders = collectReminders({
+      persona: persona({
+        togetherFrom: "2020-05-20",
+        settings: { mode: "memorial", memorial: { birthday: "05-21" } },
+      }),
+      anniversaries: [],
+      locale: "zh",
+      timezone: "Asia/Shanghai",
+      now: new Date(2024, 4, 21, 10, 0),
+    });
+    expect(reminders).toHaveLength(1);
+    expect(reminders[0]).toMatchObject({
+      kind: "memorial_birthday",
+      silent: true,
+      dedupeKey: "memorial_birthday:1:2024-05-21",
+    });
+    expect(reminders[0].text).toContain("生日");
+  });
+});
+
 describe("the revisit after graduation (C6.5)", () => {
   const visit = (overrides: Record<string, unknown> = {}) =>
     collectReminders({
@@ -476,6 +524,30 @@ describe("the revisit after graduation (C6.5)", () => {
   it("stays away when the user switched it off, or the persona is a memorial", () => {
     expect(visit({ settings: { revisit: false } })).toEqual([]);
     expect(visit({ settings: { mode: "memorial" } })).toEqual([]);
+  });
+
+  it("places a memorial day on the web, and never pushes", async () => {
+    hasReminderDelivery.mockResolvedValue(false);
+    recordReminder.mockResolvedValue(true);
+    const delivered = await deliverReminder({
+      userId: 1,
+      reminder: {
+        kind: "memorial_deathday",
+        personaId: 1,
+        personaName: "小A",
+        dedupeKey: "memorial_deathday:1:2024-05-20",
+        text: "今天是小A离开的日子。",
+        silent: true,
+      },
+      channel: "wechat",
+      targetId: "wx-1",
+      now: new Date(2024, 4, 20, 10, 0),
+    });
+    expect(delivered).toBe(true);
+    expect(pushToUser).not.toHaveBeenCalled();
+    expect(recordReminder).toHaveBeenCalledWith(
+      expect.objectContaining({ channel: "web", kind: "memorial_deathday" }),
+    );
   });
 
   it("records the card on the web once, and never pushes", async () => {

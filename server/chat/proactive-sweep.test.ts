@@ -164,6 +164,26 @@ describe("the sweep that lets the persona speak first", () => {
     expect(createMessage).not.toHaveBeenCalled();
   });
 
+  it("says nothing for a memorial persona (C7.1)", async () => {
+    getProactivePersonas.mockResolvedValue([{
+      id: 1,
+      userId: 1,
+      name: "小A",
+      lastChatAt: new Date("2026-05-01T12:00:00Z"),
+      presence: "active",
+      graduationStatus: null,
+      analysisStatus: "ready",
+      proactiveFrequencyHours: 24,
+    }]);
+    getPersonaById.mockResolvedValue({ ...persona, settings: { mode: "memorial" } });
+
+    const sent = await runProactiveSweep(new Date("2026-06-01T12:00:00Z"));
+
+    expect(sent).toBe(0);
+    expect(createMessage).not.toHaveBeenCalled();
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+  });
+
   it("does not read the whole persona for a persona that is not due", async () => {
     /**
      * The whole row was read for every proactive persona, every

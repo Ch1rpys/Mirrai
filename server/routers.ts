@@ -154,6 +154,7 @@ import { collectOutboundCandidates } from "./chat/outbound";
 import { getRerankModel } from "./chat/rerank-model";
 import { loadBehaviorProfile, measureAndSaveBehaviorProfile } from "./_core/behavior-profile";
 import { mergePersonaSettings, normalizePersonaSettings } from "@shared/persona-settings";
+import { isMemorial } from "@shared/persona-state";
 import { buildWordingMessages, selectWordingSuggestions } from "@shared/wording";
 import { personaSettingsPatchSchema } from "./routers-v6/persona-settings-patch";
 import { styleRouter } from "./routers-v6/style";
@@ -1586,6 +1587,10 @@ export const appRouter = router({
         // Where the persona came from. "upload" is the default — the persona
         // is built from uploaded chat logs.
         source: z.enum(["upload", "questionnaire", "card", "sandbox"]).default("upload"),
+        /** The one setting the create dialog can turn on (C7.1). */
+        settings: z.object({
+          mode: z.enum(["default", "memorial"]),
+        }).strict().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const id = await createPersona({ userId: ctx.user.id, ...input, analysisStatus: "pending" });
@@ -2439,6 +2444,7 @@ export const appRouter = router({
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         return getGraduationModeDetails({
           personaMode: persona.graduationMode,
+          memorial: isMemorial(persona),
           userId: ctx.user.id,
         });
       }),
@@ -2492,6 +2498,7 @@ export const appRouter = router({
         // available — either way the thresholds are not the answer.
         const mode = await getEffectiveGraduationMode({
           personaMode: persona.graduationMode,
+          memorial: isMemorial(persona),
           userId: ctx.user.id,
         });
         if (mode === "off") {
@@ -2551,6 +2558,7 @@ export const appRouter = router({
         // already made the decision.
         const mode = await getEffectiveGraduationMode({
           personaMode: persona.graduationMode,
+          memorial: isMemorial(persona),
           userId: ctx.user.id,
         });
         if (mode === "off") {

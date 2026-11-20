@@ -488,6 +488,27 @@ describe("runConversation", () => {
     expect(createSafetyEvent).toHaveBeenCalled();
   });
 
+  it("keeps the crisis path for a memorial persona, in its own words (C7.1)", async () => {
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona({ settings: { mode: "memorial" } }),
+      userId: 1,
+      message: "我不想活了",
+      mode: "once",
+    })) {
+      events.push(event);
+    }
+
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+    expect(events.find((event) => event.type === "done")?.crisis).toBe(true);
+    const assistant = createMessage.mock.calls.find(
+      (call: unknown[]) => (call[0] as { role?: string }).role === "assistant",
+    )?.[0] as { content?: string };
+    expect(assistant.content).toContain(copy("zh", "safety.crisisStop.memorial"));
+    expect(assistant.content).not.toContain(copy("zh", "safety.crisisStop"));
+    expect(assistant.content).toContain("12356");
+  });
+
   it("answers a ritual without judging emotion, and counts the turn", async () => {
     const events = [];
     for await (const event of runConversation({

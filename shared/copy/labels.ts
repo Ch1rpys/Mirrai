@@ -146,6 +146,18 @@ export const LABELS = {
     zh: "……我们已经聊了好久好久了。要不，先喝口水，去透透气？我在这儿等你回来。",
     en: "……We've been talking for such a long time. How about a glass of water and a little break? I'll be right here when you get back.",
   },
+  "labels.care.dependency.memorial": {
+    zh: "……我发现你最近常来找我。我希望你过得去，也希望你身边有真实的人可以说说话。",
+    en: "……I've noticed you've been coming to me often. I hope you are doing okay, and I hope there are real people around you to talk to.",
+  },
+  "labels.care.longSession.memorial": {
+    zh: "……已经聊了很久了。先喝口水，去透透气。我在这儿。",
+    en: "……We've been talking for a long time. Have some water, take a little break. I'm here.",
+  },
+  "labels.care.dailyLimit.memorial": {
+    zh: "……今天已经说了很多了。也留一点时间给自己，去做点别的。",
+    en: "……You've said a lot today already. Leave a little time for yourself, too — go and do something else.",
+  },
   "labels.care.dailyLimit": {
     zh: "……今天已经聊了好多次了哦。我很高兴你愿意找我说话，但记得也留一点时间给自己，去做点别的、见点别的人。",
     /**

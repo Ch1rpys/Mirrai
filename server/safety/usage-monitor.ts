@@ -191,7 +191,10 @@ export type CareNoteKind = "long_session" | "daily_frequency" | "dependency";
 export type CareNoteTextKey =
   | "safety.care.longSession"
   | "safety.care.dailyLimit"
-  | "safety.care.dependency";
+  | "safety.care.dependency"
+  | "safety.care.longSession.memorial"
+  | "safety.care.dailyLimit.memorial"
+  | "safety.care.dependency.memorial";
 
 export interface CareNote {
   kind: CareNoteKind;
@@ -214,12 +217,20 @@ export interface CareNote {
  * threshold trips after a few conversations, so it used to pre-empt the
  * dependency note every single time it could have fired.
  */
-export function pickCareNote(signals: UsageSignals, locale: "zh" | "en" = "zh"): CareNote | null {
+export function pickCareNote(
+  signals: UsageSignals,
+  locale: "zh" | "en" = "zh",
+  options: { memorial?: boolean } = {},
+): CareNote | null {
   if (signals.dependencyRising) {
     return {
       kind: "dependency",
-      text: copy(locale, "labels.care.dependency"),
-      textKey: "safety.care.dependency",
+      text: copy(locale, options.memorial
+        ? "labels.care.dependency.memorial"
+        : "labels.care.dependency"),
+      textKey: options.memorial
+        ? "safety.care.dependency.memorial"
+        : "safety.care.dependency",
       showBanner: true,
     };
   }
@@ -227,8 +238,12 @@ export function pickCareNote(signals: UsageSignals, locale: "zh" | "en" = "zh"):
   if (signals.sessionDurationMs > LONG_SESSION_MS) {
     return {
       kind: "long_session",
-      text: copy(locale, "labels.care.longSession"),
-      textKey: "safety.care.longSession",
+      text: copy(locale, options.memorial
+        ? "labels.care.longSession.memorial"
+        : "labels.care.longSession"),
+      textKey: options.memorial
+        ? `safety.care.longSession.memorial`
+        : "safety.care.longSession",
       showBanner: false,
     };
   }
@@ -236,8 +251,12 @@ export function pickCareNote(signals: UsageSignals, locale: "zh" | "en" = "zh"):
   if (signals.dailyMessageCount > DAILY_MESSAGE_LIMIT) {
     return {
       kind: "daily_frequency",
-      text: copy(locale, "labels.care.dailyLimit"),
-      textKey: "safety.care.dailyLimit",
+      text: copy(locale, options.memorial
+        ? "labels.care.dailyLimit.memorial"
+        : "labels.care.dailyLimit"),
+      textKey: options.memorial
+        ? `safety.care.dailyLimit.memorial`
+        : "safety.care.dailyLimit",
       showBanner: true,
     };
   }

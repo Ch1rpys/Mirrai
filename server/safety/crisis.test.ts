@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { detectCrisis, buildCrisisResponse, buildGentleCheckIn } from "./crisis";
 import { DEFAULT_CRISIS_RESOURCES, formatResources } from "./resources";
+import { copy } from "@shared/copy";
 
 describe("detectCrisis", () => {
   it("detects a Chinese crisis statement", () => {
@@ -150,6 +151,14 @@ describe("buildCrisisResponse", () => {
     expect(reply).not.toContain("我只是一段代码");
   });
 
+  it("uses the memorial wording for a memorial persona (C7.1)", () => {
+    const reply = buildCrisisResponse("小A", "zh", { memorial: true });
+    expect(reply).toContain(copy("zh", "safety.crisisStop.memorial"));
+    expect(reply).not.toContain(copy("zh", "safety.crisisStop"));
+    // The resources are the same, and just as real.
+    expect(reply).toContain("12356");
+  });
+
   it("does not include the resource list in the gentle check-in", () => {
     const reply = buildGentleCheckIn("小A");
     expect(reply).not.toContain("12356");
@@ -163,6 +172,11 @@ describe("buildCrisisResponse", () => {
     const reply = buildGentleCheckIn("小A", "en");
     expect(reply).toContain("I'm here");
     expect(reply).not.toContain("12356");
+  });
+
+  it("uses the memorial wording for a memorial persona (C7.1)", () => {
+    const reply = buildGentleCheckIn("小A", "zh", { memorial: true });
+    expect(reply).toBe(copy("zh", "safety.crisisGentle.memorial"));
   });
 });
 

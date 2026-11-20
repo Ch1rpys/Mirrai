@@ -20,7 +20,9 @@ export type ReminderKind =
   | "anniversary"
   | "together_years"
   | "memory_trigger"
-  | "graduation_revisit";
+  | "graduation_revisit"
+  | "memorial_birthday"
+  | "memorial_deathday";
 
 export interface Reminder {
   kind: ReminderKind;
@@ -158,6 +160,52 @@ export function collectReminders(params: {
 
   if (!params.persona.remindersEnabled) return reminders;
 
+  const settings = normalizePersonaSettings(params.persona.settings);
+  const dayKey = todayKey(now, timezone);
+  const monthDay = dayKey.slice(5, 10); // MM-DD
+
+  /**
+   * A memorial persona gets the two days that matter, and nothing else
+   * (C7.1).
+   *
+   * The birthday and the day they died are placed quietly in the hall;
+   * they are not pushed and they do not go through a channel. The
+   * shared anniversaries and the years together are not celebrated for
+   * someone who is not here.
+   */
+  if (settings.mode === "memorial") {
+    const matchesDay = (value: string | undefined) => {
+      const date = String(value ?? "").trim();
+      if (!date) return false;
+      return date === dayKey || date === monthDay || date.slice(5, 10) === monthDay;
+    };
+    if (matchesDay(settings.memorial?.birthday)) {
+      reminders.push({
+        kind: "memorial_birthday",
+        personaId: params.persona.id,
+        personaName: params.persona.name,
+        dedupeKey: `memorial_birthday:${params.persona.id}:${dayKey}`,
+        text: copy(locale, "reminders.memorialBirthday", {
+          name: params.persona.name,
+        }),
+        silent: true,
+      });
+    }
+    if (matchesDay(settings.memorial?.deathday)) {
+      reminders.push({
+        kind: "memorial_deathday",
+        personaId: params.persona.id,
+        personaName: params.persona.name,
+        dedupeKey: `memorial_deathday:${params.persona.id}:${dayKey}`,
+        text: copy(locale, "reminders.memorialDeathday", {
+          name: params.persona.name,
+        }),
+        silent: true,
+      });
+    }
+    return reminders;
+  }
+
   // A persona that has said goodbye, or that the user asked to be left
   // alone, must not have anything pushed to it. Announcing the anniversary
   // of a relationship the user has ended is the opposite of what the
@@ -179,10 +227,6 @@ export function collectReminders(params: {
   // pushed at three in the morning when they cannot even get through
   // to the person.
   const unreachable = params.persona.reachability === "unreachable";
-
-  const dayKey = todayKey(now, timezone);
-  // The month and the day, in the user's calendar.
-  const monthDay = dayKey.slice(5, 10); // MM-DD
 
   if (mayReach && !relationshipEnded && !unreachable) {
     for (const anniversary of params.anniversaries) {
@@ -298,15 +342,13 @@ export function collectReminders(params: {
    * `silent` so the sweep cannot push it. The user can switch it off,
    * and a memorial persona never asks at all.
    */
-  const settings = normalizePersonaSettings(params.persona.settings);
   const graduatedAt = params.persona.graduatedAt
     ? new Date(params.persona.graduatedAt)
     : null;
   if (
     graduatedAt &&
     Number.isFinite(graduatedAt.getTime()) &&
-    settings.revisit !== false &&
-    settings.mode !== "memorial"
+    settings.revisit !== false
   ) {
     const days = daysBetweenDayKeys(
       zonedDateKey(graduatedAt, timezone),

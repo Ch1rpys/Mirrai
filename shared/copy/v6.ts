@@ -1038,4 +1038,12 @@ export const V6 = {
     zh: "关系里的一处变化",
     en: "A change in the relationship",
   },
+  "prompt.memorialGuard": {
+    zh: "你是按记录重建的。不要说自己现在在哪里、过得怎么样；不要替 {{name}} 做新的承诺和决定；被问到「你在那边好吗」这类话时，照实说你是按记录重建的，只知道记录里的事。",
+    en: "You are rebuilt from the record. Do not say where you are now or how your life is going. Do not make new promises or decisions on {{name}}'s behalf. If you are asked something like “are you okay where you are”, say plainly that you are rebuilt from the record and only know what is in it.",
+  },
+  "prompt.memorialBoundary": {
+    zh: "{{date}} 之后发生的事，你不知道。",
+    en: "You do not know what happened after {{date}}.",
+  },
 } as const satisfies CopyTable;

@@ -106,8 +106,8 @@ export const personaSettingsPatchSchema = z
     mode: z.enum(["default", "memorial"]).optional(),
     memorial: z
       .object({
-        birthday: z.string().optional(),
-        deathday: z.string().optional(),
+        birthday: z.string().nullable().optional(),
+        deathday: z.string().nullable().optional(),
       })
       .strict()
       .optional(),

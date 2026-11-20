@@ -470,6 +470,7 @@ export function resolveProactiveDeadline(params: {
   quietHours?: QuietHoursSpec | null;
   userTimeZone?: string | null;
   windowIndex?: number;
+  memorial?: boolean;
 }): ProactiveDeadline | null {
   if (!params.lastChatAt || !params.frequencyHours || params.frequencyHours <= 0) {
     return null;
@@ -491,6 +492,7 @@ export function resolveProactiveDeadline(params: {
     presence: params.presence ?? "active",
     reachability: params.reachability,
     windowIndex,
+    memorial: params.memorial,
     rng: seededRandom(`${params.personaId}:${silenceStart.getTime()}:${params.frequencyHours}:${windowIndex}`),
   });
   if (!decision.eligibleAt) return null;
@@ -551,8 +553,11 @@ export function isProactiveDue(params: {
   userTimeZone?: string | null;
   /** The user's own taper (C6.1): any stage above zero stops first words. */
   taperStage?: number;
+  /** A memorial persona never speaks first (C7.1). */
+  memorial?: boolean;
 }): boolean {
   const now = params.now ?? new Date();
+  if (params.memorial) return false;
   if ((params.taperStage ?? 0) > 0) return false;
   if (!params.frequencyHours || params.frequencyHours <= 0) return false;
   if (!mayReachOut(params.presence as Presence)) return false;
@@ -575,6 +580,7 @@ export function isProactiveDue(params: {
     quietHours: params.quietHours,
     userTimeZone: params.userTimeZone,
     windowIndex,
+    memorial: params.memorial,
   });
   if (!deadline) return false;
   const decision = decideProactiveWindow({

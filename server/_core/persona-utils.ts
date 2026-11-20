@@ -12,6 +12,7 @@ import {
 import { renderSuppressions, type Suppression } from "@shared/suppressions";
 import { ACT_COPY_KEYS, renderActInstruction, type SpeechAct } from "@shared/speech-acts";
 import { normalizePersonaData } from "./persona-schema";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 import { shouldInstructHarm } from "@shared/harm";
 import { normalizeAddressHistory, pickThemToMeAddress } from "@shared/address-history";
 import { normalizeLexicon, renderLexicon, type LexiconEntry } from "@shared/lexicon";
@@ -475,6 +476,15 @@ export function buildSystemPromptParts(
    * The setting remains, but it now only controls whether the persona
    * *volunteers* the fact. It may never lie about it.
    */
+  const personaSettings = normalizePersonaSettings(persona.settings);
+  const memorial = personaSettings.mode === "memorial";
+  const memorialGuard = memorial
+    ? copy(locale, "prompt.memorialGuard", { name })
+    : "";
+  const memorialDeathday = memorial ? personaSettings.memorial?.deathday : undefined;
+  const memorialBoundary = memorialDeathday
+    ? copy(locale, "prompt.memorialBoundary", { date: memorialDeathday })
+    : "";
   const volunteersIdentity = process.env.PERSONA_AI_TRANSPARENCY !== "false";
   const identityRule = volunteersIdentity
     ? copy(locale, "prompt.identityVolunteers")
@@ -643,6 +653,7 @@ export function buildSystemPromptParts(
   const blocks: PromptBlock[] = [
     { kind: "stable", text: identityRule },
     { kind: "stable", text: hardRules },
+    { kind: "stable", text: memorialGuard },
     { kind: "stable", text: options.guardInstruction || "" },
     { kind: "stable", text: harmInstruction },
     { kind: "volatile", text: options.seedTurnsNote || "" },
@@ -679,6 +690,7 @@ export function buildSystemPromptParts(
     { kind: "volatile", text: closingInstruction },
     { kind: "volatile", text: options.inSessionShare || "" },
     { kind: "volatile", text: options.periodBoundary || "" },
+    { kind: "volatile", text: memorialBoundary },
     {
       kind: "volatile",
       text:
@@ -809,11 +821,13 @@ export function buildSystemPromptParts(
         togetherDays,
         locale,
         isOver,
-        currentRoutines(
-          normalizeLifeEvents((p as { lifeEvents?: unknown }).lifeEvents),
-          now,
-          options.timeZone ?? persona.timezone,
-        )[0]?.title,
+        memorial
+          ? undefined
+          : currentRoutines(
+              normalizeLifeEvents((p as { lifeEvents?: unknown }).lifeEvents),
+              now,
+              options.timeZone ?? persona.timezone,
+            )[0]?.title,
         options.nextMeetLine ?? null,
       ),
     },

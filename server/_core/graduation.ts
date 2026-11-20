@@ -86,11 +86,15 @@ async function readUserGraduationMode(userId: number): Promise<string | null> {
 export async function getGraduationModeDetails(params: {
   /** The persona's own override; null means "inherit the user's default". */
   personaMode?: string | null;
+  /** A memorial persona never gets the suggestion (C7.1). */
+  memorial?: boolean;
   userId: number;
 }): Promise<GraduationModeDetails> {
   const userMode = await readUserGraduationMode(params.userId);
   return {
-    mode: resolveGraduationMode(params.personaMode, userMode),
+    mode: resolveGraduationMode(params.personaMode, userMode, {
+      memorial: params.memorial,
+    }),
     personaMode: params.personaMode ?? null,
     userMode,
   };
@@ -101,6 +105,7 @@ export async function getGraduationModeDetails(params: {
  */
 export async function getEffectiveGraduationMode(params: {
   personaMode?: string | null;
+  memorial?: boolean;
   userId: number;
 }): Promise<GraduationMode> {
   const { mode } = await getGraduationModeDetails(params);

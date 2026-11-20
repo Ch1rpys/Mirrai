@@ -37,6 +37,15 @@ describe("the graduation mode", () => {
     expect(resolveGraduationMode("", "manual")).toBe("manual");
   });
 
+  it("never suggests a goodbye to a memorial persona (C7.1)", () => {
+    expect(resolveGraduationMode("suggest", "suggest", { memorial: true })).toBe("manual");
+    expect(resolveGraduationMode("off", "suggest", { memorial: true })).toBe("manual");
+    // The user can still open the farewell page themselves: manual is
+    // "the app does not bring it up", not "the page is gone".
+    expect(resolveGraduationMode(null, null, { memorial: true })).toBe("manual");
+    expect(resolveGraduationMode("suggest", "suggest", { memorial: false })).toBe("suggest");
+  });
+
   it("does not trust a value it does not know", () => {
     // A corrupted row must not be able to switch the mechanism off — or on.
     expect(resolveGraduationMode("nonsense", "manual")).toBe("manual");

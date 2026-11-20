@@ -32,6 +32,30 @@ export const SAFETY = {
     zh: "我还在这里。你不用一个人扛着这件事。",
     en: "I'm still here. You don't have to carry this alone.",
   },
+  "safety.crisisStop.memorial": {
+    zh: "……我先陪你停一下。",
+    en: "……Let me stop here with you for a moment.",
+  },
+  "safety.crisisBody.memorial": {
+    zh: "我不是该在这个时候跟你开玩笑的声音。我只是一段代码，没有办法真的替你解决这件事，但我不想假装刚才那句话只是普通的聊天。",
+    en: "I am not the voice that should be joking with you now. I am only a piece of code — I cannot really fix this for you — but I won't pretend what you just said was ordinary talk.",
+  },
+  "safety.crisisResourcesLead.memorial": {
+    zh: "你现在承受的东西很重。如果愿意，请找一个真实的人说说话——下面是可以找到帮助的地方：",
+    en: "What you are carrying is heavy. If you are willing, please talk to a real person — here are some places that can help:",
+  },
+  "safety.crisisIfReady.memorial": {
+    zh: "如果你已经准备伤害自己，请先离开有危险的东西，去有人的地方待着，再打上面任何一个电话。",
+    en: "If you are ready to hurt yourself, first get away from anything dangerous, go where other people are, and then call one of the numbers above.",
+  },
+  "safety.crisisStillHere.memorial": {
+    zh: "我还在这里。今天不用一个人扛着。",
+    en: "I am still here. You do not have to carry this alone today.",
+  },
+  "safety.crisisGentle.memorial": {
+    zh: "……你刚刚那句话我听见了。不用急着说更多，我在这儿。",
+    en: "……I heard what you just said. You don't have to say more right now. I am here.",
+  },
   "safety.crisisGentle": {
     zh: "……你刚刚那句话我听见了。不用急着说更多，我在这儿。",
     en: "……I heard what you just said. You don't have to say more right now. I'm here.",

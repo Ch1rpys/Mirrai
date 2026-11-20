@@ -31,7 +31,7 @@ import { assessTrajectory, getStoredTrajectory } from "../safety/trajectory";
 import { checkGraduationEligibility } from "../_core/persona-utils";
 import { worseStreakFor } from "../safety/checkins";
 import { getEffectiveGraduationMode, canOfferGraduation, getEffectivePresence } from "../_core/graduation";
-import { mayChatNow } from "@shared/persona-state";
+import { isMemorial, mayChatNow } from "@shared/persona-state";
 import { mayReachOut } from "@shared/graduation-mode";
 import { copy, localizeScene } from "@shared/copy";
 import { normalizePersonaSettings } from "@shared/persona-settings";
@@ -1202,7 +1202,9 @@ async function* admitUserMessage(
 
   const crisis = detectCrisis(message);
   if (crisis.crisis) {
-    const replyText = buildCrisisResponse(persona.name, locale);
+    const replyText = buildCrisisResponse(persona.name, locale, {
+      memorial: isMemorial(persona),
+    });
     const messageId = await db.createMessage({
       personaId: persona.id,
       userId,
@@ -1354,7 +1356,9 @@ async function* runConversationTurn(
 
   // A weak signal is ordinary distress, not a crisis: the persona still
   // answers normally and checks in afterwards.
-  let gentleCheckIn: string | null = crisis.weakSignal ? buildGentleCheckIn(persona.name, locale) : null;
+  let gentleCheckIn: string | null = crisis.weakSignal
+    ? buildGentleCheckIn(persona.name, locale, { memorial: isMemorial(persona) })
+    : null;
 
   /**
    * The distress is written down.
@@ -1886,7 +1890,9 @@ async function* runConversationTurn(
   } catch (e) {
     console.warn("[Safety] Could not evaluate the usage:", e);
   }
-  const pickedNote = signals ? pickCareNote(signals, locale) : null;
+  const pickedNote = signals
+    ? pickCareNote(signals, locale, { memorial: isMemorial(persona) })
+    : null;
 
   /**
    * The note is said once a day.
@@ -2773,6 +2779,7 @@ export async function evaluateGraduation(params: {
 
   const mode = await getEffectiveGraduationMode({
     personaMode: persona.graduationMode,
+    memorial: isMemorial(persona),
     userId,
   });
   if (mode !== "suggest") return false;

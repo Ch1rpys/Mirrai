@@ -12,6 +12,7 @@ import { buildSystemPromptParts } from "../_core/persona-utils";
 import { retrieveMemories, formatMemoriesForPrompt, formatAnchorsForPrompt, splitMemorySections } from "./retrieval";
 import { buildUserContextBlock, buildRelationshipSection, resolveRelationshipPhase, isUserMood } from "@shared/user-side";
 import { copy } from "@shared/copy";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 import type { MicroRule } from "@shared/micro-rules";
 import type { ImperfectionEntry } from "@shared/imperfection";
 import type { Suppression } from "@shared/suppressions";
@@ -231,6 +232,23 @@ export async function buildPromptBundleForPersona(
   const clockZone = preferredClockZone(theirZone, userZone);
   const periodEnd = periodToInstant(period?.to, clockZone);
   const persona = personaAsOfPeriod(context.persona, period, clockZone);
+  /**
+   * A deathday is a knowledge boundary (C7.1).
+   *
+   * The persona knows what the record holds up to the day they died.
+   * Memories and events after it are not injected — the same rule the
+   * period boundary uses, so a memorial persona does not suddenly know
+   * about a birthday that came after.
+   */
+  const personaSettings = normalizePersonaSettings(context.persona.settings);
+  const deathdayEnd =
+    personaSettings.mode === "memorial" && personaSettings.memorial?.deathday
+      ? periodToInstant(personaSettings.memorial.deathday, clockZone)
+      : null;
+  const knowledgeEnd =
+    [periodEnd, deathdayEnd]
+      .filter((value): value is Date => Boolean(value))
+      .sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
 
   const memories = context.memories ?? await retrieveMemories({
     personaId: persona.id,
@@ -248,10 +266,10 @@ export async function buildPromptBundleForPersona(
     markRecalled: context.markRecalled,
   }).catch(() => []);
   const recordTimes = await recordTimesFor(memories, userId);
-  const knownMemories = memories.filter((row) => memoryKnownBy(row, periodEnd, recordTimes));
+  const knownMemories = memories.filter((row) => memoryKnownBy(row, knowledgeEnd, recordTimes));
   const { anchors, ordinary } = splitMemorySections(knownMemories);
 
-  const summary = periodEnd
+  const summary = knowledgeEnd
     ? null
     : context.summarySection !== undefined
     ? null
@@ -353,7 +371,7 @@ export async function buildPromptBundleForPersona(
           : await contrastSectionFor(context, locale),
     memoryConflictSection: memoryConflictSectionFor(
       (await optionalCall(() => db.getMemoriesByPersonaId(persona.id, userId), [])).filter((row) =>
-        memoryKnownBy(row, periodEnd, recordTimes),
+        memoryKnownBy(row, knowledgeEnd, recordTimes),
       ),
       locale,
     ),

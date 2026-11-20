@@ -18,6 +18,7 @@ import type { Persona } from "../../drizzle/schema";
 import type { ChannelId } from "./types";
 import { mayReachOut } from "@shared/graduation-mode";
 import { copy, detectLocale, type Locale } from "@shared/copy";
+import { isMemorial } from "@shared/persona-state";
 import { getUserLocale } from "../db";
 import { CHANNEL_COMMANDS } from "@shared/copy/channels";
 
@@ -345,6 +346,7 @@ async function handleGraduationCommand(
   // Whether the graduation may happen at all is the user's choice.
   const mode = await getEffectiveGraduationMode({
     personaMode: persona.graduationMode,
+    memorial: isMemorial(persona),
     userId: params.userId,
   });
   if (mode === "off") {

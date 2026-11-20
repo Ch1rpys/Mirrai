@@ -82,6 +82,19 @@ describe("whether a bought window is used", () => {
     expect(decision.skipReason).toBe("taper");
   });
 
+  it("says nothing for a memorial persona, and records why (C7.1)", () => {
+    const decision = decideProactiveWindow({
+      frequencyHours: 24,
+      silenceStart: new Date("2026-01-01T00:00:00Z"),
+      openingRate: null,
+      presence: "active",
+      memorial: true,
+      rng: () => 0,
+    });
+    expect(decision.used).toBe(false);
+    expect(decision.skipReason).toBe("memorial");
+  });
+
   it("is the same decision for the same silence", () => {
     const silenceStart = new Date("2026-01-01T00:00:00Z");
     const a = decideProactiveWindow({
