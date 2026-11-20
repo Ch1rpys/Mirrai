@@ -137,7 +137,7 @@
 | C2.10 | ✅ | 14ea90d (db/routes); 66f2d6e (page) | `server/db-record-page.test.ts`（带临时库）4 通过：夹具 5126 行按每页 200 从最新翻到最旧不重不漏（26 页，首屏 hasNewer=false、末页 hasOlder=false）、around 带锚点行、outline 各月计数之和等于总条数、书签/批注唯一且随行删除。`server/routers.record.test.ts` 7 通过：三种方向透传、`limit` >200 被 zod 拒绝、别人的分身 404、删除只删自己的、贴纸渲染、伤害行折叠、批注上限 1000。`client/src/pages/Records.test.tsx` 8 通过：`?at=` 打开并高亮、加书签进侧栏、折叠行点开、失败给重试不显示空、删除确认、搜索跳转写 `?at=`、再往前。迁移 0060 四步+升级路径：`--replay` 58 条、`--rollback 1` 后表消失、再 migrate 回来；DROP 表并删 journal 行后再 migrate，表与 3 个索引出现。 |
 | C3.1 | ⬜ |  |  |
 | C3.2 | ⬜ |  |  |
-| C3.3 | ⬜ |  |  |
+| C3.3 | ✅ | d5d6ae7 | `server/routers.outbound.test.ts` 7 通过：`addFromMessage` 传分身消息 → `BAD_REQUEST`、别人的消息 → `NOT_FOUND`、存下的 `text` 与 `message.content` 逐字相同、同一条第二次返回已有行（`existed: true`，只调用一次 `createOutboundLetter`）；`addOwn` 写入并拒绝空白。`MessageBubble.test.tsx` 新增：只有用户气泡有「收进…」按钮、助手气泡没有。`OutboundEntry.test.tsx` 3 通过：入口显示条数（2）、悼念模式文案、点击打开。`OutboundDrawer.test.tsx` 3 通过：抽屉复用 `OutboundLetters`、可关闭、关闭时不渲染。`OutboundLetters.test.tsx` 新增「自己写一句」：去空格后 `addOwn({ personaId: 5, text })`、提交后清空。`Chat`/`fidelity-branches` 的 trpc mock 补了 `outbound`，断言未改。闸门全绿：`506 passed | 13 skipped (519)`、`4217 passed | 56 skipped (4273)`。 |
 | C3.4 | ⬜ |  |  |
 | C3.5 | ⬜ |  |  |
 | C3.6 | ⬜ |  |  |
@@ -2366,3 +2366,4 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 
 - 开工前：把 WP11 独立验收留下的 25 条 `- [ ]` 逐条核对（`b553f25` 的修复已在代码里，`server/records/on-this-day|firsts|timeline|nearest`、`routers.record*`、`TimelineChart`、`OurDictionary`、`PlacesSongs`、`RecordSearch` 共 10 个文件 51 条通过），改成 `- [x] b553f25 — …`。P0.5 那条留给验收会话复验，不动。
 - C10.4 `796cb87`：`server/no-surveillance.test.ts` 五条结构测试；`docs/product-concept.md` 伦理节加「不做监视」并进 5.8 落地表，README 伦理节加一句和链接。闸门 `corepack pnpm gate` 全绿（`Test Files 502 passed | 13 skipped (515)`，`Tests 4198 passed | 56 skipped (4254)`，`all six steps passed`）。
+- C3.3 `d5d6ae7`：`outbound.addFromMessage` / `outbound.addOwn`；用户消息操作行加「收进「想对 {{name}} 说的话」」；聊天页「更多操作」加带条数的入口（悼念模式换文案），抽屉复用 `OutboundLetters` 并支持自己写一句。新测试 4 个文件，既有 `Chat`/`fidelity-branches` 只补 mock。
