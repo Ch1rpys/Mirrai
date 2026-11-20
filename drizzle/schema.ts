@@ -1724,6 +1724,31 @@ export type UserJournalEntry = typeof userJournal.$inferSelect;
 export type InsertUserJournalEntry = typeof userJournal.$inferInsert;
 
 /**
+ * One "swap places" practice (C4.4).
+ *
+ * The user plays the person, and the app plays the user, rebuilt from
+ * their own lines. It is a practice, bounded to fifteen minutes and
+ * thirty turns, once a day. Nothing here is a message, a memory, a mood
+ * or a chat count — the transcript is the whole of it.
+ */
+export const roleplaySessions = pgTable("roleplay_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  startedAt: timestamp("startedAt").notNull(),
+  endedAt: timestamp("endedAt"),
+  turns: integer("turns").default(0).notNull(),
+  transcript: jsonb("transcript"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userTimeIdx: index("roleplay_sessions_user_time_idx").on(table.userId, table.createdAt),
+  personaTimeIdx: index("roleplay_sessions_persona_time_idx").on(table.personaId, table.createdAt),
+}));
+
+export type RoleplaySession = typeof roleplaySessions.$inferSelect;
+export type InsertRoleplaySession = typeof roleplaySessions.$inferInsert;
+
+/**
  * A reply the user marked as not sounding like them.
  *
  * The reason is a closed set: the action was wrong, it was too

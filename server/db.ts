@@ -33,6 +33,7 @@ import {
   rehearsals, InsertRehearsal,
   sessionCheckins, InsertSessionCheckin,
   userJournal, InsertUserJournalEntry,
+  roleplaySessions, InsertRoleplaySession,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
@@ -1239,6 +1240,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(rehearsals).where(eq(rehearsals.userId, id));
     await tx.delete(sessionCheckins).where(eq(sessionCheckins.userId, id));
     await tx.delete(userJournal).where(eq(userJournal.userId, id));
+    await tx.delete(roleplaySessions).where(eq(roleplaySessions.userId, id));
     await tx.delete(personaFiles).where(eq(personaFiles.userId, id));
     await tx.delete(personaQuestionnaireAnswers).where(eq(personaQuestionnaireAnswers.userId, id));
     await tx.delete(personaTemplates).where(eq(personaTemplates.userId, id));
@@ -1669,6 +1671,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(rehearsals).where(and(eq(rehearsals.personaId, id), eq(rehearsals.userId, userId)));
     await tx.delete(sessionCheckins).where(and(eq(sessionCheckins.personaId, id), eq(sessionCheckins.userId, userId)));
     await tx.delete(userJournal).where(and(eq(userJournal.personaId, id), eq(userJournal.userId, userId)));
+    await tx.delete(roleplaySessions).where(and(eq(roleplaySessions.personaId, id), eq(roleplaySessions.userId, userId)));
     await tx.delete(personaFiles).where(and(eq(personaFiles.personaId, id), eq(personaFiles.userId, userId)));
     await tx.delete(personaQuestionnaireAnswers).where(and(eq(personaQuestionnaireAnswers.personaId, id), eq(personaQuestionnaireAnswers.userId, userId)));
     await tx.delete(personaVersions).where(and(eq(personaVersions.personaId, id), eq(personaVersions.userId, userId)));
@@ -8452,6 +8455,64 @@ export async function listUserMessageTimesSince(userId: number, since: Date) {
   return db.select({ at: messages.createdAt }).from(messages)
     .where(and(eq(messages.userId, userId), eq(messages.role, "user"), gte(messages.createdAt, since)))
     .orderBy(asc(messages.createdAt));
+}
+
+// ─── The role swap ─────────────────────────────────────────────────────────
+
+export async function createRoleplaySession(data: {
+  userId: number;
+  personaId: number;
+  startedAt: Date;
+}) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db.insert(roleplaySessions).values({
+    userId: data.userId,
+    personaId: data.personaId,
+    startedAt: data.startedAt,
+    turns: 0,
+    transcript: [],
+  }).returning({ id: roleplaySessions.id });
+  return row?.id;
+}
+
+export async function getRoleplaySession(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(roleplaySessions).where(and(
+    eq(roleplaySessions.id, id),
+    eq(roleplaySessions.userId, userId),
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
+/** How many practices the user has started since an instant. */
+export async function countRoleplaySessionsSince(userId: number, since: Date): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [row] = await db.select({ n: count() }).from(roleplaySessions).where(and(
+    eq(roleplaySessions.userId, userId),
+    gte(roleplaySessions.createdAt, since),
+  ));
+  return Number(row?.n ?? 0);
+}
+
+export async function updateRoleplaySession(
+  id: number,
+  userId: number,
+  patch: { turns?: number; transcript?: unknown; endedAt?: Date | null },
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(roleplaySessions).set({
+    ...(patch.turns !== undefined ? { turns: patch.turns } : {}),
+    ...(patch.transcript !== undefined ? { transcript: patch.transcript as any } : {}),
+    ...(patch.endedAt !== undefined ? { endedAt: patch.endedAt } : {}),
+  }).where(and(
+    eq(roleplaySessions.id, id),
+    eq(roleplaySessions.userId, userId),
+  )).returning({ id: roleplaySessions.id });
+  return rows.length > 0;
 }
 
 // ─── Distillation blocks and cards ────────────────────────────────────────
