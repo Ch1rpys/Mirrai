@@ -265,7 +265,10 @@ describe("the letters", () => {
     const conditions = whereOf().map((c) => c.sql).join(" ");
     expect(conditions).toContain('"letters"."kind"');
     expect(whereOf().flatMap((c) => c.params)).toContain("todo");
-    expect(orderOf()[0].sql).toContain('"letters"."createdAt" desc');
+    // The notes are a checklist: the open ones first, the ticked ones
+    // below, each group newest first (C3.7).
+    expect(orderOf()[0].sql).toContain('"letters"."doneAt" asc');
+    expect(orderOf()[1].sql).toContain('"letters"."createdAt" desc');
   });
 
   it("says whether a letter was deleted", async () => {

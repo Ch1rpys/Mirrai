@@ -625,7 +625,7 @@ export default function PersonaEdit() {
             <h2 className="section-title">{t("letters.title")}</h2>
             <p className="text-muted-foreground text-sm mt-1">{t("letters.note")}</p>
           </div>
-          <LetterBox personaId={personaId} />
+          <LetterBox personaId={personaId} personaName={persona?.name} />
         </section>
 
         {/* What actually happened. Without this the persona's sense of the

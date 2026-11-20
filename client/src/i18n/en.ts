@@ -1590,6 +1590,10 @@ export const en = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  meetDay: {
+    entry: "You meet today. {{n}} things to say when {{name}} is back →",
+  },
+
   rehearsal: {
     title: "Rehearsal",
     topNote: "Something you want to say to {{name}} and do not dare to? Say it here first. These are a few possibilities read from the record — not {{name}}'s answers.",
@@ -1943,7 +1947,12 @@ export const en = {
     kindLetter: "A letter to them",
     kindLabel: "What this letter is",
     kindTodo: "When they come back",
-    todoTitle: "When they come back",
+    todoTitle: "Things to say when {{name}} is back ({{open}} left)",
+    todoDone: "Tick this off",
+    todoUndo: "Untick this",
+    copyTodos: "Copy as text",
+    copiedTodos: "Copied.",
+    copyFailed: "Could not copy",
     todoCapped: "{{count}} more are not shown here.",
     todoNote: "Write it down for the moment you are in touch again. Nobody is going to rush you.",
     saveTodo: "Save it",

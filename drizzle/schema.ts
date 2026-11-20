@@ -837,6 +837,8 @@ export const letters = pgTable(
      * "answered" — the persona has replied.
      */
     status: varchar("status", { length: 16 }).default("private").notNull(),
+    /** When a note-to-say-later was ticked off (C3.7). */
+    doneAt: timestamp("doneAt"),
     /** When the reply is due. */
     replyAt: timestamp("replyAt"),
     repliedAt: timestamp("repliedAt"),

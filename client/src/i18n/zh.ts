@@ -1591,6 +1591,10 @@ export const zh = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  meetDay: {
+    entry: "今天见面。有 {{n}} 件「等 {{name}} 回来再说」的事 →",
+  },
+
   rehearsal: {
     title: "排练",
     topNote: "有话想对 {{name}} 说又不敢？先在这里说一遍。下面是按记录推的几种可能，不是 {{name}} 的回答。",
@@ -1955,7 +1959,12 @@ export const zh = {
     kindLetter: "写给 TA 的信",
     kindLabel: "这封信是什么",
     kindTodo: "等 TA 回来再说",
-    todoTitle: "等 TA 回来再说",
+    todoTitle: "等 {{name}} 回来再说（{{open}} 件没说）",
+    todoDone: "把这件事勾掉",
+    todoUndo: "取消勾选",
+    copyTodos: "复制成文字",
+    copiedTodos: "复制好了。",
+    copyFailed: "复制失败",
     todoCapped: "还有 {{count}} 条没有显示。",
     todoNote: "记下来，等你们重新联系上的时候再说。不会有人催你。",
     saveTodo: "记下来",

@@ -26,7 +26,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
  *   「交给 TA」 — delivered, and answered a day later. Because instant
  *                replies are the one thing that gives the game away.
  */
-export default function LetterBox({ personaId }: { personaId: number }) {
+export default function LetterBox({ personaId, personaName }: { personaId: number; personaName?: string }) {
   const { t, locale } = useLocale();
   /**
    * The app's own confirmation.
@@ -118,6 +118,18 @@ export default function LetterBox({ personaId }: { personaId: number }) {
     },
     onError: (e) => toast.error(e.message),
   });
+  /**
+   * Ticking a note off (C3.7).
+   *
+   * The list is a checklist for the day they meet again; a note that
+   * has been said should stop being in the way.
+   */
+  const setDone = trpc.letter.setDone.useMutation({
+    onSuccess: () => {
+      utils.letter.todos.invalidate({ personaId });
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const remove = trpc.letter.remove.useMutation({
     onSuccess: () => {
       utils.letter.list.invalidate({ personaId });
@@ -185,7 +197,21 @@ export default function LetterBox({ personaId }: { personaId: number }) {
     }
     return all;
   })();
-  const todos = todosData?.todos ?? [];
+  /**
+   * The checklist: what has not been said yet, then what has.
+   *
+   * The server sorts them too, but the component sorts as well so the
+   * order the user sees does not depend on which page the data came
+   * from.
+   */
+  const todos = [...(todosData?.todos ?? [])].sort((a: any, b: any) => {
+    const aDone = a.doneAt ? 1 : 0;
+    const bDone = b.doneAt ? 1 : 0;
+    if (aDone !== bDone) return aDone - bDone;
+    return b.id - a.id;
+  });
+  const openTodos = todos.filter((todo: any) => !todo.doneAt);
+  const todoName = personaName || t("common.them");
   // How many there are, not how many are shown.
   const total = (data?.total ?? 0) as number;
 
@@ -317,13 +343,47 @@ export default function LetterBox({ personaId }: { personaId: number }) {
 
       {todos.length > 0 && (
         <div className="rounded-xl border border-border/70 bg-muted/30 p-4">
-          <p className="text-xs font-medium text-foreground/80 mb-2">
-            {t("letters.todoTitle")}
-          </p>
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <p className="text-xs font-medium text-foreground/80">
+              {t("letters.todoTitle", { name: todoName, open: openTodos.length })}
+            </p>
+            <button
+              type="button"
+              onClick={async () => {
+                const text = todos
+                  .map((todo: any) => `${todo.doneAt ? "✓" : "·"} ${todo.body}`)
+                  .join("\n");
+                try {
+                  await navigator.clipboard.writeText(text);
+                  toast.success(t("letters.copiedTodos"));
+                } catch {
+                  toast.error(t("letters.copyFailed"));
+                }
+              }}
+              className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              {t("letters.copyTodos")}
+            </button>
+          </div>
           <ul className="space-y-1.5">
             {todos.map((todo: any) => (
-              <li key={todo.id} className="text-xs text-muted-foreground leading-relaxed">
-                · {todo.body}
+              <li
+                key={todo.id}
+                className={`flex items-start gap-2 text-xs leading-relaxed ${
+                  todo.doneAt ? "text-muted-subtle" : "text-muted-foreground"
+                }`}
+              >
+                <button
+                  type="button"
+                  aria-label={t(todo.doneAt ? "letters.todoUndo" : "letters.todoDone")}
+                  aria-pressed={Boolean(todo.doneAt)}
+                  disabled={setDone.isPending}
+                  onClick={() => setDone.mutate({ id: todo.id, done: !todo.doneAt })}
+                  className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-sm border border-border text-[9px] leading-none flex items-center justify-center hover:border-foreground"
+                >
+                  {todo.doneAt ? "✓" : ""}
+                </button>
+                <span className={todo.doneAt ? "line-through" : ""}>{todo.body}</span>
               </li>
             ))}
           </ul>

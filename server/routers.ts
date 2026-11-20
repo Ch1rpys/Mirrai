@@ -61,6 +61,7 @@ import {
   upsertUserMood, getUserMoods,
   createLetter, getLetters, countLetters, getDueLetters, getLastLetterReplyAt,
   answerLetter, markLetterUnanswered, deleteLetter, getWaitingNotes, countWaitingNotes,
+  getLetterById, setLetterDone,
   createRelationshipEvent, getRelationshipEvents, countRelationshipEvents, deleteRelationshipEvent,
   saveEvalCases, getEvalCases, saveEvalRun, getLatestEvalRun,
   getOutboundLetters, setOutboundLetterStatus, restoreOutboundLetter, updateOutboundLetterText,
@@ -5594,6 +5595,26 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const removed = await deleteLetter(input.id, ctx.user.id);
         if (!removed) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true };
+      }),
+
+    /**
+     * Ticks a note off the meeting list, or puts it back (C3.7).
+     *
+     * Only the 「等 TA 回来再说」 notes are a checklist. A letter is not
+     * a task: it was delivered, or it was kept, and either way there is
+     * nothing to tick.
+     */
+    setDone: protectedProcedure
+      .input(z.object({ id: z.number(), done: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        const letter = await getLetterById(input.id, ctx.user.id);
+        if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
+        if (letter.kind !== "todo") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Only a note can be ticked off." });
+        }
+        const changed = await setLetterDone(input.id, ctx.user.id, input.done);
+        if (!changed) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true };
       }),
   }),

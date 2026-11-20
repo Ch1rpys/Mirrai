@@ -36,6 +36,7 @@ import PendingReply from "@/components/v6/PendingReply";
 import OutboundEntry from "@/components/v6/OutboundEntry";
 import OutboundDrawer from "@/components/v6/OutboundDrawer";
 import WaitGauge from "@/components/v6/WaitGauge";
+import MeetDayNote from "@/components/v6/MeetDayNote";
 import { useTypingReveal, waitMs } from "@/components/v6/useTypingReveal";
 
 /** A message the reply carried besides its words (B7.1). */
@@ -2116,6 +2117,13 @@ export default function Chat() {
           </>
         )}
       </header>
+
+      <MeetDayNote
+        personaId={personaId}
+        name={displayName || t("common.them")}
+        nextMeetAt={normalizePersonaSettings(persona?.settings).ldr?.nextMeetAt}
+        timezone={persona?.timezone || user?.timezone}
+      />
 
       {showSearch && (
         <SearchPanel

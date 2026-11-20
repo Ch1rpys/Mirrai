@@ -13,6 +13,7 @@ import { translate } from "@/i18n";
  */
 const write = vi.fn();
 const remove = vi.fn();
+const setDone = vi.fn();
 const invalidate = vi.fn();
 
 let letters: any[] = [];
@@ -56,6 +57,15 @@ vi.mock("@/lib/trpc", () => ({
         }),
       },
       remove: { useMutation: () => ({ mutate: remove, isPending: false }) },
+      setDone: {
+        useMutation: (options: any) => ({
+          mutate: (values: any) => {
+            setDone(values);
+            options?.onSuccess?.();
+          },
+          isPending: false,
+        }),
+      },
     },
     safety: {
       resources: {
@@ -153,16 +163,17 @@ describe("the letters", () => {
     render(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
 
     expect(screen.getByText(/等你回来的时候我想说/)).toBeInTheDocument();
-    expect(screen.getByText(translate("zh", "letters.todoTitle"))).toBeInTheDocument();
+    expect(screen.getByText(translate("zh", "letters.todoTitle", { name: "TA", open: 1 }))).toBeInTheDocument();
   });
 
-  it("does not offer the same letter twice", () => {
+  it("shows a letter and a note with the same words in their own lists", () => {
+    // The two lists are different objects even when the words are the
+    // same: one was delivered, the other is a note for the meeting.
     listData = { letters: [{ id: 1, body: "有件事我一直没说。", kind: "letter", status: "waiting" }] };
     todos = [{ id: 1, body: "有件事我一直没说。", kind: "todo", status: "private" }];
     render(<ConfirmProvider><LetterBox personaId={1} /></ConfirmProvider>);
 
-    // The delivered letter appears once, not twice.
-    expect(screen.getAllByText("有件事我一直没说。")).toHaveLength(1);
+    expect(screen.getAllByText("有件事我一直没说。")).toHaveLength(2);
   });
 
   it("hands a letter over rather than keeping it, when the person says so", async () => {
@@ -329,5 +340,44 @@ describe("the letters", () => {
       expect(write).toHaveBeenCalled();
     });
     expect(screen.queryByText("12356")).not.toBeInTheDocument();
+  });
+});
+
+
+describe("the meeting list (C3.7)", () => {
+  it("puts the open notes first and the said ones below, struck through", () => {
+    todos = [
+      { id: 1, body: "已经说过的事", kind: "todo", status: "private", doneAt: new Date().toISOString() },
+      { id: 2, body: "还没说的事", kind: "todo", status: "private", doneAt: null },
+    ];
+    render(<ConfirmProvider><LetterBox personaId={1} personaName="小满" /></ConfirmProvider>);
+    const open = screen.getByText("还没说的事");
+    const done = screen.getByText("已经说过的事");
+    expect(open.className).not.toContain("line-through");
+    expect(done.className).toContain("line-through");
+    expect(open.compareDocumentPosition(done) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      screen.getByText(translate("zh", "letters.todoTitle", { name: "小满", open: 1 })),
+    ).toBeInTheDocument();
+  });
+
+  it("ticks one off", async () => {
+    const user = userEvent.setup();
+    todos = [{ id: 2, body: "还没说的事", kind: "todo", status: "private", doneAt: null }];
+    render(<ConfirmProvider><LetterBox personaId={1} personaName="小满" /></ConfirmProvider>);
+    await user.click(screen.getByRole("button", { name: translate("zh", "letters.todoDone") }));
+    expect(setDone).toHaveBeenCalledWith({ id: 2, done: true });
+  });
+
+  it("copies the list as text", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    todos = [
+      { id: 1, body: "还没说的事", kind: "todo", status: "private", doneAt: null },
+      { id: 2, body: "已经说过的事", kind: "todo", status: "private", doneAt: new Date().toISOString() },
+    ];
+    render(<ConfirmProvider><LetterBox personaId={1} personaName="小满" /></ConfirmProvider>);
+    await userEvent.click(screen.getByRole("button", { name: translate("zh", "letters.copyTodos") }));
+    expect(writeText).toHaveBeenCalledWith("· 还没说的事\n✓ 已经说过的事");
   });
 });

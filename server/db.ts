@@ -450,14 +450,57 @@ export async function getLetters(
 export async function getWaitingNotes(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) return [];
+  /**
+   * The open notes first, then the ones already said (C3.7).
+   *
+   * A checklist that stays in the order it was written is a list where
+   * the finished items are in the way. The ticked ones sink to the
+   * bottom, oldest first, and the open ones keep the order they were
+   * written in.
+   */
   return db.select().from(letters)
     .where(and(
       eq(letters.personaId, personaId),
       eq(letters.userId, userId),
       eq(letters.kind, "todo"),
     ))
-    .orderBy(desc(letters.createdAt))
+    .orderBy(asc(letters.doneAt), desc(letters.createdAt))
     .limit(20);
+}
+
+/** One letter or note of the caller's own. */
+export async function getLetterById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(letters).where(and(
+    eq(letters.id, id),
+    eq(letters.userId, userId),
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Ticks a note off, or puts it back (C3.7).
+ *
+ * Only 「等 TA 回来再说」 notes have a done state; a letter that was
+ * delivered is answered, not completed. The route checks the kind, and
+ * the query does too, so a bug in one place cannot tick a letter.
+ */
+export async function setLetterDone(
+  id: number,
+  userId: number,
+  done: boolean,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(letters).set({
+    doneAt: done ? new Date() : null,
+  }).where(and(
+    eq(letters.id, id),
+    eq(letters.userId, userId),
+    eq(letters.kind, "todo"),
+  )).returning({ id: letters.id });
+  return rows.length > 0;
 }
 
 /**
