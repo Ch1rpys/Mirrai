@@ -614,7 +614,6 @@ export const zh = {
       back: "返回",
     },
     profile: {
-
       name: "昵称",
       email: "邮箱",
       changePassword: "修改密码",
@@ -1901,6 +1900,7 @@ export const zh = {
   },
 
   profile: {
+    recordsEntryNote: "从导入的记录里逐条往回读，可以加书签和批注。",
     moreTitle: "更多",
     voicesEntry: "听听 {{name}} 的声音",
     callEntry: "和 {{name}} 打电话",
@@ -2444,6 +2444,39 @@ export const zh = {
     clusterSize: "这一组有 {{n}} 张",
   },
 
+
+  records: {
+    title: "和 {{name}} 的记录",
+    empty: "还没有导入记录。",
+    folded: "这里有一句可能伤人的话。点开看。",
+    open: "点开看",
+    older: "再往前",
+    newer: "再往后",
+    loading: "正在读记录…",
+    failed: "记录没读出来。",
+    retry: "再试一次",
+    chapters: "章节",
+    periods: "时期",
+    bookmarks: "书签",
+    noBookmarks: "还没有书签。",
+    jumpDate: "按日期跳转",
+    jump: "跳过去",
+    search: "搜 {{name}} 说过的话",
+    me: "我",
+    bookmark: "加书签",
+    unbookmark: "去掉书签",
+    note: "写批注",
+    notePlaceholder: "写一句给自己看的话",
+    saveNote: "保存批注",
+    cancel: "取消",
+    copy: "复制",
+    copied: "复制好了。",
+    delete: "从记录里删掉",
+    deleteTitle: "删掉这一行？",
+    deleteBody: "从记录里删掉这一行？下次蒸馏时它不会再被读到。这个操作不能撤销。",
+    deleteConfirm: "删掉",
+    back: "回到档案",
+  },
   material: {
     title: "材料够不够",
     hint: "蒸馏之前先看每一层站不站得住。数字来自记录，不是感觉。",

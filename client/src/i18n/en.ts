@@ -615,7 +615,6 @@ export const en = {
       back: "Back",
     },
     profile: {
-
       name: "Display name",
       email: "Email",
       changePassword: "Change password",
@@ -1889,6 +1888,7 @@ export const en = {
   },
 
   profile: {
+    recordsEntryNote: "Read the imported record line by line, and keep bookmarks and notes.",
     moreTitle: "More",
     voicesEntry: "Hear {{name}}'s voice",
     callEntry: "Call {{name}}",
@@ -2433,6 +2433,39 @@ export const en = {
     clusterSize: "{{n}} faces in this group",
   },
 
+
+  records: {
+    title: "The record with {{name}}",
+    empty: "No records have been imported yet.",
+    folded: "There is a line here that may have been meant to hurt. Tap to read it.",
+    open: "Read it",
+    older: "Earlier",
+    newer: "Later",
+    loading: "Reading the record…",
+    failed: "The record could not be read.",
+    retry: "Try again",
+    chapters: "Chapters",
+    periods: "Periods",
+    bookmarks: "Bookmarks",
+    noBookmarks: "No bookmarks yet.",
+    jumpDate: "Jump to a date",
+    jump: "Go",
+    search: "Search what {{name}} said",
+    me: "Me",
+    bookmark: "Bookmark this line",
+    unbookmark: "Remove the bookmark",
+    note: "Add a note",
+    notePlaceholder: "A note for yourself",
+    saveNote: "Save the note",
+    cancel: "Cancel",
+    copy: "Copy",
+    copied: "Copied.",
+    delete: "Remove from the record",
+    deleteTitle: "Remove this line?",
+    deleteBody: "Remove this line from the record? The next distillation will not read it. This cannot be undone.",
+    deleteConfirm: "Remove",
+    back: "Back to the profile",
+  },
   material: {
     title: "Whether the material is enough",
     hint: "Before distillation, whether each layer has enough of the record to stand on. The numbers come from the records, not from a feeling.",

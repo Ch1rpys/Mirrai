@@ -29,6 +29,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const BlindTest = lazy(() => import("./pages/BlindTest"));
 const BlindGuest = lazy(() => import("./pages/BlindGuest"));
 const Voices = lazy(() => import("./pages/Voices"));
+const Records = lazy(() => import("./pages/Records"));
 const Call = lazy(() => import("./pages/Call"));
 
 function Router() {
@@ -59,6 +60,7 @@ function Router() {
           <Route path="/persona/:id/profile" component={PersonaProfile} />
           <Route path="/persona/:id/blind-test" component={BlindTest} />
           <Route path="/persona/:id/voices" component={Voices} />
+          <Route path="/persona/:id/records" component={Records} />
           <Route path="/persona/:id/call" component={Call} />
           <Route path="/blind/:token" component={BlindGuest} />
           <Route path="/persona/:id/graduation" component={Graduation} />

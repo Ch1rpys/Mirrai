@@ -454,6 +454,18 @@ export default function PersonaProfile() {
           <h2 className="section-title">{t("profile.moreTitle")}</h2>
           <button
             type="button"
+            onClick={() => navigate(`/persona/${personaId}/records`)}
+            className="w-full rounded-lg border border-border/70 p-3 text-left transition-colors hover:bg-muted/30"
+          >
+            <span className="block text-sm text-foreground">
+              {t("records.title", { name: persona.name })}
+            </span>
+            <span className="block text-xs text-muted-foreground leading-relaxed">
+              {t("profile.recordsEntryNote")}
+            </span>
+          </button>
+          <button
+            type="button"
             onClick={() => navigate(`/persona/${personaId}/voices`)}
             className="w-full rounded-lg border border-border/70 p-3 text-left transition-colors hover:bg-muted/30"
           >
