@@ -138,7 +138,25 @@ describe("the fidelity evaluation", () => {
   it("does not start a second run while one is going", async () => {
     const caller = appRouter.createCaller(ctxFor(1));
 
+    /**
+     * Wait until the first request is really inside the run.
+     *
+     * The claim happens before the first `await`, but the procedure body
+     * itself is scheduled — so under load the second request could be
+     * created before the first body had run, and the guard was not yet
+     * set. Waiting for `runEval` to be entered keeps the test about the
+     * guard rather than about the scheduler.
+     */
+    let entered!: () => void;
+    const enteredRun = new Promise<void>((resolve) => { entered = resolve; });
+    runEval.mockImplementation(async () => {
+      entered();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return { score: 0.8 } as any;
+    });
+
     const first = caller.eval.run({ personaId: 5, variant: "default", locale: "zh" });
+    await enteredRun;
     // The second one arrives while the first is still measuring.
     const second = caller.eval.run({ personaId: 5, variant: "default", locale: "zh" });
 
