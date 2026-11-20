@@ -34,7 +34,10 @@ describe("the database", () => {
      */
     // The insert of the collected messages specifically.
     expect(db).toMatch(/insert\(collectedMessages\)/);
-    expect(db).toMatch(/\.values\(chunk\)/);
+    // C8.6 computes the row's search tokens before the insert, so the
+    // batch is `values`; it is still the collected messages' insert and
+    // still onConflictDoNothing.
+    expect(db).toMatch(/\.values\(values\)/);
     expect(db).toMatch(/onConflictDoNothing\(\)/);
   });
 

@@ -206,6 +206,33 @@ export function userBurstsForEmbedding(
 }
 
 /**
+ * Every turn, both sides, as the text to embed (C8.6).
+ *
+ * B2.3 embedded only the user turn in front of each reply. C8.6's
+ * semantic search has to find what either side said, so the range is
+ * now every turn. The key stays the first text row of the turn — the
+ * same key the old range used for a user burst, so vectors stored
+ * before this change are still addressable.
+ */
+export function turnsForEmbedding(
+  records: CollectedReply[],
+): Array<{ recordId: number; text: string }> {
+  const out: Array<{ recordId: number; text: string }> = [];
+  const seen = new Set<number>();
+  for (const scene of splitScenes(records)) {
+    for (const turn of toTurns(scene)) {
+      const first = turn.find((row) => isTextRecord(row) && row.content.trim());
+      if (!first || seen.has(first.id)) continue;
+      const text = textOf(turn);
+      if (!text) continue;
+      seen.add(first.id);
+      out.push({ recordId: first.id, text });
+    }
+  }
+  return out;
+}
+
+/**
  * Their replies whose preceding user turn is closest to this one.
  *
  * A held-out id is excluded so evaluation cannot retrieve the answer.
@@ -232,6 +259,15 @@ export function retrieveExemplars(params: {
   period?: ExemplarPeriod | null;
   history?: Array<{ role: string; content: string; speaker?: string | null }>;
   embedCosine?: ExemplarEmbedFn;
+  /**
+   * Scene ids for turns that no longer sit in their real scene.
+   *
+   * C8.7 assembles a small window around each candidate record; those
+   * windows are not in chronological order and may touch each other.
+   * The caller knows which source scene each reply came from, so the
+   * seed turns can still avoid taking three exchanges from one scene.
+   */
+  sceneKeyById?: ReadonlyMap<number, number>;
 }): Exemplar[] {
   const query = params.userMessage.trim();
   if (!query) return [];
@@ -277,6 +313,7 @@ export function retrieveExemplars(params: {
     for (let i = 0; i < turns.length; i++) {
       const turn = turns[i];
       if (turn[0]?.role !== "assistant") continue;
+      const turnSceneKey = params.sceneKeyById?.get(turn[0].id) ?? sceneKey;
       const lines = turn.filter(
         (row) => isTextRecord(row) && kept.has(row.id) && row.content.trim(),
       );
@@ -335,7 +372,7 @@ export function retrieveExemplars(params: {
         previousUserTurn,
         previousUserIds,
         at,
-        sceneKey,
+        sceneKey: turnSceneKey,
       });
     }
   }

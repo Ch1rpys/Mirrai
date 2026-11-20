@@ -46,6 +46,8 @@ import { PERIOD_SILENCE_DAYS } from "@shared/periods";
 import type { MaterialCounts } from "@shared/material-report";
 import { RITUAL_MAX_REPLY_CHARS, RITUAL_MAX_TRIGGER_CHARS } from "@shared/ritual-table";
 import { charBigrams } from "@shared/act-clusters";
+import { queryLexemes, searchTokens, toTsQuery } from "@shared/search-tokens";
+import { MAX_EMBEDDED_TURNS } from "@shared/records";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -78,8 +80,27 @@ export async function getDb() {
   return null;
 }
 
-export async function withRetry<T>(operation: () => Promise<T>, maxRetries = 2): Promise<T> {
-  let lastError: unknown;
+/**
+ * The `tsvector` expression for one row's text (C8.6).
+ *
+ * The application cuts the text into character bigrams; PostgreSQL
+ * only stores and indexes them. Binding the array through the driver
+ * makes PostgreSQL render the Postgres array literal, so no string is
+ * spliced into the SQL.
+ */
+function pgTextArrayLiteral(values: string[]): string {
+  // The tokenizer only produces letters, digits, kana and Han, but the
+  // quoting is here so the helper is safe for anything else as well.
+  return `{${values
+    .map((value) => `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`)
+    .join(",")}}`;
+}
+
+function searchTokensValue(content: string) {
+  return sql`array_to_tsvector(${pgTextArrayLiteral(searchTokens(content))}::text[])`;
+}
+
+export async function withRetry<T>(operation: () => Promise<T>, maxRetries = 2): Promise<T> {  let lastError: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await operation();
@@ -1785,7 +1806,10 @@ export async function getFilesByPersonaId(
 export async function createMessage(data: InsertMessage) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  const [result] = await db.insert(messages).values(data).returning({ id: messages.id });
+  const [result] = await db
+    .insert(messages)
+    .values({ ...data, searchTokens: searchTokensValue(data.content) })
+    .returning({ id: messages.id });
   return result.id;
 }
 
@@ -2203,10 +2227,18 @@ export async function listRecordEmbeddings(
   personaId: number,
   userId: number,
   model: string,
+  options: { limit?: number } = {},
 ): Promise<RecordEmbeddingRow[]> {
   const db = await getDb();
   if (!db) return [];
-  return db
+  /**
+   * The most recent turns first.
+   *
+   * Record ids grow with the import, so ordering by id selects the
+   * newest turns without a join to the record table. C8.6's semantic
+   * search keeps only the most recent 60 thousand.
+   */
+  const query = db
     .select({
       recordId: recordEmbeddings.recordId,
       dim: recordEmbeddings.dim,
@@ -2219,7 +2251,10 @@ export async function listRecordEmbeddings(
         eq(recordEmbeddings.userId, userId),
         eq(recordEmbeddings.model, model),
       ),
-    );
+    )
+    .orderBy(desc(recordEmbeddings.recordId));
+  if (options.limit != null) return query.limit(Math.max(1, options.limit));
+  return query;
 }
 
 export async function listEmbeddedRecordIds(
@@ -2265,7 +2300,7 @@ export async function setMessageContent(
   if (!db) return false;
   const rows = await db
     .update(messages)
-    .set({ content })
+    .set({ content, searchTokens: searchTokensValue(content) })
     .where(and(eq(messages.id, id), eq(messages.userId, userId)))
     .returning({ id: messages.id });
   return rows.length > 0;
@@ -2503,8 +2538,19 @@ export async function searchMessages(personaId: number, userId: number, query: s
   // The wildcards are escaped, so a search for "50%" does not match
   // everything that contains a digit.
   const escaped = query.replace(/[\\%_]/g, (c) => `\\${c}`);
+  const tsQuery = toTsQuery(queryLexemes(query), "&");
   return db.select().from(messages)
-    .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId), ilike(messages.content, `%${escaped}%`)))
+    .where(and(
+      eq(messages.personaId, personaId),
+      eq(messages.userId, userId),
+      ilike(messages.content, `%${escaped}%`),
+      tsQuery
+        ? or(
+            sql`${messages.searchTokens} @@ to_tsquery('simple', ${tsQuery})`,
+            isNull(messages.searchTokens),
+          )!
+        : sql`true`,
+    ))
     .orderBy(desc(messages.createdAt))
     .limit(limit);
 }
@@ -2525,6 +2571,7 @@ export async function searchAllMessages(
   if (!db) return [];
   const escaped = query.replace(/[\\%_]/g, (c) => `\\${c}`);
   const pattern = `%${escaped}%`;
+  const messageTsQuery = toTsQuery(queryLexemes(query), "&");
 
   const [messageRows, memoryRows, diaryRows] = await Promise.all([
     db.select({
@@ -2536,7 +2583,16 @@ export async function searchAllMessages(
       content: messages.content,
       createdAt: messages.createdAt,
     }).from(messages)
-      .where(and(eq(messages.userId, userId), ilike(messages.content, pattern)))
+      .where(and(
+        eq(messages.userId, userId),
+        ilike(messages.content, pattern),
+        messageTsQuery
+          ? or(
+              sql`${messages.searchTokens} @@ to_tsquery('simple', ${messageTsQuery})`,
+              isNull(messages.searchTokens),
+            )!
+          : sql`true`,
+      ))
       .orderBy(desc(messages.createdAt))
       .limit(limit),
 
@@ -4710,7 +4766,7 @@ export async function updateUserMessage(
    * and the conversation that changed were two different ones.
    */
   const updated = await db.update(messages)
-    .set({ content })
+    .set({ content, searchTokens: searchTokensValue(content) })
     .where(and(
       eq(messages.id, messageId),
       eq(messages.userId, userId),
@@ -5514,7 +5570,9 @@ export async function getResearchProfilesByPersonaId(
 export async function createCollectedMessage(data: InsertCollectedMessage) {
   const db = await getDb();
   if (!db) return undefined;
-  const [result] = await db.insert(collectedMessages).values(data)
+  const [result] = await db
+    .insert(collectedMessages)
+    .values({ ...data, searchTokens: searchTokensValue(data.content) })
     .returning({ id: collectedMessages.id });
   return result.id;
 }
@@ -5550,6 +5608,18 @@ export async function createCollectedMessages(
     for (let start = 0; start < rows.length; start += chunkSize) {
       const chunk = rows.slice(start, start + chunkSize);
       /**
+       * The search tokens are written with the row (C8.6).
+       *
+       * Computing them here rather than in a later sweep means the
+       * common case — an import, then a search — reads an index that is
+       * already full. The backfill exists for rows imported before the
+       * column did.
+       */
+      const values = chunk.map((row) => ({
+        ...row,
+        searchTokens: searchTokensValue(row.content),
+      }));
+      /**
        * The second copy of a message is not written.
        *
        * The importer already checks which messages are new — but that
@@ -5564,7 +5634,7 @@ export async function createCollectedMessages(
        */
       const inserted = await tx
         .insert(collectedMessages)
-        .values(chunk)
+        .values(values)
         .onConflictDoNothing()
         .returning({ id: collectedMessages.id });
       written += inserted.length;
@@ -5765,11 +5835,22 @@ function lexicalCoverage(query: string, haystack: string): number {
   return hits / left.size;
 }
 
+/** Escape the wildcards of a `LIKE` pattern, so `50%` does not match everything. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
+
 /**
- * Newest twenty thousand records scored by character-bigram overlap.
+ * Lexical search over the record table (C8.6).
  *
- * Full-text `searchTokens` arrives with C8.6. Until then the scan is
- * in memory, with the same owner filter as every other helper.
+ * The tokens are character bigrams written by `array_to_tsvector`, so
+ * PostgreSQL can use the GIN index instead of reading every row of the
+ * persona. The substring test is kept as well: the bigram AND says
+ * every pair appears somewhere, not that the words appear together.
+ *
+ * Rows written before the column existed have no tokens yet. They are
+ * found with the substring test until the backfill reaches them, so a
+ * search during the backfill is still correct.
  */
 export async function searchRecordsLexical(
   personaId: number,
@@ -5781,11 +5862,20 @@ export async function searchRecordsLexical(
   const q = String(params.q ?? "").trim();
   if (!q) return [];
   const role = params.role && params.role !== "all" ? params.role : undefined;
+  const lexemes = queryLexemes(q);
+  const tsQuery = toTsQuery(lexemes, "&");
+  const pattern = `%${escapeLike(q)}%`;
+  const offset = Math.max(0, params.offset ?? 0);
+  const limit = Math.max(1, params.limit ?? 20);
+  const rank = tsQuery
+    ? sql<number>`ts_rank(${collectedMessages.searchTokens}, to_tsquery('simple', ${tsQuery}))`
+    : sql<number>`0`;
   const rows = await db
     .select({
       id: collectedMessages.id,
       content: collectedMessages.content,
       timestamp: collectedMessages.timestamp,
+      rank,
     })
     .from(collectedMessages)
     .where(and(
@@ -5794,29 +5884,219 @@ export async function searchRecordsLexical(
       ...(role ? [eq(collectedMessages.role, role)] : []),
       ...(params.from ? [gte(collectedMessages.timestamp, params.from)] : []),
       ...(params.to ? [lte(collectedMessages.timestamp, params.to)] : []),
+      sql`${collectedMessages.content} ILIKE ${pattern}`,
+      tsQuery
+        ? or(
+            sql`${collectedMessages.searchTokens} @@ to_tsquery('simple', ${tsQuery})`,
+            isNull(collectedMessages.searchTokens),
+          )!
+        : sql`true`,
     ))
-    .orderBy(desc(sql`COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt})`))
-    .limit(MAX_COLLECTED_MESSAGES);
+    .orderBy(
+      desc(sql`COALESCE(${rank}, -1)`),
+      desc(sql`COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt})`),
+      desc(collectedMessages.id),
+    )
+    .limit(limit)
+    .offset(offset);
+
+  /**
+   * The application checks the substring again.
+   *
+   * The database test is already `ILIKE`, so this is a second pair of
+   * eyes rather than the only gate — but a search that returns a row
+   * which does not contain the words would be worse than a miss.
+   */
+  const needle = q.toLowerCase();
   const scored: SearchRecordsLexicalHit[] = [];
   for (const row of rows) {
     const text = String(row.content ?? "");
-    if (!text) continue;
-    const coverage = lexicalCoverage(q, text);
-    if (coverage < 0.5 && !text.includes(q)) continue;
+    if (!text.toLowerCase().includes(needle)) continue;
     scored.push({
       id: row.id,
       content: text,
       timestamp: row.timestamp ?? null,
-      coverage: Math.max(coverage, text.includes(q) ? 1 : coverage),
+      coverage: 1,
     });
   }
-  scored.sort((a, b) => {
-    if (b.coverage !== a.coverage) return b.coverage - a.coverage;
-    return (b.timestamp?.getTime() ?? 0) - (a.timestamp?.getTime() ?? 0);
-  });
-  const offset = Math.max(0, params.offset ?? 0);
-  const limit = Math.max(1, params.limit ?? 20);
-  return scored.slice(offset, offset + limit);
+  return scored;
+}
+
+/**
+ * Candidate records whose tokens overlap the given text (C8.6).
+ *
+ * The OR query is deliberately loose: this is the candidate set that
+ * C8.7, C2.3 and the fact check then score. Ranked by `ts_rank`, most
+ * recent first on a tie.
+ */
+export async function candidateRecordsByOverlap(
+  personaId: number,
+  userId: number,
+  params: {
+    text: string;
+    role?: "assistant" | "user" | "all";
+    from?: Date;
+    to?: Date;
+    limit?: number;
+  },
+): Promise<SearchRecordsLexicalHit[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const text = String(params.text ?? "").trim();
+  if (!text) return [];
+  const role = params.role && params.role !== "all" ? params.role : undefined;
+  const lexemes = queryLexemes(text);
+  const tsQuery = toTsQuery(lexemes, "|");
+  const limit = Math.max(1, Math.min(1000, params.limit ?? 200));
+  /**
+   * Rows that predate the column are matched on their substring, one
+   * pattern per lexeme. Only the first twenty lexemes are used: an OR
+   * of two thousand patterns is worse than the scan it replaces.
+   */
+  const fallback = lexemes.slice(0, 20).map(
+    (lexeme) => sql`${collectedMessages.content} ILIKE ${`%${escapeLike(lexeme)}%`}`,
+  );
+  if (!tsQuery && fallback.length === 0) return [];
+  const rank = tsQuery
+    ? sql<number>`ts_rank(${collectedMessages.searchTokens}, to_tsquery('simple', ${tsQuery}))`
+    : sql<number>`0`;
+  const rows = await db
+    .select({
+      id: collectedMessages.id,
+      content: collectedMessages.content,
+      timestamp: collectedMessages.timestamp,
+      rank,
+    })
+    .from(collectedMessages)
+    .where(and(
+      eq(collectedMessages.personaId, personaId),
+      eq(collectedMessages.userId, userId),
+      ...(role ? [eq(collectedMessages.role, role)] : []),
+      ...(params.from ? [gte(collectedMessages.timestamp, params.from)] : []),
+      ...(params.to ? [lte(collectedMessages.timestamp, params.to)] : []),
+      or(
+        tsQuery
+          ? sql`${collectedMessages.searchTokens} @@ to_tsquery('simple', ${tsQuery})`
+          : sql`false`,
+        fallback.length > 0
+          ? and(isNull(collectedMessages.searchTokens), or(...fallback))
+          : sql`false`,
+      ),
+    ))
+    .orderBy(
+      desc(sql`COALESCE(${rank}, -1)`),
+      desc(sql`COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt})`),
+      desc(collectedMessages.id),
+    )
+    .limit(limit);
+  return rows.map((row) => ({
+    id: row.id,
+    content: String(row.content ?? ""),
+    timestamp: row.timestamp ?? null,
+    coverage: lexicalCoverage(text, String(row.content ?? "")),
+  }));
+}
+
+export { MAX_EMBEDDED_TURNS };
+
+/**
+ * A hit of the semantic search.
+ *
+ * `searchRecordsSemantic` returns `null` — not an empty list — when
+ * the local embedding model is unavailable. The caller then shows only
+ * the literal results and says why, instead of pretending there are
+ * no similar lines.
+ */
+export interface SemanticRecordHit {
+  id: number;
+  content: string;
+  timestamp: Date | null;
+  role: string;
+  score: number;
+}
+
+export interface SemanticSearchResult {
+  hits: SemanticRecordHit[];
+  /** True when the persona has more turns than the in-memory ceiling. */
+  truncated: boolean;
+}
+
+/** Cosine ranking over stored vectors, kept pure so it can be tested. */
+export function rankSemanticVectors(
+  query: number[],
+  rows: Array<{ recordId: number; vec: Uint8Array | Buffer; dim: number }>,
+  cosine: (a: number[], b: number[]) => number,
+  dequantize: (vec: Uint8Array | Buffer) => number[],
+  k: number,
+): Array<{ recordId: number; score: number }> {
+  const scores: Array<{ recordId: number; score: number }> = [];
+  for (const row of rows) {
+    const vec = dequantize(row.vec);
+    if (vec.length === 0 || query.length === 0) continue;
+    const score = cosine(query, vec);
+    if (score >= 0.55) scores.push({ recordId: row.recordId, score });
+  }
+  scores.sort((a, b) => b.score - a.score || b.recordId - a.recordId);
+  return scores.slice(0, Math.max(1, k));
+}
+
+/**
+ * Meaning-based search over record turns (C8.6).
+ *
+ * The vectors are made locally by the user's own Ollama and stored by
+ * B2.3; the query is embedded the same way. Only the most recent
+ * `MAX_EMBEDDED_TURNS` turns are compared — an in-memory cosine over
+ * every turn of a very large history would block the server.
+ */
+export async function searchRecordsSemantic(
+  personaId: number,
+  userId: number,
+  params: { q: string; role?: "assistant" | "user" | "all"; k?: number },
+): Promise<SemanticSearchResult | null> {
+  const q = String(params.q ?? "").trim();
+  if (!q) return { hits: [], truncated: false };
+  const { embedTexts, cosine, dequantizeInt8, embedModelName } = await import("./chat/embeddings");
+  /**
+   * The embedding check comes first: "the local model is down" is a
+   * different answer (null, with an explanation in the interface) from
+   * "there is nothing similar".
+   */
+  const encoded = await embedTexts([q]);
+  if (!encoded || !encoded[0]) return null;
+  const db = await getDb();
+  if (!db) return null;
+  const [owned] = await db
+    .select({ id: personas.id })
+    .from(personas)
+    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)))
+    .limit(1);
+  if (!owned) return null;
+  const model = embedModelName();
+  const rows = await listRecordEmbeddings(personaId, userId, model, { limit: MAX_EMBEDDED_TURNS + 1 });
+  const truncated = rows.length > MAX_EMBEDDED_TURNS;
+  const usable = truncated ? rows.slice(0, MAX_EMBEDDED_TURNS) : rows;
+  if (usable.length === 0) return { hits: [], truncated };
+  const k = Math.max(1, Math.min(50, params.k ?? 8));
+  const ranked = rankSemanticVectors(encoded[0], usable, cosine, dequantizeInt8, k * 5);
+  if (ranked.length === 0) return { hits: [], truncated };
+  const records = await getRecordsByIds(ranked.map((row) => row.recordId), userId);
+  const byId = new Map(records.map((row) => [row.id, row]));
+  const role = params.role && params.role !== "all" ? params.role : undefined;
+  const hits: SemanticRecordHit[] = [];
+  for (const hit of ranked) {
+    const record = byId.get(hit.recordId);
+    if (!record) continue;
+    if (role && record.role !== role) continue;
+    hits.push({
+      id: record.id,
+      content: String(record.content ?? ""),
+      timestamp: record.timestamp ?? null,
+      role: record.role,
+      score: hit.score,
+    });
+    if (hits.length >= k) break;
+  }
+  return { hits, truncated };
 }
 
 /**
@@ -5855,6 +6135,8 @@ export interface IterateRecordsOptions {
    * the million-row ceiling is the whole table, not one register.
    */
   register?: string;
+  /** Only rows whose search tokens have not been filled in (C8.6). */
+  tokensMissing?: boolean;
 }
 
 function spokenAtColumn() {
@@ -5887,6 +6169,7 @@ function recordsWhere(
       : []),
     ...(options.from ? [gte(collectedMessages.timestamp, options.from)] : []),
     ...(options.to ? [lte(collectedMessages.timestamp, options.to)] : []),
+    ...(options.tokensMissing ? [isNull(collectedMessages.searchTokens)] : []),
   );
 }
 
@@ -5962,6 +6245,164 @@ export async function countRecords(
       ),
     );
   return Number(result?.c ?? 0);
+}
+
+/** How many rows still have no search tokens (C8.6). */
+export async function countMissingSearchTokens(
+  kind: "records" | "messages",
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const table = kind === "records" ? collectedMessages : messages;
+  const [result] = await db
+    .select({ c: count() })
+    .from(table)
+    .where(isNull(table.searchTokens));
+  return Number(result?.c ?? 0);
+}
+
+/**
+ * Fills one batch of missing search tokens (C8.6).
+ *
+ * The backfill is deliberately a batch: the table can hold a million
+ * rows, and a single statement that rewrote them all would hold the
+ * event loop and a lock for minutes. Returns how many rows it wrote.
+ */
+export async function backfillSearchTokenBatch(
+  kind: "records" | "messages",
+  limit = 2000,
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const table = kind === "records" ? collectedMessages : messages;
+  const rows = await db
+    .select({ id: table.id, content: table.content })
+    .from(table)
+    .where(isNull(table.searchTokens))
+    .limit(Math.max(1, Math.min(20_000, limit)));
+  if (rows.length === 0) return 0;
+  await db.transaction(async (tx) => {
+    for (const row of rows) {
+      await tx
+        .update(table)
+        .set({ searchTokens: searchTokensValue(row.content) })
+        .where(eq(table.id, row.id));
+    }
+  });
+  return rows.length;
+}
+
+/**
+ * The rows immediately around some user records, for C8.7.
+ *
+ * The exemplar scorer needs the user turn in front of each reply and
+ * the reply itself. Doing that per candidate would be two hundred
+ * queries; this is one query for the rows before and one for the rows
+ * after, both filtered by the owner.
+ */
+export interface RecordWindow {
+  candidate: CollectedMessage;
+  before: CollectedMessage[];
+  after: CollectedMessage[];
+}
+
+export async function getWindowsAroundUserRecords(
+  ids: number[],
+  userId: number,
+  options: { before?: number; after?: number; maxGapHours?: number } = {},
+): Promise<Map<number, RecordWindow>> {
+  const db = await getDb();
+  const out = new Map<number, RecordWindow>();
+  if (!db || ids.length === 0) return out;
+  const before = Math.max(0, Math.min(20, options.before ?? 6));
+  const after = Math.max(0, Math.min(20, options.after ?? 8));
+  const maxGapHours = Math.max(1, Math.min(48, options.maxGapHours ?? 6));
+  const idList = pgTextArrayLiteral([...new Set(ids)].map(String));
+  /**
+   * The owner filter is in the query, not only in the ids the caller
+   * passed: an id from another account must not open a window.
+   */
+  const candidates = await db
+    .select()
+    .from(collectedMessages)
+    .where(and(inArray(collectedMessages.id, [...new Set(ids)]), eq(collectedMessages.userId, userId)))
+    .orderBy(asc(spokenAtColumn()), asc(collectedMessages.id));
+  for (const candidate of candidates) {
+    if (candidate.role !== "user") continue;
+    out.set(candidate.id, { candidate, before: [], after: [] });
+  }
+  if (out.size === 0) return out;
+
+  const [beforeRows, afterRows] = await Promise.all([
+    before > 0
+      ? db.execute(sql`
+          SELECT u.id AS "candidateId", m.*
+          FROM unnest(${idList}::int[]) AS cid
+          JOIN "collected_messages" u
+            ON u.id = cid AND u."userId" = ${userId} AND u."role" = 'user'
+          JOIN LATERAL (
+            SELECT * FROM "collected_messages" b
+            WHERE b."personaId" = u."personaId" AND b."userId" = u."userId"
+              AND (
+                COALESCE(b."timestamp", b."createdAt"),
+                b.id
+              ) < (
+                COALESCE(u."timestamp", u."createdAt"),
+                u.id
+              )
+              AND COALESCE(b."timestamp", b."createdAt")
+                >= COALESCE(u."timestamp", u."createdAt") - (${maxGapHours} * interval '1 hour')
+            ORDER BY COALESCE(b."timestamp", b."createdAt") DESC, b.id DESC
+            LIMIT ${before}
+          ) m ON true
+          ORDER BY cid, COALESCE(m."timestamp", m."createdAt"), m.id
+        `)
+      : { rows: [] },
+    after > 0
+      ? db.execute(sql`
+          SELECT u.id AS "candidateId", m.*
+          FROM unnest(${idList}::int[]) AS cid
+          JOIN "collected_messages" u
+            ON u.id = cid AND u."userId" = ${userId} AND u."role" = 'user'
+          JOIN LATERAL (
+            SELECT * FROM "collected_messages" a
+            WHERE a."personaId" = u."personaId" AND a."userId" = u."userId"
+              AND (
+                COALESCE(a."timestamp", a."createdAt"),
+                a.id
+              ) > (
+                COALESCE(u."timestamp", u."createdAt"),
+                u.id
+              )
+              AND COALESCE(a."timestamp", a."createdAt")
+                <= COALESCE(u."timestamp", u."createdAt") + (${maxGapHours} * interval '1 hour')
+            ORDER BY COALESCE(a."timestamp", a."createdAt") ASC, a.id ASC
+            LIMIT ${after}
+          ) m ON true
+          ORDER BY cid, COALESCE(m."timestamp", m."createdAt"), m.id
+        `)
+      : { rows: [] },
+  ]);
+  for (const row of beforeRows.rows as Array<Record<string, unknown>>) {
+    const window = out.get(Number(row.candidateId));
+    if (window) window.before.push(row as unknown as CollectedMessage);
+  }
+  for (const row of afterRows.rows as Array<Record<string, unknown>>) {
+    const window = out.get(Number(row.candidateId));
+    if (window) window.after.push(row as unknown as CollectedMessage);
+  }
+  // The lateral reads each direction newest-first or oldest-first; the
+  // caller wants both in the order they were said.
+  const spokenAt = (row: CollectedMessage): number => {
+    const value = row.timestamp ?? row.createdAt;
+    const time = value instanceof Date ? value.getTime() : new Date(value as unknown as string).getTime();
+    return Number.isFinite(time) ? time : 0;
+  };
+  for (const window of out.values()) {
+    window.before.sort((a, b) => spokenAt(a) - spokenAt(b) || a.id - b.id);
+    window.after.sort((a, b) => spokenAt(a) - spokenAt(b) || a.id - b.id);
+  }
+  return out;
 }
 
 export async function getRecordsByIds(

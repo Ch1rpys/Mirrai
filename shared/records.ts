@@ -32,6 +32,16 @@ export const RECORD_ROLES = ["user", "assistant", "other"] as const;
 export type RecordRole = (typeof RECORD_ROLES)[number];
 
 export const RECORD_REGISTERS = ["private", "public", "written", "group"] as const;
+
+/**
+ * The most turns one persona's semantic index keeps (C8.6).
+ *
+ * Comparing a query against every turn of a very large history would
+ * read hundreds of thousands of vectors into memory on every search.
+ * Past this many, only the most recent turns are covered, and the
+ * interface says so.
+ */
+export const MAX_EMBEDDED_TURNS = 60_000;
 export type RecordRegister = (typeof RECORD_REGISTERS)[number];
 
 /**

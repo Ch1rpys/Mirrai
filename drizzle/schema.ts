@@ -8,6 +8,20 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   },
 });
 
+/**
+ * A PostgreSQL text-search vector (C8.6).
+ *
+ * Chinese has no word boundaries the built-in configurations could
+ * use, so the application cuts the text into character bigrams and
+ * writes them with `array_to_tsvector`. Reads only ask whether it
+ * matches, so no decoding into a JavaScript value is needed.
+ */
+const tsvector = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});
+
 export const roleEnum = pgEnum("role", ["user", "admin"]);
 export const analysisStatusEnum = pgEnum("analysis_status", ["pending", "analyzing", "ready", "error"]);
 export const emotionalStateEnum = pgEnum("emotional_state", ["warm", "playful", "nostalgic", "melancholy", "happy", "distant"]);
@@ -331,6 +345,8 @@ export const messages = pgTable("messages", {
   userId: integer("userId").notNull(),
   role: messageRoleEnum().notNull(),
   content: text("content").notNull(),
+  /** Character bigrams for search (C8.6), written by `array_to_tsvector`. */
+  searchTokens: tsvector("searchTokens"),
   messageType: messageTypeEnum().default("text").notNull(),
   mediaUrl: text("mediaUrl"),
   mediaDuration: integer("mediaDuration"),
@@ -395,6 +411,8 @@ export const messages = pgTable("messages", {
     table.role,
     table.createdAt,
   ),
+  /** The full-text index (C8.6). */
+  searchTokensIdx: index("messages_search_tokens_idx").using("gin", table.searchTokens),
 }));
 
 export type Message = typeof messages.$inferSelect;
@@ -1191,6 +1209,8 @@ export const collectedMessages = pgTable("collected_messages", {
   emotion: varchar("emotion", { length: 16 }),
   /** `rule` or `model`. */
   emotionSource: varchar("emotionSource", { length: 8 }),
+  /** Character bigrams for search (C8.6), written by `array_to_tsvector`. */
+  searchTokens: tsvector("searchTokens"),
 }, (table) => ({
   /**
    * The collected history of one persona.
@@ -1208,6 +1228,8 @@ export const collectedMessages = pgTable("collected_messages", {
     .where(sql`${table.idempotencyKey} IS NOT NULL`),
   personaTimeIdx: index("collected_messages_persona_time_idx").on(table.personaId, table.userId, table.timestamp),
   fileIdx: index("collected_messages_file_idx").on(table.personaId, table.userId, table.fileId),
+  /** The full-text index (C8.6). */
+  searchTokensIdx: index("collected_messages_search_tokens_idx").using("gin", table.searchTokens),
 }));
 
 export type CollectedMessage = typeof collectedMessages.$inferSelect;

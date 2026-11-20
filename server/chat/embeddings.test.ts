@@ -196,7 +196,7 @@ describe("probeEmbedStatus", () => {
 });
 
 describe("embedPersonaTurns", () => {
-  it("embeds the user burst in front of each of their turns", async () => {
+  it("embeds every turn, both sides (C8.6 widened the range)", async () => {
     iterateRecords.mockImplementation(async function* () {
       yield* records;
     });
@@ -204,21 +204,22 @@ describe("embedPersonaTurns", () => {
       "fetch",
       vi.fn(async () => ({
         ok: true,
-        json: async () => ({ embeddings: [beach, dinner] }),
+        json: async () => ({ embeddings: [beach, dinner, beach, dinner] }),
       })),
     );
     const result = await embedPersonaTurns({ personaId: 5, userId: 1 });
-    expect(result.embedded).toBe(2);
-    expect(upsertRecordEmbedding).toHaveBeenCalledTimes(2);
-    expect(upsertRecordEmbedding.mock.calls[0][0].recordId).toBe(1);
-    expect(upsertRecordEmbedding.mock.calls[1][0].recordId).toBe(3);
+    expect(result.embedded).toBe(4);
+    expect(upsertRecordEmbedding).toHaveBeenCalledTimes(4);
+    expect(upsertRecordEmbedding.mock.calls.map((call) => call[0].recordId)).toEqual([
+      1, 2, 3, 4,
+    ]);
   });
 
-  it("skips bursts that already have a vector", async () => {
+  it("skips turns that already have a vector", async () => {
     iterateRecords.mockImplementation(async function* () {
       yield* records;
     });
-    listEmbeddedRecordIds.mockResolvedValue([1, 3]);
+    listEmbeddedRecordIds.mockResolvedValue([1, 2, 3, 4]);
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const result = await embedPersonaTurns({ personaId: 5, userId: 1 });

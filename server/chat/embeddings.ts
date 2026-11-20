@@ -9,9 +9,11 @@
  * API: https://docs.ollama.com/api/embed
  */
 import { ENV } from "../_core/env";
+import { MAX_EMBEDDED_TURNS } from "@shared/records";
 import * as db from "../db";
 import {
   retrieveExemplars,
+  turnsForEmbedding,
   userBurstsForEmbedding,
   type CollectedReply,
   type Exemplar,
@@ -43,7 +45,7 @@ export function quantizeInt8(vec: number[]): Int8Array {
   return out;
 }
 
-export function dequantizeInt8(vec: Int8Array | Buffer): number[] {
+export function dequantizeInt8(vec: Uint8Array | Int8Array | Buffer): number[] {
   const out = new Array<number>(vec.length);
   for (let i = 0; i < vec.length; i++) out[i] = vec[i] / 127;
   return out;
@@ -328,7 +330,15 @@ export async function embedPersonaTurns(params: {
         emotion: row.emotion,
       });
     }
-    const bursts = userBurstsForEmbedding(records);
+    /**
+     * Both sides of every turn (C8.6).
+     *
+     * It used to be only the user turn in front of a reply, because
+     * the vectors existed for the exemplar scorer. The semantic search
+     * has to find what either of them said.
+     */
+    const allTurns = turnsForEmbedding(records);
+    const bursts = allTurns.slice(-MAX_EMBEDDED_TURNS);
     if (!bursts.length) return { embedded: 0 };
     const already = new Set<number>();
     const listed = dbFn<typeof db.listEmbeddedRecordIds>("listEmbeddedRecordIds");

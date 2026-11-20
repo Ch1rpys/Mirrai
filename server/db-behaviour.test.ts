@@ -443,7 +443,12 @@ describe("a single message", () => {
     const conditions = whereOf().map((c) => c.sql).join(" ");
     expect(conditions).toContain('"messages"."role"');
     expect(whereOf().flatMap((c) => c.params)).toContain("user");
-    expect(last().values).toEqual({ content: "改过的" });
+    /**
+     * C8.6: the search tokens are rewritten with the content, so the
+     * edit carries both. The words are still the part this test is
+     * about.
+     */
+    expect(last().values).toEqual(expect.objectContaining({ content: "改过的" }));
   });
 
   it("says whether a message was edited", async () => {

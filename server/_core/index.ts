@@ -186,6 +186,20 @@ async function startServer() {
     console.error("[Bootstrap] First-run setup failed:", e),
   );
 
+  /**
+   * Fill in the search tokens of rows imported before C8.6.
+   *
+   * In the background: a million-row history must not hold the app
+   * down while it is indexed, and a search still works during the
+   * sweep (the missing rows are matched by substring).
+   */
+  try {
+    const { scheduleSearchTokenBackfill } = await import("../records/backfill-tokens");
+    scheduleSearchTokenBackfill();
+  } catch (e) {
+    console.warn("[Search] The token backfill could not start:", e);
+  }
+
   // The rate limiter, counted in a store every copy of the app shares.
   //
   // It is set up after the server is already listening, because a Redis
