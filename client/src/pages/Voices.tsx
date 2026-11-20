@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { ArrowLeft, Play, Search } from "lucide-react";
+import { ArrowLeft, Bookmark, BookmarkCheck, Download, Play, Search } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { formatInstantInZone } from "@/lib/dates";
@@ -39,8 +39,10 @@ export default function Voices() {
 
   const [q, setQ] = useState("");
   const [onlyTheirs, setOnlyTheirs] = useState(false);
+  const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [cursor, setCursor] = useState<number | undefined>(undefined);
   const [rows, setRows] = useState<VoiceRow[]>([]);
+  const [playingId, setPlayingId] = useState<number | null>(null);
 
   const persona = trpc.persona.get.useQuery({ id: personaId }, { enabled: personaId > 0 });
   const voices = trpc.media.listVoices.useQuery(
@@ -69,6 +71,28 @@ export default function Voices() {
     },
   });
 
+  /**
+   * The favorites (C7.3).
+   *
+   * A bookmark on the record the voice note came from. A voice note
+   * without a record cannot be bookmarked — there is nothing to point
+   * at — and that is said by the row simply not offering the button.
+   */
+  const marks = trpc.record.marks.list.useQuery(
+    { personaId },
+    { enabled: personaId > 0 },
+  );
+  const addMark = trpc.record.marks.add.useMutation({
+    onSuccess: () => void marks.refetch(),
+  });
+  const removeMark = trpc.record.marks.remove.useMutation({
+    onSuccess: () => void marks.refetch(),
+  });
+  const favoriteMarks = (marks.data ?? []).filter((mark: any) => mark.kind === "bookmark");
+  const favoriteRecordIds = new Set<number>(
+    favoriteMarks.map((mark: any) => Number(mark.recordId)),
+  );
+
   // A new search starts at the newest page again.
   useEffect(() => {
     setCursor(undefined);
@@ -93,6 +117,39 @@ export default function Voices() {
 
   const name = persona.data.name;
   const nextCursor = voices.data?.nextCursor ?? null;
+  const visibleRows = onlyFavorites
+    ? rows.filter((row) => row.recordId != null && favoriteRecordIds.has(row.recordId))
+    : rows;
+  /**
+   * Playing in time order.
+   *
+   * The list arrives newest first, which is the right order to browse.
+   * "Continue listening" is the other direction: from the one playing,
+   * the next recording in time after it.
+   */
+  const orderedRows = [...visibleRows].sort((left, right) => {
+    const a = left.at ? Date.parse(left.at) : 0;
+    const b = right.at ? Date.parse(right.at) : 0;
+    return a - b || left.id - right.id;
+  });
+  const playing = visibleRows.find((row) => row.id === playingId) ?? null;
+  const playNext = () => {
+    if (!playing) return;
+    const index = orderedRows.findIndex((row) => row.id === playing.id);
+    const next = index >= 0 ? orderedRows[index + 1] : undefined;
+    setPlayingId(next ? next.id : null);
+  };
+  const toggleFavorite = (row: VoiceRow) => {
+    if (row.recordId == null) return;
+    const existing = favoriteMarks.find(
+      (mark: any) => Number(mark.recordId) === row.recordId,
+    );
+    if (existing) {
+      removeMark.mutate({ personaId, id: Number((existing as any).id) });
+    } else {
+      addMark.mutate({ personaId, recordId: row.recordId, kind: "bookmark" });
+    }
+  };
   const run = status.data?.run;
   const localEngine = status.data?.local ?? false;
 
@@ -136,7 +193,36 @@ export default function Voices() {
           />
           {t("media.voicesOnlyTheirs", { name })}
         </label>
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={onlyFavorites}
+            onChange={(event) => setOnlyFavorites(event.target.checked)}
+          />
+          {t("media.voicesOnlyFavorites")}
+        </label>
       </div>
+
+      {playing && (
+        <div className="surface p-3 space-y-2">
+          <p className="text-xs text-muted-subtle">
+            {t("media.voicesPlaying")}
+            {playing.at
+              ? ` · ${formatInstantInZone(playing.at, locale, timezone)}`
+              : ""}
+          </p>
+          {/* One player, and the next recording starts when this one ends. */}
+          <audio
+            key={playing.id}
+            data-testid="voices-player"
+            src={playing.url}
+            controls
+            autoPlay
+            onEnded={playNext}
+            className="w-full h-9"
+          />
+        </div>
+      )}
 
       {/**
        * Transcription is optional and only local.
@@ -193,13 +279,15 @@ export default function Voices() {
             {t("common.retry")}
           </Button>
         </div>
-      ) : rows.length === 0 ? (
+      ) : visibleRows.length === 0 ? (
         <p className="text-sm text-muted-foreground leading-relaxed">
-          {t("media.voicesEmpty", { name })}
+          {onlyFavorites && rows.length > 0
+            ? t("media.voicesNoFavorites")
+            : t("media.voicesEmpty", { name })}
         </p>
       ) : (
         <ul className="space-y-3">
-          {rows.map((row) => (
+          {visibleRows.map((row) => (
             <li key={row.id} className="surface p-3 space-y-2">
               <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-muted-muted">
                 <span className="text-foreground text-sm">
@@ -214,7 +302,42 @@ export default function Voices() {
                     : ""}
                 </span>
               </div>
-              <audio controls preload="none" src={row.url} className="w-full h-9" />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPlayingId(row.id)}
+                >
+                  <Play className="w-3.5 h-3.5" /> {t("media.voicesPlay")}
+                </Button>
+                {row.recordId != null && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => toggleFavorite(row)}
+                  >
+                    {favoriteRecordIds.has(row.recordId) ? (
+                      <>
+                        <BookmarkCheck className="w-3.5 h-3.5" />
+                        {t("media.voicesFavorited")}
+                      </>
+                    ) : (
+                      <>
+                        <Bookmark className="w-3.5 h-3.5" />
+                        {t("media.voicesFavorite")}
+                      </>
+                    )}
+                  </Button>
+                )}
+                <a
+                  href={row.url}
+                  download
+                  className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  {t("media.voicesDownload")}
+                </a>
+              </div>
               <p className="text-sm leading-relaxed whitespace-pre-wrap">
                 {row.transcript?.trim()
                   ? row.transcript

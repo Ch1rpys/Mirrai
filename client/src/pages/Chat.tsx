@@ -36,6 +36,7 @@ import MemoryReview from "@/components/v6/MemoryReview";
 import ChoiceBubble from "@/components/v6/ChoiceBubble";
 import PendingReply from "@/components/v6/PendingReply";
 import OutboundEntry from "@/components/v6/OutboundEntry";
+import VoicesEntry from "@/components/v6/VoicesEntry";
 import OutboundDrawer from "@/components/v6/OutboundDrawer";
 import WaitGauge from "@/components/v6/WaitGauge";
 import MeetDayNote from "@/components/v6/MeetDayNote";
@@ -1843,6 +1844,13 @@ export default function Chat() {
                   personaId={personaId}
                   nextMeetAt={normalizePersonaSettings(persona?.settings).ldr?.nextMeetAt}
                   timezone={user?.timezone ?? persona?.timezone}
+                />
+                {/* Their own recordings are the first door for a memorial
+                    persona (C7.3). */}
+                <VoicesEntry
+                  personaId={personaId}
+                  name={displayName || t("common.them")}
+                  memorial={memorialMode}
                 />
                 {/* How long it has been. */}
                 {daysSinceTalk !== null && daysSinceTalk > 0 && (

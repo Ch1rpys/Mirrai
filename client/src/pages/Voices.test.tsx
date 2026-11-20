@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
@@ -17,6 +17,10 @@ const listState: { value: any } = { value: undefined };
 const statusState: { value: any } = { value: undefined };
 const transcribe = vi.fn();
 const refetch = vi.fn();
+const marksRefetch = vi.fn();
+const addMark = vi.fn();
+const removeMark = vi.fn();
+const marksState: { value: any } = { value: { data: [] } };
 
 vi.mock("wouter", () => ({
   useParams: () => ({ id: "5" }),
@@ -53,6 +57,27 @@ vi.mock("@/lib/trpc", () => ({
         useMutation: () => ({ mutate: transcribe, isPending: false }),
       },
     },
+    record: {
+      marks: {
+        list: { useQuery: () => ({ refetch: marksRefetch, ...marksState.value }) },
+        add: {
+          useMutation: (options?: any) => ({
+            mutate: (input: any) => {
+              addMark(input);
+              options?.onSuccess?.();
+            },
+          }),
+        },
+        remove: {
+          useMutation: (options?: any) => ({
+            mutate: (input: any) => {
+              removeMark(input);
+              options?.onSuccess?.();
+            },
+          }),
+        },
+      },
+    },
   },
 }));
 
@@ -77,6 +102,7 @@ describe("the soundtrack page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     lastInput.value = undefined;
+    marksState.value = { data: [] };
     listState.value = {
       data: { voices: [voice], nextCursor: null },
       isLoading: false,
@@ -178,4 +204,68 @@ describe("the soundtrack page", () => {
     );
     expect(transcribe).toHaveBeenCalledWith({ personaId: 5 });
   });
+  it("favorites a recording by bookmarking its record (C7.3)", async () => {
+    marksState.value = {
+      data: [{ id: 7, recordId: 101, kind: "bookmark" }],
+    };
+    const user = userEvent.setup();
+    render(<Voices />);
+    expect(screen.getByText(translate("zh", "media.voicesFavorited"))).toBeInTheDocument();
+    await user.click(screen.getByText(translate("zh", "media.voicesFavorited")));
+    expect(removeMark).toHaveBeenCalledWith({ personaId: 5, id: 7 });
+  });
+
+  it("shows only the favorites when asked (C7.3)", async () => {
+    listState.value = {
+      data: {
+        voices: [
+          voice,
+          { ...voice, id: 12, recordId: 102, transcript: "另一条", at: "2022-04-01T12:00:00.000Z" },
+        ],
+        nextCursor: null,
+      },
+      isLoading: false,
+      isError: false,
+      refetch,
+    };
+    marksState.value = { data: [{ id: 7, recordId: 101, kind: "bookmark" }] };
+    const user = userEvent.setup();
+    render(<Voices />);
+    await user.click(screen.getByLabelText(translate("zh", "media.voicesOnlyFavorites")));
+    expect(screen.getByText("刚下课")).toBeInTheDocument();
+    expect(screen.queryByText("另一条")).toBeNull();
+  });
+
+  it("continues to the next recording in time order (C7.3)", () => {
+    listState.value = {
+      data: {
+        voices: [
+          { ...voice, id: 12, recordId: 102, transcript: "后一条", at: "2022-04-01T12:00:00.000Z", url: "/uploads/personas/1/5/imports/1/b.ogg" },
+          voice,
+        ],
+        nextCursor: null,
+      },
+      isLoading: false,
+      isError: false,
+      refetch,
+    };
+    render(<Voices />);
+    // The list is newest-first; play the older one, and the next in time
+    // is the newer one.
+    const playButtons = screen.getAllByText(translate("zh", "media.voicesPlay"));
+    fireEvent.click(playButtons[1]);
+    const player = screen.getByTestId("voices-player") as HTMLAudioElement;
+    expect(player.getAttribute("src")).toContain("a.ogg");
+    fireEvent.ended(player);
+    expect((screen.getByTestId("voices-player") as HTMLAudioElement).getAttribute("src"))
+      .toContain("b.ogg");
+  });
+
+  it("offers the original file for download (C7.3)", () => {
+    render(<Voices />);
+    const link = screen.getByText(translate("zh", "media.voicesDownload")).closest("a");
+    expect(link).toHaveAttribute("href", "/uploads/personas/1/5/imports/1/a.ogg");
+    expect(link).toHaveAttribute("download");
+  });
+
 });

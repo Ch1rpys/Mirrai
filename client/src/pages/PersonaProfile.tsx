@@ -29,6 +29,7 @@ import FingerprintView from "@/components/v6/FingerprintView";
 import { Button } from "@/components/ui/button";
 import { resolveRelationshipPhase } from "@shared/user-side";
 import { normalizePersonaSettings } from "@shared/persona-settings";
+import VoicesEntry from "@/components/v6/VoicesEntry";
 import ReunionSummary from "@/components/v6/ReunionSummary";
 
 /**
@@ -214,6 +215,14 @@ export default function PersonaProfile() {
       </header>
 
       <main className="container page-main max-w-3xl space-y-6">
+        {/* A memorial persona's recordings come first (C7.3). */}
+        <div className="flex justify-end">
+          <VoicesEntry
+            personaId={personaId}
+            name={persona.name}
+            memorial={normalizePersonaSettings(persona.settings).mode === "memorial"}
+          />
+        </div>
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="surface p-5 sm:p-6">
           <div className="flex items-start gap-4">
             <PersonaAvatar name={persona.name} url={persona.avatarUrl} className="w-16 h-16 rounded-full text-2xl flex-shrink-0" />
