@@ -10,6 +10,8 @@ import {
 } from "recharts";
 import { useLocale } from "@/contexts/LocaleContext";
 import { EMOTIONS, EMOTION_KEYS, emotionColor } from "@/lib/emotions";
+import WellbeingTrends from "@/components/v6/WellbeingTrends";
+import GraduationReasons from "@/components/v6/GraduationReasons";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -373,6 +375,14 @@ export default function Analytics() {
               })()}
             </div>
           )}
+        </ChartCard>
+
+        <ChartCard title={t("wellbeing.title")}>
+          <WellbeingTrends />
+        </ChartCard>
+
+        <ChartCard title={t("graduationReasons.title")}>
+          <GraduationReasons />
         </ChartCard>
 
         {(() => {

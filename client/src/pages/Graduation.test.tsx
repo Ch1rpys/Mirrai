@@ -48,6 +48,10 @@ vi.mock("@/components/OutboundLetters", () => ({
   default: () => <div data-testid="outbound-letters" />,
 }));
 
+vi.mock("@/components/v6/GraduationReasons", () => ({
+  default: () => <div data-testid="graduation-reasons" />,
+}));
+
 import Graduation from "./Graduation";
 
 describe("the goodbye", () => {

@@ -1594,6 +1594,36 @@ export const zh = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  wellbeing: {
+    title: "最近的你",
+    note: "只陈述，不评价。",
+    moodsLabel: "心情打卡",
+    moodsLine: "最近四周心情打卡 {{a}} 次，之前四周是 {{b}} 次。",
+    checkinsLabel: "聊完之后",
+    checkinsLine: "最近四周聊完，好一点 {{better}} 次、差不多 {{same}} 次、更难受 {{worse}} 次。",
+    visitsLabel: "你来的天数",
+    visitsLine: "最近四周你来了 {{a}} 天，之前四周是 {{b}} 天。",
+    lateLabel: "深夜（0–5 点）",
+    lateLine: "最近四周深夜来的有 {{a}} 次，之前四周是 {{b}} 次。",
+  },
+  graduationReasons: {
+    title: "应用什么时候会建议告别",
+    note: "应用只看下面这几件事。它们都满足的时候会问你一次；问不问，你都可以在设置里关掉。",
+    persona: "看哪个分身",
+    empty: "还没有可以看的条件。",
+    met: "到了",
+    notMet: "还没到",
+    yourAnswers: "你自己最近的回答",
+    condition: {
+      intimacy: "亲密度到「灵魂伴侣」",
+      chatCount: "聊满 50 次",
+      emotionData: "最近 14 天有至少 7 次情绪记录",
+      emotionsRising: "最近的情绪里，六成以上是好的",
+      frequencyRising: "最近没有突然聊得更多",
+      checkinsWorse: "最近三次聊完不都是更难受",
+    },
+  },
+
   myJournal: {
     title: "我写的",
     hint: "这里是你自己写的东西，不是应用对聊天的总结。",

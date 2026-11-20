@@ -10,6 +10,7 @@ import PageLoader from "@/components/PageLoader";
 import NotFound from "@/pages/NotFound";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
 import OutboundLetters from "@/components/OutboundLetters";
+import GraduationReasons from "@/components/v6/GraduationReasons";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -394,6 +395,13 @@ export default function Graduation() {
             </div>
           </motion.section>
         )}
+
+        <motion.section
+          initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }}
+          className="surface p-6 sm:p-8"
+        >
+          <GraduationReasons personaId={personaId} />
+        </motion.section>
 
         {/* The exit.
 

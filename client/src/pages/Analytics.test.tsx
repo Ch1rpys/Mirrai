@@ -27,6 +27,14 @@ const overview = {
   isError: false,
 };
 
+vi.mock("@/components/v6/WellbeingTrends", () => ({
+  default: () => <div data-testid="wellbeing-trends" />,
+}));
+
+vi.mock("@/components/v6/GraduationReasons", () => ({
+  default: () => <div data-testid="graduation-reasons" />,
+}));
+
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     analytics: {

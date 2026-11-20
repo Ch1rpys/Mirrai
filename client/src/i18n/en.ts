@@ -1593,6 +1593,36 @@ export const en = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  wellbeing: {
+    title: "How you have been",
+    note: "Stated, not graded.",
+    moodsLabel: "Mood check-ins",
+    moodsLine: "You checked in {{a}} times in the last four weeks; the four before that, {{b}}.",
+    checkinsLabel: "After conversations",
+    checkinsLine: "In the last four weeks: better {{better}}, about the same {{same}}, worse {{worse}}.",
+    visitsLabel: "Days you came",
+    visitsLine: "You came on {{a}} days in the last four weeks; the four before that, {{b}}.",
+    lateLabel: "Late night (0–5)",
+    lateLine: "{{a}} late-night visits in the last four weeks; the four before that, {{b}}.",
+  },
+  graduationReasons: {
+    title: "When the app will suggest a goodbye",
+    note: "The app looks at these things only. When all of them are met it will ask once; you can turn the asking off in settings either way.",
+    persona: "Which persona",
+    empty: "There is nothing to look at yet.",
+    met: "met",
+    notMet: "not yet",
+    yourAnswers: "Your recent answers",
+    condition: {
+      intimacy: "The closeness reaches “soulmate”",
+      chatCount: "Fifty conversations",
+      emotionData: "At least seven emotion records in the last 14 days",
+      emotionsRising: "Most of the recent mood was good",
+      frequencyRising: "You have not suddenly been talking much more",
+      checkinsWorse: "The last three conversations did not all leave you worse",
+    },
+  },
+
   myJournal: {
     title: "What I wrote",
     hint: "These are your own words, not the app's summary of a conversation.",
