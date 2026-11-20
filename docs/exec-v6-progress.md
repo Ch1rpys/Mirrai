@@ -157,7 +157,7 @@
 | C6.2 | ✅ | 1e35222 | `shared/persona-state.test.ts` 11 通过（C5.1 时已写，本轮加了验收里的两个时刻）：没有 `until` 时 open、未来日期 sealed；同一时刻 `2026-03-19T16:30Z` 在上海已是 20 日（open）而在洛杉矶还是 19 日（sealed）；`cooling` 申请后 71 小时仍 sealed、72 小时整 open、73 小时 open，`never` 到 20 日仍 sealed。`server/sealed-guard.test.ts` 7 通过：封存中 `chat.getHistory` / `letter.list` / `memory.list` / `record.page` 都是 `FORBIDDEN` 且对应 db 读函数 0 次；`persona.exportManual` 仍返回 HTML、`persona.delete` 仍成功；`persona.seal.set(until:null)` 仍能解开；`earlyOpen: "never"` 时 `requestOpen` 为 `BAD_REQUEST` 且不写设置，`cooling` 时写入 `seal.requestedAt`；未封存时 `letter.list` 正常读到；结构测试：`server/routers-v6/**` 里没有「public procedure 带 personaId」，且 `protectedProcedure` 源码含 `.use(sealedGuard)`。`SealSettings.test.tsx` 4 通过：选日期与「可以申请提前打开」写入、没日期不写、封存中显示日期并能「打开封存」、只有 cooling 时出现「申请提前打开」。`Lobby.test.tsx` 17 通过（新增一条）：封存的分身卡片只有「小A · 封存到 2099-04-01」，没有天数。`Graduation.test.tsx` 6 通过（封存区挂在告别页末）。闸门 `554 passed \| 14 skipped (568)` 文件、`4564 passed \| 60 skipped (4624)` 用例，`all six steps passed`。 |
 | C6.3 | ⬜ |  |  |
 | C6.4 | ✅ | 26e7798 | `server/routers.kept-quotes.test.ts` 4 通过：传我说的话的 id（role user）、表情（kind sticker）、别的分身的记录 → `BAD_REQUEST` 且不写设置；传第 4 句 → `BAD_REQUEST`；成功时 `quotes` 的 `text`/`at` 来自记录本身（「晚安呀」/`2024-05-01T21:00:00.000Z`），顺序照传入顺序，写入的 `settings.keptQuotes` 与返回一致；空数组清空。`KeepThree.test.tsx` 2 通过：搜索后选三句（两句搜索结果 + 一条书签）、去掉一句再换一句、保存调用 `persona.setKeptQuotes` 且 id 数 3；「以后再选」不保存并调用 `onDone`。`Graduation.test.tsx` 6 通过（留下三句话区块挂在告别页）。闸门 `556 passed \| 14 skipped (570)` 文件、`4570 passed \| 60 skipped (4630)` 用例，`all six steps passed`。 |
-| C6.5 | ⬜ |  |  |
+| C6.5 | ✅ | 01c1994 (没说完的话); 31be290 (互相读信); b718e0c (毕业后回访) | `server/records/unsaid.test.ts` 4 通过：夹具确认的 `下次带你去吃那家面`（`whoSaid: "them"`）被找到、带记录 id 和日期；「算了。」收尾的 TA 行被找到，`context` 是前两行 `周末去看电影吗` / `好啊 我看看时间`；中文和英文的收尾词各自命中、`我没事的`/`好呀`/`算了吧` 不误命中；同一行既是 open loop 又是收尾只出现一次。`server/chat/unsaid.test.ts` 3 通过：守则 `prompt.unsaidGuard` 在系统提示词、位置在第一个 `<persona_data>` 之前；记录原句只在 user 消息的 `MATERIAL>>>` 围栏内、围栏外没有；模型回「我原谅你，我们和好吧」时返回 `null`；调用 `purpose: "reply"`。`server/routers-v6/unsaid.test.ts` 4 通过：`list` 传 personaId/userId；`complete` 重新按 `recordId` 读记录（`getRecordsByIds([3], 1)`）、把前两行作为 context 传下去、返回模型句；`createMessage`/`updateMessageMetadata`/`createMemory` 各 0 次；用户行或别人的分身被拒。`server/records/unsaid-no-exit.test.ts` 2 通过：三个 unsaid 服务端文件没有 outbound/通道/邮件/推送/createMessage 的 import 或调用；客户端组件没有剪贴板、分享、收进清单的控件。`server/prompt-fences.test.ts` 新增「a record line being finished for the user (C6.5)」：敌意原句只在 `MATERIAL>>>` 围栏内，守则在指令区。客户端：`UnfinishedWords.test.tsx` 4 通过（原话与上下文、按钮只发一条续写、重建卡片标注、无复制/分享按钮、无内容时不渲染）；`MutualLetters.test.tsx` 3 通过（两封信并排、当场写走 `outbound.addOwn`、从出口清单选一封）；`Graduation.test.tsx` 10 通过（新增「两封信都在、未选信时右边是输入框」）；`RevisitToggle.test.tsx` 2 通过（默认勾选、取消写 `revisit: false`）。`server/scheduler/reminders.test.ts` 26 通过（新增 5 条）：毕业后第 7 天 `dedupeKey: graduation_revisit:1:7`、第 30 天 `:30`，`silent: true`；`revisit: false` 或 `mode: "memorial"` 不产出；交付只写 `channel: "web"` 一次、`pushToUser` 0 次、`getChannelAdapter` 0 次，第二次 tick 不再写。`shared/persona-settings.test.ts` 新增默认 `revisit: true`、显式 false 保留。闸门 `564 passed \| 14 skipped (578)` 文件、`4604 passed \| 60 skipped (4664)` 用例、`all six steps passed`；`prompt-golden.test.ts` 10 通过、快照未改。 |
 | C6.6 | ✅ | 974fd44 | `server/farewell.test.ts` 12 通过（新增一条）：`farewell` 的 `userPrompt` 逐字等于 `copy("zh","prompts.farewellLetter")`、不含「不要说真人现在怎么想」；整份 `{systemPrompt,userPrompt,memoryCount}` 写进新快照（快照文件首次建立，默认路径的构造代码未改）；`said_it`/`reconciled`/`not_afraid` 三种各自的指令段出现、都含「不要说真人现在怎么想、怎么感觉；你只知道记录里的事。」、与默认不同。`GraduationKindPicker.test.tsx` 1 通过：四张卡都出现、默认 `farewell` 是 `aria-pressed`、点「我们和好了」写 `graduationKind: "reconciled"`。`Graduation.test.tsx` 9 通过（新增三条）：未毕业时显示四种结局并保存选择；`not_afraid` 结束后显示「这里可以合上了。毕业的是害怕，不是 小A。」且没有「记一条关系事件」；`reconciled` 结束后有「记一条关系事件」按钮。中英键集合由 `i18n.test.ts` / `copy.test.ts` 守住（125 条相关测试通过）。闸门 `557 passed \| 14 skipped (571)` 文件、`4575 passed \| 60 skipped (4635)` 用例，`all six steps` 全绿。 |
 | C7.1 | ⬜ |  |  |
 | C7.2 | ⬜ |  |  |
@@ -606,6 +606,11 @@
 | 301 | C6.6 | 告别页的「第一步」 | 手册写「告别页第一步改成选一种结局（四张卡片）」；现有告别页不是分步向导，实际在页首（标题下）放四张结局卡片，选择后同一页的文案跟着换 | 页面本来就是一页读完；把它改成向导是 C6.6 之外的结构调整。卡片位置在正文之前，用户看到的第一件事就是选择。 |
 | 302 | C6.6 | 每种结局的说明 | 手册给了四张卡片的标题和结束页文案，没有给每种的说明；补了 `graduation.<kind>.note` 四句 | 四张卡只有标题太像四个按钮；一句说明写清楚「这封信写的是哪件事」。 |
 | 303 | C6.6 | 「与改动前相同」的证据 | 新增了 `server/__snapshots__/farewell.test.ts.snap`（首次建立），同时用逐字相等断言守住默认 `userPrompt`；系统提示词路径没有加任何东西 | 快照本身不能证明「改动前」，逐字相等可以；快照守住以后不被顺手改掉。 |
+| 304 | C6.5 | 没说完的话只给两类：v5 未结事项里属于 TA 的、和以「算了/没事/没什么/当我没说/以后再说/下次再说」收尾的 TA 行 | 第二类另外收了英文对应说法（`forget it` / `never mind` / `forget i said that` / `talk later` / `some other time`）；匹配前剥掉句末标点，原话不改 | 英文用户的记录里也有同样的收尾方式；不改原话是这条的边界（「都是原话」）。 |
+| 305 | C6.5 | 守则写在 `unsaid.complete` 这一个调用的 Layer 0 之后，不改全局 Layer 0 | `SystemPromptOptions` 新增 `guardInstruction`，排在 `hardRules` 之后、`harmInstruction` 之前；只有这一条调用传它 | 手册同条要求「不改变每一个分身的提示词」；黄金快照不传这个字段，逐字不变。 |
+| 306 | C6.5 | 毕业后第 7、30 天各生成一条 `reminder_deliveries`（`channel: "web"`），不走推送、不走通道 | `Reminder` 加 `silent?: boolean`；`deliverReminder` 对 silent 直接认领 `channel: "web"` 并返回，不检查安静时段、不调 `pushToUser`/通道；sweep 对 silent 不找绑定 | 现有的 web 提醒路径本来就会 `pushToUser`；不加这个旗子，「不走推送」做不到。 |
+| 307 | C6.5 | 「互相读信」从出口清单里选一条或当场写；两封并排 | 新增 `MutualLetters`：左列是分身写的信，右列是 `outbound.list` 的下拉选择和 `outbound.addOwn` 的输入框；默认停在「当场写」，选了才换成那封信；没有删除/发送按钮 | 现有 `OutboundLetters` 是带编辑/状态的清单，直接复用会把「读信」变成「管理清单」。 |
+| 308 | C6.5 | 回访卡片的「不需要了」去封存或删除 | 点击后关掉提醒并跳到 `PersonaEdit`（封存在那一页）；删除仍在设置的数据页 | 手册没指定封存/删除的落点；编辑页已经有 C6.2 的封存控件，不再造一个只有两个按钮的中间页。 |
 
 ## 批次日志
 
@@ -2518,3 +2523,12 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 - **未验证清单新增**：C5.2 真实 Open-Meteo、C5.3 真实到点与推送、C5.5 真实 SMTP。
 - **待用户决定**：这一轮没有新增。
 - **没做完**：C6.5、C6.3、C7.1、C7.2、C7.3。它们的依赖（C6.4、C1.7、B7.3、C6.6）都已完成，下一个会话可以直接从 C6.5 开始，不需要先补依赖；C7.4 仍等 C1.8。
+
+### WP13 · 实现会话 · 2026-11-20 · 续（C6.5）
+
+- 开工基线：`corepack pnpm gate` 全绿，`557 passed | 14 skipped (571)` 文件、`4575 passed | 60 skipped (4635)` 用例，与上一会话收尾一致；`exec/v6` 工作区干净。
+- C6.5 三个提交：`01c1994` 没说完的话（`server/records/unsaid.ts`、`server/chat/unsaid.ts`、`server/routers-v6/unsaid.ts`、`UnfinishedWords`、`prompt.unsaidGuard`）；`31be290` 互相读信（`MutualLetters`、告别页两列）；`b718e0c` 毕业后回访（`silent` 提醒、大厅三键卡片、`RevisitToggle`）。
+- 这一条的三块分开验收，证据写在进度表 C6.5 一行。`prompt-golden.test.ts` 10 通过、快照未改；新增的 `guardInstruction` 只有 `unsaid.complete` 传，默认提示词逐字不变。
+- 闸门：`corepack pnpm gate` 退出码 0，`564 passed | 14 skipped (578)` 文件、`4604 passed | 60 skipped (4664)` 用例，`all six steps passed`；相对本会话基线通过文件 +7、通过用例 +29，跳过文件/用例不变。
+- 偏差 304–308；未验证清单与待用户决定本轮没有新增（回访卡片不推送，模型续写只在单测里用桩）。
+- 下一步：C6.3 纪念册（依赖 C6.4、C1.7 已完成）。
