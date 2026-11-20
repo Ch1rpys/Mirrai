@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { generateChatExportHTML, generateManualHTML } from "./_core/export-html";
+import { generateChatExportHTML, generateCounselorSummaryHTML, generateManualHTML } from "./_core/export-html";
 
 /**
  * The keepsake.
@@ -300,5 +300,69 @@ describe("the printable manual", () => {
     const source = readFileSync(path.join(__dirname, "_core", "export-html.ts"), "utf-8");
     expect(source).not.toMatch(/from\s+["'][^"']*server\/llm/);
     expect(source).not.toMatch(/from\s+["']\.\.?\/llm/);
+  });
+});
+
+
+describe("the counsellor summary (C4.6)", () => {
+  const input = {
+    range: "30d" as const,
+    from: new Date("2026-02-01T00:00:00Z"),
+    to: new Date("2026-03-01T00:00:00Z"),
+    moods: [
+      { date: "2026-02-02", mood: "happy" },
+      { date: "2026-02-03", mood: "melancholy" },
+    ],
+    weeks: [{ start: "2026-02-02", visits: 3, lateNight: 1 }],
+    checkins: [{ answer: "worse" }, { answer: "skipped" }, { answer: "worse" }],
+    events: [{ happenedAt: new Date("2026-02-10T12:00:00Z"), title: "关系事件" }],
+    safetyCounts: { usage: 1 },
+    messages: [
+      { role: "user", content: "消息里的哨兵串" },
+      { role: "assistant", content: "分身回复的哨兵串" },
+    ],
+    includeThemes: false,
+    includeJournal: false,
+    journal: [{ entryDate: "2026-02-11", body: "日记里的哨兵串" }],
+  };
+
+  it("never carries the conversation, the persona's reply, or the diary by default", () => {
+    const html = generateCounselorSummaryHTML(input, "zh");
+    expect(html).not.toContain("消息里的哨兵串");
+    expect(html).not.toContain("分身回复的哨兵串");
+    expect(html).not.toContain("日记里的哨兵串");
+    expect(html).toContain("心情打卡");
+    expect(html).toContain("更难受");
+    expect(html).toContain("关系事件");
+  });
+
+  it("includes the diary only when asked, and never the persona's reply", () => {
+    const html = generateCounselorSummaryHTML(
+      { ...input, includeJournal: true, includeThemes: true },
+      "zh",
+    );
+    expect(html).toContain("日记里的哨兵串");
+    expect(html).not.toContain("分身回复的哨兵串");
+  });
+
+  it("has no external resource and escapes what it does print", () => {
+    const html = generateCounselorSummaryHTML(
+      {
+        ...input,
+        events: [{ happenedAt: new Date("2026-02-10T12:00:00Z"), title: "<script>alert(1)</script>" }],
+        includeJournal: true,
+        journal: [{ entryDate: "2026-02-11", body: "<script>alert(2)</script>" }],
+      },
+      "en",
+    );
+    expect(html).not.toMatch(/https?:\/\//);
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).toContain("not a diagnosis");
+  });
+
+  it("uses no model", () => {
+    const source = readFileSync(path.join(__dirname, "_core", "export-html.ts"), "utf-8");
+    expect(source).not.toMatch(/from\s+["'][^"']*(?:server\/)?llm/);
   });
 });

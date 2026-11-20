@@ -73,6 +73,7 @@ import {
   getEvalRuns,
   setPersonaBehaviorProfile, getPersonaBehaviorProfile,
   getPersonaSettings, setPersonaSettings,
+  getUserJournal, listCheckinAnswersSince,
   getPersonaStyleProfile, setPersonaStyleProfile,
   setPersonaAvatar,
   setPersonaBackground,
@@ -1041,6 +1042,114 @@ export const appRouter = router({
           return { success: true, mood, crisis: true };
         }
         return { success: true, mood, crisis: false };
+      }),
+
+    /**
+     * The one-page summary for a counsellor or a doctor (C4.6).
+     *
+     * It is built and returned as a string; the page opens it in a new
+     * tab. No model is called, and the persona's words never enter it.
+     */
+    exportCounselorSummary: protectedProcedure
+      .input(z.object({
+        range: z.enum(["30d", "90d", "all"]),
+        includeThemes: z.boolean().default(false),
+        includeJournal: z.boolean().default(false),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { generateCounselorSummaryHTML } = await import("./_core/export-html");
+        const now = new Date();
+        const days = input.range === "30d" ? 30 : input.range === "90d" ? 90 : null;
+        const since = days === null ? new Date(0) : new Date(now.getTime() - days * 86_400_000);
+        const timezone = ctx.user.timezone;
+
+        const personaList = await getPersonasByUserId(ctx.user.id);
+        const [moods, checkins, safetyEvents, journalAll, ...perPersona] = await Promise.all([
+          getUserMoods(ctx.user.id, days ?? 36500, timezone),
+          listCheckinAnswersSince(ctx.user.id, since),
+          getSafetyEvents(ctx.user.id, 1000),
+          getUserJournal(ctx.user.id),
+          ...personaList.map(async (persona) => {
+            const [events, messages] = await Promise.all([
+              getRelationshipEvents(persona.id, ctx.user.id, 1000),
+              getMessagesByPersonaId(persona.id, ctx.user.id, 10_000),
+            ]);
+            return { events, messages };
+          }),
+        ]);
+
+        const events = perPersona
+          .flatMap((entry) => entry.events)
+          .filter((event) => event.happenedAt.getTime() >= since.getTime());
+        const messages = perPersona
+          .flatMap((entry) => entry.messages)
+          .filter((message) => message.createdAt.getTime() >= since.getTime());
+
+        const safetyCounts: Record<string, number> = {};
+        for (const event of safetyEvents) {
+          if (event.createdAt.getTime() < since.getTime()) continue;
+          safetyCounts[event.type] = (safetyCounts[event.type] ?? 0) + 1;
+        }
+
+        // The weeks, in the user's own calendar: distinct days, and how
+        // many messages came between midnight and five.
+        const weekStartOf = (dayKey: string): string => {
+          const [year, month, day] = dayKey.split("-").map(Number);
+          const date = new Date(Date.UTC(year, month - 1, day));
+          date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+          return date.toISOString().slice(0, 10);
+        };
+        const weeks = new Map<string, { start: string; days: Set<string>; lateNight: number }>();
+        for (const message of messages) {
+          if (message.role !== "user") continue;
+          const day = zonedDateKey(message.createdAt, timezone);
+          const start = weekStartOf(day);
+          const week = weeks.get(start) ?? { start, days: new Set<string>(), lateNight: 0 };
+          week.days.add(day);
+          const hour = Number(
+            new Intl.DateTimeFormat("en-GB", {
+              hour: "2-digit",
+              hour12: false,
+              timeZone: timezone || undefined,
+            }).format(message.createdAt),
+          );
+          if (hour >= 0 && hour < 5) week.lateNight += 1;
+          weeks.set(start, week);
+        }
+
+        const journal = journalAll.filter((entry) =>
+          days === null || entry.entryDate >= zonedDateKey(since, timezone),
+        );
+
+        const html = generateCounselorSummaryHTML(
+          {
+            range: input.range,
+            from: days === null ? null : since,
+            to: now,
+            moods: moods.map((mood) => ({ date: mood.date, mood: mood.mood })),
+            weeks: Array.from(weeks.values())
+              .sort((a, b) => a.start.localeCompare(b.start))
+              .map((week) => ({
+                start: week.start,
+                visits: week.days.size,
+                lateNight: week.lateNight,
+              })),
+            checkins: checkins.map((row) => ({ answer: row.answer })),
+            events: events.map((event) => ({ happenedAt: event.happenedAt, title: event.title })),
+            safetyCounts,
+            messages: messages.map((message) => ({
+              role: message.role,
+              content: message.content,
+              timestamp: message.createdAt,
+              kind: "text",
+            })),
+            includeThemes: input.includeThemes,
+            includeJournal: input.includeJournal,
+            journal: journal.map((entry) => ({ entryDate: entry.entryDate, body: entry.body })),
+          },
+          ctx.locale,
+        );
+        return { html };
       }),
 
     /** The user's own moods, oldest first. */
