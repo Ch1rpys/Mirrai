@@ -326,6 +326,7 @@ export function MessageBubble({
   onDelete,
   deleting,
   onQuote,
+  onCollectOutbound,
 }: {
   msg: Message;
   personaName: string;
@@ -355,6 +356,13 @@ export function MessageBubble({
   /** Whether a delete is in flight. */
   deleting?: boolean;
   onQuote?: (msg: Message) => void;
+  /**
+   * Keeps this sentence on the way-out list (C3.3).
+   *
+   * Only the user's own messages can be kept — the exit is the user's
+   * words going back to them, never the persona's.
+   */
+  onCollectOutbound?: (msg: Message) => void;
 }) {
   const { t, locale } = useLocale();
   const [unlikeOpen, setUnlikeOpen] = useState(false);
@@ -839,6 +847,17 @@ export function MessageBubble({
                     className="text-muted-subtle hover:text-muted-foreground transition-colors p-0.5"
                   >
                     <CornerUpLeft className="w-3 h-3" />
+                  </button>
+                )}
+                {isUser && !isNotice && onCollectOutbound && (
+                  <button
+                    type="button"
+                    onClick={() => onCollectOutbound(msg)}
+                    title={t("chat.collectOutbound", { name: personaName })}
+                    aria-label={t("chat.collectOutbound", { name: personaName })}
+                    className="text-muted-subtle hover:text-muted-foreground transition-colors p-0.5"
+                  >
+                    <Mail className="w-3 h-3" />
                   </button>
                 )}
                 {isUser && onEdit && (

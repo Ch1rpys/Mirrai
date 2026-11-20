@@ -28,7 +28,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
  * no "send" button: there is a "I said it" button, and that is a
  * different thing entirely.
  */
-export default function OutboundLetters({ personaId }: { personaId: number }) {
+export default function OutboundLetters({ personaId, name }: { personaId: number; name?: string }) {
   const { t, locale } = useLocale();
   /**
    * The app's own confirmation.
@@ -87,6 +87,22 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
     onSuccess: () => refetch(),
     onError: (e: any) => toast.error(e.message),
   });
+  /**
+   * A sentence with no message behind it (C3.3).
+   *
+   * The list is not only for lines found in the conversation: sometimes
+   * the sentence was never typed anywhere, and the drawer is where a
+   * person is reminded of the one they have been carrying around.
+   */
+  const addOwnMutation = trpc.outbound.addOwn.useMutation({
+    onSuccess: () => {
+      setOwn("");
+      toast.success(t("outbound.keep"));
+      refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const [own, setOwn] = useState("");
 
   const letters = data?.letters ?? [];
   const [editing, setEditing] = useState<number | null>(null);
@@ -188,6 +204,33 @@ export default function OutboundLetters({ personaId }: { personaId: number }) {
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed">{t("outbound.hint")}</p>
       </header>
+
+      <form
+        className="space-y-2 rounded-xl border border-border/70 p-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const trimmed = own.trim();
+          if (!trimmed || addOwnMutation.isPending) return;
+          addOwnMutation.mutate({ personaId, text: trimmed });
+        }}
+      >
+        <Label className="text-xs text-muted-foreground" htmlFor="outbound-own">
+          {t("outbound.writeOwn")}
+        </Label>
+        <Textarea
+          id="outbound-own"
+          value={own}
+          rows={2}
+          maxLength={2000}
+          placeholder={t("outbound.writeOwnPlaceholder", { name: name || t("common.them") })}
+          onChange={(event) => setOwn(event.target.value)}
+        />
+        <div className="flex justify-end">
+          <Button type="submit" size="sm" variant="outline" disabled={!own.trim() || addOwnMutation.isPending}>
+            {t("outbound.addOwn")}
+          </Button>
+        </div>
+      </form>
 
       {letters.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border/70 px-4 py-8 text-center text-xs text-muted-foreground">

@@ -259,6 +259,9 @@ export const zh = {
     saidFailed: "这次没查到。",
     copyFailed: "复制失败",
     quote: "回复这一条",
+    collectOutbound: "收进「想对 {{name}} 说的话」",
+    outboundEntry: "想对 {{name}} 说的话（{{n}}）",
+    outboundEntryMemorial: "想对 {{name}} 说、但来不及说的话（{{n}}）",
     recalled: "TA 想起了 {{count}} 件事",
     claimSupported: "「{{text}}」— 记录里有（{{date}}）",
     claimUnsupported: "「{{text}}」— 记录里没找到",
@@ -1619,6 +1622,11 @@ export const zh = {
     editRequired: "这句话不能是空的。",
     staleHint: "这句话已经放了 {{days}} 天了。它不会自己消失。",
     forSelf: "留给自己的",
+    writeOwn: "自己写一句",
+    writeOwnPlaceholder: "想对 {{name}} 说的话",
+    addOwn: "收进清单",
+    keep: "收好了。它只在你这里。",
+    drawerTitle: "想对 {{name}} 说的话",
   },
 
   /**

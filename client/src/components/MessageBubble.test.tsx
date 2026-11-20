@@ -114,6 +114,7 @@ function callbacks() {
     onEdit: vi.fn(),
     onDelete: vi.fn(),
     onQuote: vi.fn(),
+    onCollectOutbound: vi.fn(),
   };
 }
 
@@ -340,8 +341,39 @@ describe("the message bubble", () => {
     expect(screen.queryByLabelText(translate("zh", "chat.regenerate"))).toBeNull();
   });
 
-  it("offers to edit the user's own message, and not the persona's", () => {
+  it("keeps the user's own message for the way-out list, and not the persona's", async () => {
+    const user = userEvent.setup();
     const handlers = callbacks();
+    const collectLabel = translate("zh", "chat.collectOutbound", { name: "小A" });
+
+    const { unmount } = render(
+      <MessageBubble
+        msg={makeMessage({ role: "user", content: "我害怕你离开我" })}
+        personaName="小A"
+        showMood={false}
+        onCollectOutbound={handlers.onCollectOutbound}
+      />,
+    );
+    await user.click(screen.getByLabelText(collectLabel));
+    expect(handlers.onCollectOutbound).toHaveBeenCalledTimes(1);
+    expect(handlers.onCollectOutbound.mock.calls[0][0]).toMatchObject({
+      role: "user",
+      content: "我害怕你离开我",
+    });
+    unmount();
+
+    render(
+      <MessageBubble
+        msg={makeMessage({ role: "assistant" })}
+        personaName="小A"
+        showMood={false}
+        onCollectOutbound={handlers.onCollectOutbound}
+      />,
+    );
+    expect(screen.queryByLabelText(collectLabel)).toBeNull();
+  });
+
+  it("offers to edit the user's own message, and not the persona's", () => {    const handlers = callbacks();
 
     const { unmount } = render(
       <MessageBubble

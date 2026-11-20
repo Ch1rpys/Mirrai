@@ -33,6 +33,8 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import MemoryReview from "@/components/v6/MemoryReview";
 import ChoiceBubble from "@/components/v6/ChoiceBubble";
 import PendingReply from "@/components/v6/PendingReply";
+import OutboundEntry from "@/components/v6/OutboundEntry";
+import OutboundDrawer from "@/components/v6/OutboundDrawer";
 import { useTypingReveal, waitMs } from "@/components/v6/useTypingReveal";
 
 /** A message the reply carried besides its words (B7.1). */
@@ -399,6 +401,25 @@ export default function Chat() {
   );
   const skin = normalizePersonaSettings(persona?.settings).skin ?? { theme: "classic" as const };
   const displayName = skin.alias?.trim() || persona?.name || "";
+  /**
+   * The way out, reachable from the conversation (C3.3).
+   *
+   * The list of words the user never said to the real person used to be
+   * reachable only from the graduation page. The thought "I never told
+   * them this" happens inside the conversation, so the list is now a
+   * drawer here too.
+   */
+  const [showOutbound, setShowOutbound] = useState(false);
+  const collectOutbound = trpc.outbound.addFromMessage.useMutation({
+    onSuccess: () => toast.success(t("outbound.keep")),
+    onError: (e: any) => toast.error(e.message),
+  });
+  const handleCollectOutbound = useCallback((message: Message) => {
+    const id = Number(message.id);
+    if (!Number.isFinite(id)) return;
+    collectOutbound.mutate({ personaId, messageId: id });
+  }, [collectOutbound, personaId]);
+  const memorialMode = normalizePersonaSettings(persona?.settings).mode === "memorial";
 
   /**
    * A farewell the app has already offered.
@@ -1895,6 +1916,12 @@ export default function Chat() {
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors">
                       <BarChart3 className="w-4 h-4 text-muted-foreground" />{t("chat.emotionReport")}
                     </button>
+                    <OutboundEntry
+                      personaId={personaId}
+                      name={displayName || t("common.them")}
+                      memorial={memorialMode}
+                      onOpen={() => { setShowOutbound(true); setShowMenu(false); }}
+                    />
                     <button onClick={() => { navigate(`/diary`); setShowMenu(false); }}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors">
                       <BookOpen className="w-4 h-4 text-muted-foreground" />{t("diary.title")}
@@ -2081,6 +2108,13 @@ export default function Chat() {
         />
       )}
 
+      <OutboundDrawer
+        personaId={personaId}
+        name={displayName || t("common.them")}
+        open={showOutbound}
+        onClose={() => setShowOutbound(false)}
+      />
+
       {showCrisis && <CrisisCard onClose={() => setShowCrisis(false)} />}
 
       {/* The notes the user kept for later, surfaced when they come
@@ -2225,6 +2259,7 @@ export default function Chat() {
                 onDelete={handleDeleteMessage}
                 deleting={deleteMessageMutation.isPending}
                 onQuote={handleQuote}
+                onCollectOutbound={handleCollectOutbound}
               />
               {offer && Number.isInteger(offer.replyToMessageId) && (
                 <div className="mt-2">

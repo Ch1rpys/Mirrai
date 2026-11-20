@@ -20,6 +20,7 @@ const keepForSelf = vi.fn();
 const updateText = vi.fn();
 const markStaleNotified = vi.fn();
 const restore = vi.fn();
+const addOwn = vi.fn();
 
 let letters: any[] = [];
 
@@ -27,8 +28,7 @@ vi.mock("@/lib/trpc", () => ({
   trpc: {
     outbound: {
       list: { useQuery: () => ({ data: { letters }, refetch: vi.fn() }) },
-      collect: { useMutation: () => ({ mutate: collect, isPending: false }) },
-      markSent: { useMutation: () => ({ mutate: markSent, isPending: false }) },
+      collect: { useMutation: () => ({ mutate: collect, isPending: false }) },      markSent: { useMutation: () => ({ mutate: markSent, isPending: false }) },
       drop: { useMutation: () => ({ mutate: drop, isPending: false }) },
       keepForSelf: { useMutation: () => ({ mutate: keepForSelf, isPending: false }) },
       restore: { useMutation: () => ({ mutate: restore, isPending: false }) },
@@ -44,6 +44,15 @@ vi.mock("@/lib/trpc", () => ({
         useMutation: () => ({
           mutate: (input: any, options: any) => {
             updateText(input, options);
+          },
+          isPending: false,
+        }),
+      },
+      addOwn: {
+        useMutation: (options?: any) => ({
+          mutate: (input: any) => {
+            addOwn(input);
+            options?.onSuccess?.();
           },
           isPending: false,
         }),
@@ -283,5 +292,16 @@ describe("the way out", () => {
     ];
     render(<ConfirmProvider><OutboundLetters personaId={1} /></ConfirmProvider>);
     expect(screen.queryByText(/不会自己消失/)).toBeNull();
+  });
+
+  it("lets the user write one themselves", async () => {
+    const user = userEvent.setup();
+    render(<ConfirmProvider><OutboundLetters personaId={5} name="小满" /></ConfirmProvider>);
+    const box = screen.getByLabelText(translate("zh", "outbound.writeOwn"));
+    await user.type(box, "  那天我应该留下来的  ");
+    await user.click(screen.getByRole("button", { name: translate("zh", "outbound.addOwn") }));
+    expect(addOwn).toHaveBeenCalledWith({ personaId: 5, text: "那天我应该留下来的" });
+    // The box is empty again, so the next sentence starts clean.
+    await waitFor(() => expect(box).toHaveValue(""));
   });
 });

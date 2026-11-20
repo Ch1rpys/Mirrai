@@ -260,6 +260,9 @@ export const en = {
     saidFailed: "The record could not be checked.",
     copyFailed: "Could not copy",
     quote: "Reply to this",
+    collectOutbound: "Keep in “things to say to {{name}}”",
+    outboundEntry: "Things to say to {{name}} ({{n}})",
+    outboundEntryMemorial: "Things you meant to say to {{name}} ({{n}})",
     recalled: "They remembered {{count}} things",
     claimSupported: "“{{text}}” — in the record ({{date}})",
     claimUnsupported: "“{{text}}” — not in the record",
@@ -1618,6 +1621,11 @@ export const en = {
     editRequired: "This cannot be empty.",
     staleHint: "This has been waiting {{days}} days. It will not go away on its own.",
     forSelf: "For yourself",
+    writeOwn: "Write one yourself",
+    writeOwnPlaceholder: "What you want to say to {{name}}",
+    addOwn: "Add to the list",
+    keep: "Kept. It stays with you.",
+    drawerTitle: "Things to say to {{name}}",
   },
 
   /**

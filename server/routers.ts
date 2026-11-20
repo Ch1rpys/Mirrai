@@ -6798,6 +6798,65 @@ export const appRouter = router({
       }),
 
     /**
+     * Keeps one of the user's own messages for the list.
+     *
+     * The exit has always been reachable from the graduation page, and by
+     * a search the model runs over the whole conversation. But the moment
+     * a person realizes "this is a sentence I never said to them" is in
+     * the conversation itself, and there was no way to keep it from
+     * there. So the same message can be taken back with one tap.
+     *
+     * The text is copied, not paraphrased, and the row remembers which
+     * message it came from. Collecting the same message twice is the
+     * same sentence, not a second one — the database refuses the second
+     * copy and the existing row is returned instead.
+     */
+    addFromMessage: protectedProcedure
+      .input(z.object({ personaId: z.number(), messageId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const message = await getMessageById(input.messageId, ctx.user.id, input.personaId);
+        if (!message) throw new TRPCError({ code: "NOT_FOUND" });
+        // Only the user's own words belong on this list. A persona's
+        // sentence would be the app putting somebody else's mouth in
+        // the user's.
+        if (message.role !== "user") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Only your own messages can be kept." });
+        }
+        const id = await createOutboundLetter({
+          userId: ctx.user.id,
+          personaId: input.personaId,
+          text: message.content,
+          sourceMessageId: message.id,
+          status: "ready",
+        });
+        if (id) return { id, text: message.content, existed: false };
+        // Nothing was written: the message is already on the list. That
+        // is not an error — it is the answer the caller needs to show
+        // the right words.
+        const existing = await getOutboundLetters(input.personaId, ctx.user.id);
+        const row = existing.find((letter) => letter.sourceMessageId === message.id);
+        if (row) return { id: row.id, text: row.text, existed: true };
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }),
+
+    /** Writes a sentence straight onto the list, with no message behind it. */
+    addOwn: protectedProcedure
+      .input(z.object({ personaId: z.number(), text: z.string().trim().min(1).max(2000) }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        await createOutboundLetter({
+          userId: ctx.user.id,
+          personaId: input.personaId,
+          text: input.text,
+          status: "ready",
+        });
+        return { success: true };
+      }),
+
+    /**
      * Looks through the conversation for the words that were only ever
      * said here.
      *

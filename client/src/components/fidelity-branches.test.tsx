@@ -65,6 +65,7 @@ vi.mock("@/lib/trpc", () => ({
         useMutation: () => ({ mutate: vi.fn(), isPending: false }),
       },
       updateText: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      addOwn: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     behavior: {
       get: { useQuery: () => ({ data: { profile: null }, refetch: vi.fn() }) },
