@@ -23,6 +23,7 @@ export type ProactiveSkipReason =
   | "unreachable"
   | "graduated"
   | "hold"
+  | "taper"
   | "empty";
 
 export interface QuietHoursSpec {
@@ -201,6 +202,8 @@ export function decideProactiveWindow(params: {
   rng: () => number;
   /** 1 is the first bought window of this silence. */
   windowIndex?: number;
+  /** The user's own taper (C6.1). Any stage above zero means no first word. */
+  taperStage?: number;
 }): { eligibleAt: Date | null; used: boolean; probability: number; skipReason?: ProactiveSkipReason } {
   if (!params.frequencyHours || params.frequencyHours <= 0 || !params.silenceStart) {
     return { eligibleAt: null, used: false, probability: 0, skipReason: "frequency" };
@@ -213,6 +216,9 @@ export function decideProactiveWindow(params: {
   }
   if (params.reachability === "unreachable") {
     return { eligibleAt: null, used: false, probability: 0, skipReason: "unreachable" };
+  }
+  if ((params.taperStage ?? 0) > 0) {
+    return { eligibleAt: null, used: false, probability: 0, skipReason: "taper" };
   }
   const windowIndex = Math.max(1, Math.round(params.windowIndex ?? 1));
   const eligibleAt = new Date(

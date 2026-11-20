@@ -230,6 +230,7 @@ import {
   withPersonaTurn,
   commitPendingChoice,
   PersonaAsleepError,
+  ChatClosedError,
   ChoiceMissingError,
   clampContextLimit,
   clampTemperature,
@@ -2950,7 +2951,7 @@ export const appRouter = router({
             }
           }
         } catch (e) {
-          if (e instanceof PersonaAsleepError) {
+          if (e instanceof PersonaAsleepError || e instanceof ChatClosedError) {
             throw new TRPCError({ code: "BAD_REQUEST", message: e.message });
           }
           /**

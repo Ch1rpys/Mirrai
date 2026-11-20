@@ -24,7 +24,7 @@ import { z } from "zod";
 import { authenticateRequest } from "../_core/auth";
 import { RATE_LIMITS, rateLimiter, resolveRateLimitKey } from "../_core/rate-limit";
 import * as db from "../db";
-import { runConversation, PersonaAsleepError } from "./service";
+import { runConversation, PersonaAsleepError, ChatClosedError } from "./service";
 import { copy } from "@shared/copy";
 
 const inputSchema = z.object({
@@ -271,7 +271,7 @@ async function handleChatStream(req: Request, res: Response): Promise<void> {
            * Everything else — a Postgres error, a provider's raw
            * response — is kept on the server.
            */
-          message: e instanceof TRPCError || e instanceof PersonaAsleepError
+          message: e instanceof TRPCError || e instanceof PersonaAsleepError || e instanceof ChatClosedError
             ? e.message
             : copy(parsed.data.locale, "errors.replyFailed"),
           partial: false,

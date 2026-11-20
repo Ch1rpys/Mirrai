@@ -1500,6 +1500,42 @@ describe("runConversation", () => {
     ).rejects.toThrow(/毕业/);
   });
 
+  it("refuses a weekday when the user kept the chat to weekends (C6.1)", async () => {
+    await expect(
+      (async () => {
+        for await (const _ of runConversation({
+          persona: persona({ settings: { taper: { stage: 2 } } }),
+          userId: 1,
+          message: "在吗",
+          mode: "once",
+          // A Wednesday in the user's zone.
+          now: new Date("2026-03-04T12:00:00Z"),
+        })) {
+          // Drain the generator.
+        }
+      })(),
+    ).rejects.toThrow(/只在周末/);
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+    // The closed day does not leave the user's message in the transcript.
+    expect(createMessage).not.toHaveBeenCalled();
+  });
+
+  it("refuses the chat on the letters-only step (C6.1)", async () => {
+    await expect(
+      (async () => {
+        for await (const _ of runConversation({
+          persona: persona({ settings: { taper: { stage: 3 } } }),
+          userId: 1,
+          message: "在吗",
+          mode: "once",
+        })) {
+          // Drain the generator.
+        }
+      })(),
+    ).rejects.toThrow(/只写信/);
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+  });
+
   it("still talks to a persona the user asked to be left alone", async () => {
     // "Quiet" silences the app, it does not lock the user out.
     const events = [];

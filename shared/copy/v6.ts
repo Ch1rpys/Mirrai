@@ -946,6 +946,18 @@ export const V6 = {
     zh: "今天已经换过一次了。明天可以再来。",
     en: "You have already swapped once today. Come back tomorrow.",
   },
+  "chat.closedWeekend": {
+    zh: "今天不是周末。这是你自己定的：只在周末和 {{name}} 聊。",
+    en: "It is not the weekend. You set this yourself: only weekends with {{name}}.",
+  },
+  "chat.closedLettersOnly": {
+    zh: "现在只写信。这是你自己定的。",
+    en: "Only letters for now. You set this yourself.",
+  },
+  "chat.closedSealed": {
+    zh: "这个分身封存着，到你定的那天之前打不开。",
+    en: "This persona is sealed until the day you picked.",
+  },
   "errors.emailIncomplete": {
     zh: "服务器、用户名、密码、发件地址和收件地址都要填。",
     en: "Server, username, password, from and to are all needed.",

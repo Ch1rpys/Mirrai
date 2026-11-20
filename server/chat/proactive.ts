@@ -549,8 +549,11 @@ export function isProactiveDue(params: {
   personaTimeZone?: string | null;
   quietHours?: QuietHoursSpec | null;
   userTimeZone?: string | null;
+  /** The user's own taper (C6.1): any stage above zero stops first words. */
+  taperStage?: number;
 }): boolean {
   const now = params.now ?? new Date();
+  if ((params.taperStage ?? 0) > 0) return false;
   if (!params.frequencyHours || params.frequencyHours <= 0) return false;
   if (!mayReachOut(params.presence as Presence)) return false;
   if (!params.lastChatAt) return true;
@@ -584,6 +587,7 @@ export function isProactiveDue(params: {
         : null,
     presence: params.presence,
     reachability: params.reachability,
+    taperStage: params.taperStage,
     windowIndex,
     rng: seededRandom(`${params.personaId ?? 0}:${new Date(params.lastChatAt).getTime()}:${params.frequencyHours}:${windowIndex}`),
   });

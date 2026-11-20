@@ -175,6 +175,8 @@ export const zh = {
   },
 
   chat: {
+    taperOverride: "今天破例",
+    taperHelp: "求助信息",
     scheduledSend: "定时发送",
     /**
      * The label that says what this is.
@@ -2866,6 +2868,15 @@ export const zh = {
       storm: "雷雨",
       unknown: "天气不明",
     },
+  },
+  taper: {
+    title: "慢慢来",
+    hint: "不想一下子告别，可以一级一级往下走。每一步都是你选的，随时能退回去。",
+    level0: "照常",
+    level1: "{{name}} 不主动找我",
+    level2: "只在周末聊",
+    level3: "只写信",
+    saved: "保存了。",
   },
   email: {
     title: "回信发到邮箱",

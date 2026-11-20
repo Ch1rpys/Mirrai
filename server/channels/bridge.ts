@@ -8,7 +8,7 @@
  */
 import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
-import { runConversation, PersonaAsleepError } from "../chat/service";
+import { runConversation, PersonaAsleepError, ChatClosedError } from "../chat/service";
 import { copy } from "@shared/copy";
 import { fallbackChannelGapMs, waitAbortable } from "../chat/inbox";
 import type { ChannelReply } from "./send-parts";
@@ -128,6 +128,20 @@ export async function handleChannelChat(params: ChannelChatParams): Promise<Chan
      * persona was asleep.
      */
     if (e instanceof PersonaAsleepError) {
+      return { parts: [e.message], gapsMs: [] };
+    }
+    /**
+     * The user closed the chat themselves (C6.1).
+     *
+     * On a channel the notice is a message, so it is sent once a day —
+     * the same rule the "they did not reply" notice follows.
+     */
+    if (e instanceof ChatClosedError) {
+      const zone = (await db.getUserTimezone(userId).catch(() => null))
+        || (persona as { timezone?: string | null }).timezone
+        || "UTC";
+      const day = zonedDateKey(new Date(), zone) || localDateKey(new Date());
+      if (!(await claimSilenceNotice(userId, persona.id, day))) return null;
       return { parts: [e.message], gapsMs: [] };
     }
     throw e;

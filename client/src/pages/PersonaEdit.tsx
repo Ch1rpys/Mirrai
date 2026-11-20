@@ -32,6 +32,7 @@ import SkinPicker from "@/components/v6/SkinPicker";
 import LdrSettings from "@/components/v6/LdrSettings";
 import ReunionSummary from "@/components/v6/ReunionSummary";
 import LetterEmailToggle from "@/components/v6/LetterEmailToggle";
+import TaperPicker from "@/components/v6/TaperPicker";
 import PersonaSampling from "@/components/v6/PersonaSampling";
 import HarmNotice from "@/components/v6/HarmNotice";
 import VersionHistory from "@/components/v6/VersionHistory";
@@ -533,6 +534,7 @@ export default function PersonaEdit() {
               )}
             </div>
           </div>
+          <TaperPicker personaId={personaId} name={name} />
           <div className="space-y-1.5">
             <Label htmlFor="persona-proactive" className="text-xs text-muted-foreground">{t("proactive.label")}</Label>
             <select id="persona-proactive" value={String(proactiveHours)} onChange={e => setProactiveHours(Number(e.target.value))}

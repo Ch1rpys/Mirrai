@@ -45,6 +45,7 @@ vi.mock("./llm/user-provider", () => ({
 vi.mock("./chat/service", () => ({
   runConversation: (...a: unknown[]) => runConversation(...a),
   withPersonaTurn: async (_key: string, work: () => Promise<unknown>) => work(),
+  ChatClosedError: class ChatClosedError extends Error {},
   PersonaAsleepError: class PersonaAsleepError extends Error {},
   clampContextLimit: (value: unknown) => value,
   clampTemperature: (value: unknown) => value,

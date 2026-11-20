@@ -23,11 +23,13 @@ import { normalizePeriods } from "@shared/periods";
 import { careBannerText } from "@/lib/care-note";
 import { resolveStarterQuestions } from "@/lib/scene-starters";
 import { useLocale } from "@/contexts/LocaleContext";
-import { formatZonedClock, zonedHour, daysSinceContact } from "@shared/timezone";
+import { formatZonedClock, zonedHour, zonedDateKey, daysSinceContact } from "@shared/timezone";
 import { formatDayKey, formatInstantInZone, formatTimeInZone } from "@/lib/dates";
 import DigitalPersonaBadge from "@/components/DigitalPersonaBadge";
 import TimeBar from "@/components/v6/TimeBar";
 import { normalizePersonaSettings } from "@shared/persona-settings";
+import { mayChatNow } from "@shared/persona-state";
+import { copy } from "@shared/copy";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionKey } from "@/lib/emotions";
 import { useConfirm } from "@/components/ConfirmDialog";
 import MemoryReview from "@/components/v6/MemoryReview";
@@ -418,6 +420,7 @@ export default function Chat() {
   const [showOutbound, setShowOutbound] = useState(false);
   const [showWaitGauge, setShowWaitGauge] = useState(false);
   const [showScheduled, setShowScheduled] = useState(false);
+  const [showTaperHelp, setShowTaperHelp] = useState(false);
   const collectOutbound = trpc.outbound.addFromMessage.useMutation({
     onSuccess: () => toast.success(t("outbound.keep")),
     onError: (e: any) => toast.error(e.message),
@@ -519,6 +522,21 @@ export default function Chat() {
     () => daysSinceContact((persona as any)?.lastUserMessageAt ?? (persona as any)?.lastChatAt),
     [(persona as any)?.lastUserMessageAt, (persona as any)?.lastChatAt],
   );
+
+  /**
+   * Whether the user's own taper (C6.1) or a seal (C6.2) closes the
+   * chat right now. Computed on the clock that ticks above, so a page
+   * left open overnight follows the user's own calendar.
+   */
+  const chatState = mayChatNow(
+    { settings: persona?.settings, presence: persona?.presence, graduationStatus: persona?.graduationStatus },
+    new Date(nowTick),
+    user?.timezone ?? null,
+  );
+  const taperOverride = trpc.persona.updateSettings.useMutation({
+    onSuccess: () => refetchPersona(),
+    onError: (error: { message: string }) => toast.error(error.message),
+  });
 
   const { data: intimacy } = trpc.persona.getIntimacy.useQuery(
     { id: personaId },
@@ -2209,6 +2227,7 @@ export default function Chat() {
       />
 
       {showCrisis && <CrisisCard onClose={() => setShowCrisis(false)} />}
+      {showTaperHelp && <CrisisCard onClose={() => setShowTaperHelp(false)} />}
 
       {/* The notes the user kept for later, surfaced when they come
           back. They were written for this moment, so they belong here
@@ -2442,6 +2461,52 @@ export default function Chat() {
                 className="h-11 w-11 p-0 rounded-md flex-shrink-0">
                 <Send className="w-5 h-5" />
               </Button>
+            </div>
+          ) : !chatState.ok ? (
+            /*
+             * The user closed the chat themselves (C6.1).
+             *
+             * The input is not there to be typed into and then refused;
+             * the reason is, and one way to make an exception today.
+             * The support entrance is always here, closed or not.
+             */
+            <div className="rounded-lg border border-border bg-muted/40 px-3.5 py-3 space-y-2">
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {copy(
+                  locale === "en" ? "en" : "zh",
+                  chatState.reason === "weekend_only"
+                    ? "chat.closedWeekend"
+                    : chatState.reason === "letters_only"
+                      ? "chat.closedLettersOnly"
+                      : "chat.closedSealed",
+                  { name: displayName || t("common.them") },
+                )}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                {chatState.reason === "weekend_only" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="bg-transparent"
+                    disabled={taperOverride.isPending}
+                    onClick={() =>
+                      taperOverride.mutate({
+                        id: personaId,
+                        patch: {
+                          taper: {
+                            overrideDay: zonedDateKey(new Date(), user?.timezone ?? null),
+                          },
+                        },
+                      })
+                    }
+                  >
+                    {t("chat.taperOverride")}
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" onClick={() => setShowTaperHelp(true)}>
+                  {t("chat.taperHelp")}
+                </Button>
+              </div>
             </div>
           ) : (
             /*

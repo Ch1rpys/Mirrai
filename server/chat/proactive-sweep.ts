@@ -16,6 +16,7 @@ import { pushToUser } from "../_core/push";
 import { ENV } from "../_core/env";
 import { openingRateForWindow, normalizeOpeningProfile } from "@shared/opening-profile";
 import { parseQuietHours } from "@shared/proactive-decision";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 
 /**
  * Sends the message on whichever channel is bound.
@@ -254,6 +255,9 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
       const persona = await db.getPersonaById(row.id, row.userId);
       if (!persona) continue;
       if ((persona as { reachability?: string }).reachability === "unreachable") continue;
+      // Any step down the taper stops the persona from speaking first.
+      const taperStage = normalizePersonaSettings(persona.settings).taper?.stage ?? 0;
+      if (taperStage > 0) continue;
       const openingRate = openingRateForWindow(
         normalizeOpeningProfile((persona.personaData as any)?.openingProfile),
       );
@@ -269,6 +273,7 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
         personaTimeZone: (persona as { timezone?: string | null }).timezone,
         quietHours: parseQuietHours(ENV.reminderQuietHours),
         userTimeZone: settings.timezone,
+        taperStage,
       })) {
         continue;
       }

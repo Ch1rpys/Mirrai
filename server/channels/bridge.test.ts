@@ -32,6 +32,7 @@ vi.mock("../chat/silence-notice", () => ({
 }));
 
 import { handleChannelChat, sendChannelParts } from "./bridge";
+import { ChatClosedError } from "../chat/service";
 import { copy } from "@shared/copy";
 import { fallbackChannelGapMs } from "../chat/inbox";
 
@@ -57,6 +58,32 @@ describe("the bridge", () => {
     });
     getUserTimezone.mockResolvedValue("Asia/Shanghai");
     claimSilenceNotice.mockResolvedValue(true);
+  });
+
+  it("says the taper notice once a day on a channel (C6.1)", async () => {
+    runConversation.mockImplementation(async function* () {
+      throw new ChatClosedError("今天不是周末。这是你自己定的：只在周末和 小A 聊。");
+    });
+    claimSilenceNotice.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+    const first = await handleChannelChat({
+      userId: 1,
+      conversationKey: "oc_abc",
+      personaId: 7,
+      messageText: "在吗",
+      channel: "feishu",
+    });
+    expect(first?.parts[0]).toContain("只在周末");
+    expect(claimSilenceNotice).toHaveBeenNthCalledWith(1, 1, 7, expect.any(String));
+
+    const second = await handleChannelChat({
+      userId: 1,
+      conversationKey: "oc_abc",
+      personaId: 7,
+      messageText: "在吗",
+      channel: "feishu",
+    });
+    expect(second).toBeNull();
   });
 
   it("mentions the ritual once when the app has decided a farewell is due", async () => {

@@ -31,6 +31,7 @@ import { assessTrajectory, getStoredTrajectory } from "../safety/trajectory";
 import { checkGraduationEligibility } from "../_core/persona-utils";
 import { worseStreakFor } from "../safety/checkins";
 import { getEffectiveGraduationMode, canOfferGraduation, getEffectivePresence } from "../_core/graduation";
+import { mayChatNow } from "@shared/persona-state";
 import { mayReachOut } from "@shared/graduation-mode";
 import { copy, localizeScene } from "@shared/copy";
 import { normalizePersonaSettings } from "@shared/persona-settings";
@@ -200,6 +201,19 @@ export class PersonaAsleepError extends Error {
 /**
  * The pair is gone, or the two lines are not the ones that were offered.
  */
+/**
+ * The user themselves closed the chat (C6.1).
+ *
+ * The taper is the user's own decision, so this is a notice and not a
+ * failure: the web, the channels and the phone all show its sentence.
+ */
+export class ChatClosedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ChatClosedError";
+  }
+}
+
 export class ChoiceMissingError extends Error {
   constructor() {
     super("eval.choice.missing");
@@ -1120,6 +1134,25 @@ async function* admitUserMessage(
     throw new PersonaAsleepError(
       copy(locale, "prompt.graduatedNotice", { name: persona.name }),
     );
+  }
+
+  /**
+   * The user's own taper (C6.1) and the seal (C6.2).
+   *
+   * Checked before the message is stored: a closed day must not leave a
+   * message in the transcript that the persona then ignores.
+   */
+  const clockZone = (persona as { timezone?: string | null }).timezone
+    || (await db.getUserTimezone(userId).catch(() => null))
+    || "UTC";
+  const chat = mayChatNow(persona, now, clockZone);
+  if (!chat.ok) {
+    const key = chat.reason === "weekend_only"
+      ? "chat.closedWeekend"
+      : chat.reason === "letters_only"
+        ? "chat.closedLettersOnly"
+        : "chat.closedSealed";
+    throw new ChatClosedError(copy(locale, key, { name: persona.name }));
   }
 
   const pendingMsg = await findPendingChoiceMessage(persona.id, userId);

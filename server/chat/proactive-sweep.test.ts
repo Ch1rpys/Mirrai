@@ -145,6 +145,25 @@ describe("the sweep that lets the persona speak first", () => {
     }));
   });
 
+  it("says nothing at any step down the taper (C6.1)", async () => {
+    getProactivePersonas.mockResolvedValue([{
+      id: 1,
+      userId: 1,
+      name: "小A",
+      lastChatAt: new Date("2026-05-01T12:00:00Z"),
+      presence: "active",
+      graduationStatus: null,
+      analysisStatus: "ready",
+      proactiveFrequencyHours: 24,
+    }]);
+    getPersonaById.mockResolvedValue({ ...persona, settings: { taper: { stage: 1 } } });
+
+    const sent = await runProactiveSweep(new Date("2026-06-01T12:00:00Z"));
+
+    expect(sent).toBe(0);
+    expect(createMessage).not.toHaveBeenCalled();
+  });
+
   it("does not read the whole persona for a persona that is not due", async () => {
     /**
      * The whole row was read for every proactive persona, every

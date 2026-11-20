@@ -89,7 +89,8 @@ export const personaSettingsPatchSchema = z
       .optional(),
     taper: z
       .object({
-        stage: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]),
+        // Partial patches: setting `overrideDay` alone keeps the stage.
+        stage: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]).optional(),
         overrideDay: z.string().optional(),
       })
       .strict()

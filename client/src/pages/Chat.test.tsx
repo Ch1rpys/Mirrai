@@ -206,6 +206,14 @@ describe("Chat", () => {
     ).toBeInTheDocument();
   });
 
+  it("closes the composer and keeps a way to get help (C6.1)", () => {
+    chatPersona.value.settings = { taper: { stage: 3 } };
+    render(<Chat />);
+    expect(screen.getByText("现在只写信。这是你自己定的。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "求助信息" })).toBeInTheDocument();
+    expect(document.querySelector("#chat-composer")).toBeNull();
+  });
+
   it("lets the composer take another line while a reply is still arriving", async () => {
     streamChat.mockImplementation(() => new Promise(() => {}));
     const user = userEvent.setup();

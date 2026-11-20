@@ -183,6 +183,8 @@ export const en = {
   },
 
   chat: {
+    taperOverride: "Make an exception today",
+    taperHelp: "Where to get help",
     scheduledSend: "Send later",
     digitalPersona: "Digital persona",
     conversation: "The conversation with {{name}}",
@@ -2855,6 +2857,15 @@ export const en = {
       storm: "thunderstorms",
       unknown: "weather unknown",
     },
+  },
+  taper: {
+    title: "Take it slowly",
+    hint: "If you do not want to say goodbye all at once, you can go down one step at a time. Every step is yours, and you can step back up.",
+    level0: "As usual",
+    level1: "{{name}} does not start conversations",
+    level2: "Only weekends",
+    level3: "Only letters",
+    saved: "Saved.",
   },
   email: {
     title: "Replies by email",
