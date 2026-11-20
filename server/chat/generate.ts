@@ -48,6 +48,7 @@ import {
 } from "@shared/layers";
 import { capReply, replyBudget } from "@shared/length-cap";
 import { normalizePersonaSettings } from "@shared/persona-settings";
+import { resolveRecordScope } from "@shared/persona-sharing";
 import { effectiveStyleProfile } from "@shared/style-profile";
 import { defaultAddressForms, FINGERPRINT_STATES, type EmotionalState, type StyleFingerprintCore } from "@shared/style-fingerprint";
 import { projectStyle } from "@shared/style-projection";
@@ -216,9 +217,10 @@ async function exemplarsForTurn(
   sampledAct: SpeechAct | null,
 ): Promise<Exemplar[]> {
   const period = periodForTurn(input.persona, input.periodId ?? null);
+  const scope = resolveRecordScope(input.persona);
   const common = {
-    personaId: input.persona.id,
-    userId: input.userId,
+    personaId: scope.personaId,
+    userId: scope.userId,
     userMessage: input.userMessage,
     excludeIds: input.exclude?.recordIds,
     excludeTexts: input.exclude?.texts,
@@ -234,7 +236,7 @@ async function exemplarsForTurn(
   if (fromTable !== null) return fromTable;
   let records: Array<Record<string, unknown>> = [];
   try {
-    records = await db.getCollectedMessagesForPersona(input.persona.id, input.userId, {
+    records = await db.getCollectedMessagesForPersona(scope.personaId, scope.userId, {
       newest: true,
     });
   } catch {
@@ -256,7 +258,8 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   const layers = applyLayerOverrides(layersFromSettings(input.persona), input.layerOverrides);
   let layersUsed = layersInEffect(layers, input.persona);
   if (layersUsed.includes("rerank") && !input.exclude) {
-    const model = await getRerankModel(input.persona.id, input.userId);
+    const scope = resolveRecordScope(input.persona);
+    const model = await getRerankModel(scope.personaId, scope.userId);
     if (!model) layersUsed = layersUsed.filter((id) => id !== "rerank");
   }
   const rng = seededRandom(input.seed);
@@ -612,8 +615,9 @@ async function seedPlanForTurn(
     const period = ((input.persona.personaData as { periods?: Array<{ id?: string; from?: string; to?: string }> } | null)?.periods ?? [])
       .find((item) => item.id === input.periodId);
     let records: Array<{ role: string; content: string; id?: number; kind?: string | null }> = [];
+    const scope = resolveRecordScope(input.persona);
     try {
-      records = await db.getCollectedMessagesForPersona(input.persona.id, input.userId, { newest: true });
+      records = await db.getCollectedMessagesForPersona(scope.personaId, scope.userId, { newest: true });
     } catch {
       records = [];
     }
@@ -1271,7 +1275,10 @@ export async function* executePlan(
             ? io.trainingTexts.filter((text) => !input.exclude?.texts?.includes(text))
             : io.trainingTexts,
         )
-      : await getRerankModel(input.persona.id, input.userId)
+      : await getRerankModel(
+          resolveRecordScope(input.persona).personaId,
+          resolveRecordScope(input.persona).userId,
+        )
     : null;
 
   if (useRerank && rerankModel) {

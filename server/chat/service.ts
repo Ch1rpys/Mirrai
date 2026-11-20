@@ -32,6 +32,7 @@ import { checkGraduationEligibility } from "../_core/persona-utils";
 import { worseStreakFor } from "../safety/checkins";
 import { getEffectiveGraduationMode, canOfferGraduation, getEffectivePresence } from "../_core/graduation";
 import { isMemorial, mayChatNow } from "@shared/persona-state";
+import { resolveRecordScope } from "@shared/persona-sharing";
 import { mayReachOut } from "@shared/graduation-mode";
 import { copy, localizeScene } from "@shared/copy";
 import { normalizePersonaSettings } from "@shared/persona-settings";
@@ -1153,6 +1154,17 @@ async function* admitUserMessage(
         ? "chat.closedLettersOnly"
         : "chat.closedSealed";
     throw new ChatClosedError(copy(locale, key, { name: persona.name }));
+  }
+
+  /**
+   * A share that has been stopped, or whose owner deleted the persona
+   * (C7.2). The member's conversations stay; the door does not.
+   */
+  if (persona.sharedFromPersonaId) {
+    const active = await db.getActiveShareForMemberPersona(persona.id, userId);
+    if (!active) {
+      throw new ChatClosedError(copy(locale, "chat.revoked"));
+    }
   }
 
   const pendingMsg = await findPendingChoiceMessage(persona.id, userId);
@@ -2524,8 +2536,8 @@ async function* runConversationTurn(
       const extracted = extractClaims(finalText, locale);
       claims = extracted.length
         ? await verifyClaims(extracted, {
-            personaId: persona.id,
-            userId,
+            personaId: resolveRecordScope(persona).personaId,
+            userId: resolveRecordScope(persona).userId,
             memories: recalled.map((row) => ({
               id: row.id,
               title: row.title,

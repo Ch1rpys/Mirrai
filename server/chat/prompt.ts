@@ -13,6 +13,7 @@ import { retrieveMemories, formatMemoriesForPrompt, formatAnchorsForPrompt, spli
 import { buildUserContextBlock, buildRelationshipSection, resolveRelationshipPhase, isUserMood } from "@shared/user-side";
 import { copy } from "@shared/copy";
 import { normalizePersonaSettings } from "@shared/persona-settings";
+import { resolveRecordScope } from "@shared/persona-sharing";
 import type { MicroRule } from "@shared/micro-rules";
 import type { ImperfectionEntry } from "@shared/imperfection";
 import type { Suppression } from "@shared/suppressions";
@@ -520,7 +521,10 @@ async function exemplarSectionFor(
   );
   if (fromTable !== null) return renderExemplars(fromTable, locale);
   const records = await optionalCall(
-    () => db.getCollectedMessagesForPersona(context.persona.id, context.userId, { newest: true }),
+    () => {
+      const scope = resolveRecordScope(context.persona);
+      return db.getCollectedMessagesForPersona(scope.personaId, scope.userId, { newest: true });
+    },
     [],
   );
   const found = await retrieveExemplarsWithEmbed({

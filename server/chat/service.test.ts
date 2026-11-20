@@ -64,6 +64,7 @@ vi.mock("../storage", () => ({
 
 vi.mock("../db", () => ({
   getRecentCheckinAnswers: vi.fn().mockResolvedValue([]),
+  getActiveShareForMemberPersona: (...a: unknown[]) => getActiveShareForMemberPersona(...a),
   createMessage: (...a: unknown[]) => createMessage(...a),
   getDefaultLlmConfig: (...a: unknown[]) => getDefaultLlmConfig(...a),
   getTodaySnapshot: (...a: unknown[]) => getTodaySnapshot(...a),
@@ -158,6 +159,7 @@ vi.mock("../llm/user-provider", () => ({
 }));
 
 const inferEmotionalState = vi.fn();
+const getActiveShareForMemberPersona = vi.fn();
 
 vi.mock("../_core/emotion", () => ({
   inferEmotionalState: (...a: unknown[]) => inferEmotionalState(...a),
@@ -486,6 +488,27 @@ describe("runConversation", () => {
     const assistantCall = createMessage.mock.calls[1][0];
     expect(assistantCall.content).toContain("12356");
     expect(createSafetyEvent).toHaveBeenCalled();
+  });
+
+  it("stops a shared persona whose invitation was revoked (C7.2)", async () => {
+    getActiveShareForMemberPersona.mockResolvedValue(undefined);
+    let message = "";
+    try {
+      for await (const _event of runConversation({
+        persona: persona({ sharedFromPersonaId: 5, sharedFromUserId: 1 }),
+        userId: 1,
+        message: "在吗",
+        mode: "once",
+      })) {
+        // no events: the turn is refused before anything is stored
+      }
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain(copy("zh", "chat.revoked"));
+    expect(getActiveShareForMemberPersona).toHaveBeenCalledWith(expect.any(Number), 1);
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+    expect(createMessage).not.toHaveBeenCalled();
   });
 
   it("keeps the crisis path for a memorial persona, in its own words (C7.1)", async () => {
