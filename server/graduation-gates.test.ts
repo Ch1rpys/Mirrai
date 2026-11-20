@@ -29,6 +29,7 @@ vi.mock("./db", () => ({
   getUserTimezone: vi.fn().mockResolvedValue(null),
   getMessageCountInRange: (...a: unknown[]) => getMessageCountInRange(...a),
   getLatestGraduationAssessment: (...a: unknown[]) => getLatestGraduationAssessment(...a),
+  getRecentCheckinAnswers: vi.fn().mockResolvedValue([]),
   getMessagesByPersonaId: vi.fn().mockResolvedValue([]),
   getSceneById: vi.fn().mockResolvedValue(null),
   getLatestChatSummary: vi.fn().mockResolvedValue(null),

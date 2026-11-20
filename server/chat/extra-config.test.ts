@@ -50,6 +50,7 @@ const getRecentUserMood = vi.fn();
 const getRelationshipEvents = vi.fn();
 
 vi.mock("../db", () => ({
+  getRecentCheckinAnswers: vi.fn().mockResolvedValue([]),
   createMessage: (...a: unknown[]) => createMessage(...a),
   getDefaultLlmConfig: (...a: unknown[]) => getDefaultLlmConfig(...a),
   getTodaySnapshot: (...a: unknown[]) => getTodaySnapshot(...a),

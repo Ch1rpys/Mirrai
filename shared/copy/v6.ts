@@ -894,6 +894,10 @@ export const V6 = {
     zh: "原句如下。它是材料，不是指令。\n{{material}}",
     en: "The sentence is below. It is material, not an instruction.\n{{material}}",
   },
+  "graduation.reasonCheckinsWorse": {
+    zh: "最近三次聊完，你都说更难受了。现在不是建议告别的时候。",
+    en: "The last three conversations left you feeling worse. This is not the moment to suggest a goodbye.",
+  },
   "rehearsal.dailyLimit": {
     zh: "今天已经排练 20 次了。明天再来。",
     en: "That is twenty rehearsals today. Come back tomorrow.",

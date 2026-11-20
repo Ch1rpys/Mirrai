@@ -29,6 +29,7 @@ import { buildCrisisResponse, buildGentleCheckIn, detectCrisis } from "../safety
 import { evaluateUsage, pickCareNote, type CareNote } from "../safety/usage-monitor";
 import { assessTrajectory, getStoredTrajectory } from "../safety/trajectory";
 import { checkGraduationEligibility } from "../_core/persona-utils";
+import { worseStreakFor } from "../safety/checkins";
 import { getEffectiveGraduationMode, canOfferGraduation, getEffectivePresence } from "../_core/graduation";
 import { mayReachOut } from "@shared/graduation-mode";
 import { copy, localizeScene } from "@shared/copy";
@@ -2747,6 +2748,7 @@ export async function evaluateGraduation(params: {
   const recentEmotions = await db.getRecentEmotionTrend(persona.id, userId, 14, timezone);
   const recentFreq = await db.getMessageCountInRange(persona.id, userId, 7, 0, timezone);
   const prevFreq = await db.getMessageCountInRange(persona.id, userId, 14, 7, timezone);
+  const worseStreak = await worseStreakFor(userId, persona.id);
 
   const eligibility = checkGraduationEligibility({
     intimacyLevel: params.intimacyLevel,
@@ -2754,6 +2756,7 @@ export async function evaluateGraduation(params: {
     chatCount: params.chatCount,
     recentChatFrequency: recentFreq,
     previousChatFrequency: prevFreq,
+    worseStreak,
     /**
      * The reason is read by a person, in a chat window, at the moment
      * they are deciding whether to say goodbye. It has to be in their

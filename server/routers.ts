@@ -3,6 +3,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { createSessionToken } from "./_core/auth";
 import { isUniqueViolation } from "./_core/auth";
 import { detectCrisis } from "./safety/crisis";
+import { worseStreakFor } from "./safety/checkins";
 import { withPersonaDataLock } from "./_core/lock";
 import { requestAbortSignal } from "./_core/context";
 import { extractMemories } from "./chat/memory-extract";
@@ -162,6 +163,7 @@ import { blindRouter } from "./routers-v6/blind";
 import { materialRouter } from "./routers-v6/material";
 import { pushRouter } from "./routers-v6/push";
 import { rehearsalRouter } from "./routers-v6/rehearsal";
+import { checkinRouter } from "./routers-v6/checkin";
 import { stickerRouter } from "./routers-v6/sticker";
 import { mediaRouter } from "./routers-v6/media";
 import { mineMicroRules } from "./skill-engine/micro-rules";
@@ -2174,12 +2176,14 @@ export const appRouter = router({
         const recentEmotions = await getRecentEmotionTrend(input.id, ctx.user.id, 14, ctx.user.timezone);
         const recentFreq = await getMessageCountInRange(input.id, ctx.user.id, 7, 0, ctx.user.timezone);
         const prevFreq = await getMessageCountInRange(input.id, ctx.user.id, 14, 7, ctx.user.timezone);
+        const worseStreak = await worseStreakFor(ctx.user.id, input.id);
         const result = checkGraduationEligibility({
           intimacyLevel: persona.intimacyLevel,
           recentEmotions,
           chatCount: persona.chatCount,
           recentChatFrequency: recentFreq,
           previousChatFrequency: prevFreq,
+          worseStreak,
           // The reason is read by a person. It has to be in their
           // language.
           locale: ctx.locale,
@@ -7235,6 +7239,7 @@ export const appRouter = router({
   material: materialRouter,
   push: pushRouter,
   rehearsal: rehearsalRouter,
+  checkin: checkinRouter,
   sticker: stickerRouter,
   media: mediaRouter,
 

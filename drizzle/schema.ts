@@ -1669,6 +1669,34 @@ export type Rehearsal = typeof rehearsals.$inferSelect;
 export type InsertRehearsal = typeof rehearsals.$inferInsert;
 
 /**
+ * How the user felt after a conversation (C4.2).
+ *
+ * The app measured the persona's mood and never asked the person how
+ * the conversation left them. One answer per session, in four words;
+ * skipped is an answer too. Nothing here is a score: it is what the user
+ * said, kept so that three "worse" in a row can be noticed and so the
+ * trend can be read back to them.
+ */
+export const sessionCheckins = pgTable("session_checkins", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  /** The start of the session the answer is about. */
+  sessionStartAt: timestamp("sessionStartAt").notNull(),
+  /** better / same / worse / skipped. */
+  answer: varchar("answer", { length: 8 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  sessionUnique: uniqueIndex("session_checkins_session_idx")
+    .on(table.userId, table.personaId, table.sessionStartAt),
+  userTimeIdx: index("session_checkins_user_time_idx").on(table.userId, table.createdAt),
+  personaTimeIdx: index("session_checkins_persona_time_idx").on(table.personaId, table.createdAt),
+}));
+
+export type SessionCheckin = typeof sessionCheckins.$inferSelect;
+export type InsertSessionCheckin = typeof sessionCheckins.$inferInsert;
+
+/**
  * A reply the user marked as not sounding like them.
  *
  * The reason is a closed set: the action was wrong, it was too

@@ -31,6 +31,7 @@ import {
   media, InsertMedia, Media,
   memoryMedia, InsertMemoryMedia, MemoryMedia,
   rehearsals, InsertRehearsal,
+  sessionCheckins, InsertSessionCheckin,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
@@ -1235,6 +1236,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(messages).where(eq(messages.userId, id));
     await tx.delete(outboundLetters).where(eq(outboundLetters.userId, id));
     await tx.delete(rehearsals).where(eq(rehearsals.userId, id));
+    await tx.delete(sessionCheckins).where(eq(sessionCheckins.userId, id));
     await tx.delete(personaFiles).where(eq(personaFiles.userId, id));
     await tx.delete(personaQuestionnaireAnswers).where(eq(personaQuestionnaireAnswers.userId, id));
     await tx.delete(personaTemplates).where(eq(personaTemplates.userId, id));
@@ -1663,6 +1665,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(messages).where(and(eq(messages.personaId, id), eq(messages.userId, userId)));
     await tx.delete(outboundLetters).where(and(eq(outboundLetters.personaId, id), eq(outboundLetters.userId, userId)));
     await tx.delete(rehearsals).where(and(eq(rehearsals.personaId, id), eq(rehearsals.userId, userId)));
+    await tx.delete(sessionCheckins).where(and(eq(sessionCheckins.personaId, id), eq(sessionCheckins.userId, userId)));
     await tx.delete(personaFiles).where(and(eq(personaFiles.personaId, id), eq(personaFiles.userId, userId)));
     await tx.delete(personaQuestionnaireAnswers).where(and(eq(personaQuestionnaireAnswers.personaId, id), eq(personaQuestionnaireAnswers.userId, userId)));
     await tx.delete(personaVersions).where(and(eq(personaVersions.personaId, id), eq(personaVersions.userId, userId)));
@@ -8243,6 +8246,93 @@ export async function countRehearsalsSince(userId: number, since: Date): Promise
   const [row] = await db.select({ n: count() }).from(rehearsals).where(and(
     eq(rehearsals.userId, userId),
     gte(rehearsals.createdAt, since),
+  ));
+  return Number(row?.n ?? 0);
+}
+
+// ─── After a conversation ──────────────────────────────────────────────────
+
+/** One answer about one session. The unique key refuses the second. */
+export async function createSessionCheckin(data: {
+  userId: number;
+  personaId: number;
+  sessionStartAt: Date;
+  answer: string;
+}): Promise<number | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db.insert(sessionCheckins).values({
+    userId: data.userId,
+    personaId: data.personaId,
+    sessionStartAt: data.sessionStartAt,
+    answer: data.answer,
+  }).onConflictDoNothing().returning({ id: sessionCheckins.id });
+  return row?.id;
+}
+
+export async function getSessionCheckin(
+  userId: number,
+  personaId: number,
+  sessionStartAt: Date,
+) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(sessionCheckins).where(and(
+    eq(sessionCheckins.userId, userId),
+    eq(sessionCheckins.personaId, personaId),
+    eq(sessionCheckins.sessionStartAt, sessionStartAt),
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
+/** Whether the user was already asked today, for any persona. */
+export async function countCheckinsSince(userId: number, since: Date): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [row] = await db.select({ n: count() }).from(sessionCheckins).where(and(
+    eq(sessionCheckins.userId, userId),
+    gte(sessionCheckins.createdAt, since),
+  ));
+  return Number(row?.n ?? 0);
+}
+
+/**
+ * The most recent answers for one persona, newest first.
+ *
+ * The three-worse-in-a-row rule and the graduation veto both read this;
+ * `skipped` is dropped before the streak is counted, because not
+ * answering is not the same as answering "fine".
+ */
+export async function getRecentCheckinAnswers(
+  userId: number,
+  personaId: number,
+  limit = 20,
+) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ answer: sessionCheckins.answer, createdAt: sessionCheckins.createdAt })
+    .from(sessionCheckins)
+    .where(and(
+      eq(sessionCheckins.userId, userId),
+      eq(sessionCheckins.personaId, personaId),
+    ))
+    .orderBy(desc(sessionCheckins.createdAt))
+    .limit(Math.max(1, Math.min(100, limit)));
+}
+
+/** How many messages the user wrote since an instant. */
+export async function countUserMessagesSince(
+  personaId: number,
+  userId: number,
+  since: Date,
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [row] = await db.select({ n: count() }).from(messages).where(and(
+    eq(messages.personaId, personaId),
+    eq(messages.userId, userId),
+    eq(messages.role, "user"),
+    gte(messages.createdAt, since),
   ));
   return Number(row?.n ?? 0);
 }

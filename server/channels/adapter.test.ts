@@ -37,6 +37,7 @@ const invoke = vi.fn();
 // ("../db", "../wechat/bot", "../_core/crypto" and "./bridge" from
 // server/channels/).
 vi.mock("../db", () => ({
+  getRecentCheckinAnswers: vi.fn().mockResolvedValue([]),
   getWechatBindingsByUserId: (...a: unknown[]) => getWechatBindingsByUserId(...a),
   setWechatBindingPersona: (...a: unknown[]) => setWechatBindingPersona(...a),
   getChannelState: (...a: unknown[]) => getChannelState(...a),

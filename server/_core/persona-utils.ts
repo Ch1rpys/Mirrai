@@ -997,8 +997,19 @@ export function checkGraduationEligibility(params: {
    * are deciding whether to say goodbye. It has to be in their language.
    */
   locale?: "zh" | "en";
+  /**
+   * Three conversations in a row that left the user worse (C4.2).
+   *
+   * A veto, not a condition: "they seem ready" is the app's reading,
+   * and the person saying the talks hurt is the person's own report.
+   * When the two disagree, the person wins.
+   */
+  worseStreak?: number;
 }): { eligible: boolean; reason: string } {
   const locale = params.locale ?? "zh";
+  if ((params.worseStreak ?? 0) >= 3) {
+    return { eligible: false, reason: copy(locale, "graduation.reasonCheckinsWorse") };
+  }
   if (normalizeIntimacyLevel(params.intimacyLevel) !== "soulmate") {
     return { eligible: false, reason: copy(locale, "graduation.reasonIntimacy") };
   }

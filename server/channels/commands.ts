@@ -10,6 +10,7 @@
  * message arrived on, so `/使用` behaves the same in WeChat and in Feishu.
  */
 import { checkGraduationEligibility } from "../_core/persona-utils";
+import { worseStreakFor } from "../safety/checkins";
 import { getEffectiveGraduationMode, canOfferGraduation, getEffectivePresence } from "../_core/graduation";
 import { getMessageCountInRange, getPersonasByUserId, getRecentEmotionTrend, setGraduationStatus, getUserTimezone } from "../db";
 import { writeFarewellLetterWithStatus } from "../chat/farewell";
@@ -374,12 +375,14 @@ async function handleGraduationCommand(
     const recentEmotions = await getRecentEmotionTrend(personaId, params.userId, 14, timezone);
     const recentFreq = await getMessageCountInRange(personaId, params.userId, 7, 0, timezone);
     const prevFreq = await getMessageCountInRange(personaId, params.userId, 14, 7, timezone);
+    const worseStreak = await worseStreakFor(params.userId, personaId);
     const eligibility = checkGraduationEligibility({
       intimacyLevel: persona.intimacyLevel,
       recentEmotions,
       chatCount: persona.chatCount || 0,
       recentChatFrequency: recentFreq,
       previousChatFrequency: prevFreq,
+      worseStreak,
       locale,
     });
 

@@ -11,6 +11,7 @@ const invoke = vi.fn();
 // The mock paths must resolve to the same modules commands.ts imports
 // ("../db" and "../llm" from server/wechat/ → server/db and server/llm).
 vi.mock("../db", () => ({
+  getRecentCheckinAnswers: vi.fn().mockResolvedValue([]),
   getPersonasByUserId: (...a: unknown[]) => getPersonasByUserId(...a),
   getRecentEmotionTrend: (...a: unknown[]) => getRecentEmotionTrend(...a),
   getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),

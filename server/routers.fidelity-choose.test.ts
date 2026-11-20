@@ -25,6 +25,7 @@ const setGraduationStatus = vi.fn();
 const createGraduationAssessment = vi.fn();
 
 vi.mock("./db", () => ({
+  getRecentCheckinAnswers: vi.fn().mockResolvedValue([]),
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   getMessageById: (...a: unknown[]) => getMessageById(...a),
   createMessage: (...a: unknown[]) => createMessage(...a),

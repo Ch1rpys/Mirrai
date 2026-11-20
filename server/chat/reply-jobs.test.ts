@@ -160,6 +160,7 @@ vi.mock("../storage", () => ({
 }));
 
 vi.mock("../db", () => ({
+  getRecentCheckinAnswers: vi.fn().mockResolvedValue([]),
   createMessage: (...a: unknown[]) => (createMessage as (...args: unknown[]) => unknown)(...a),
   getDefaultLlmConfig: (...a: unknown[]) => getDefaultLlmConfig(...a),
   getTodaySnapshot: (...a: unknown[]) => getTodaySnapshot(...a),
