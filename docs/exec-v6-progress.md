@@ -168,8 +168,8 @@
 | C8.3 | ⬜ |  |  |
 | C8.4 | ⬜ |  |  |
 | C8.5 | ⬜ |  |  |
-| C8.6 | ⬜ |  |  |
-| C8.7 | ⬜ |  |  |
+| C8.6 | ✅ | fa12604 | `shared/search-tokens.test.ts` 6 通过（喜欢海→喜欢/欢海、OK吗→ok/吗、单引号/反斜杠转义、2000 上限）。`server/db-search.test.ts` 4 通过（带临时库）：三行里「喜欢海」只命中连续那一行、分开的「喜欢」「海」不命中；带单引号、反斜杠、`&`、`\|`、`:*` 的查询串和注入串都不报错；100 行置空后回填全部非空且查询结果前后 id 相同；两个 GIN 索引在 push 后仍在。迁移 0059 四步+升级路径：`--replay` 57 条、`--rollback 1` 后两列与索引消失、再 migrate 回来；DROP 两列+两索引并删 journal 行后 migrate，对象回来。`server/db-semantic.test.ts` 1 通过（假向量「沙滩」找到「海边」那一轮、正交的股票不返回）；`server/db-semantic-missing.test.ts` 1 通过（嵌入不可用返回 null）；`server/chat/embeddings.test.ts` 11 通过（B2.3 索引扩到双方每一轮）。10 万行草稿库实测：`searchRecordsLexical` 中位 54.6ms、p95 58.1ms；`candidateRecordsByOverlap` 中位 19.7ms、p95 21.0ms（p95 均 < 200ms）。`searchMessages` 原有 3 条用例不改仍过。 |
+| C8.7 | 🟡 | d100c62 | `server/chat/exemplar-query.test.ts` 5 通过：走索引、把时期的 from/to 传给候选查询、缺 token 时返回 null 走旧路径、无记录返回 null、没有重叠候选返回空且不评分。`server/chat/service.test.ts` 84 通过，新增一条：回填完成的分身走一轮，`getCollectedMessagesForPersona` 与 `iterateRecords` 调用次数都是 0、`candidateRecordsByOverlap` 被调用。`server/db-exemplars.test.ts`（带临时库）1 通过：夹具 18 条不同用户消息，新旧两条路径第一名相同 18/18，前四名 Jaccard 平均 0.894（差异见批次日志）。`prompt-golden.test.ts` 10 通过、快照未改。效果量（是否更像 TA）见未验证清单。 |
 | C8.8 | ⬜ |  |  |
 | C8.9 | ⬜ |  |  |
 | C8.10 | ⬜ |  |  |
@@ -463,6 +463,11 @@
 | 251 | B7.8 | 没有 EXIF 的图 `at` 为空 | `readImageExif` 的 `at` 为空；`registerMedia` 的 `media.at` 退回消息时间（单独上传退回上传时间） | `media.at` 的列含义是「拍摄或发送时间」；没有拍摄时间时发送时间仍是合法排序键。`importers/media.test.ts` 同时断言这两层。 |
 | 252 | B7.3 | 语音列表按时间倒序 | `listVoices` 按 `media.id` 倒序；导入时 id 通常跟着时间走 | 分页 cursor 用 id 更稳定；多次导入可能让 id 顺序与时间顺序不一致。C2.10 或分页改造时再换成 `(at,id)` 复合 cursor。 |
 | 253 | B7.10 | `pipeline.test.ts` 新增视频用例 | 集成断言拆到 `routers.skill-engine.test.ts`（帧/转写/跳过数传进 pipeline）、`describe-images.test.ts`（3 帧交给模型）、`video-materials.test.ts`（转写在围栏内），以及 2026-11-20 独立验收后补的 `pipeline-video.test.ts`（走完整 `runSkillPipeline`：3 帧交给视觉阶段、转写带标题且在围栏内、没有转写时只读画面不报错）；`pipeline.test.ts` 本身仍没有视频用例 | `pipeline.test.ts` 的 mock 太重（它自带「必定失败」的 retry 设定），另起一个同样走完整 `runSkillPipeline` 的测试文件更干净。 |
+| 255 | C8.6 | 提交拆三个（分词与列、查询与回填、语义） | 合成一个提交 `fa12604`；C8.7 单独一个 `d100c62` | 三部分的改动都落在 `server/db.ts` 的同一段上下文里，硬拆会把同一函数拆进两个提交；合起来仍是「至少一个提交」，C8.7 单独可回退。 |
+| 256 | C8.6 | `searchRecordsLexical` 返回 `coverage` | 索引命中时 `coverage` 恒为 1，排序用 `ts_rank` + 时间 + id；SQL 里已经用 `ILIKE` 限定连续子串，应用层再做一次包含检查 | 原返回形状里的 `coverage` 是内存扫描的副产品，改成索引后没有「覆盖率」可言；保留字段是为了 B6.6 的调用方不改。 |
+| 257 | C8.6 | `searchRecordsSemantic` 返回前 k 个 | 返回 `{ hits, truncated }`；`truncated` 表示超过 60,000 轮上限，界面照实说明 | 手册要求「界面照实说明」只覆盖了最近 6 万轮，布尔值需要一个位置；`hits` 为空和不可用（null）必须区分。 |
+| 258 | C8.7 | 取 20 条不同的用户消息做新旧路径对比 | 夹具只有 18 条不同的用户文本，测试用全部 18 条 | `buildXiaomanRecords()` 的用户文本行共 1741 条，去重后 18 条；凑到 20 只能重复，反而违反「不同」。 |
+| 259 | C8.7 | 种子轮次与示范用同一批候选 | `planTurn` 每轮只调一次 `exemplarsForTurn`，把结果传给种子计划、提示词和重排；提示词再按种子计划的排除词过滤一遍 | 旧路径里种子和提示词各查一次、且排除词不同；共享后必须保留「敌意行不进提示词」的旧语义，所以多一次内存过滤。 |
 | 254 | 全部 | 手册 §2.1「跳过数不能增加」 | 2026-11-20 用户拍板：改成「已有测试不得改成跳过；跳过只允许来自 §2.3 新增的 `describe.skipIf(!DATABASE_URL)` 数据库测试，每次变化记进度」 | §2.2 的基线本身就有 2 个文件 8 条数据库跳过，§2.3 又要求继续新增这类测试，两条规则从写下起就互斥；`server/skip-audit.test.ts` 把「只允许四种环境条件、禁止无条件 `.skip`/`.todo`/`.only`、数据库测试文件清单固定」变成结构测试，放宽的只是数字，实质没有松。 |
 
 ## 未验证清单
@@ -504,6 +509,8 @@
 | B6.5 | 选了时期之后提示词只知道那段时间。本机没有非 stub 的模型。时期不是单独的层 | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身已切出时期、已有带 `periodId` 的分层标答的人 |
 | B6.6 | 事实核查标注和重写有没有让生成更像 TA、少编往事。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare factRewrite --k 3` | 配了真实模型、并且该分身已打开事实重写或标注、已有分层标答的人 |
 | B6.9 | 账本标记有没有让分身前后说法一致。本机没有非 stub 的模型。不是单独的层 | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身在应用里说过可核对的话、已有分层标答的人 |
+| C8.6 | 语义检索的真实召回：本机没有 Ollama/bge-m3，只在手造向量上验证了排序与 0.55 阈值；真实记录上「沙滩」能否召回「海边」、60,000 轮截断后的体验未量 | 装好 Ollama 与 `bge-m3` 后，在真实分身上执行 `style.measure` 让 B2.3 建向量，再在记录页搜一个不含原词的近义说法并核对前几条 | 有本机 Ollama 和真实记录的人 |
+| C8.7 | 示范改成查询之后，生成是否更像 TA。夹具只证明新旧路径选出的前四名高度重合，不证明模型输出更像 | `corepack pnpm eval -- --persona <id> --user <id> --k 3`（与改动前的运行对比） | 配了真实模型、该分身已有记录和分层标答的人 |
 | C8.1 | 真机没有收到通知。需要 HTTPS 或 localhost 上的真实浏览器，本机这次没有做订阅 | 在 localhost 打开设置，点「应用关着的时候也提醒我」，允许通知，再点「发一条试试」 | 有图形浏览器、并且服务以 localhost 或 HTTPS 跑着的人 |
 | B5.2 | 真实的多小时等待。本机单元测试用假定时器，没有把页面开着等到点 | 打开 `asyncDelivery`，发一条会抽到 >90 秒延迟的消息，关掉页面，等到 `dueAt` 之后看对话里是否出现回复，开了推送的话是否收到 `kind: "reply"` | 有真模型、并且该分身已打开「可以晚点回」的人 |
 | B5.8 | 真实微信、飞书上的连发间隔、延迟后逐条送达、追一句、同一天第二次沉默。本机只跑了单元测试和假定时器 | 绑好通道后连发三条，看是否合成一轮且回复拆成多条气泡；等到延迟任务的 `dueAt` 之后看是否逐条到达；追一句是否走同一通道；同一天第二次沉默是否不再发「没回」 | 绑了微信或飞书通道的人 |
@@ -2225,3 +2232,25 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 **仍留下的**：
 - B7.10 验收原文写的是 `pipeline.test.ts`，本轮把完整 pipeline 用例放在了新文件 `pipeline-video.test.ts`（偏差 253 已更新）。如果要求必须落在原文件，可以再搬，只是 `pipeline.test.ts` 自带「必定失败」的 retry 设定，要另配一套 mock。
 - 真 whisper.cpp / 真 piper、真实截图/视觉模型、真实 EXIF/人脸、真人麦克风的通话延迟与打断手感仍未验证，未验证清单原有行不变。
+
+### WP11 · 实现会话 · 2026-11-20 · C8.6 全文检索与语义检索
+
+- 开工核对：`docs/exec-v6.md` WP11 行 4318–4707；当前分支 `exec/v6`；开工基线闸门 `474 passed | 8 skipped (482)` 文件、`4055 passed | 37 skipped (4092)` 用例，与 WP10 收尾一致。批次日志里唯一未勾的 `- [ ]`（P0.5 最后一次修复待独立复验）是验收会话的任务，本次不动。
+- `shared/search-tokens.ts`：连续汉字/假名/谚文切相邻二元组、单个字保留自身、拉丁字母和数字按词小写、去重、上限 2000；`toTsQuery` 按 PostgreSQL 词素规则加引号并转义单引号/反斜杠。`shared/search-tokens.test.ts` 6 通过。
+- 列与索引：`collected_messages.searchTokens`、`messages.searchTokens`（`customType` tsvector），各一个 GIN；迁移 `0059_record_search_tokens.sql`。`drizzle/schema.ts` 里的索引声明用 `.using("gin", …)`，`drizzle-kit push` 不会把它们删掉。
+- 写入点：`createCollectedMessages`、`createCollectedMessage`、`createMessage`、`setMessageContent`、`updateUserMessage` 都同时写 `array_to_tsvector`；`importRecords` 走 `createCollectedMessages`。`messages` 里由信件/恢复路径插入的行没改，靠回填补齐。
+- 查询：`searchRecordsLexical` 改成 `content ILIKE` + `searchTokens @@ to_tsquery('simple', …)`，未回填行用 `searchTokens IS NULL` 兜住；`candidateRecordsByOverlap` 用 OR 查询、`ts_rank` 排序；`searchMessages`/`searchAllMessages` 的 messages 部分同样处理；`searchRecordsSemantic` 用本机 Ollama 嵌入 + `record_embeddings` 余弦，返回 `{ hits, truncated }`，嵌入不可用返回 null。
+- 回填：`server/records/backfill-tokens.ts`（`backfillSearchTokens` 每批 2000 行、可重入、`missingSearchTokenRows`）＋ `scripts/backfill-search-tokens.ts`；启动后在 `server/_core/index.ts` 后台跑。
+- 语义索引范围：`server/chat/exemplars.ts` 新增 `turnsForEmbedding`（双方每一轮，以一轮第一条文本行为键），`embedPersonaTurns` 改用它并只保留最近 60,000 轮；旧键仍是同一批用户轮次的第一行，已有向量继续可用。`shared/records.ts` 放 `MAX_EMBEDDED_TURNS`。
+- 数据库：临时库 `mirrai_v6_scratch` 上 `push --force` 后 `migrate` 应用到 0059；`--replay` 输出 `replayed 57 migration(s) — all of them ran again`；`--rollback 1` 后两列和两个索引消失，再 `migrate` 回来；升级路径 DROP 两列与两索引、删 `schema_migrations` 的 `0059_record_search_tokens` 行后再 migrate，对象全部出现。库已 `dropdb`，`mirrai_live` 未碰。
+- 性能（同上的临时库、另建 10 万行后删库）：`searchRecordsLexical` 50 次中位 54.6ms、p95 58.1ms、max 64.1ms；`candidateRecordsByOverlap` 50 次中位 19.7ms、p95 21.0ms、max 23.6ms。均低于手册的 200ms，无需偏差说明。
+- 提交：`fa12604`（索引、查询、回填、语义；证据见进度表 C8.6）。改了两条既有测试的断言形状：`db-behaviour.test.ts` 的 `setMessageContent` 现在同时写 `searchTokens`（改成 `objectContaining`）；`collectors/idempotency.test.ts` 的源码形状从 `.values(chunk)` 改成 `.values(values)`；两条都是 C8.6 的必要变化，没有放宽语义。
+
+### WP11 · 实现会话 · 2026-11-20 · C8.7 示范检索改成查询
+
+- `server/chat/exemplar-query.ts` 的 `retrieveExemplarsFromTable`：先查 `countRecords(tokensMissing)`，有缺 token 或无记录时返回 `null`（调用方走旧路径）；否则 `candidateRecordsByOverlap(role: "user", limit 200, period from/to)` → `getWindowsAroundUserRecords`（两次批量查询，取候选前后的行，带上所有者过滤）→ 按 `toTurns` 拼成轮次 → 交给 `retrieveExemplarsWithEmbed` 打分（保留 B2.3 的嵌入第二项）。
+- `server/db.ts` 新增 `getWindowsAroundUserRecords`：一次 `unnest` + LATERAL 查每一条候选前后的行，最多前 4 后 8 行、间隔不超过 6 小时；`before`/`after` 都按说话时间排序。
+- `server/chat/exemplars.ts` 的 `retrieveExemplars` 增加可选 `sceneKeyById`，让不在真实场景里的窗口仍能按来源场景去重（种子轮次要求来自不同场景）。
+- `server/chat/generate.ts`：`planTurn` 每轮只算一次 `exemplarsForTurn`，结果同时给种子计划、提示词和重排；`executePlan` 的重排不再读一遍记录；`TurnPlan` 增加 `exemplars`。`prompt.ts` 的 `PromptContext` 增加 `exemplarSection` 覆盖，`composeMessages` 透传。
+- 验收：`service.test.ts` 新增一条「回填完成的一轮里 `getCollectedMessagesForPersona` 和 `iterateRecords` 都是 0 次」；`exemplar-query.test.ts` 5 条；`db-exemplars.test.ts`（临时库）把夹具写进库，18 条不同用户消息对比新旧路径：第一名相同 18/18，前四名 Jaccard 平均 0.894；差异是 `吃了没`、`晚安`、`在干嘛呢`、`对不起嘛` 四条的第二到第四名顺序不同（Jaccard 最低 0.67）。`prompt-golden.test.ts` 10 通过、快照未改。
+- 提交：`d100c62`。
