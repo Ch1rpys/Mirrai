@@ -6,7 +6,7 @@ import { EGRESS_ITEMS } from "@shared/egress";
 const ROOT = join(__dirname, "..");
 const SERVER = join(ROOT, "server");
 
-const CALL_PATTERN = /fetch\s*\(|new WebSocket\s*\(|https\.request\s*\(|http\.request\s*\(/;
+const CALL_PATTERN = /fetch\s*\(|new WebSocket\s*\(|https\.request\s*\(|http\.request\s*\(|nodemailer\.createTransport\s*\(|createTransport\s*\(|net\.connect\s*\(|tls\.connect\s*\(/;
 
 /**
  * Production files under `server/` that talk to the network.
@@ -25,6 +25,7 @@ const CALL_SITES: Array<{ file: string; purpose: string }> = [
   { file: "server/llm/providers/xunfei.ts", purpose: "iFlytek Spark WebSocket" },
   { file: "server/wechat/ilink/client.ts", purpose: "WeChat iLink HTTP" },
   { file: "server/routers-v6/ldr.ts", purpose: "Open-Meteo geocoding and forecast (C5.2)" },
+  { file: "server/_core/mail.ts", purpose: "The user's own SMTP server for letter replies (C5.5)" },
 ];
 
 function walk(dir: string, files: string[] = []): string[] {
@@ -86,6 +87,25 @@ describe("the outbound inventory", () => {
     }));
     files.push({ file: "server/invented-egress.ts", source: 'fetch("https://example.com")' });
     expect(unlistedCallSites(files, listedFiles())).toEqual(["server/invented-egress.ts"]);
+  });
+
+  it("fails when a new unlisted socket appears", () => {
+    const files = filesWithCalls().map((file) => ({
+      file,
+      source: readFileSync(join(ROOT, file), "utf8"),
+    }));
+    files.push({
+      file: "server/invented-socket.ts",
+      source: 'net.connect({ host: "example.com", port: 25 })',
+    });
+    files.push({
+      file: "server/invented-tls.ts",
+      source: 'tls.connect({ host: "example.com", port: 465 })',
+    });
+    expect(unlistedCallSites(files, listedFiles())).toEqual([
+      "server/invented-socket.ts",
+      "server/invented-tls.ts",
+    ]);
   });
 
   it("keeps the markdown table in lockstep with the inventory", () => {

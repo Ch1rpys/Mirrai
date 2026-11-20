@@ -444,4 +444,25 @@ export const EGRESS_ITEMS: EgressItem[] = [
       en: "Turn off “show the weather there”; or set WEATHER_ENABLED=false",
     },
   },
+  {
+    id: "letter-email",
+    side: "server",
+    destination: {
+      zh: "用户自己填的 SMTP 邮件服务器",
+      en: "The SMTP mail server the user filled in",
+    },
+    payload: {
+      zh: "分身回信的全文，以及收件地址（用户自己的邮箱）。不带记录、不带图片、不带追踪像素",
+      en: "The full text of the reply and the recipient address (the user's own inbox). No records, no images, no tracking pixel",
+    },
+    when: {
+      zh: "用户为这个分身打开「回信也发到我的邮箱」，并且一封信被回信时",
+      en: "When the user turned on “send replies to my email” for the persona, and a letter is answered",
+    },
+    defaultOn: false,
+    offHow: {
+      zh: "关掉「回信也发到我的邮箱」，或清掉设置里的邮件服务器",
+      en: "Turn off “send replies to my email”, or clear the mail server in Settings",
+    },
+  },
 ];

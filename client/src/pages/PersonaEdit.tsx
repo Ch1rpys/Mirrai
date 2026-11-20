@@ -31,6 +31,7 @@ import AvatarPicker from "@/components/v6/AvatarPicker";
 import SkinPicker from "@/components/v6/SkinPicker";
 import LdrSettings from "@/components/v6/LdrSettings";
 import ReunionSummary from "@/components/v6/ReunionSummary";
+import LetterEmailToggle from "@/components/v6/LetterEmailToggle";
 import PersonaSampling from "@/components/v6/PersonaSampling";
 import HarmNotice from "@/components/v6/HarmNotice";
 import VersionHistory from "@/components/v6/VersionHistory";
@@ -640,6 +641,7 @@ export default function PersonaEdit() {
             <p className="text-muted-foreground text-sm mt-1">{t("letters.note")}</p>
           </div>
           <LetterBox personaId={personaId} personaName={persona?.name} />
+          <LetterEmailToggle personaId={personaId} name={name} />
         </section>
 
         {/* What actually happened. Without this the persona's sense of the

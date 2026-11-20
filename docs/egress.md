@@ -26,3 +26,4 @@
 | push-browser | 浏览器厂商的推送服务（地址由浏览器在订阅时给出，例如 fcm.googleapis.com 或 push.services.mozilla.com） | 加密后的通知负载。默认只有种类、分身编号和打开对话的地址，不含名字和内容 | 用户打开了「应用关着的时候也提醒我」，并且有一条主动开口、回信或提醒要送到网页时 | 关 | 设置里关掉「应用关着的时候也提醒我」，或在系统里取消通知权限 | server |
 | ldr-geocoding | Open-Meteo 的地理编码接口 geocoding-api.open-meteo.com | 用户在「查找城市」里输入的那几个字。不发送分身、记录或用户标识 | 用户点了「查找」按钮时，一次点击一次请求 | 关 | 不点「查找」；或环境变量 WEATHER_ENABLED=false 把整个入口关掉 | server |
 | ldr-weather | Open-Meteo 的天气接口 api.open-meteo.com | 四舍五入到小数点后两位的经纬度。不带城市名、记录内容或用户标识 | 用户打开「显示 TA 那边的天气」之后，最多每 30 分钟一次 | 关 | 关掉「显示 TA 那边的天气」；或环境变量 WEATHER_ENABLED=false | server |
+| letter-email | 用户自己填的 SMTP 邮件服务器 | 分身回信的全文，以及收件地址（用户自己的邮箱）。不带记录、不带图片、不带追踪像素 | 用户为这个分身打开「回信也发到我的邮箱」，并且一封信被回信时 | 关 | 关掉「回信也发到我的邮箱」，或清掉设置里的邮件服务器 | server |

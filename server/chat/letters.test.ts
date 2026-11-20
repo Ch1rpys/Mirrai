@@ -15,6 +15,7 @@ const getUserById = vi.fn();
 const getMemoriesByPersonaId = vi.fn();
 const getUserLocale = vi.fn();
 const retrieveMemories = vi.fn();
+const deliverLetterEmail = vi.fn();
 
 vi.mock("./retrieval", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./retrieval")>();
@@ -23,6 +24,10 @@ vi.mock("./retrieval", async (importOriginal) => {
     retrieveMemories: (...a: unknown[]) => retrieveMemories(...a),
   };
 });
+
+vi.mock("../_core/mail", () => ({
+  deliverLetterEmail: (...a: unknown[]) => deliverLetterEmail(...a),
+}));
 
 vi.mock("../db", () => ({
   createLetter: (...a: unknown[]) => createLetter(...a),
@@ -260,6 +265,74 @@ describe("answering the letters that are due", () => {
         content: "我知道了。",
       }),
     );
+  });
+
+  it("emails the reply when the persona asked for it (C5.5)", async () => {
+    getPersonaById.mockResolvedValue({
+      ...persona,
+      settings: { letterEmail: true },
+    });
+    deliverLetterEmail.mockResolvedValue(true);
+    getDueLetters.mockResolvedValue([{
+      id: 7,
+      userId: 1,
+      personaId: 1,
+      body: "有件事我一直没说。",
+      kind: "letter",
+      status: "waiting",
+      replyAt: new Date("2026-06-01T00:00:00Z"),
+      createdAt: new Date("2026-05-31T00:00:00Z"),
+    }]);
+
+    const answered = await answerDueLetters(new Date("2026-06-02T12:00:00Z"));
+
+    expect(answered).toBe(1);
+    expect(deliverLetterEmail).toHaveBeenCalledWith({
+      userId: 1,
+      personaName: "小A",
+      body: "我知道了。",
+      letterEmail: true,
+      locale: "zh",
+    });
+  });
+
+  it("does not email when the switch is off", async () => {
+    getPersonaById.mockResolvedValue({ ...persona, settings: {} });
+    getDueLetters.mockResolvedValue([{
+      id: 7,
+      userId: 1,
+      personaId: 1,
+      body: "有件事我一直没说。",
+      kind: "letter",
+      status: "waiting",
+      replyAt: new Date("2026-06-01T00:00:00Z"),
+      createdAt: new Date("2026-05-31T00:00:00Z"),
+    }]);
+
+    await answerDueLetters(new Date("2026-06-02T12:00:00Z"));
+
+    expect(deliverLetterEmail).not.toHaveBeenCalled();
+  });
+
+  it("keeps the letter answered when the mail server fails", async () => {
+    getPersonaById.mockResolvedValue({
+      ...persona,
+      settings: { letterEmail: true },
+    });
+    deliverLetterEmail.mockRejectedValue(new Error("smtp refused"));
+    getDueLetters.mockResolvedValue([{
+      id: 7,
+      userId: 1,
+      personaId: 1,
+      body: "有件事我一直没说。",
+      kind: "letter",
+      status: "waiting",
+      replyAt: new Date("2026-06-01T00:00:00Z"),
+      createdAt: new Date("2026-05-31T00:00:00Z"),
+    }]);
+
+    await expect(answerDueLetters(new Date("2026-06-02T12:00:00Z"))).resolves.toBe(1);
+    expect(answerLetterWithMessage).toHaveBeenCalledTimes(1);
   });
 
   it("answers a letter in the language the user reads", async () => {

@@ -23,6 +23,28 @@ vi.mock("@/lib/trpc", () => ({
     chat: {
       exportAll: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    email: {
+      getConfig: {
+        useQuery: () => ({
+          data: {
+            configured: false,
+            host: null,
+            port: null,
+            secure: true,
+            user: null,
+            from: null,
+            to: null,
+            subjectWithName: false,
+          },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+      saveConfig: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      test: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     push: {
       publicKey: {
         useQuery: () => ({ data: undefined, isError: false, isLoading: false, refetch: vi.fn() }),

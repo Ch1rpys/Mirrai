@@ -20,6 +20,8 @@ import { userTimeZone } from "./prompt";
 import { buildCrisisResponse, detectCrisis } from "../safety/crisis";
 import { pushToUser } from "../_core/push";
 import { getEffectivePresence } from "../_core/graduation";
+import { deliverLetterEmail } from "../_core/mail";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 
 /**
  * How long a letter to a sleeping persona is left alone.
@@ -258,6 +260,25 @@ export async function answerDueLetters(now: Date = new Date()): Promise<number> 
           personaName: persona.name,
           text: replyText,
         });
+        /**
+         * The reply also goes to the user's own inbox, if they asked
+         * (C5.5). The letter is already answered: a mail server that
+         * refuses can change nothing about that.
+         */
+        const settings = normalizePersonaSettings(persona.settings);
+        if (settings.letterEmail) {
+          try {
+            await deliverLetterEmail({
+              userId: letter.userId,
+              personaName: persona.name,
+              body: replyText,
+              letterEmail: true,
+              locale,
+            });
+          } catch (error) {
+            console.warn("[Letters] The reply could not be emailed:", (error as Error).message);
+          }
+        }
       } catch (e) {
         await db.releaseLetterClaim(letter.id, letter.userId).catch(() => {});
         throw e;

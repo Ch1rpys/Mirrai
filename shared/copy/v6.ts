@@ -946,6 +946,26 @@ export const V6 = {
     zh: "今天已经换过一次了。明天可以再来。",
     en: "You have already swapped once today. Come back tomorrow.",
   },
+  "errors.emailIncomplete": {
+    zh: "服务器、用户名、密码、发件地址和收件地址都要填。",
+    en: "Server, username, password, from and to are all needed.",
+  },
+  "mail.subject": {
+    zh: "你有一封回信",
+    en: "You have a reply",
+  },
+  "mail.testBody": {
+    zh: "这是一封测试信。你的 Mirrai 邮件配置可用。",
+    en: "This is a test message. Your Mirrai mail settings work.",
+  },
+  "mail.subjectWithName": {
+    zh: "{{name}} 的回信",
+    en: "A reply from {{name}}",
+  },
+  "mail.footer": {
+    zh: "——\n这封信是你的 Mirrai 分身按记录写的，不是 {{name}} 本人写的。",
+    en: "——\nThis letter was written by your Mirrai persona from the record. It was not written by {{name}}.",
+  },
   "scheduled.pastDate": {
     zh: "这个日子已经过去了。",
     en: "That day has already passed.",
