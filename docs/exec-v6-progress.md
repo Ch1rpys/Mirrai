@@ -125,16 +125,16 @@
 | C1.6 | ✅ | 0b53159 (server); d856d0e (UI) | `routers.file-delete.test.ts` 2 通过：别人的文件 `NOT_FOUND`；`storageDelete` 收到 `personas/1/5/chat.txt`。`routers-v6/record.test.ts` 3 通过：别人的分身 `NOT_FOUND`；sources 带上 `chat.txt` / `wechat-txt-2line`；`deleteSource` 调 `deleteRecordsBySource(5,1,"sms")`。临时库 `mirrai_v6_scratch` 上 `db-records.test.ts` 8 通过：`deleting one file leaves the other file's rows` 先写 3+2 条，删文件 A 后 `countRecords=2`。库已 `dropdb`。`RecordSources.test.tsx`：空列表不渲染；有来源时点删除出确认框，确认后 `file.delete({ fileId: 11 })`。`db-delete-coverage.test.ts`、`db-isolation.test.ts` 通过。闸门 `308 passed \| 3 skipped (311)` 文件，`2817 passed \| 16 skipped (2833)` 用例。 |
 | C1.7 | ✅ | 825c73c | `redact.test.ts` 9 通过：`13800138000`→`[phone]`、`12345678901` 不动；`+8613800138000`→`[phone]`；18 位含末位 X→`[id]`、17 位不动；`alice@example.com`→`[email]`、`not@valid` 不动；`4111111111111111`→`[card]`、`1234567890123` 不动；`琪琪`/`我妈` 稳定为 `[person-1]`/`[person-2]` 且 other 的 speaker 也换；`keepNames: ["小满"]` 时分身名不动。`import.test.ts`：`confirm` 带 `redaction.phones` 时写库内容为 `打 [phone]` / `在的`，`parseReport.redaction` 为 `phones: true` `replaced.phones: 1`，两处 JSON 都不含 `13800138000`。`ImportWizard.test.tsx`：勾选「手机号」后预览「打 13800138000」变成「打 [phone]」。闸门 `309 passed \| 3 skipped (312)` 文件，`2828 passed \| 16 skipped (2844)` 用例。 |
 | C1.8 | ⬜ |  |  |
-| C2.1 | ⬜ |  |  |
-| C2.2 | ⬜ |  |  |
-| C2.3 | ⬜ |  |  |
-| C2.4 | ⬜ |  |  |
-| C2.5 | ⬜ |  |  |
-| C2.6 | ⬜ |  |  |
-| C2.7 | ⬜ |  |  |
-| C2.8 | ⬜ |  |  |
-| C2.9 | ⬜ |  |  |
-| C2.10 | ⬜ |  |  |
+| C2.1 | ✅ | 15e345c | `server/records/on-this-day.test.ts` 4 通过：夹具里同月同日跨年取每年第一场景前 6 行、2 月 29 日在平年 2 月 28 日算、distant 首场景被跳过、伤害行默认跳过且 `keep` 时保留。`client/src/components/v6/OnThisDay.test.tsx` 4 通过：mayFeature 为真直接展开、为假默认收起点「看看」展开、无数据不渲染、设置关掉不渲染。`Lobby.test.tsx` 16 通过；A5 的「没有 DailyMessages」用例仍过。 |
+| C2.2 | ✅ | 6617bd7 | `server/routers.record-search.test.ts` 6 通过：每页 30、cursor 分页、时间范围传成 Date、语义命中去重、语义不可用返回 null、context 拒绝别的分身、searchAll 只查调用者的分身。`server/db-search.test.ts` 新增夹具用例通过：搜「海」得到 4 条 TA 的「喜欢海」、`role: user` 为空、两字查询同结果、时间范围收窄、offset 不重。`client/src/components/v6/RecordSearch.test.tsx` 4 通过：高亮、两组、semantic null 说明、点结果跳转；`Records.test.tsx` 的搜索跳到 `?at=11`。`CommandPalette.test.tsx` 7 通过，新增「原始记录」组跳 `/persona/5/records?at=11`。 |
+| C2.3 | ✅ | dd11cd4 | `server/records/nearest.test.ts` 6 通过（3 条纯函数 + 3 条带临时库）：夹具「晚安」verbatim 且有日期、「好啦 不生气了」similar 且最接近「好啦 不气了」、无关句 none、三句输入三个判定、「好」不因被别的句子包含算 verbatim。`client/src/components/v6/SaidBefore.test.tsx` 3 通过：三种判定、底部固定说明、失败时不说「没说过」；`MessageBubble.test.tsx` 32 通过（菜单里挂了入口，未改原有断言）。 |
+| C2.4 | ✅ | b7ef9d4 (server); c7249e2 (page) | `server/records/report.test.ts` 7 通过：span 2022-03-01–2024-10-31 / activeDays 160、最长沉默 25 天、byYear 条数之和等于 totals、goodnightFirst 两项之和等于含晚安的场景数、heatmap 午夜到 7 点（0–6 点格）TA 为 0、每年 topTerms ≤12。`server/routers.record-report.test.ts` 4 通过：首次计算后缓存命中不重读（`iterateRecords` 1 次）、recordsVersion 变了重算、>20 万行返回 building、别人的分身 404。`server/db-record-report.test.ts`（临时库）2 通过：一人一行 upsert、删除分身带走缓存。迁移 0061 四步+升级路径：`--replay` 59 条、rollback 后表消失、再 migrate 回来；DROP 表+删 journal 行后 migrate，表与 3 个索引出现。`client/src/pages/Report.test.tsx` 5 通过：五个页签、各页内容、空记录不画空坐标轴、失败重试、building 文案。Analytics 有入口卡片。 |
+| C2.5 | ✅ | b7ef9d4 (server); c7249e2 (chart) | `server/records/timeline.test.ts` 5 通过：夹具 2023 年第 24–33 周之间找到 charsMedian 变化（前约 10、后约 6）、完全平稳曲线无变点、两边不足 4 周不产出、weekStartDate。`server/routers.turning-point.test.ts` 3 通过：timeline 返回曲线、confirm/reject/annotate 调对应状态、别人的分身 404。`server/db-timeline.test.ts`（临时库）1 通过：否决的转折重算后不再出现、确认并批注的保留且批注还在。`server/chat/prompt.test.ts` 新增用例：`turningPoints` 的 id、note、changes 都不出现在提示词。`TimelineChart.test.tsx` 2 通过：竖线/标记数与 points 一致、点了显示变化陈述、两个按钮调路由。 |
+| C2.6 | ✅ | b7ef9d4 (server); c7249e2 (list) | `server/records/firsts.test.ts` 3 通过：每一项指向 fixture truth 能验证的行——第一句、第一条 TA 晚安（用户说晚安后的回复）、第一次冲突（最早 episode 的场景起点）、第一次通话；没有「我爱你」就不出现；没有冲突画像就不出第一次吵架。`FirstsList.test.tsx` 2 通过：mayFeature 为真两条结尾都显示、为假默认收起点展开后显示。 |
+| C2.7 | ✅ | c7249e2 | `client/src/components/v6/OurDictionary.test.tsx` 4 通过：已确认的「咕咕」带 15 次和第一次出现的日期；候选「贴贴」改意思后点「是我们的词」把 verified 和新 gloss 一起提交；点「不是」从列表移除；空状态。`OurDictionary` 挂在档案页「更多」里，`@media print` 只留词典。未新增数据，读的是 B3.7 的 `personaData.lexicon`。 |
+| C2.8 | ✅ | 662e4da (leaflet); b7ef9d4 (server); c7249e2 (panels) | `server/records/places.test.ts` 3 通过：10 行里同名 4 条、坐标四舍五入后 3 条、另 1 条和 2 条各自归并；照片 EXIF 坐标并入无名地点；非法坐标只按名字保留。`songs.test.ts` 2 通过：按歌名+歌手归并、分享方计数、`javascript:` 不可点。`PlacesSongs.test.tsx` 5 通过：没设 MAP_TILE_URL 时没有底图开关且不加瓦片层、设了之后开关默认关、打开才加层、两个空状态、歌单只把 http(s) 变链接。`security-headers.test.ts` 7 通过：未设 MAP_TILE_URL 时 `img-src` 无外部源，设了只放该 origin。`egress.test.ts` 4 通过：`map-tiles` 已登记且 docs 表体同步。 |
+| C2.9 | ✅ | b7ef9d4 (generator); c7249e2 (button) | `server/export-html.test.ts` 9 通过：证据里的 `<script>` 被转义成 `&lt;script&gt;`、未确认的规则/人物/喜恶/词不出现、没有冲突画像时「怎么和好」整节不出现、页脚在、文件里没有 `server/llm` 导入。`shared/fingerprint-prose.test.ts` 4 通过：夹具指纹产出「几乎不用句号，除非不高兴」「从不用「呢」」，每句都带 metric 和 value。`server/routers.manual.test.ts` 2 通过：返回可打印 HTML、别人的分身 404。档案页「更多」里的按钮用 Blob 在新标签页打开。 |
+| C2.10 | ✅ | 14ea90d (db/routes); 66f2d6e (page) | `server/db-record-page.test.ts`（带临时库）4 通过：夹具 5126 行按每页 200 从最新翻到最旧不重不漏（26 页，首屏 hasNewer=false、末页 hasOlder=false）、around 带锚点行、outline 各月计数之和等于总条数、书签/批注唯一且随行删除。`server/routers.record.test.ts` 7 通过：三种方向透传、`limit` >200 被 zod 拒绝、别人的分身 404、删除只删自己的、贴纸渲染、伤害行折叠、批注上限 1000。`client/src/pages/Records.test.tsx` 8 通过：`?at=` 打开并高亮、加书签进侧栏、折叠行点开、失败给重试不显示空、删除确认、搜索跳转写 `?at=`、再往前。迁移 0060 四步+升级路径：`--replay` 58 条、`--rollback 1` 后表消失、再 migrate 回来；DROP 表并删 journal 行后再 migrate，表与 3 个索引出现。 |
 | C3.1 | ⬜ |  |  |
 | C3.2 | ⬜ |  |  |
 | C3.3 | ⬜ |  |  |
@@ -468,6 +468,21 @@
 | 257 | C8.6 | `searchRecordsSemantic` 返回前 k 个 | 返回 `{ hits, truncated }`；`truncated` 表示超过 60,000 轮上限，界面照实说明 | 手册要求「界面照实说明」只覆盖了最近 6 万轮，布尔值需要一个位置；`hits` 为空和不可用（null）必须区分。 |
 | 258 | C8.7 | 取 20 条不同的用户消息做新旧路径对比 | 夹具只有 18 条不同的用户文本，测试用全部 18 条 | `buildXiaomanRecords()` 的用户文本行共 1741 条，去重后 18 条；凑到 20 只能重复，反而违反「不同」。 |
 | 259 | C8.7 | 种子轮次与示范用同一批候选 | `planTurn` 每轮只调一次 `exemplarsForTurn`，把结果传给种子计划、提示词和重排；提示词再按种子计划的排除词过滤一遍 | 旧路径里种子和提示词各查一次、且排除词不同；共享后必须保留「敌意行不进提示词」的旧语义，所以多一次内存过滤。 |
+| 260 | C8.6 | 单字和连续子串都由 `tsvector` 索引回答 | 只含单字的查询（如「海」）绕过 GIN，走 `ILIKE` 顺序扫描；两字以上的查询才用 `@@` | 索引里存的是二元组（「喜欢」「欢海」），没有单字「海」，所以单字查询不可能命中索引。把每个单字也存进 tsvector 会让索引接近翻倍，而单字查询很少；顺序扫描只发生在这一种查询上。`db-search.test.ts` 的「海」用例覆盖。 |
+| 261 | C2.10 | 阅读器读整个记录表 | `record.page`/`record.outline`/搜索默认只读 `private`，公开动态不进阅读器和搜索 | 第 3.1 节规定测量函数默认 private；阅读器是「读聊天记录」，公开动态有自己的界面。要读公开行需要显式传入 register，这一阶段没有入口。 |
+| 262 | C2.10/C2.4 | heatmap 覆盖「00:30–07:30」 | heatmap 是一小时一格，`hour 7` 同时装 07:00–07:59；夹具里 TA 的「早」回复在 07:34–07:58，落在 hour 7 | 格子精度是小时，07:30–08:00 无法和 07:00–07:30 分开。测试断言 0–6 点全为 0，并单独断言 TA 的所有行都不早于 7 点。 |
+| 263 | C2.4 | 最长沉默从 2023-06-10 到 2023-07-04 | 报告里的 `from` 是静默前最后一条消息（上海时间 2023-06-09 22:17），`to` 是 2023-07-04；`days` 25 | 静默是「两条消息之间的间隔」，起点必然是上一条消息。手册写的是静默的日期区间，差一天；测试按 25 天和 2023-06-09/07-04 断言。 |
+| 264 | C2.5 | 「第一次冲突」按 B4.4 的第一次冲突 | 夹具的 `conflictEpisode` 是按候选池顺序编号的，不是按时间；测试取「所有 conflictEpisode 里最早的一行」作为第一次吵架 | 生产代码不读 truth，取「第一个出现 TA 负面情绪的 scene 的第一行」；夹具里这正好是最早的那次冲突（episode 2，2022-03-17）。 |
+| 265 | C2.6 | 第一句晚安是「第一条 truth.ritual === 晚安 的 TA 回复」 | TA 的第一次晚安取「我说晚安之后 TA 那一轮的第一条」；我说的第一次晚安取第一条我说「晚安」 | 记录里零星出现的「晚安」不是晚安往来；手册要的是固定的那一来一回。测试对 fixture truth 验证。 |
+| 266 | C2.8 | 地图底图默认没有，开关在设置 MAP_TILE_URL 后出现 | `img-src` 按 `MAP_TILE_URL` 的 origin 放行；开关只在「去过的地方」分页出现，地图在分页打开时懒加载 leaflet；底图默认关 | 与手册一致；补充的是开关放在分页内而不是全局设置页，因为底图只影响地图。出站清单已登记为 client 侧。 |
+| 267 | C2.4 | 超过 20 万行时后台算，先返回 building | 实现为 `countRecords > 200_000` 时起一个后台 `buildReport` 并返回 `{ status: "building" }`；页面每 2 秒重试 | 手册没写轮询间隔；2 秒与导入页的轮询一致。 |
+| 268 | C2.9 | 服务端文案走 `copy()` | 说明书的中英文文案放在 `server/_core/export-html.ts` 的 `MANUAL_COPY` 表里，沿用同一文件 `COPY` 的做法 | 这个文件本来就用双语常量表生成 HTML；`audit-cn` 对 `{ zh, en }` 表成对识别，0 条。 |
+| 269 | C2.7 | 词典的「在记录里看」跳到原话那一行 | B3.7 的 `LexiconEvidence` 只有 `at` 和 `snippet`，没有 `recordId`；链接跳到 `?atDate=YYYY-MM-DD`，阅读器按那一行所在的那一天定位 | 要精确到行需要给证据加 recordId 并重新挖词，超出「不新增数据」的范围。 |
+| 270 | C2.2 | 阅读器搜索结果只有原话和相似两组 | `record.search` 额外返回 `semanticTruncated`，页面在超过 6 万轮时说明只覆盖最近 6 万轮 | 手册要求「界面照实说明」截断，返回形状里需要一个位置。 |
+| 271 | C2.4–C2.9 | 每条一个提交 | 服务端（C2.4–C2.6、C2.8、C2.9）合成 `b7ef9d4`，客户端页面合成 `c7249e2`；leaflet 依赖单独 `662e4da`；C2.10、C2.2、C2.3、C2.1 各自独立提交 | 这六条的 i18n 键、`record.ts` 路由和 Report 页面互相引用，硬拆会让中间提交的 i18n「有键没人读」或 TypeScript 找不到组件。进度表仍逐条给证据和提交范围。 |
+| 272 | C2.4 | 每年高频词 | 每年用 B3.7 的 `collectLexiconCandidates` 挖，按「该年次数 / 其他年份次数」排序取前 12；合成夹具上会出现「还上晚」这类 n-gram 碎片 | 与 B3.7 同一把尺；真实记录上是否可读需要真实数据（未验证清单）。 |
+| 273 | C2.9 | 指纹转人话 | `shared/fingerprint-prose.ts` 用 `copy()` 新键 `fingerprintProse.*` 拼句子；函数上加了 `i18n:allow-identifier`，因为「呢」是粒子键 | 保持文案走 copy；粒子键不是文案，是数据键。 |
+| 274 | C2.1 | 那年今天挂在大厅 A5 腾出的位置 | 组件挂在 `TodayRecommendation` 之后；`mayFeature` 为假时折叠，设置里的 `onThisDay` 关掉后不渲染 | 大厅没有「DailyMessages 原位置」的锚点，按相邻顺序放在推荐之后；A5 的测试仍过。 |
 | 254 | 全部 | 手册 §2.1「跳过数不能增加」 | 2026-11-20 用户拍板：改成「已有测试不得改成跳过；跳过只允许来自 §2.3 新增的 `describe.skipIf(!DATABASE_URL)` 数据库测试，每次变化记进度」 | §2.2 的基线本身就有 2 个文件 8 条数据库跳过，§2.3 又要求继续新增这类测试，两条规则从写下起就互斥；`server/skip-audit.test.ts` 把「只允许四种环境条件、禁止无条件 `.skip`/`.todo`/`.only`、数据库测试文件清单固定」变成结构测试，放宽的只是数字，实质没有松。 |
 
 ## 未验证清单
@@ -509,6 +524,10 @@
 | B6.5 | 选了时期之后提示词只知道那段时间。本机没有非 stub 的模型。时期不是单独的层 | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身已切出时期、已有带 `periodId` 的分层标答的人 |
 | B6.6 | 事实核查标注和重写有没有让生成更像 TA、少编往事。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare factRewrite --k 3` | 配了真实模型、并且该分身已打开事实重写或标注、已有分层标答的人 |
 | B6.9 | 账本标记有没有让分身前后说法一致。本机没有非 stub 的模型。不是单独的层 | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身在应用里说过可核对的话、已有分层标答的人 |
+| C2.4 | 真实记录上的年报数字是否与本人记忆一致。夹具证明计数和分桶，但没有真实聊天记录；每年高频词在真实语料上是否可读也没量 | 在真实分身上打开 `/persona/<id>/report`，与导出的原始记录人工对一遍 span、每月条数、最长沉默、最长一次聊天 | 有真实记录的人 |
+| C2.5 | 真实记录上自动找出的转折是否有意义。夹具只证明算法在设计的静默处找到长度变化；真实关系里的转折要人来判断 | 在真实分身上打开报告的心电图分页，逐条看「记下来 / 不对」，记下命中率 | 有真实记录的人 |
+| C2.8 | 真机地图：配置 `MAP_TILE_URL` 后在浏览器里打开底图、看瓦片请求与空白底图上的点 | `MAP_TILE_URL=https://<tile-host>/{z}/{x}/{y}.png` 起应用，打开「去过的地方」，先看空白底图，再打开开关 | 有地图瓦片服务和图形浏览器的人 |
+| C2.9 | 打印版式：jsdom 只证明 HTML、转义和页脚；真实浏览器的 `@media print` 分页与中文字体没看过 | 在浏览器里打开说明书 → 打印预览，检查分节、页脚和字体 | 有图形浏览器的人 |
 | C8.6 | 语义检索的真实召回：本机没有 Ollama/bge-m3，只在手造向量上验证了排序与 0.55 阈值；真实记录上「沙滩」能否召回「海边」、60,000 轮截断后的体验未量 | 装好 Ollama 与 `bge-m3` 后，在真实分身上执行 `style.measure` 让 B2.3 建向量，再在记录页搜一个不含原词的近义说法并核对前几条 | 有本机 Ollama 和真实记录的人 |
 | C8.7 | 示范改成查询之后，生成是否更像 TA。夹具只证明新旧路径选出的前四名高度重合，不证明模型输出更像 | `corepack pnpm eval -- --persona <id> --user <id> --k 3`（与改动前的运行对比） | 配了真实模型、该分身已有记录和分层标答的人 |
 | C8.1 | 真机没有收到通知。需要 HTTPS 或 localhost 上的真实浏览器，本机这次没有做订阅 | 在 localhost 打开设置，点「应用关着的时候也提醒我」，允许通知，再点「发一条试试」 | 有图形浏览器、并且服务以 localhost 或 HTTPS 跑着的人 |
@@ -2254,3 +2273,33 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 - `server/chat/generate.ts`：`planTurn` 每轮只算一次 `exemplarsForTurn`，结果同时给种子计划、提示词和重排；`executePlan` 的重排不再读一遍记录；`TurnPlan` 增加 `exemplars`。`prompt.ts` 的 `PromptContext` 增加 `exemplarSection` 覆盖，`composeMessages` 透传。
 - 验收：`service.test.ts` 新增一条「回填完成的一轮里 `getCollectedMessagesForPersona` 和 `iterateRecords` 都是 0 次」；`exemplar-query.test.ts` 5 条；`db-exemplars.test.ts`（临时库）把夹具写进库，18 条不同用户消息对比新旧路径：第一名相同 18/18，前四名 Jaccard 平均 0.894；差异是 `吃了没`、`晚安`、`在干嘛呢`、`对不起嘛` 四条的第二到第四名顺序不同（Jaccard 最低 0.67）。`prompt-golden.test.ts` 10 通过、快照未改。
 - 提交：`d100c62`。
+
+### WP11 · 实现会话 · 2026-11-20 · C2.10 时间线阅读器
+
+- `record_marks` 表与 0060 迁移：`(personaId,userId,recordId,kind)` 唯一，删除分身/账号一并删；`db-delete-coverage` 通过。
+- `server/db.ts`：`pageRecords`（older/newer/around，keyset 用「时间 + id」，并把 Date 换成 naive UTC 字符串，避免服务器时区把游标推后 8 小时导致重复页）、`countRecordsByMonth`、`listRecordMarks`/`upsertRecordMark`/`removeRecordMark`、`deleteRecordRow`、`listMediaForRecordIds`。
+- `server/routers-v6/record.ts`：`page`（渲染 kind、媒体、伤害折叠标记、批注）、`outline`、`marks.list/add/remove`、`delete`。
+- `client/src/pages/Records.tsx`：三栏结构、侧栏时期/年/月/书签、每页 200、再往前/再往后、滚动到边缘自动加载、`?at=` 高亮、按日期跳转、`RecordSearch` 搜索面板、行菜单（书签/批注/复制/删除确认）、伤害行折叠。
+- 验收：见进度表 C2.10。数据库四步+升级路径（0060）见进度表。临时库 `mirrai_v6_scratch` 用完已 `dropdb`。
+
+### WP11 · 实现会话 · 2026-11-20 · C2.2 / C2.3 / C2.1
+
+- C2.2 `6617bd7`：`record.search`（literal 30 条/页 + cursor，semantic 去重 + `semanticTruncated`）、`record.context`、`record.searchAll`；`RecordSearch` 面板（高亮、两组、语义不可用说明、点结果跳 `?at=`）；⌘K 加「原始记录」组。搜索只读 private（偏差 261）。
+- C2.3 `dd11cd4`：`server/records/nearest.ts`（分句、归一化、verbatim/similar/none，similar 用二元组 Jaccard ≥0.5 或语义 ≥0.8）；`record.nearest`；`SaidBefore` 挂进 `MessageBubble` 的操作行，底部固定说明。
+- C2.1 `15e345c`：`server/records/on-this-day.ts`（按用户时区取同月同日、2 月 29 日在平年 2 月 28 日、每年第一场景前 6 行、跳过 distant/melancholy 场景与伤害行）；`record.onThisDay`；`OnThisDay` 挂在大厅推荐之后，`mayFeature` 为假折叠，`settings.onThisDay` 关掉不渲染；`PersonaSwitches` 加开关。
+- 验收：见进度表 C2.2/C2.3/C2.1；`Lobby.test.tsx` 16、`MessageBubble.test.tsx` 32 全过。
+
+### WP11 · 实现会话 · 2026-11-20 · C2.4–C2.9
+
+- 提交：`662e4da`（leaflet 依赖，白名单、BSD-2-Clause）、`b7ef9d4`（服务端与测试）、`c7249e2`（客户端页面与测试）。C2.4–C2.9 的提交合在一起的原因见偏差 271。
+- C2.4：`server/records/report.ts` 一遍 `iterateRecords` 数出 span/totals/byMonth/byYear/longestScene/longestSilence/heatmap/topTerms/calls；`record_reports` 缓存表与 0061 迁移；`record.report` 按 `recordsVersion` 缓存、>20 万行走后台 building；`Report.tsx` 五页签，Analytics 加入口。
+- C2.5：`weeklySeries` 六条曲线、`findTurningPoints`（前后 8 周、至少 4 个有数据周、1.5 倍合并标准差、相隔 4 周合并、取最大 8 个）；`turningPoint.confirm/reject/annotate` 写 `personaData.turningPoints`，重算时否决的不再出现；提示词专项断言不含 `turningPoints`。
+- C2.6：`findFirsts`（第一/最后一句、双方第一句晚安/早/喜欢、第一次吵架、第一张照片/表情/语音、第一/最后/最长通话），没有的项不产出，`mayFeature` 为假时最后两项在页面折起。
+- C2.7：`OurDictionary` 读 `personaData.lexicon`，已确认在上、候选在下，可改意思/确认/拒绝，打印只留词典；没有新数据。
+- C2.8：`collectPlaces`（location + 照片 EXIF，按名字或三位小数坐标归并）、`collectSongs`（歌名+歌手，http(s) 才可点）；leaflet 懒加载，`MAP_TILE_URL` 才出现底图开关且默认关；CSP `img-src` 按需放行，出站清单登记 `map-tiles`（client）。
+- C2.9：`generateManualHTML`（是谁/说话的样子/这些话的意思/雷区/怎么和好/喜恶/人物/作息/词典；只收确认条目与测量值；全部动态文字转义；页脚固定；`@media print`）；`shared/fingerprint-prose.ts` 纯函数；`persona.exportManual` 返回 HTML，档案页 Blob 新标签页打开。
+- **数据库**：0060/0061 在 `mirrai_v6_scratch` 上各走完四步（push → migrate → replay → rollback → migrate）和升级路径（DROP 对象 + 删 `schema_migrations` 行 + migrate）；0061 `--replay` 59 条。带 `DATABASE_URL` 跑 `db-search`（5）、`db-exemplars`（1）、`db-record-page`（4）、`db-record-report`（2）、`db-timeline`（1）、`records/nearest`（3 条 DB + 3 条纯函数）、`db-delete-coverage`、`db-isolation` 共 41 条全过。库已 `dropdb`，`mirrai_live` 未连接。
+- **闸门**（无 `--fast`、无 `DATABASE_URL`，Node v24.14.1）：`corepack pnpm gate` 退出码 0，`Test Files  502 passed | 13 skipped (515)`，`Tests  4182 passed | 53 skipped (4235)`，`all six steps passed`；`audit-cn` 为 `0 Chinese strings without an English counterpart, in 0 files.`，`fidelity-gate.ts` 7 条 ✓，P0.3 黄金快照未改。
+- 相对 WP11 开工基线（474/8 文件、4055/37 用例）：通过文件 +28、通过用例 +127；跳过文件 8→13、跳过用例 37→53。新增的 16 条跳过全部来自按 §2.3 新写的数据库测试（`db-search` 5、`db-exemplars` 1、`db-record-page` 4、`db-record-report` 2、`db-timeline` 1、`records/nearest` 3），已在 `server/skip-audit.test.ts` 登记，没有既有用例被改成跳过。改动过的既有测试只有 `db-behaviour`（`setMessageContent` 多写 searchTokens）、`collectors/idempotency`（`.values(chunk)`→`.values(values)`）、`chat/embeddings`（B2.3 索引扩到双方每轮）、`chat/prompt`（新增 turningPoints 断言）和 `chat/service`（新增 C8.7 用例），语义变化都已在偏差表/提交说明里写明。
+- **WP11 所有条目完成**：C8.6、C8.7、C2.10、C2.2、C2.3、C2.1、C2.4、C2.5、C2.6、C2.7、C2.8、C2.9。没有占位实现、没有空断言。效果类未验证项见未验证清单（C8.6、C8.7、C2.4、C2.5、C2.8、C2.9）。
+- **遗留**：批次日志里仍有一条 P0.5 的 `- [ ]`（最后一次修复待独立验收复验），这是验收会话的任务，本次不动；`dist/` 与 `.live-test/` 的旧构建产物未改（gitignore）。下一次会话应从 WP12 开始。
