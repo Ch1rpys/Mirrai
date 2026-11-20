@@ -37,6 +37,7 @@ import OutboundEntry from "@/components/v6/OutboundEntry";
 import OutboundDrawer from "@/components/v6/OutboundDrawer";
 import WaitGauge from "@/components/v6/WaitGauge";
 import MeetDayNote from "@/components/v6/MeetDayNote";
+import MeetCountdown from "@/components/v6/MeetCountdown";
 import AfterChat from "@/components/v6/AfterChat";
 import { useTypingReveal, waitMs } from "@/components/v6/useTypingReveal";
 
@@ -1816,6 +1817,12 @@ export default function Chat() {
                     {t("chat.theirClock", { time: theirClock })}
                   </span>
                 )}
+                {/* The next time they will be in the same place (C5.1). */}
+                <MeetCountdown
+                  personaId={personaId}
+                  nextMeetAt={normalizePersonaSettings(persona?.settings).ldr?.nextMeetAt}
+                  timezone={user?.timezone ?? persona?.timezone}
+                />
                 {/* How long it has been. */}
                 {daysSinceTalk !== null && daysSinceTalk > 0 && (
                   <span
@@ -2129,6 +2136,14 @@ export default function Chat() {
         name={displayName || t("common.them")}
         nextMeetAt={normalizePersonaSettings(persona?.settings).ldr?.nextMeetAt}
         timezone={persona?.timezone || user?.timezone}
+      />
+
+      {/* Asked once, the next time the chat is opened after the day (C5.1). */}
+      <MeetCountdown
+        personaId={personaId}
+        nextMeetAt={normalizePersonaSettings(persona?.settings).ldr?.nextMeetAt}
+        timezone={user?.timezone ?? persona?.timezone}
+        mode="banner"
       />
 
       {showSearch && (

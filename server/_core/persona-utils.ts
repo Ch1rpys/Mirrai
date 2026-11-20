@@ -197,6 +197,13 @@ export interface SystemPromptOptions {
   /** Reference time for time-of-day and relationship length. */
   now?: Date;
   /**
+   * The next meeting, already worded (C5.1).
+   *
+   * Empty or absent leaves the prompt exactly as it was before the
+   * persona had a meeting date, which is what the golden snapshot holds.
+   */
+  nextMeetLine?: string | null;
+  /**
    * The time zone the time-of-day awareness is computed in.
    *
    * It defaults to the persona's own zone. A persona who lives abroad has
@@ -798,6 +805,7 @@ export function buildSystemPromptParts(
           now,
           options.timeZone ?? persona.timezone,
         )[0]?.title,
+        options.nextMeetLine ?? null,
       ),
     },
     {
@@ -920,11 +928,15 @@ function buildTimeAwareness(
   locale: "zh" | "en",
   relationshipEnded = false,
   routineTitle?: string,
+  nextMeetLine?: string | null,
 ): string {
   const parts: string[] = [];
   parts.push(copy(locale, "prompt.timeNow", { label: timeOfDay.label }));
   if (routineTitle) {
     parts.push(renderRoutineNowLine(routineTitle, locale));
+  }
+  if (nextMeetLine) {
+    parts.push(nextMeetLine);
   }
   if (timeOfDay.intimate) {
     parts.push(copy(locale, "prompt.timeQuiet"));

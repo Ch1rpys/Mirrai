@@ -29,6 +29,7 @@ import PersonaSwitches from "@/components/v6/PersonaSwitches";
 import StickerLibrary from "@/components/v6/StickerLibrary";
 import AvatarPicker from "@/components/v6/AvatarPicker";
 import SkinPicker from "@/components/v6/SkinPicker";
+import LdrSettings from "@/components/v6/LdrSettings";
 import PersonaSampling from "@/components/v6/PersonaSampling";
 import HarmNotice from "@/components/v6/HarmNotice";
 import VersionHistory from "@/components/v6/VersionHistory";
@@ -616,6 +617,11 @@ export default function PersonaEdit() {
         {/* The chat's appearance (B7.15). */}
         <section className="surface p-5 sm:p-6 animate-fade-in-up">
           <SkinPicker personaId={personaId} name={persona?.name ?? ""} />
+        </section>
+
+        {/* Long distance: the next day the two of them meet (C5.1). */}
+        <section className="surface p-5 sm:p-6 animate-fade-in-up">
+          <LdrSettings personaId={personaId} />
         </section>
 
         {/* The letters. A letter that is kept and never answered, and a

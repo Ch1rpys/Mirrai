@@ -30,6 +30,7 @@ import { retrieveExemplarsWithEmbed } from "./embeddings";
 import { retrieveExemplarsFromTable } from "./exemplar-query";
 import type { ReanchorIssue } from "@shared/style-reminder";
 import { preferredClockZone } from "@shared/timezone";
+import { meetCountdown } from "@shared/persona-state";
 
 /**
  * The user's own time zone, for the parts of the prompt that are about
@@ -205,6 +206,22 @@ export async function buildPromptBundleForPersona(
 ): Promise<{ prompt: string; cacheBreak?: number }> {
   const locale = context.locale ?? "zh";
   const now = context.now ?? new Date();
+  /**
+   * The meeting countdown (C5.1).
+   *
+   * The date is on the user's calendar, so the line is worked out in
+   * their zone. A meeting that has passed, or no date at all, adds
+   * nothing — the golden prompt for a persona with no sixth-stage data
+   * stays byte for byte the same.
+   */
+  const meetZone = await userTimeZone(context.persona, context.userId);
+  const meet = meetCountdown(context.persona, now, meetZone);
+  const nextMeetLine =
+    meet.state === "upcoming"
+      ? copy(locale, "prompt.nextMeet", { date: meet.date, days: meet.days })
+      : meet.state === "today"
+        ? copy(locale, "prompt.nextMeetToday")
+        : "";
   const period = periodOf(context.persona, context.periodId);
   const { userId } = context;
   const theirZone = (context.persona as { timezone?: string | null }).timezone ?? null;
@@ -342,6 +359,7 @@ export async function buildPromptBundleForPersona(
     ),
     locale,
     now,
+    nextMeetLine,
     periodId: context.periodId ?? null,
     seedTurnsNote: context.promptMode === "planner" ? null : context.seedTurnsNote ?? null,
     styleReminderLines: context.promptMode === "planner" ? null : context.styleReminderLines ?? null,

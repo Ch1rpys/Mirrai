@@ -69,7 +69,9 @@ export const personaSettingsPatchSchema = z
       .optional(),
     ldr: z
       .object({
-        nextMeetAt: z.string().optional(),
+        // `null` clears the date; a partial patch does not have to
+        // repeat the other fields.
+        nextMeetAt: z.string().nullable().optional(),
         city: z
           .object({
             name: z.string(),
@@ -77,8 +79,9 @@ export const personaSettingsPatchSchema = z
             lng: z.number(),
           })
           .strict()
+          .nullable()
           .optional(),
-        weather: z.boolean(),
+        weather: z.boolean().optional(),
       })
       .strict()
       .optional(),

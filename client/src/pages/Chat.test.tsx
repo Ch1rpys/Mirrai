@@ -48,6 +48,7 @@ vi.mock("@/lib/trpc", () => ({
       getIntimacy: { useQuery: () => ({ data: null }) },
       graduationMode: { useQuery: () => ({ data: { mode: "suggest" } }) },
       update: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      updateSettings: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       graduate: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       declineGraduation: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
@@ -103,6 +104,9 @@ vi.mock("@/lib/trpc", () => ({
     },
     emotion: {
       getReport: { useQuery: () => ({ data: undefined, isError: false, isLoading: false }) },
+    },
+    relationship: {
+      add: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     useUtils: () => ({
       persona: {

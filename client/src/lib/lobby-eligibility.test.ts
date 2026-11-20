@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mayFeature, type LobbyPersona } from "./lobby-eligibility";
 
 /**
@@ -36,5 +36,26 @@ describe("mayFeature", () => {
 
   it("is false when the relationship has ended", () => {
     expect(mayFeature({ ...featured, relationshipEnded: true })).toBe(false);
+  });
+
+  it("is false for a memorial persona", () => {
+    expect(mayFeature({ ...featured, settings: { mode: "memorial" } })).toBe(false);
+  });
+
+  it("is false while sealed, and true again after the day", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-03-04T12:00:00Z"));
+      const sealed = { ...featured, settings: { seal: { until: "2026-03-20", earlyOpen: "never" } } };
+      expect(mayFeature(sealed)).toBe(false);
+      vi.setSystemTime(new Date("2026-03-20T12:00:00Z"));
+      expect(mayFeature(sealed)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("is false when only letters are allowed", () => {
+    expect(mayFeature({ ...featured, settings: { taper: { stage: 3 } } })).toBe(false);
   });
 });

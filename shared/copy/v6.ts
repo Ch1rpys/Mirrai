@@ -848,6 +848,14 @@ export const V6 = {
     zh: "这个钟点你通常在{{title}}。",
     en: "You are usually at {{title}} at this hour.",
   },
+  "prompt.nextMeet": {
+    zh: "你们约好 {{date}} 见面，还有 {{days}} 天。",
+    en: "You agreed to meet on {{date}}, {{days}} days from now.",
+  },
+  "prompt.nextMeetToday": {
+    zh: "你们约好今天见面。",
+    en: "You are meeting today.",
+  },
   "labels.routine.weekday.0": { zh: "周日", en: "Sunday" },
   "labels.routine.weekday.1": { zh: "周一", en: "Monday" },
   "labels.routine.weekday.2": { zh: "周二", en: "Tuesday" },

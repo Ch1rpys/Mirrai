@@ -39,6 +39,7 @@ vi.mock("./retrieval", async (importOriginal) => {
 });
 
 import { actProfileForTurn, buildPromptForPersona } from "./prompt";
+import { copy } from "@shared/copy";
 import { buildSystemPrompt } from "../_core/persona-utils";
 
 const persona = {
@@ -91,6 +92,26 @@ describe("the prompt the persona is given", () => {
       expect(built).toContain(marker);
       expect(preview).toContain(marker);
     }
+  });
+
+  it("adds the meeting countdown only when a date is set (C5.1)", async () => {
+    const withDate = await buildPromptForPersona({
+      persona: { ...persona, settings: { ldr: { nextMeetAt: "2026-03-02", weather: false } } },
+      userId: 1,
+      now: new Date("2026-03-01T12:00:00Z"),
+    });
+    expect(withDate).toContain(copy("zh", "prompt.nextMeet", { date: "2026-03-02", days: 1 }));
+
+    const onTheDay = await buildPromptForPersona({
+      persona: { ...persona, settings: { ldr: { nextMeetAt: "2026-03-02", weather: false } } },
+      userId: 1,
+      now: new Date("2026-03-02T04:00:00Z"),
+    });
+    expect(onTheDay).toContain(copy("zh", "prompt.nextMeetToday"));
+
+    const without = await buildPromptForPersona({ persona, userId: 1 });
+    expect(without).not.toContain("约好 2026-03-02 见面");
+    expect(without).not.toContain("约好今天见面");
   });
 
   it("puts the persona's own instructions in it", async () => {
