@@ -1630,6 +1630,13 @@ export const en = {
     outcomePlaceholder: "How did it go? Write it down if you want to. You do not have to.",
     saveOutcome: "Keep this",
     saidItHint: "If this is what you came here for, you can draw a full stop here →",
+    suggest: "Try saying it another way",
+    suggestionsTitle: "Suggestions (written by a model, not by you)",
+    suggestionDirect: "More direct",
+    suggestionSoft: "Softer",
+    suggestionShort: "Shorter",
+    adopt: "Use this one",
+    assistedMark: "This one started as a suggestion",
   },
 
   /**

@@ -68,6 +68,7 @@ vi.mock("@/lib/trpc", () => ({
       addOwn: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       saveOutcome: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       dismissSaidItHint: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      suggestWording: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     behavior: {
       get: { useQuery: () => ({ data: { profile: null }, refetch: vi.fn() }) },

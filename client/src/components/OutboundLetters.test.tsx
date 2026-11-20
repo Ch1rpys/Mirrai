@@ -24,6 +24,8 @@ const addOwn = vi.fn();
 const saveOutcome = vi.fn();
 const dismissSaidItHint = vi.fn();
 const navigate = vi.fn();
+const suggestWording = vi.fn();
+let suggestResult: any = { suggestions: [], crisis: false, text: "" };
 
 let letters: any[] = [];
 let saidItHint = false;
@@ -34,6 +36,9 @@ vi.mock("wouter", () => ({
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    safety: {
+      resources: { useQuery: () => ({ data: { resources: [] }, isError: false, isLoading: false }) },
+    },
     outbound: {
       list: { useQuery: () => ({ data: { letters, saidItHint }, refetch: vi.fn() }) },
       collect: { useMutation: () => ({ mutate: collect, isPending: false }) },
@@ -80,6 +85,15 @@ vi.mock("@/lib/trpc", () => ({
           mutate: (input: any) => {
             dismissSaidItHint(input);
             options?.onSuccess?.({ success: true });
+          },
+          isPending: false,
+        }),
+      },
+      suggestWording: {
+        useMutation: (options?: any) => ({
+          mutate: (input: any) => {
+            suggestWording(input);
+            options?.onSuccess?.(suggestResult, input);
           },
           isPending: false,
         }),
@@ -405,5 +419,78 @@ describe("after the words have been said (C3.5)", () => {
     render(<ConfirmProvider><OutboundLetters personaId={5} name="小满" /></ConfirmProvider>);
     expect(screen.getByText("她说了「我知道了」。")).toBeInTheDocument();
     expect(screen.queryByLabelText(translate("zh", "outbound.outcomePlaceholder"))).toBeNull();
+  });
+});
+
+
+describe("the wording assistant (C3.6)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    suggestResult = { suggestions: [], crisis: false, text: "" };
+  });
+
+  it("shows the suggestions under the original without changing it", async () => {
+    const user = userEvent.setup();
+    letters = [{ id: 7, status: "ready", text: "我想了很久，那天我不该那样说你。", createdAt: new Date().toISOString() }];
+    suggestResult = {
+      suggestions: [
+        { kind: "direct", text: "那天我不该那样说你。" },
+        { kind: "short", text: "那天是我不对。" },
+      ],
+      crisis: false,
+      text: letters[0].text,
+    };
+    render(<ConfirmProvider><OutboundLetters personaId={5} name="小满" /></ConfirmProvider>);
+    await user.click(screen.getByRole("button", { name: translate("zh", "outbound.suggest") }));
+    expect(suggestWording).toHaveBeenCalledWith({ id: 7 });
+    expect(screen.getByText(translate("zh", "outbound.suggestionsTitle"))).toBeInTheDocument();
+    expect(screen.getByText("那天我不该那样说你。")).toBeInTheDocument();
+    // The original is still there, and nothing has been written.
+    expect(screen.getByText("我想了很久，那天我不该那样说你。")).toBeInTheDocument();
+    expect(updateText).not.toHaveBeenCalled();
+  });
+
+  it("fills the editor when a suggestion is adopted, and saves only on the user's click", async () => {
+    const user = userEvent.setup();
+    letters = [{ id: 7, status: "ready", text: "我想了很久。", createdAt: new Date().toISOString() }];
+    suggestResult = {
+      suggestions: [{ kind: "direct", text: "那天我不该那样说你。" }],
+      crisis: false,
+      text: letters[0].text,
+    };
+    render(<ConfirmProvider><OutboundLetters personaId={5} name="小满" /></ConfirmProvider>);
+    await user.click(screen.getByRole("button", { name: translate("zh", "outbound.suggest") }));
+    await user.click(screen.getByRole("button", { name: translate("zh", "outbound.adopt") }));
+    const editor = screen.getByLabelText(translate("zh", "outbound.editLabel"));
+    expect(editor).toHaveValue("那天我不该那样说你。");
+    expect(updateText).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: translate("zh", "microRules.save") }));
+    expect(updateText).toHaveBeenCalledWith(
+      { id: 7, text: "那天我不该那样说你。", assisted: true },
+      expect.anything(),
+    );
+  });
+
+  it("shows the mark on a sentence that used a suggestion", () => {
+    letters = [{
+      id: 7,
+      status: "ready",
+      text: "那天我不该那样说你。",
+      wordingAssisted: true,
+      createdAt: new Date().toISOString(),
+    }];
+    render(<ConfirmProvider><OutboundLetters personaId={5} name="小满" /></ConfirmProvider>);
+    expect(screen.getByText(translate("zh", "outbound.assistedMark"))).toBeInTheDocument();
+  });
+
+  it("shows the crisis card instead of suggestions when the words are a crisis", async () => {
+    const user = userEvent.setup();
+    letters = [{ id: 7, status: "ready", text: "我不想活了", createdAt: new Date().toISOString() }];
+    suggestResult = { suggestions: [], crisis: true, text: "我不想活了" };
+    render(<ConfirmProvider><OutboundLetters personaId={5} name="小满" /></ConfirmProvider>);
+    await user.click(screen.getByRole("button", { name: translate("zh", "outbound.suggest") }));
+    expect(screen.queryByText(translate("zh", "outbound.suggestionsTitle"))).toBeNull();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 });

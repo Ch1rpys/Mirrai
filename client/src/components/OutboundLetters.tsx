@@ -7,10 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Send, Search, Check, X, Pencil, BookMarked, Undo2 } from "lucide-react";
+import { Send, Search, Check, X, Pencil, BookMarked, Undo2, Sparkles } from "lucide-react";
 import { daysWaiting, isStale } from "@shared/outbound";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { formatInstantInZone } from "@/lib/dates";
+import CrisisCard from "@/components/CrisisCard";
+import type { WordingSuggestion } from "@shared/wording";
 
 /**
  * The way out.
@@ -121,6 +123,25 @@ export default function OutboundLetters({ personaId, name }: { personaId: number
     onSuccess: () => refetch(),
   });
   const [outcomes, setOutcomes] = useState<Record<number, string>>({});
+  /**
+   * The wording assistant (C3.6).
+   *
+   * A suggestion is only ever offered. It goes into the editor when the
+   * user adopts it, and only becomes the letter when they save.
+   */
+  const [suggestions, setSuggestions] = useState<Record<number, WordingSuggestion[]>>({});
+  const [crisisFor, setCrisisFor] = useState<number | null>(null);
+  const [assistedId, setAssistedId] = useState<number | null>(null);
+  const suggestMutation = trpc.outbound.suggestWording.useMutation({
+    onSuccess: (result: { suggestions: WordingSuggestion[]; crisis: boolean }, variables: { id: number }) => {
+      if (result.crisis) {
+        setCrisisFor(variables.id);
+        return;
+      }
+      setSuggestions((current) => ({ ...current, [variables.id]: result.suggestions }));
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   const letters = data?.letters ?? [];
   /** The card the one-time hint hangs from: the first letter that was said. */
@@ -169,6 +190,15 @@ export default function OutboundLetters({ personaId, name }: { personaId: number
   function beginEdit(id: number, current: string) {
     setEditing(id);
     setText(current);
+    // Opening the editor by hand is not adopting a suggestion.
+    setAssistedId(null);
+  }
+
+  /** "Use this one": it fills the editor; the user still has to save. */
+  function adoptSuggestion(id: number, current: string) {
+    setEditing(id);
+    setText(current);
+    setAssistedId(id);
   }
 
   function saveEdit(id: number) {
@@ -184,9 +214,10 @@ export default function OutboundLetters({ personaId, name }: { personaId: number
     // rewritten words away with no way of getting them back — the only
     // trace was the error toast.
     updateMutation.mutate(
-      { id, text: trimmed },
+      { id, text: trimmed, assisted: assistedId === id },
       {
         onSuccess: () => {
+          setAssistedId(null);
           /**
            * Only the editor that was saved is closed.
            *
@@ -290,6 +321,9 @@ export default function OutboundLetters({ personaId, name }: { personaId: number
                 <span className="text-[11px] text-muted-subtle">
                   {t("outbound.source")}
                 </span>
+              ) : null}
+              {letter.wordingAssisted ? (
+                <span className="text-[11px] text-muted-subtle">{t("outbound.assistedMark")}</span>
               ) : null}
               <div className="ml-auto flex items-center gap-1">
                 {/**
@@ -460,6 +494,53 @@ export default function OutboundLetters({ personaId, name }: { personaId: number
                 {letter.text}
               </p>
             )}
+
+            {letter.status !== "sent" && letter.status !== "dropped" && letter.status !== "self" ? (
+              <div className="space-y-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={suggestMutation.isPending}
+                  onClick={() => suggestMutation.mutate({ id: letter.id })}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {t("outbound.suggest")}
+                </Button>
+
+                {crisisFor === letter.id ? (
+                  <CrisisCard onClose={() => setCrisisFor(null)} />
+                ) : null}
+
+                {(suggestions[letter.id] ?? []).length > 0 ? (
+                  <div className="space-y-2 rounded-md border border-border/70 bg-muted/20 p-3">
+                    <p className="text-[11px] text-muted-subtle">{t("outbound.suggestionsTitle")}</p>
+                    <ul className="space-y-2">
+                      {(suggestions[letter.id] ?? []).map((suggestion) => (
+                        <li key={suggestion.kind} className="flex items-start gap-3">
+                          <span className="mt-0.5 shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                            {suggestion.kind === "direct"
+                              ? t("outbound.suggestionDirect")
+                              : suggestion.kind === "soft"
+                                ? t("outbound.suggestionSoft")
+                                : t("outbound.suggestionShort")}
+                          </span>
+                          <p className="min-w-0 flex-1 text-sm text-foreground/85 leading-relaxed">
+                            {suggestion.text}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => adoptSuggestion(letter.id, suggestion.text)}
+                            className="shrink-0 text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                          >
+                            {t("outbound.adopt")}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </li>
         ))}
       </ul>

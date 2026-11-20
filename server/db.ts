@@ -8070,10 +8070,17 @@ export async function updateOutboundLetterText(
   id: number,
   userId: number,
   text: string,
+  assisted = false,
 ): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
-  const rows = await db.update(outboundLetters).set({ text, updatedAt: new Date() }).where(and(
+  const rows = await db.update(outboundLetters).set({
+    text,
+    updatedAt: new Date(),
+    // Only an adopted suggestion marks the sentence as assisted. Saving
+    // a letter the user wrote themselves leaves the flag alone.
+    ...(assisted ? { wordingAssisted: true } : {}),
+  }).where(and(
     eq(outboundLetters.id, id),
     eq(outboundLetters.userId, userId),
   )).returning({ id: outboundLetters.id });

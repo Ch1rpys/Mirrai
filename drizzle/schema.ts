@@ -1591,6 +1591,15 @@ export const outboundLetters = pgTable("outbound_letters", {
   outcomeNote: text("outcomeNote"),
   /** When the note was written. */
   outcomeAt: timestamp("outcomeAt"),
+  /**
+   * Whether the words came from the wording assistant (C3.6).
+   *
+   * The suggestion is never saved on its own: the user has to pick it
+   * and save. This column records that the sentence that ended up here
+   * started as a suggestion — it is shown next to the letter, so the
+   * user can always tell which of their words the model helped with.
+   */
+  wordingAssisted: boolean("wordingAssisted").default(false).notNull(),
   /** When the user decided it would never be sent. */
   droppedAt: timestamp("droppedAt"),
   /**

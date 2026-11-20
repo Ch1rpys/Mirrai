@@ -16,9 +16,34 @@ const getOutboundLetters = vi.fn();
 const createOutboundLetter = vi.fn();
 const getOutboundLetterById = vi.fn();
 const setOutboundLetterOutcome = vi.fn();
+const updateOutboundLetterText = vi.fn();
 const createRelationshipEvent = vi.fn();
 const getPersonaSettings = vi.fn();
 const setPersonaSettings = vi.fn();
+const invoke = vi.fn();
+
+vi.mock("./llm", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, any>>();
+  return {
+    ...actual,
+    llmService: {
+      ...actual.llmService,
+      invoke: (...a: unknown[]) => invoke(...a),
+      invokeWithProvider: (...a: unknown[]) => invoke(...a),
+    },
+  };
+});
+
+vi.mock("./llm/user-provider", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, any>>();
+  return {
+    ...actual,
+    resolveProviderForUserWithOwnership: async () => ({
+      provider: { name: "test", isConfigured: () => true, invoke: async () => "" },
+      owned: true,
+    }),
+  };
+});
 
 vi.mock("./db", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -28,6 +53,7 @@ vi.mock("./db", async (importOriginal) => ({
   createOutboundLetter: (...a: unknown[]) => createOutboundLetter(...a),
   getOutboundLetterById: (...a: unknown[]) => getOutboundLetterById(...a),
   setOutboundLetterOutcome: (...a: unknown[]) => setOutboundLetterOutcome(...a),
+  updateOutboundLetterText: (...a: unknown[]) => updateOutboundLetterText(...a),
   createRelationshipEvent: (...a: unknown[]) => createRelationshipEvent(...a),
   getPersonaSettings: (...a: unknown[]) => getPersonaSettings(...a),
   setPersonaSettings: (...a: unknown[]) => setPersonaSettings(...a),
@@ -250,5 +276,82 @@ describe("outbound.saveOutcome", () => {
     expect(createRelationshipEvent).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "said_it" }),
     );
+  });
+});
+
+
+describe("outbound.suggestWording", () => {
+  const letter = { id: 7, personaId: 5, status: "ready", text: "我想了很久，那天我不该那样说你。" };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getOutboundLetterById.mockResolvedValue(letter);
+  });
+
+  it("offers three ways and writes nothing", async () => {
+    invoke.mockResolvedValue(JSON.stringify({
+      direct: "那天我不该那样说你。",
+      soft: "我想了很久，那天我话说重了。",
+      short: "那天是我不对。",
+    }));
+    const result = await appRouter.createCaller(ctxFor(1)).outbound.suggestWording({ id: 7 });
+    expect(result.crisis).toBe(false);
+    expect(result.suggestions.map((entry: any) => entry.kind)).toEqual(["direct", "soft", "short"]);
+    expect(updateOutboundLetterText).not.toHaveBeenCalled();
+    expect(createRelationshipEvent).not.toHaveBeenCalled();
+    expect(createOutboundLetter).not.toHaveBeenCalled();
+  });
+
+  it("drops a 'short' that is longer than the sentence", async () => {
+    invoke.mockResolvedValue(JSON.stringify({
+      direct: "那天我不该那样说你。",
+      short: "我想了很久很久，那天我真的不该用这样的话说你。",
+    }));
+    const result = await appRouter.createCaller(ctxFor(1)).outbound.suggestWording({ id: 7 });
+    expect(result.suggestions.map((entry: any) => entry.kind)).toEqual(["direct"]);
+  });
+
+  it("drops a suggestion with a number the user never wrote", async () => {
+    invoke.mockResolvedValue(JSON.stringify({
+      direct: "3 点那天我不该那样说你。",
+      soft: "那天我话说重了。",
+    }));
+    const result = await appRouter.createCaller(ctxFor(1)).outbound.suggestWording({ id: 7 });
+    expect(result.suggestions.map((entry: any) => entry.kind)).toEqual(["soft"]);
+  });
+
+  it("does not call the model when the words are a crisis", async () => {
+    getOutboundLetterById.mockResolvedValue({ ...letter, text: "我不想活了" });
+    const result = await appRouter.createCaller(ctxFor(1)).outbound.suggestWording({ id: 7 });
+    expect(result).toMatchObject({ crisis: true, suggestions: [] });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("returns an empty list when no provider can answer", async () => {
+    invoke.mockRejectedValue(new Error("down"));
+    const result = await appRouter.createCaller(ctxFor(1)).outbound.suggestWording({ id: 7 });
+    expect(result).toMatchObject({ crisis: false, suggestions: [] });
+  });
+});
+
+describe("outbound.updateText and the assisted mark", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    updateOutboundLetterText.mockResolvedValue(true);
+  });
+
+  it("leaves the mark alone when the user wrote the sentence", async () => {
+    await appRouter
+      .createCaller(ctxFor(1))
+      .outbound.updateText({ id: 7, text: "我自己写的话" });
+    expect(updateOutboundLetterText).toHaveBeenCalledWith(7, 1, "我自己写的话");
+    expect(updateOutboundLetterText.mock.calls[0]).toHaveLength(3);
+  });
+
+  it("marks it only when the sentence was adopted from a suggestion", async () => {
+    await appRouter
+      .createCaller(ctxFor(1))
+      .outbound.updateText({ id: 7, text: "建议的说法", assisted: true });
+    expect(updateOutboundLetterText).toHaveBeenCalledWith(7, 1, "建议的说法", true);
   });
 });

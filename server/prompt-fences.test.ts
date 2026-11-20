@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildLetterReplyInstruction } from "../shared/letters";
 import { buildSystemPrompt } from "./_core/persona-utils";
 import { copy } from "@shared/copy";
+import { buildWordingMessages } from "@shared/wording";
 
 /**
  * The fences around the user's own text.
@@ -38,6 +39,19 @@ function persona(overrides: Record<string, unknown> = {}) {
 function unfenced(prompt: string): string {
   return prompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "");
 }
+
+describe("the sentence given to the wording assistant", () => {
+  it("is material, fenced, and not an instruction", () => {
+    const messages = buildWordingMessages(HOSTILE_NOTE, "zh");
+    const user = messages.find((message) => message.role === "user")!;
+    expect(user.content).toContain(HOSTILE_NOTE);
+    const unfencedUser = user.content.replace(
+      /MATERIAL>>>:[0-9a-f]+\n[\s\S]*?<<<END MATERIAL>>>:[0-9a-f]+/g,
+      "",
+    );
+    expect(unfencedUser).not.toContain(HOSTILE_NOTE);
+  });
+});
 
 describe("the persona's name", () => {
   it("is not in the instruction to answer a letter", () => {

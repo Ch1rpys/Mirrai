@@ -150,6 +150,7 @@ import { collectOutboundCandidates } from "./chat/outbound";
 import { getRerankModel } from "./chat/rerank-model";
 import { loadBehaviorProfile, measureAndSaveBehaviorProfile } from "./_core/behavior-profile";
 import { mergePersonaSettings, normalizePersonaSettings } from "@shared/persona-settings";
+import { buildWordingMessages, selectWordingSuggestions } from "@shared/wording";
 import { personaSettingsPatchSchema } from "./routers-v6/persona-settings-patch";
 import { styleRouter } from "./routers-v6/style";
 import { importRouter } from "./routers-v6/import";
@@ -7090,11 +7091,84 @@ export const appRouter = router({
       }),
 
     updateText: protectedProcedure
-      .input(z.object({ id: z.number(), text: z.string().min(1).max(5000) }))
+      .input(z.object({
+        id: z.number(),
+        text: z.string().min(1).max(5000),
+        /**
+         * The sentence began as a suggestion from the wording assistant
+         * (C3.6). Only then is the letter marked as assisted — a letter
+         * the user wrote themselves is not.
+         */
+        assisted: z.boolean().optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
-        const changed = await updateOutboundLetterText(input.id, ctx.user.id, input.text);
+        const changed = input.assisted
+          ? await updateOutboundLetterText(input.id, ctx.user.id, input.text, true)
+          : await updateOutboundLetterText(input.id, ctx.user.id, input.text);
         if (!changed) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true };
+      }),
+
+    /**
+     * Three other ways to say the same sentence (C3.6).
+     *
+     * The model only suggests; the original stays where it is and
+     * nothing is written. Each suggestion has to pass the rules in
+     * `shared/wording.ts`, so a suggestion cannot add a fact the user
+     * did not write. The user's sentence is material and is fenced.
+     */
+    suggestWording: protectedProcedure
+      .use(rateLimit(RATE_LIMITS.llm))
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const letter = await getOutboundLetterById(input.id, ctx.user.id);
+        if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
+        // The same rule as everywhere else a person writes something:
+        // a crisis is handled before anything else happens, and no model
+        // is called.
+        if (detectCrisis(letter.text).crisis) {
+          return { suggestions: [], crisis: true, text: letter.text };
+        }
+        const request = {
+          messages: buildWordingMessages(letter.text, ctx.locale),
+          options: { temperature: 0.4, maxTokens: 600, purpose: "other" as const },
+        };
+        let raw: string | null = null;
+        let mayUseServerProvider = false;
+        let provider: Awaited<ReturnType<typeof resolveProviderForUserWithOwnership>>["provider"] | undefined;
+        try {
+          const resolved = await resolveProviderForUserWithOwnership({ userId: ctx.user.id });
+          provider = resolved.provider;
+          mayUseServerProvider = !resolved.owned;
+        } catch (error) {
+          console.warn("[Outbound] The provider could not be resolved:", (error as Error).message);
+        }
+        if (provider) {
+          try {
+            raw = await llmService.invokeWithProvider(provider, {
+              ...request,
+              options: { ...request.options, purpose: "other" },
+            });
+          } catch (error) {
+            console.warn("[Outbound] The user's wording suggestion failed:", (error as Error).message);
+          }
+        }
+        if (!raw?.trim() && mayUseServerProvider) {
+          try {
+            raw = await llmService.invoke({
+              ...request,
+              options: { ...request.options, purpose: "other" },
+            });
+          } catch (error) {
+            console.warn("[Outbound] No provider could suggest words:", (error as Error).message);
+          }
+        }
+        const parsed = raw?.trim() ? extractJsonObject(raw) : null;
+        return {
+          suggestions: selectWordingSuggestions(letter.text, parsed),
+          crisis: false,
+          text: letter.text,
+        };
       }),
   }),
 

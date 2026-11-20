@@ -1631,6 +1631,13 @@ export const zh = {
     outcomePlaceholder: "后来怎么样？想写就写，不写也行。",
     saveOutcome: "记下来",
     saidItHint: "如果这就是你来这里想做的事，可以在这里画个句号 →",
+    suggest: "换个说法试试",
+    suggestionsTitle: "建议（模型写的，不是你的话）",
+    suggestionDirect: "更直接",
+    suggestionSoft: "更轻",
+    suggestionShort: "更短",
+    adopt: "采用这一句",
+    assistedMark: "这句用了建议的说法",
   },
 
   /**
