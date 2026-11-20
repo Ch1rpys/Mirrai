@@ -72,6 +72,10 @@ vi.mock("@/lib/trpc", () => ({
       import: { useMutation: () => ({ mutate: importCard, isPending: false }) },
     },
     llmConfig: { listProviders: { useQuery: () => ({ data: [] }) } },
+    ldr: {
+      status: { useQuery: () => ({ data: { enabled: true } }) },
+      searchCity: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     chat: {
       voices: {
         useQuery: () => ({ data: { voices: [], enabled: true, engine: "edge", leavesMachine: true } }),

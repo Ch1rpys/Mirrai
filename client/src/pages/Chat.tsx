@@ -38,6 +38,7 @@ import OutboundDrawer from "@/components/v6/OutboundDrawer";
 import WaitGauge from "@/components/v6/WaitGauge";
 import MeetDayNote from "@/components/v6/MeetDayNote";
 import MeetCountdown from "@/components/v6/MeetCountdown";
+import TheirSide from "@/components/v6/TheirSide";
 import AfterChat from "@/components/v6/AfterChat";
 import { useTypingReveal, waitMs } from "@/components/v6/useTypingReveal";
 
@@ -1853,6 +1854,12 @@ export default function Chat() {
                   already has the right word for it. */}
               <p className="app-nav-subtitle truncate">{persona?.relationshipDesc || t("common.them")}</p>
               <ChatPeriodHint period={selectedPeriod} name={persona?.name || ""} />
+              {/* The weather and the light where they are (C5.2). */}
+              <TheirSide
+                personaId={personaId}
+                settings={persona?.settings}
+                timezone={user?.timezone ?? null}
+              />
             </div>
           </div>
 

@@ -77,6 +77,8 @@ export const personaSettingsPatchSchema = z
             name: z.string(),
             lat: z.number(),
             lng: z.number(),
+            // The place's IANA zone, for the local sunrise and sunset.
+            timezone: z.string().optional(),
           })
           .strict()
           .nullable()

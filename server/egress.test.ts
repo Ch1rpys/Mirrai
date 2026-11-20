@@ -24,6 +24,7 @@ const CALL_SITES: Array<{ file: string; purpose: string }> = [
   { file: "server/llm/providers/dify.ts", purpose: "Dify /chat-messages" },
   { file: "server/llm/providers/xunfei.ts", purpose: "iFlytek Spark WebSocket" },
   { file: "server/wechat/ilink/client.ts", purpose: "WeChat iLink HTTP" },
+  { file: "server/routers-v6/ldr.ts", purpose: "Open-Meteo geocoding and forecast (C5.2)" },
 ];
 
 function walk(dir: string, files: string[] = []): string[] {

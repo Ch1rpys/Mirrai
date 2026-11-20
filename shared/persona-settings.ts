@@ -45,7 +45,12 @@ export interface PersonaSettings {
   };
   providers?: { planner?: string; voice?: string };
   skin?: { theme: "classic" | "im-green" | "im-blue"; alias?: string; background?: string };
-  ldr?: { nextMeetAt?: string; city?: { name: string; lat: number; lng: number }; weather: boolean };
+  ldr?: {
+    nextMeetAt?: string;
+    /** `timezone` is the place's IANA zone, kept so the sun is local (C5.2). */
+    city?: { name: string; lat: number; lng: number; timezone?: string };
+    weather: boolean;
+  };
   taper?: { stage: 0 | 1 | 2 | 3; overrideDay?: string };
   seal?: { until?: string; earlyOpen: "never" | "cooling"; requestedAt?: string };
   mode?: "default" | "memorial";
@@ -234,13 +239,18 @@ function normalizeSkin(value: unknown): PersonaSettings["skin"] | undefined {
   return skin;
 }
 
-function normalizeCity(value: unknown): { name: string; lat: number; lng: number } | undefined {
+function normalizeCity(
+  value: unknown,
+): { name: string; lat: number; lng: number; timezone?: string } | undefined {
   if (!isPlainObject(value)) return undefined;
   const name = asString(value.name);
   const lat = asFiniteNumber(value.lat);
   const lng = asFiniteNumber(value.lng);
   if (name === undefined || lat === undefined || lng === undefined) return undefined;
-  return { name, lat, lng };
+  const city: { name: string; lat: number; lng: number; timezone?: string } = { name, lat, lng };
+  const timezone = asString(value.timezone);
+  if (timezone !== undefined) city.timezone = timezone;
+  return city;
 }
 
 function normalizeLdr(value: unknown): PersonaSettings["ldr"] | undefined {

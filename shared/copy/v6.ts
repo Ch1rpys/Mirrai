@@ -946,6 +946,10 @@ export const V6 = {
     zh: "今天已经换过一次了。明天可以再来。",
     en: "You have already swapped once today. Come back tomorrow.",
   },
+  "errors.weatherDisabled": {
+    zh: "天气功能没有打开。",
+    en: "Weather is switched off.",
+  },
   "rehearsal.unavailable": {
     zh: "这个分身已经休眠或封存，排练不可用。",
     en: "This persona is asleep or sealed. The rehearsal room is not available.",

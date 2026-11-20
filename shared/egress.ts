@@ -402,4 +402,46 @@ export const EGRESS_ITEMS: EgressItem[] = [
       en: "Turn off “notify me while the app is closed” in Settings, or revoke the notification permission",
     },
   },
+  {
+    id: "ldr-geocoding",
+    side: "server",
+    destination: {
+      zh: "Open-Meteo 的地理编码接口 geocoding-api.open-meteo.com",
+      en: "Open-Meteo's geocoding API at geocoding-api.open-meteo.com",
+    },
+    payload: {
+      zh: "用户在「查找城市」里输入的那几个字。不发送分身、记录或用户标识",
+      en: "The words the user typed into the city search. No persona, record or user identifier is sent",
+    },
+    when: {
+      zh: "用户点了「查找」按钮时，一次点击一次请求",
+      en: "When the user presses Search — one request per click",
+    },
+    defaultOn: false,
+    offHow: {
+      zh: "不点「查找」；或环境变量 WEATHER_ENABLED=false 把整个入口关掉",
+      en: "Do not press Search; or set WEATHER_ENABLED=false to remove the whole section",
+    },
+  },
+  {
+    id: "ldr-weather",
+    side: "server",
+    destination: {
+      zh: "Open-Meteo 的天气接口 api.open-meteo.com",
+      en: "Open-Meteo's forecast API at api.open-meteo.com",
+    },
+    payload: {
+      zh: "四舍五入到小数点后两位的经纬度。不带城市名、记录内容或用户标识",
+      en: "A latitude and longitude rounded to two decimals. No city name, record content or user identifier",
+    },
+    when: {
+      zh: "用户打开「显示 TA 那边的天气」之后，最多每 30 分钟一次",
+      en: "After the user turns on “show the weather there”, at most once every thirty minutes",
+    },
+    defaultOn: false,
+    offHow: {
+      zh: "关掉「显示 TA 那边的天气」；或环境变量 WEATHER_ENABLED=false",
+      en: "Turn off “show the weather there”; or set WEATHER_ENABLED=false",
+    },
+  },
 ];

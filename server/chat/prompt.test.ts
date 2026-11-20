@@ -114,6 +114,24 @@ describe("the prompt the persona is given", () => {
     expect(without).not.toContain("约好今天见面");
   });
 
+  it("never puts the weather or the city into the prompt (C5.2)", async () => {
+    const built = await buildPromptForPersona({
+      persona: {
+        ...persona,
+        settings: {
+          ldr: {
+            weather: true,
+            city: { name: "上海", lat: 31.2304, lng: 121.4737, timezone: "Asia/Shanghai" },
+          },
+        },
+      },
+      userId: 1,
+    });
+    expect(built).not.toContain("上海");
+    expect(built).not.toContain("纬");
+    expect(built).not.toContain("天气");
+  });
+
   it("puts the persona's own instructions in it", async () => {
     const built = await buildPromptForPersona({ persona, userId: 1 });
     expect(built).toContain("温柔");

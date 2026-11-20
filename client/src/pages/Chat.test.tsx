@@ -108,6 +108,10 @@ vi.mock("@/lib/trpc", () => ({
     relationship: {
       add: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    ldr: {
+      status: { useQuery: () => ({ data: { enabled: true } }) },
+      weather: { useQuery: () => ({ data: null }) },
+    },
     useUtils: () => ({
       persona: {
         get: { invalidate: vi.fn() },
