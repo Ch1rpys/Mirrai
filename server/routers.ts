@@ -65,6 +65,7 @@ import {
   saveEvalCases, getEvalCases, saveEvalRun, getLatestEvalRun,
   getOutboundLetters, setOutboundLetterStatus, restoreOutboundLetter, updateOutboundLetterText,
   markOutboundLetterStaleNotified,
+  getOutboundLetterById, setOutboundLetterOutcome,
   createOutboundLetter,
   getCollectedMessagesForPersona as getCollectedMessagesForPersonaRows,
   getEvalRuns,
@@ -5358,7 +5359,7 @@ export const appRouter = router({
         personaId: z.number(),
         kind: z.enum([
           "together", "apart", "reunion", "breakup", "conflict",
-          "reconciliation", "news", "meetup", "triggered",
+          "reconciliation", "news", "meetup", "triggered", "said_it",
         ]),
         title: z.string().min(1).max(200),
         detail: z.string().max(2000).optional(),
@@ -6794,7 +6795,43 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        return { letters: await getOutboundLetters(input.personaId, ctx.user.id) };
+        const [letters, settings] = await Promise.all([
+          getOutboundLetters(input.personaId, ctx.user.id),
+          getPersonaSettings(input.personaId, ctx.user.id),
+        ]);
+        /**
+         * The one-time invitation to the last page (C3.5).
+         *
+         * It is shown on the first card that appears after a letter
+         * has been said. It is recorded in the persona's settings, so
+         * it is said once and not on every visit.
+         */
+        const saidItHint = letters.some((letter) => letter.status === "sent")
+          && !settings?.saidItHintShown;
+        return { letters, saidItHint };
+      }),
+
+    /**
+     * Says the one-time hint has been shown.
+     *
+     * The hint offers the last page; following it records that the
+     * offer was made, so it is not made again.
+     */
+    dismissSaidItHint: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const current = await getPersonaSettings(input.personaId, ctx.user.id);
+          if (current?.saidItHintShown) return { success: true };
+          const written = await setPersonaSettings(input.personaId, ctx.user.id, {
+            ...normalizePersonaSettings(current),
+            saidItHintShown: true,
+          });
+          if (!written) throw new TRPCError({ code: "NOT_FOUND" });
+          return { success: true };
+        });
       }),
 
     /**
@@ -6950,6 +6987,40 @@ export const appRouter = router({
         // otherwise show a success for something that never happened.
         if (!changed) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true };
+      }),
+
+    /**
+     * How it went after the user said it (C3.5).
+     *
+     * Nothing is required. The note is the user's own words, kept
+     * exactly as written, and it becomes one relationship event. There
+     * is no follow-up question, no badge, no notification: saying the
+     * sentence was the point, and the note is only there for the person
+     * who wants to put it down.
+     */
+    saveOutcome: protectedProcedure
+      .input(z.object({ id: z.number(), note: z.string().max(2000) }))
+      .mutation(async ({ ctx, input }) => {
+        const letter = await getOutboundLetterById(input.id, ctx.user.id);
+        if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
+        if (letter.status !== "sent") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "This has not been said yet." });
+        }
+        // An empty note is a complete answer: nothing is written, and no
+        // relationship event is created.
+        if (!input.note.trim()) return { saved: false };
+        const now = new Date();
+        const saved = await setOutboundLetterOutcome(input.id, ctx.user.id, input.note, now);
+        if (!saved) throw new TRPCError({ code: "NOT_FOUND" });
+        const event = await createRelationshipEvent({
+          userId: ctx.user.id,
+          personaId: letter.personaId,
+          kind: "said_it",
+          title: copy(ctx.locale, "outbound.saidItTitle"),
+          detail: input.note,
+          happenedAt: now,
+        });
+        return { saved: true, event };
       }),
 
     /**

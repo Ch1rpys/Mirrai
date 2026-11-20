@@ -8080,6 +8080,44 @@ export async function updateOutboundLetterText(
   return rows.length > 0;
 }
 
+/** One letter of the caller's own (C3.5). */
+export async function getOutboundLetterById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(outboundLetters).where(and(
+    eq(outboundLetters.id, id),
+    eq(outboundLetters.userId, userId),
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * Records how it went after the user said it (C3.5).
+ *
+ * The note is optional and it is the user's own words, so it is stored
+ * exactly as written. A letter that is not the caller's, or is not marked
+ * as said, gets nothing written.
+ */
+export async function setOutboundLetterOutcome(
+  id: number,
+  userId: number,
+  note: string,
+  at: Date,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(outboundLetters).set({
+    outcomeNote: note,
+    outcomeAt: at,
+    updatedAt: at,
+  }).where(and(
+    eq(outboundLetters.id, id),
+    eq(outboundLetters.userId, userId),
+    eq(outboundLetters.status, "sent"),
+  )).returning({ id: outboundLetters.id });
+  return rows.length > 0;
+}
+
 // ─── Distillation blocks and cards ────────────────────────────────────────
 
 export async function createDistillationChunk(data: InsertDistillationChunk) {

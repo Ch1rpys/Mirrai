@@ -1627,6 +1627,10 @@ export const zh = {
     addOwn: "收进清单",
     keep: "收好了。它只在你这里。",
     drawerTitle: "想对 {{name}} 说的话",
+    saidCard: "{{date}}，你把这句话对 {{name}} 说了。",
+    outcomePlaceholder: "后来怎么样？想写就写，不写也行。",
+    saveOutcome: "记下来",
+    saidItHint: "如果这就是你来这里想做的事，可以在这里画个句号 →",
   },
 
   /**

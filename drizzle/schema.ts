@@ -1580,6 +1580,17 @@ export const outboundLetters = pgTable("outbound_letters", {
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   /** When the user sent it — to the real person, themselves. */
   sentAt: timestamp("sentAt"),
+  /**
+   * What happened after the user said it (C3.5).
+   *
+   * The list used to end at "I said it" — the app recorded the fact
+   * and then had nothing to say. Optionally, the user can write down
+   * how it went; that note becomes a relationship event. It is never
+   * asked for twice, and nothing is required.
+   */
+  outcomeNote: text("outcomeNote"),
+  /** When the note was written. */
+  outcomeAt: timestamp("outcomeAt"),
   /** When the user decided it would never be sent. */
   droppedAt: timestamp("droppedAt"),
   /**

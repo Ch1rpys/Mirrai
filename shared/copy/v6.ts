@@ -882,4 +882,8 @@ export const V6 = {
     zh: "这条没回成。可以再发一次，或者到设置里看看模型是不是通的。",
     en: "That reply did not go through. Send it again, or check in settings that the model is reachable.",
   },
+  "outbound.saidItTitle": {
+    zh: "把一句话说出口了",
+    en: "Said the words out loud",
+  },
 } as const satisfies CopyTable;

@@ -1626,6 +1626,10 @@ export const en = {
     addOwn: "Add to the list",
     keep: "Kept. It stays with you.",
     drawerTitle: "Things to say to {{name}}",
+    saidCard: "{{date}} — you said this to {{name}}.",
+    outcomePlaceholder: "How did it go? Write it down if you want to. You do not have to.",
+    saveOutcome: "Keep this",
+    saidItHint: "If this is what you came here for, you can draw a full stop here →",
   },
 
   /**

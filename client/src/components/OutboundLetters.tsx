@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import { toast } from "sonner";
 import { Send, Search, Check, X, Pencil, BookMarked, Undo2 } from "lucide-react";
 import { daysWaiting, isStale } from "@shared/outbound";
 import { useConfirm } from "@/components/ConfirmDialog";
+import { formatInstantInZone } from "@/lib/dates";
 
 /**
  * The way out.
@@ -38,6 +40,7 @@ export default function OutboundLetters({ personaId, name }: { personaId: number
    * is reading the app in.
    */
   const confirm = useConfirm();
+  const [, navigate] = useLocation();
   const { data, refetch, isLoading, isError } = trpc.outbound.list.useQuery({ personaId });
   const collectMutation = trpc.outbound.collect.useMutation({
     onSuccess: (result) => {
@@ -103,8 +106,25 @@ export default function OutboundLetters({ personaId, name }: { personaId: number
     onError: (e: any) => toast.error(e.message),
   });
   const [own, setOwn] = useState("");
+  /**
+   * How it went after the user said it (C3.5).
+   *
+   * The note is optional, it is written in the user's own words, and it
+   * is not asked for again. There is deliberately no success message: the
+   * card simply keeps the sentence.
+   */
+  const saveOutcome = trpc.outbound.saveOutcome.useMutation({
+    onSuccess: () => refetch(),
+    onError: (e: any) => toast.error(e.message),
+  });
+  const dismissSaidItHint = trpc.outbound.dismissSaidItHint.useMutation({
+    onSuccess: () => refetch(),
+  });
+  const [outcomes, setOutcomes] = useState<Record<number, string>>({});
 
   const letters = data?.letters ?? [];
+  /** The card the one-time hint hangs from: the first letter that was said. */
+  const firstSentId = letters.find((letter: any) => letter.status === "sent")?.id;
   const [editing, setEditing] = useState<number | null>(null);
   const [text, setText] = useState("");
 
@@ -370,7 +390,58 @@ export default function OutboundLetters({ personaId, name }: { personaId: number
               </p>
             ) : null}
 
-            {editing === letter.id ? (
+            {letter.status === "sent" ? (
+              <div className="space-y-2" data-outbound-outcome>
+                <p className="text-sm text-foreground/90 leading-relaxed">
+                  {t("outbound.saidCard", {
+                    date: formatInstantInZone(letter.sentAt ?? letter.createdAt, locale),
+                    name: name || t("common.them"),
+                  })}
+                </p>
+                {letter.outcomeNote ? (
+                  <p className="whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">
+                    {letter.outcomeNote}
+                  </p>
+                ) : (
+                  <>
+                    <Textarea
+                      aria-label={t("outbound.outcomePlaceholder")}
+                      placeholder={t("outbound.outcomePlaceholder")}
+                      value={outcomes[letter.id] ?? ""}
+                      rows={2}
+                      maxLength={2000}
+                      onChange={(event) =>
+                        setOutcomes((current) => ({ ...current, [letter.id]: event.target.value }))
+                      }
+                    />
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={saveOutcome.isPending || !(outcomes[letter.id] ?? "").trim()}
+                        onClick={() =>
+                          saveOutcome.mutate({ id: letter.id, note: outcomes[letter.id] ?? "" })
+                        }
+                      >
+                        {t("outbound.saveOutcome")}
+                      </Button>
+                    </div>
+                  </>
+                )}
+                {data?.saidItHint && firstSentId === letter.id ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      dismissSaidItHint.mutate({ personaId });
+                      navigate(`/persona/${personaId}/graduation`);
+                    }}
+                    className="text-left text-[11px] text-muted-subtle hover:text-muted-foreground underline underline-offset-2"
+                  >
+                    {t("outbound.saidItHint")}
+                  </button>
+                ) : null}
+              </div>
+            ) : editing === letter.id ? (
               <div className="space-y-2">
                 <Label className="sr-only" htmlFor={`outbound-letter-${letter.id}`}>{t("outbound.editLabel")}</Label>
                 <Textarea id={`outbound-letter-${letter.id}`} value={text} onChange={(e) => setText(e.target.value)} rows={3} />

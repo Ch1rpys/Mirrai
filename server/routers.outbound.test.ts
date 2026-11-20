@@ -14,6 +14,11 @@ const getPersonaById = vi.fn();
 const getMessageById = vi.fn();
 const getOutboundLetters = vi.fn();
 const createOutboundLetter = vi.fn();
+const getOutboundLetterById = vi.fn();
+const setOutboundLetterOutcome = vi.fn();
+const createRelationshipEvent = vi.fn();
+const getPersonaSettings = vi.fn();
+const setPersonaSettings = vi.fn();
 
 vi.mock("./db", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -21,6 +26,11 @@ vi.mock("./db", async (importOriginal) => ({
   getMessageById: (...a: unknown[]) => getMessageById(...a),
   getOutboundLetters: (...a: unknown[]) => getOutboundLetters(...a),
   createOutboundLetter: (...a: unknown[]) => createOutboundLetter(...a),
+  getOutboundLetterById: (...a: unknown[]) => getOutboundLetterById(...a),
+  setOutboundLetterOutcome: (...a: unknown[]) => setOutboundLetterOutcome(...a),
+  createRelationshipEvent: (...a: unknown[]) => createRelationshipEvent(...a),
+  getPersonaSettings: (...a: unknown[]) => getPersonaSettings(...a),
+  setPersonaSettings: (...a: unknown[]) => setPersonaSettings(...a),
 }));
 
 import { appRouter } from "./routers";
@@ -136,5 +146,109 @@ describe("outbound.addOwn", () => {
       appRouter.createCaller(ctxFor(1)).outbound.addOwn({ personaId: 5, text: "   " }),
     ).rejects.toThrow();
     expect(createOutboundLetter).not.toHaveBeenCalled();
+  });
+});
+
+describe("outbound.list's one-time hint", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getPersonaById.mockResolvedValue(persona);
+  });
+
+  it("offers the last page once, after a letter has been said", async () => {
+    getOutboundLetters.mockResolvedValue([
+      { id: 7, status: "sent", text: "我说了" },
+      { id: 8, status: "sent", text: "还有一句" },
+    ]);
+    getPersonaSettings.mockResolvedValue(null);
+    const first = await appRouter
+      .createCaller(ctxFor(1))
+      .outbound.list({ personaId: 5 });
+    expect(first.saidItHint).toBe(true);
+
+    getPersonaSettings.mockResolvedValue({ saidItHintShown: true });
+    const second = await appRouter
+      .createCaller(ctxFor(1))
+      .outbound.list({ personaId: 5 });
+    expect(second.saidItHint).toBe(false);
+  });
+
+  it("does not offer it before anything has been said", async () => {
+    getOutboundLetters.mockResolvedValue([{ id: 7, status: "ready", text: "还没说" }]);
+    getPersonaSettings.mockResolvedValue(null);
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .outbound.list({ personaId: 5 });
+    expect(result.saidItHint).toBe(false);
+  });
+
+  it("records that the hint was made", async () => {
+    getPersonaSettings.mockResolvedValue(null);
+    setPersonaSettings.mockResolvedValue(true);
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .outbound.dismissSaidItHint({ personaId: 5 });
+    expect(setPersonaSettings).toHaveBeenCalledWith(
+      5,
+      1,
+      expect.objectContaining({ saidItHintShown: true }),
+    );
+    expect(result).toEqual({ success: true });
+  });
+});
+
+describe("outbound.saveOutcome", () => {
+  const sent = { id: 7, personaId: 5, status: "sent", text: "我说了" };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getOutboundLetterById.mockResolvedValue(sent);
+    setOutboundLetterOutcome.mockResolvedValue(true);
+    createRelationshipEvent.mockResolvedValue({ id: 3 });
+  });
+
+  it("keeps the user's words exactly and records one relationship event", async () => {
+    const note = "她沉默了一会儿，说「我知道了」。";
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .outbound.saveOutcome({ id: 7, note });
+    expect(setOutboundLetterOutcome).toHaveBeenCalledWith(7, 1, note, expect.any(Date));
+    expect(createRelationshipEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ personaId: 5, kind: "said_it", detail: note }),
+    );
+    expect(result).toEqual({ saved: true, event: { id: 3 } });
+  });
+
+  it("writes nothing when the user leaves it blank", async () => {
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .outbound.saveOutcome({ id: 7, note: "   " });
+    expect(result).toEqual({ saved: false });
+    expect(setOutboundLetterOutcome).not.toHaveBeenCalled();
+    expect(createRelationshipEvent).not.toHaveBeenCalled();
+  });
+
+  it("refuses a letter that has not been said yet", async () => {
+    getOutboundLetterById.mockResolvedValue({ ...sent, status: "ready" });
+    await expect(
+      appRouter.createCaller(ctxFor(1)).outbound.saveOutcome({ id: 7, note: "说了" }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("does not reach another user's letter", async () => {
+    getOutboundLetterById.mockResolvedValue(null);
+    await expect(
+      appRouter.createCaller(ctxFor(1)).outbound.saveOutcome({ id: 7, note: "说了" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("accepts said_it as a relationship event kind", async () => {
+    createRelationshipEvent.mockResolvedValue({ id: 9 });
+    await appRouter
+      .createCaller(ctxFor(1))
+      .relationship.add({ personaId: 5, kind: "said_it", title: "说出口了" });
+    expect(createRelationshipEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "said_it" }),
+    );
   });
 });

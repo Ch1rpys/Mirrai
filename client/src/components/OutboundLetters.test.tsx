@@ -21,14 +21,23 @@ const updateText = vi.fn();
 const markStaleNotified = vi.fn();
 const restore = vi.fn();
 const addOwn = vi.fn();
+const saveOutcome = vi.fn();
+const dismissSaidItHint = vi.fn();
+const navigate = vi.fn();
 
 let letters: any[] = [];
+let saidItHint = false;
+
+vi.mock("wouter", () => ({
+  useLocation: () => ["/chat/5", navigate],
+}));
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     outbound: {
-      list: { useQuery: () => ({ data: { letters }, refetch: vi.fn() }) },
-      collect: { useMutation: () => ({ mutate: collect, isPending: false }) },      markSent: { useMutation: () => ({ mutate: markSent, isPending: false }) },
+      list: { useQuery: () => ({ data: { letters, saidItHint }, refetch: vi.fn() }) },
+      collect: { useMutation: () => ({ mutate: collect, isPending: false }) },
+      markSent: { useMutation: () => ({ mutate: markSent, isPending: false }) },
       drop: { useMutation: () => ({ mutate: drop, isPending: false }) },
       keepForSelf: { useMutation: () => ({ mutate: keepForSelf, isPending: false }) },
       restore: { useMutation: () => ({ mutate: restore, isPending: false }) },
@@ -57,6 +66,24 @@ vi.mock("@/lib/trpc", () => ({
           isPending: false,
         }),
       },
+      saveOutcome: {
+        useMutation: (options?: any) => ({
+          mutate: (input: any) => {
+            saveOutcome(input);
+            options?.onSuccess?.({ saved: true });
+          },
+          isPending: false,
+        }),
+      },
+      dismissSaidItHint: {
+        useMutation: (options?: any) => ({
+          mutate: (input: any) => {
+            dismissSaidItHint(input);
+            options?.onSuccess?.({ success: true });
+          },
+          isPending: false,
+        }),
+      },
     },
   },
 }));
@@ -81,6 +108,7 @@ describe("the way out", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     letters = [];
+    saidItHint = false;
   });
 
   it("says so when there is nothing to take back", () => {
@@ -303,5 +331,79 @@ describe("the way out", () => {
     expect(addOwn).toHaveBeenCalledWith({ personaId: 5, text: "那天我应该留下来的" });
     // The box is empty again, so the next sentence starts clean.
     await waitFor(() => expect(box).toHaveValue(""));
+  });
+});
+
+describe("after the words have been said (C3.5)", () => {
+  it("turns the letter into a quiet card with an optional note", () => {
+    letters = [
+      {
+        id: 7,
+        status: "sent",
+        text: "我说了",
+        createdAt: new Date("2026-03-01T10:00:00Z").toISOString(),
+        sentAt: new Date("2026-03-02T10:00:00Z").toISOString(),
+      },
+    ];
+    render(<ConfirmProvider><OutboundLetters personaId={5} name="小满" /></ConfirmProvider>);
+    expect(screen.getByText(/你把这句话对 小满 说了。/)).toBeInTheDocument();
+    expect(screen.getByLabelText(translate("zh", "outbound.outcomePlaceholder"))).toBeInTheDocument();
+  });
+
+  it("keeps what the user writes, exactly", async () => {
+    const user = userEvent.setup();
+    letters = [{ id: 7, status: "sent", text: "我说了", createdAt: new Date().toISOString() }];
+    render(<ConfirmProvider><OutboundLetters personaId={5} name="小满" /></ConfirmProvider>);
+    await user.type(
+      screen.getByLabelText(translate("zh", "outbound.outcomePlaceholder")),
+      "她沉默了一会儿，说「我知道了」。",
+    );
+    await user.click(screen.getByRole("button", { name: translate("zh", "outbound.saveOutcome") }));
+    expect(saveOutcome).toHaveBeenCalledWith({
+      id: 7,
+      note: "她沉默了一会儿，说「我知道了」。",
+    });
+  });
+
+  it("offers the last page only while the hint has not been made", () => {
+    letters = [
+      { id: 7, status: "sent", text: "我说了", createdAt: new Date().toISOString() },
+      { id: 8, status: "sent", text: "还有一句", createdAt: new Date().toISOString() },
+    ];
+    saidItHint = true;
+    const { unmount } = render(
+      <ConfirmProvider><OutboundLetters personaId={5} name="小满" /></ConfirmProvider>,
+    );
+    expect(screen.getAllByText(/画个句号/)).toHaveLength(1);
+    unmount();
+
+    saidItHint = false;
+    render(<ConfirmProvider><OutboundLetters personaId={5} name="小满" /></ConfirmProvider>);
+    expect(screen.queryByText(/画个句号/)).toBeNull();
+  });
+
+  it("goes to the farewell page when the hint is followed", async () => {
+    const user = userEvent.setup();
+    letters = [{ id: 7, status: "sent", text: "我说了", createdAt: new Date().toISOString() }];
+    saidItHint = true;
+    render(<ConfirmProvider><OutboundLetters personaId={5} name="小满" /></ConfirmProvider>);
+    await user.click(screen.getByText(/画个句号/));
+    expect(dismissSaidItHint).toHaveBeenCalledWith({ personaId: 5 });
+    expect(navigate).toHaveBeenCalledWith("/persona/5/graduation");
+  });
+
+  it("keeps a note that was already written without asking again", () => {
+    letters = [
+      {
+        id: 7,
+        status: "sent",
+        text: "我说了",
+        createdAt: new Date().toISOString(),
+        outcomeNote: "她说了「我知道了」。",
+      },
+    ];
+    render(<ConfirmProvider><OutboundLetters personaId={5} name="小满" /></ConfirmProvider>);
+    expect(screen.getByText("她说了「我知道了」。")).toBeInTheDocument();
+    expect(screen.queryByLabelText(translate("zh", "outbound.outcomePlaceholder"))).toBeNull();
   });
 });
