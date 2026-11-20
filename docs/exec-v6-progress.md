@@ -2517,4 +2517,4 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 - **迁移**：只新增 `0071_scheduled_items`，在临时库 `mirrai_v6_scratch` 上走完 push → migrate → replay（69 条）→ rollback 1 → migrate 与升级路径，库已 `dropdb`；`mirrai_live` 未连接。新依赖只有白名单里的 `nodemailer`（+ `@types/nodemailer` devDependency）。
 - **未验证清单新增**：C5.2 真实 Open-Meteo、C5.3 真实到点与推送、C5.5 真实 SMTP。
 - **待用户决定**：这一轮没有新增。
-- **没做完**：C6.5、C6.3、C7.1、C7.2、C7.3。全部只依赖已完成条目（C6.4 / C1.7 / B7.3 / C1.8 除外），下一个会话可以直接从 C6.5 开始，不需要先补依赖。
+- **没做完**：C6.5、C6.3、C7.1、C7.2、C7.3。它们的依赖（C6.4、C1.7、B7.3、C6.6）都已完成，下一个会话可以直接从 C6.5 开始，不需要先补依赖；C7.4 仍等 C1.8。
