@@ -99,6 +99,10 @@ describe("the report page", () => {
     }
     expect(screen.getByText(translate("zh", "report.monthlyTitle"))).toBeInTheDocument();
     expect(screen.getByText(/咕咕/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /25 天/ })).toHaveAttribute(
+      "href",
+      "/persona/5/records?atDate=2023-06-10",
+    );
   });
 
   it("shows each tab's own content", async () => {

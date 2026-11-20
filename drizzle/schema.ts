@@ -413,6 +413,18 @@ export const messages = pgTable("messages", {
   ),
   /** The full-text index (C8.6). */
   searchTokensIdx: index("messages_search_tokens_idx").using("gin", table.searchTokens),
+  /**
+   * The few rows that still have no tokens (C8.6).
+   *
+   * The search keeps a fallback for rows imported before the token
+   * column existed. Without an index for that branch the planner gives
+   * up on the GIN index and scans the whole table; this partial index
+   * is tiny, empty once the backfill has run, and lets the planner use
+   * both indexes.
+   */
+  missingTokensIdx: index("messages_missing_tokens_idx")
+    .on(table.personaId, table.userId)
+    .where(sql`${table.searchTokens} IS NULL`),
 }));
 
 export type Message = typeof messages.$inferSelect;
@@ -1230,6 +1242,10 @@ export const collectedMessages = pgTable("collected_messages", {
   fileIdx: index("collected_messages_file_idx").on(table.personaId, table.userId, table.fileId),
   /** The full-text index (C8.6). */
   searchTokensIdx: index("collected_messages_search_tokens_idx").using("gin", table.searchTokens),
+  /** The still-unindexed rows, so the fallback does not force a full scan. */
+  missingTokensIdx: index("collected_messages_missing_tokens_idx")
+    .on(table.personaId, table.userId)
+    .where(sql`${table.searchTokens} IS NULL`),
 }));
 
 export type CollectedMessage = typeof collectedMessages.$inferSelect;

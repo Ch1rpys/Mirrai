@@ -18,6 +18,12 @@ describe("the nearest-line comparison", () => {
       "你在干嘛？",
     ]);
     expect(splitSentences("一句没有标点的话").length).toBe(1);
+    expect(splitSentences("Hello. How are you? I am fine.")).toEqual([
+      "Hello.",
+      "How are you?",
+      "I am fine.",
+    ]);
+    expect(splitSentences("The price is 3.5 dollars.").length).toBe(1);
   });
 
   it("drops punctuation, spaces and case before comparing", () => {

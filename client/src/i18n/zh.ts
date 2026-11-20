@@ -2485,6 +2485,7 @@ export const zh = {
     showContext: "看前后文",
     hideContext: "收起前后文",
     semanticTruncated: "意思相近只覆盖最近的 60,000 轮。",
+    loadMore: "再显示 30 条",
     me: "我",
     bookmark: "加书签",
     unbookmark: "去掉书签",
@@ -2551,6 +2552,7 @@ export const zh = {
     jumpWeek: "看那一周",
     change: "{{series}} 从 {{before}} 变成 {{after}}",
     timelineEmpty: "记录还不够长，看不出变化。",
+    events: "记录里的事件",
     firsts: {
       firstLine: "第一句话",
       lastLine: "最后一句话",
@@ -2571,6 +2573,8 @@ export const zh = {
       open: "展开",
     },
     places: {
+      last: "最近一次：{{date}}",
+      samples: "那几次",
       empty: "记录里没有位置消息，照片里也没有带位置的。",
       mapToggle: "加载地图底图",
       mapNote: "底图来自 {{host}}。打开后，你的浏览器会向它请求地图图片，它能看到你在看哪一片区域。",

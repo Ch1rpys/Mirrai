@@ -10,6 +10,8 @@ const deleteRecordRow = vi.fn();
 const upsertRecordMark = vi.fn();
 const removeRecordMark = vi.fn();
 const afterRecordsRemoved = vi.fn();
+const iterateRecords = vi.fn();
+const getPersonaStyleProfile = vi.fn();
 
 vi.mock("./_core/style-profile", () => ({
   afterRecordsChanged: vi.fn(),
@@ -24,6 +26,8 @@ vi.mock("./db", async (importOriginal) => ({
   listRecordMarks: (...a: unknown[]) => listRecordMarks(...a),
   listMediaForRecordIds: (...a: unknown[]) => listMediaForRecordIds(...a),
   countRecordsByMonth: (...a: unknown[]) => countRecordsByMonth(...a),
+  iterateRecords: (...a: unknown[]) => iterateRecords(...a),
+  getPersonaStyleProfile: (...a: unknown[]) => getPersonaStyleProfile(...a),
   deleteRecordRow: (...a: unknown[]) => deleteRecordRow(...a),
   upsertRecordMark: (...a: unknown[]) => upsertRecordMark(...a),
   removeRecordMark: (...a: unknown[]) => removeRecordMark(...a),
@@ -80,6 +84,8 @@ describe("record.page and the reader's routes", () => {
     upsertRecordMark.mockResolvedValue({ id: 3, kind: "bookmark", note: null });
     removeRecordMark.mockResolvedValue(true);
     afterRecordsRemoved.mockResolvedValue(undefined);
+    iterateRecords.mockImplementation(async function* () {});
+    getPersonaStyleProfile.mockResolvedValue({ conflict: null });
   });
 
   it("passes the three directions through, with their boundaries", async () => {
@@ -182,6 +188,37 @@ describe("record.page and the reader's routes", () => {
     await expect(
       caller.record.marks.add({ personaId: 5, recordId: 11, kind: "note", note: "x".repeat(1001) }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("passes the emotion column through to the first fight", async () => {
+    const at = new Date("2022-03-01T20:00:00.000Z");
+    iterateRecords.mockImplementation(async function* () {
+      yield {
+        id: 1,
+        role: "user",
+        content: "嗯",
+        kind: "text",
+        timestamp: at,
+        createdAt: at,
+        meta: null,
+        emotion: null,
+      };
+      yield {
+        id: 2,
+        role: "assistant",
+        content: "就嗯？",
+        kind: "text",
+        timestamp: new Date(at.getTime() + 60_000),
+        createdAt: new Date(at.getTime() + 60_000),
+        meta: null,
+        emotion: "distant",
+      };
+    });
+    getPersonaStyleProfile.mockResolvedValue({ conflict: { episodes: 1 } });
+    const firsts = await appRouter
+      .createCaller(ctxFor(1))
+      .record.firsts({ personaId: 5 });
+    expect(firsts.some((item: { key: string }) => item.key === "firstFight")).toBe(true);
   });
 
   it("returns the outline and the periods", async () => {

@@ -434,6 +434,19 @@ const MANUAL_COPY = {
     sleep: "一般 {{start}} 到 {{end}} 不在线",
     routineWindow: "{{title}}（{{start}}–{{end}}）",
     weekdays: ["日", "一", "二", "三", "四", "五", "六"],
+    userActs: {
+      ask: "在问一件事",
+      acknowledge: "只应了一声",
+      share: "在跟我分享",
+      affection: "在表达亲近",
+      tease: "在逗我",
+      complain: "在抱怨、发火",
+      logistics: "在商量事情",
+      repair: "在道歉、和好",
+      comfort: "在安慰我",
+      advise: "在给我建议",
+      other: "说了一句",
+    },
   },
   en: {
     title: "The manual of {{name}}",
@@ -459,6 +472,19 @@ const MANUAL_COPY = {
     sleep: "Usually offline from {{start}} to {{end}}",
     routineWindow: "{{title}} ({{start}}–{{end}})",
     weekdays: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    userActs: {
+      ask: "asking something",
+      acknowledge: "just acknowledging",
+      share: "sharing something",
+      affection: "being affectionate",
+      tease: "teasing",
+      complain: "complaining or angry",
+      logistics: "sorting something out",
+      repair: "apologising or making up",
+      comfort: "comforting",
+      advise: "giving advice",
+      other: "saying something",
+    },
   },
 } as const;
 
@@ -500,7 +526,9 @@ export function generateManualHTML(
       : "";
 
   const who = [
-    `<p>${escapeHtml(input.persona.relationshipDesc ?? "")}</p>`,
+    input.persona.relationshipDesc?.trim()
+      ? `<p>${escapeHtml(input.persona.relationshipDesc.trim())}</p>`
+      : "",
     input.persona.togetherFrom
       ? `<p class="date">${escapeHtml(input.persona.togetherFrom)}${
           input.persona.togetherTo ? ` — ${escapeHtml(input.persona.togetherTo)}` : ""
@@ -520,10 +548,11 @@ export function generateManualHTML(
     )}</p>${rule.evidence.map((evidence) => quote(evidence.snippet, evidence.at)).join("")}</div>`,
   ]);
 
+  const userActs = copy.userActs as Record<string, string>;
   const triggerSection = triggers.map(
     (trigger) =>
       `<div class="item"><p>${escapeHtml(
-        copy.when.replace("{{trigger}}", trigger.userAct),
+        copy.when.replace("{{trigger}}", userActs[trigger.userAct] ?? trigger.userAct),
       )}</p>${trigger.examples.map((example) => quote(example.text, example.at)).join("")}</div>`,
   );
 

@@ -79,6 +79,51 @@ function sideOf(row: { role: string }): "me" | "them" | null {
   return null;
 }
 
+/**
+ * The words that stand out in a year (C2.4).
+ *
+ * "More often than in the other years" is a comparison, not a count:
+ * a word that appears just as often every year is not that year's
+ * word. The old filter only required five hits, so an evenly spread
+ * word could be listed under every year.
+ */
+export function selectTopTerms(
+  countsByYear: Map<number, Map<string, number>>,
+  textRowsByYear: Map<number, number>,
+  totalTermCounts: Map<string, number>,
+): Map<number, string[]> {
+  const out = new Map<number, string[]>();
+  for (const [year, counts] of countsByYear) {
+    const total = textRowsByYear.get(year) ?? 1;
+    const otherYears = [...countsByYear.entries()].filter(([other]) => other !== year);
+    out.set(
+      year,
+      [...counts.entries()]
+        .map(([term, count]) => {
+          const rate = count / total;
+          const otherRate = Math.max(
+            0,
+            ...otherYears.map(([other, otherCounts]) =>
+              (otherCounts.get(term) ?? 0) / (textRowsByYear.get(other) ?? 1),
+            ),
+          );
+          return {
+            term,
+            count,
+            rate,
+            otherRate,
+            score: count / ((totalTermCounts.get(term) ?? count) - count + 1),
+          };
+        })
+        .filter((item) => item.count >= 5 && item.rate > item.otherRate + 1e-9)
+        .sort((a, b) => b.score - a.score || b.count - a.count || a.term.localeCompare(b.term))
+        .slice(0, 12)
+        .map((item) => item.term),
+    );
+  }
+  return out;
+}
+
 // i18n:allow-input — 「晚安」 is matched against the record's own goodnights.
 export function buildReportFromRecords(
   rows: ReportRow[],
@@ -217,6 +262,7 @@ export function buildReportFromRecords(
    * miner the dictionary uses, run per year.
    */
   const totalTermCounts = new Map<string, number>();
+  const textRowsByYear = new Map<number, number>();
   for (const year of yearMap.keys()) {
     const rowsOfYear = sorted.filter((row) => isTextRecord(row) && yearOf(atOf(row)) === year);
     const candidates = collectLexiconCandidates(rowsOfYear as never);
@@ -225,21 +271,11 @@ export function buildReportFromRecords(
       counts.set(candidate.term, candidate.count);
       totalTermCounts.set(candidate.term, (totalTermCounts.get(candidate.term) ?? 0) + candidate.count);
     }
+    textRowsByYear.set(year, Math.max(1, rowsOfYear.length));
     termsByYear.set(year, counts);
   }
-  for (const [year, counts] of termsByYear) {
-    const entry = ensureYear(year);
-    entry.topTerms = [...counts.entries()]
-      .map(([term, count]) => ({
-        term,
-        score: count / ((totalTermCounts.get(term) ?? count) - count + 1),
-        count,
-      }))
-      .filter((item) => item.count >= 5)
-      .sort((a, b) => b.score - a.score || b.count - a.count || a.term.localeCompare(b.term))
-      .slice(0, 12)
-      .map((item) => item.term);
-  }
+  const topTermsByYear = selectTopTerms(termsByYear, textRowsByYear, totalTermCounts);
+  for (const [year, terms] of topTermsByYear) ensureYear(year).topTerms = terms;
 
   for (const [year, delays] of replyDelays) {
     const entry = ensureYear(year);

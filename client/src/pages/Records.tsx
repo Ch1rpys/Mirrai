@@ -76,9 +76,10 @@ export default function Records() {
     return undefined;
   }, []);
 
-  const [highlightId] = useState<number | undefined>(
+  const [highlightId, setHighlightId] = useState<number | undefined>(
     initialAnchor && "recordId" in initialAnchor ? initialAnchor.recordId : undefined,
   );
+  const [chaptersOpen, setChaptersOpen] = useState(false);
   const [request, setRequest] = useState<PageRequest>(() =>
     initialAnchor
       ? { anchor: initialAnchor, direction: "around", limit: 200 }
@@ -149,6 +150,15 @@ export default function Records() {
   const jumpTo = useCallback(
     (anchor: PageAnchor, direction: "older" | "newer" | "around") => {
       modeRef.current = "replace";
+      /**
+       * A jump to a line is also a highlight and a scroll.
+       *
+       * The id used to be read only from `?at=` on mount, so clicking
+       * a search result (or a bookmark) moved the query but left the
+       * target unmarked and off-screen. A date or month jump has no
+       * single line to mark.
+       */
+      setHighlightId("recordId" in anchor ? anchor.recordId : undefined);
       setRequest({ anchor, direction, limit: 200 });
     },
     [],
@@ -165,6 +175,13 @@ export default function Records() {
     bookmarkByRecord.set(mark.recordId, { id: mark.id, content: mark.content });
   }
   const outlineMonths = outline.data?.months ?? [];
+  const monthsByYear = new Map<string, typeof outlineMonths>();
+  for (const month of outlineMonths) {
+    const year = month.month.slice(0, 4);
+    const list = monthsByYear.get(year) ?? [];
+    list.push(month);
+    monthsByYear.set(year, list);
+  }
   const periods = outline.data?.periods ?? [];
 
   const loadOlder = () => {
@@ -282,8 +299,19 @@ export default function Records() {
         </div>
       </header>
 
+      <div className="mt-3 md:hidden">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setChaptersOpen((open) => !open)}
+          aria-expanded={chaptersOpen}
+        >
+          {t("records.chapters")}
+        </Button>
+      </div>
+
       <div className="mt-5 grid gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="space-y-4">
+        <aside className={`${chaptersOpen ? "block" : "hidden"} space-y-4 md:block`}>
           <section>
             <h2 className="kicker">{t("records.chapters")}</h2>
             {periods.length > 0 && (
@@ -301,17 +329,22 @@ export default function Records() {
                 ))}
               </div>
             )}
-            <div className="mt-2 space-y-1">
-              {outlineMonths.map((month) => (
-                <button
-                  key={month.month}
-                  type="button"
-                  className="flex w-full items-center justify-between rounded px-2 py-1 text-left text-sm hover:bg-muted"
-                  onClick={() => jumpTo({ at: new Date(`${month.month}-01T00:00:00`).toISOString() }, "around")}
-                >
-                  <span>{month.month}</span>
-                  <span className="text-xs text-muted-foreground">{month.count}</span>
-                </button>
+            <div className="mt-2 space-y-2">
+              {[...monthsByYear.entries()].map(([year, months]) => (
+                <div key={year} className="space-y-0.5">
+                  <p className="px-2 text-[11px] font-medium text-muted-foreground">{year}</p>
+                  {months.map((month) => (
+                    <button
+                      key={month.month}
+                      type="button"
+                      className="flex w-full items-center justify-between rounded px-2 py-1 text-left text-sm hover:bg-muted"
+                      onClick={() => jumpTo({ at: new Date(`${month.month}-01T00:00:00`).toISOString() }, "around")}
+                    >
+                      <span>{month.month.slice(5)}</span>
+                      <span className="text-xs text-muted-foreground">{month.count}</span>
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
           </section>

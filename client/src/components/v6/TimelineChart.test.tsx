@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
@@ -25,7 +25,13 @@ vi.mock("recharts", () => ({
   YAxis: () => null,
   CartesianGrid: () => null,
   Tooltip: () => null,
-  ReferenceLine: (props: any) => <span data-reference={props.x} />,
+  ReferenceLine: (props: any) => (
+    <span
+      data-reference={props.x}
+      data-clickable={props.onClick ? "yes" : undefined}
+      onClick={props.onClick}
+    />
+  ),
 }));
 
 const series = Array.from({ length: 20 }, (_, index) => ({
@@ -49,6 +55,9 @@ vi.mock("@/lib/trpc", () => ({
             points: [
               { id: "2023-W10", at: "2023-W10", changes: [{ series: "charsMedian", before: 10, after: 6 }], status: "auto" },
               { id: "2023-W14", at: "2023-W14", changes: [{ series: "myShare", before: 0.5, after: 0.3 }], status: "auto" },
+            ],
+            events: [
+              { at: "2023-03-06T12:00:00.000Z", week: "2023-W10", kind: "meetup", title: "第一次见面" },
             ],
           },
           isLoading: false,
@@ -74,7 +83,27 @@ describe("the timeline chart", () => {
     render(<TimelineChart personaId={5} />);
     const points = document.querySelectorAll("[data-turning-point]");
     expect(points).toHaveLength(2);
+    // Two turning-point lines (one chart each) and one event line in
+    // each of the six charts.
+    expect(document.querySelectorAll("[data-reference]")).toHaveLength(8);
+    expect(screen.getByText(/第一次见面/)).toBeInTheDocument();
     await userEvent.click(screen.getByText("2023-W10"));
+    expect(
+      screen.getByText(
+        translate("zh", "report.change", {
+          series: translate("zh", "report.series.charsMedian"),
+          before: 10,
+          after: 6,
+        }),
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("selects the turn when its vertical line is clicked", async () => {
+    render(<TimelineChart personaId={5} />);
+    const line = document.querySelector('[data-reference="2023-W10"][data-clickable="yes"]');
+    expect(line).toBeTruthy();
+    fireEvent.click(line!);
     expect(
       screen.getByText(
         translate("zh", "report.change", {

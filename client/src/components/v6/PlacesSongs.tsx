@@ -115,8 +115,36 @@ export function PlacesPanel({ personaId }: { personaId: number }) {
           <div key={`${place.name}-${place.lat ?? ""}-${place.lng ?? ""}`} className="rounded border border-border/70 px-3 py-2 text-sm">
             <p className="text-foreground">{place.name}</p>
             <p className="text-[11px] text-muted-foreground">
-              {t("report.places.count", { n: place.count })} · {t("report.places.first", { date: place.first.slice(0, 10) })}
+              {t("report.places.count", { n: place.count })} · {t("report.places.first", { date: place.first.slice(0, 10) })} · {t("report.places.last", { date: place.last.slice(0, 10) })}
             </p>
+            {place.samples.length > 0 && (
+              <p className="mt-1 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                <span>{t("report.places.samples")}</span>
+                {place.samples.slice(0, 5).map((sample) => (
+                  sample.recordId != null ? (
+                    <a
+                      key={`r-${sample.recordId}`}
+                      href={`/persona/${personaId}/records?at=${sample.recordId}`}
+                      className="underline underline-offset-2"
+                    >
+                      {sample.at.slice(0, 10)}
+                    </a>
+                  ) : sample.url ? (
+                    <a
+                      key={`m-${sample.mediaId}`}
+                      href={sample.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline underline-offset-2"
+                    >
+                      {sample.at.slice(0, 10)}
+                    </a>
+                  ) : (
+                    <span key={`m-${sample.mediaId}`}>{sample.at.slice(0, 10)}</span>
+                  )
+                ))}
+              </p>
+            )}
           </div>
         ))}
       </div>

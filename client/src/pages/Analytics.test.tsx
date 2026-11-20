@@ -16,6 +16,9 @@ import { translate } from "@/i18n";
  * for yet.
  */
 
+/** The user's personas, as the list query answers. */
+let personas: any[] = [];
+
 /** What the query answers. */
 const overview = {
   data: undefined as any,
@@ -30,7 +33,7 @@ vi.mock("@/lib/trpc", () => ({
       overview: { useQuery: () => overview },
     },
     persona: {
-      list: { useQuery: () => ({ data: [] }) },
+      list: { useQuery: () => ({ data: personas }) },
     },
   },
 }));
@@ -92,6 +95,7 @@ import Analytics from "./Analytics";
 describe("the statistics page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    personas = [];
     authError = null;
     overview.data = {
       stats: { totalMessages: 42, activeDays: 7, longestStreak: 3, avgPerDay: 6 },
@@ -121,6 +125,16 @@ describe("the statistics page", () => {
     render(<Analytics />);
 
     expect(screen.getByText("42")).toBeInTheDocument();
+  });
+
+  it("puts the report entry on every persona that has records", () => {
+    personas = [
+      { id: 5, name: "小满", recordCount: 3, fileCount: 0 },
+      { id: 6, name: "没有记录", recordCount: 0, fileCount: 0 },
+    ];
+    render(<Analytics />);
+    expect(screen.getByText(translate("zh", "report.title", { name: "小满" }))).toBeInTheDocument();
+    expect(screen.queryByText(translate("zh", "report.title", { name: "没有记录" }))).not.toBeInTheDocument();
   });
 
   it("does not keep a longest-streak tile", () => {

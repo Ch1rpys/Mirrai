@@ -3,7 +3,7 @@ import { splitScenes } from "@shared/scenes";
 import { normalizeTrigger } from "@shared/ritual-table";
 import { zonedHour } from "@shared/timezone";
 import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
-import { buildReportFromRecords } from "./report";
+import { buildReportFromRecords, selectTopTerms } from "./report";
 
 const rows = buildXiaomanRecords().map((row) => ({
   id: row.id,
@@ -60,6 +60,18 @@ describe("the annual report", () => {
     for (const day of report.heatmap) {
       for (let hour = 0; hour < 7; hour++) expect(day[hour]).toBe(0);
     }
+  });
+
+  it("keeps a word that is just as common every year out of the top terms", () => {
+    const counts = new Map<number, Map<string, number>>([
+      [2022, new Map([["彩虹雨", 5], ["海边风", 6]])],
+      [2023, new Map([["彩虹雨", 5], ["别的景", 6]])],
+    ]);
+    const totals = new Map([[2022, 10], [2023, 10]]);
+    const all = new Map([["彩虹雨", 10], ["海边风", 6], ["别的景", 6]]);
+    const top = selectTopTerms(counts, totals, all);
+    expect(top.get(2022)).toEqual(["海边风"]);
+    expect(top.get(2023)).toEqual(["别的景"]);
   });
 
   it("gives every year at most twelve terms", () => {

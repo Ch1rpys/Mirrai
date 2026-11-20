@@ -207,9 +207,12 @@ export default function Report() {
           <div className="rounded-lg border border-border/70 p-3 text-sm">
             <p className="text-xs text-muted-foreground">{t("report.longestSilence")}</p>
             {data.longestSilence ? (
-              <p>
+              <a
+                href={`/persona/${personaId}/records?atDate=${data.longestSilence.from.slice(0, 10)}`}
+                className="underline underline-offset-2"
+              >
                 {t("report.days", { n: data.longestSilence.days })} · {data.longestSilence.from.slice(0, 10)}
-              </p>
+              </a>
             ) : (
               <p className="text-muted-foreground">{t("report.noData")}</p>
             )}

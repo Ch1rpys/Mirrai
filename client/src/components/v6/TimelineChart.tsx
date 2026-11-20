@@ -70,6 +70,7 @@ export default function TimelineChart({ personaId }: { personaId: number }) {
   }
   const series = timeline.data?.series ?? [];
   const points = timeline.data?.points ?? [];
+  const events = timeline.data?.events ?? [];
   if (series.length === 0) {
     return <p className="text-sm text-muted-foreground">{t("report.timelineEmpty")}</p>;
   }
@@ -78,7 +79,7 @@ export default function TimelineChart({ personaId }: { personaId: number }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground leading-relaxed">{t("report.timelineNote")}</p>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3">
         {keys.map((key) => (
           <div key={key} className="rounded-lg border border-border/70 p-2">
             <p className="text-xs text-muted-foreground">{labels[key]}</p>
@@ -90,10 +91,29 @@ export default function TimelineChart({ personaId }: { personaId: number }) {
                   <YAxis hide />
                   <Tooltip />
                   <Line dataKey="value" dot={false} stroke="currentColor" strokeWidth={1.5} />
+                  {events.map((event) => (
+                    <ReferenceLine
+                      key={`event-${event.at}-${event.title}`}
+                      x={event.week}
+                      stroke="currentColor"
+                      strokeDasharray="2 4"
+                      strokeOpacity={0.35}
+                    />
+                  ))}
                   {points
                     .filter((point) => point.changes.some((change) => change.series === key))
                     .map((point) => (
-                      <ReferenceLine key={point.id} x={point.id} stroke="currentColor" strokeDasharray="4 4" />
+                      <ReferenceLine
+                        key={point.id}
+                        x={point.id}
+                        stroke="currentColor"
+                        strokeDasharray="4 4"
+                        style={{ cursor: "pointer" }}
+                        onClick={() => {
+                          setSelected(point.id);
+                          setNote(point.note ?? "");
+                        }}
+                      />
                     ))}
                 </LineChart>
               </ResponsiveContainer>
@@ -101,6 +121,17 @@ export default function TimelineChart({ personaId }: { personaId: number }) {
           </div>
         ))}
       </div>
+
+      {events.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">{t("report.events")}</p>
+          {events.map((event) => (
+            <p key={`${event.at}-${event.title}`} className="text-xs text-muted-foreground">
+              <span className="text-foreground">{event.at.slice(0, 10)}</span> · {event.title}
+            </p>
+          ))}
+        </div>
+      )}
 
       <div className="space-y-1">
         {points.map((point) => (

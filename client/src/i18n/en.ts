@@ -2474,6 +2474,7 @@ export const en = {
     showContext: "Show the lines around it",
     hideContext: "Hide the lines around it",
     semanticTruncated: "The meaning search covers the most recent 60,000 turns only.",
+    loadMore: "Show 30 more",
     me: "Me",
     bookmark: "Bookmark this line",
     unbookmark: "Remove the bookmark",
@@ -2540,6 +2541,7 @@ export const en = {
     jumpWeek: "See that week",
     change: "{{series}} went from {{before}} to {{after}}",
     timelineEmpty: "The record is not long enough to see a change.",
+    events: "Events from the record",
     firsts: {
       firstLine: "The first line",
       lastLine: "The last line",
@@ -2560,6 +2562,8 @@ export const en = {
       open: "Open",
     },
     places: {
+      last: "Last: {{date}}",
+      samples: "Those times",
       empty: "There are no location messages, and no photo carries a place.",
       mapToggle: "Load the map basemap",
       mapNote: "The basemap comes from {{host}}. If you turn it on, your browser asks it for map images, and it can see which part you are looking at.",

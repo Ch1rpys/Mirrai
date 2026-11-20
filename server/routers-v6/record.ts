@@ -215,11 +215,15 @@ export const recordRouter = router({
         id: hit.id,
         content: hit.content,
         timestamp: hit.timestamp?.toISOString() ?? null,
+        role: hit.role,
+        speaker: hit.speaker,
       }));
       const semantic = await searchRecordsSemantic(input.personaId, ctx.user.id, {
         q: input.q,
         role: input.role,
         k: 8,
+        ...(input.from ? { from: new Date(input.from) } : {}),
+        ...(input.to ? { to: new Date(input.to) } : {}),
       });
       const exactIds = new Set(exact.map((hit) => hit.id));
       const similar = semantic
@@ -230,6 +234,8 @@ export const recordRouter = router({
               id: hit.id,
               content: hit.content,
               timestamp: hit.timestamp?.toISOString() ?? null,
+              role: hit.role,
+              speaker: hit.speaker,
             }))
         : null;
       return {
@@ -322,6 +328,7 @@ export const recordRouter = router({
           kind: row.kind,
           timestamp: row.timestamp,
           createdAt: row.createdAt,
+          emotion: row.emotion,
           meta: row.meta,
         });
       }

@@ -64,6 +64,24 @@ describe("on this day", () => {
     expect(years[0].rows[0].content).toBe("四年才过一次");
   });
 
+  it("uses the user's own calendar day on the other side of the date line", () => {
+    const rows = [{
+      id: 1,
+      role: "assistant",
+      kind: "text",
+      content: "在的呀",
+      timestamp: new Date("2024-02-28T20:00:00.000Z"),
+      emotion: null,
+      meta: null,
+    }];
+    // 2025-03-01T02:00Z is still 2025-02-28 in Los Angeles, and the
+    // record is 2024-02-28 there too; in Shanghai the same two are
+    // 2025-03-01 and 2024-02-29, so the day does not match.
+    const today = new Date("2025-03-01T02:00:00.000Z");
+    expect(pickOnThisDay(rows, today, "America/Los_Angeles")).toHaveLength(1);
+    expect(pickOnThisDay(rows, today, "Asia/Shanghai")).toEqual([]);
+  });
+
   it("leaves out a day whose first scene was a bad one", () => {
     const rows = [
       {
@@ -72,7 +90,8 @@ describe("on this day", () => {
         kind: "text",
         content: "哦。",
         timestamp: new Date("2022-03-01T00:10:00+08:00"),
-        meta: { emotion: "distant" },
+        emotion: "distant",
+        meta: null,
       },
       {
         id: 2,
@@ -80,7 +99,8 @@ describe("on this day", () => {
         kind: "text",
         content: "随便。",
         timestamp: new Date("2022-03-01T00:11:00+08:00"),
-        meta: { emotion: "distant" },
+        emotion: "distant",
+        meta: null,
       },
       {
         id: 3,
@@ -88,7 +108,8 @@ describe("on this day", () => {
         kind: "text",
         content: "在的呀",
         timestamp: new Date("2022-03-01T20:00:00+08:00"),
-        meta: { emotion: "warm" },
+        emotion: "warm",
+        meta: null,
       },
       {
         id: 4,
@@ -96,7 +117,8 @@ describe("on this day", () => {
         kind: "text",
         content: "晚安",
         timestamp: new Date("2022-03-01T20:01:00+08:00"),
-        meta: { emotion: "warm" },
+        emotion: "warm",
+        meta: null,
       },
     ];
     const today = new Date("2025-03-01T12:00:00+08:00");

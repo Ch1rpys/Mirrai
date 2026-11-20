@@ -197,6 +197,30 @@ describe("the record reader", () => {
     await userEvent.click(await screen.findByRole("button", { name: "喜欢海" }));
     expect(window.location.search).toContain("at=11");
     expect(lastPageInput.value).toMatchObject({ anchor: { recordId: 11 }, direction: "around" });
+    // The point of the jump is to see the line, not only to load it.
+    expect(
+      document.querySelector('[data-record-id="11"]')?.className,
+    ).toContain("ring-2");
+  });
+
+  it("groups the chapters by year and folds them into a drawer on a narrow screen", async () => {
+    outlineState.value = {
+      data: {
+        months: [
+          { month: "2022-03", count: 1 },
+          { month: "2023-07", count: 2 },
+        ],
+        periods: [],
+      },
+    };
+    render(<Records />);
+    await screen.findByText("在的呀");
+    expect(screen.getByText("2022")).toBeInTheDocument();
+    expect(screen.getByText("2023")).toBeInTheDocument();
+    const drawer = screen.getByRole("button", { name: translate("zh", "records.chapters") });
+    expect(drawer).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(drawer);
+    expect(drawer).toHaveAttribute("aria-expanded", "true");
   });
 
   it("loads older lines from the first row it has", async () => {

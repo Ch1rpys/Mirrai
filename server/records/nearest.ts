@@ -30,7 +30,11 @@ export interface NearestSentence {
 /** Splits an input into the sentences the verdict is given per. */
 export function splitSentences(text: string): string[] {
   return text
-    .split(/(?<=[。！？!?；;…\n])/)
+    /**
+     * English full stops are sentence ends too. The lookahead needs a
+     * following space so decimals and "3.5" stay in one sentence.
+     */
+    .split(/(?<=[。！？!?；;…\n])|(?<=\.)\s+/)
     .map((line) => line.trim())
     .filter(Boolean);
 }
@@ -126,6 +130,8 @@ export async function findNearest(params: {
         id: hit.id,
         content: hit.content,
         timestamp: hit.timestamp,
+        role: hit.role,
+        speaker: hit.speaker,
         coverage: 1,
       };
       byId.set(hit.id, row);

@@ -19,6 +19,8 @@ export interface OnThisDayRow {
   kind: string;
   content: string;
   timestamp: Date | null;
+  /** The B1.5 label, on the record's own column. */
+  emotion?: string | null;
   meta: unknown;
 }
 
@@ -43,7 +45,7 @@ function monthDay(date: Date, timeZone?: string | null): string {
 function sceneIsNegative(rows: OnThisDayRow[]): boolean {
   const labels = rows
     .filter((row) => row.role === "assistant" && row.kind === "text")
-    .map((row) => (row.meta as { emotion?: unknown } | null)?.emotion)
+    .map((row) => row.emotion)
     .filter((state): state is string => typeof state === "string");
   if (labels.length === 0) return false;
   const negative = labels.filter((state) => NEGATIVE_STATES.has(state)).length;
@@ -120,6 +122,7 @@ export async function onThisDay(params: {
       kind: row.kind,
       content: row.content,
       timestamp: row.timestamp,
+      emotion: row.emotion,
       meta: row.meta,
     });
   }

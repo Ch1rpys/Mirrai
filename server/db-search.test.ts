@@ -2,13 +2,18 @@ import { describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import {
   createCollectedMessages,
+  createMessage,
   createPersona,
   deletePersona,
   getDb,
+  searchAllMessages,
+  searchMessages,
   searchRecordsLexical,
 } from "./db";
 import { backfillSearchTokens } from "./records/backfill-tokens";
 import { seedXiaoman } from "./test-fixtures/seed-db";
+import { appRouter } from "./routers";
+import type { TrpcContext } from "./_core/context";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -110,20 +115,43 @@ describe.skipIf(!DATABASE_URL)("search over the record table", () => {
     }
   });
 
-  it("keeps both GIN indexes after a schema push", async () => {
+  it("keeps the full-text and missing-token indexes after a schema push", async () => {
     const db = await getDb();
     const indexes = await db!.execute(sql`
       SELECT indexname FROM pg_indexes
       WHERE indexname IN (
         'collected_messages_search_tokens_idx',
-        'messages_search_tokens_idx'
+        'messages_search_tokens_idx',
+        'collected_messages_missing_tokens_idx',
+        'messages_missing_tokens_idx'
       )
     `);
     const names = (indexes.rows as Array<{ indexname: string }>).map((r) => r.indexname).sort();
     expect(names).toEqual([
+      "collected_messages_missing_tokens_idx",
       "collected_messages_search_tokens_idx",
+      "messages_missing_tokens_idx",
       "messages_search_tokens_idx",
     ]);
+  });
+
+  it("finds a one-character word inside a longer chat message", async () => {
+    const userId = 9_920_000 + Math.floor(Math.random() * 10_000);
+    const personaId = await createPersona({ userId, name: "message-search" });
+    try {
+      await createMessage({
+        personaId,
+        userId,
+        role: "assistant",
+        content: "我有一只猫",
+      });
+      const found = await searchMessages(personaId, userId, "猫");
+      expect(found.map((row) => row.content)).toEqual(["我有一只猫"]);
+      const all = await searchAllMessages(userId, "猫");
+      expect(all.some((row) => row.kind === "message" && row.content === "我有一只猫")).toBe(true);
+    } finally {
+      await deletePersona(personaId, userId);
+    }
   });
 });
 
@@ -179,6 +207,73 @@ describe.skipIf(!DATABASE_URL)("search over the Xiaoman fixture", () => {
       );
     } finally {
       await deletePersona(personaId, userId);
+    }
+  });
+});
+
+function searchCtx(userId: number): TrpcContext {
+  return {
+    user: {
+      id: userId,
+      username: `search-${userId}`,
+      passwordHash: null,
+      openId: null,
+      email: null,
+      loginMethod: "local",
+      role: "user",
+      tokenVersion: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      lastSignedIn: new Date(),
+      name: "阿树",
+      timezone: "Asia/Shanghai",
+      locale: "zh",
+    },
+    locale: "zh",
+    req: { headers: {}, socket: { remoteAddress: "127.0.0.1" } } as TrpcContext["req"],
+    res: { cookie: () => {}, clearCookie: () => {} } as unknown as TrpcContext["res"],
+  } as unknown as TrpcContext;
+}
+
+describe.skipIf(!DATABASE_URL)("searchAll across users", () => {
+  it("never returns another user's record", async () => {
+    const userId = 9_925_000 + Math.floor(Math.random() * 10_000);
+    const otherUserId = userId + 1;
+    const mine = await createPersona({ userId, name: "mine" });
+    const theirs = await createPersona({ userId: otherUserId, name: "theirs" });
+    try {
+      await createCollectedMessages([
+        {
+          userId,
+          personaId: mine,
+          source: "generic",
+          role: "assistant",
+          content: "我这边也喜欢海",
+          timestamp: new Date("2022-03-01T12:00:00.000Z"),
+          kind: "text",
+          speaker: "小满",
+        },
+      ]);
+      await createCollectedMessages([
+        {
+          userId: otherUserId,
+          personaId: theirs,
+          source: "generic",
+          role: "assistant",
+          content: "别人的海不该被搜到",
+          timestamp: new Date("2022-03-02T12:00:00.000Z"),
+          kind: "text",
+          speaker: "别人",
+        },
+      ]);
+      const rows = await appRouter
+        .createCaller(searchCtx(userId))
+        .record.searchAll({ q: "海" });
+      expect(rows.map((row) => row.personaId)).toEqual([mine]);
+      expect(rows.map((row) => row.content)).not.toContain("别人的海不该被搜到");
+    } finally {
+      await deletePersona(mine, userId);
+      await deletePersona(theirs, otherUserId);
     }
   });
 });

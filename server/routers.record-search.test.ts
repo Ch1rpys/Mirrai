@@ -91,7 +91,7 @@ describe("record.search, context and searchAll", () => {
     }));
   });
 
-  it("passes the time range as dates", async () => {
+  it("passes the time range as dates to both halves of the search", async () => {
     searchRecordsLexical.mockResolvedValue([]);
     await appRouter.createCaller(ctxFor(1)).record.search({
       personaId: 5,
@@ -102,6 +102,10 @@ describe("record.search, context and searchAll", () => {
     const params = searchRecordsLexical.mock.calls[0][2];
     expect(params.from).toEqual(new Date("2022-01-01T00:00:00.000Z"));
     expect(params.to).toEqual(new Date("2022-12-31T23:59:59.000Z"));
+    expect(searchRecordsSemantic).toHaveBeenCalledWith(5, 1, expect.objectContaining({
+      from: new Date("2022-01-01T00:00:00.000Z"),
+      to: new Date("2022-12-31T23:59:59.000Z"),
+    }));
   });
 
   it("keeps a semantic hit that is not already in the literal list", async () => {

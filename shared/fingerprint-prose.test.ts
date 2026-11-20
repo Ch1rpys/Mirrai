@@ -30,11 +30,24 @@ describe("the fingerprint in words", () => {
   });
 
   it("ties every sentence to a number in the fingerprint", () => {
+    const valueAt = (path: string): unknown => {
+      let current: unknown = fingerprint;
+      for (const part of path.split(".")) {
+        if (!current || typeof current !== "object") return undefined;
+        current = (current as Record<string, unknown>)[part];
+      }
+      return current;
+    };
     const lines = describeFingerprint(fingerprint);
     expect(lines.length).toBeGreaterThan(2);
     for (const line of lines) {
-      expect(Number.isFinite(line.value)).toBe(true);
-      expect(line.metric.length).toBeGreaterThan(0);
+      const paths = line.metric.split(" / ");
+      expect(paths.length).toBeGreaterThan(0);
+      for (const path of paths) {
+        expect(Number.isFinite(valueAt(path)), `${line.text} -> ${path}`).toBe(true);
+      }
+      // The primary path is the number the sentence states.
+      expect(valueAt(paths[0]!)).toBe(line.value);
     }
   });
 

@@ -17,6 +17,8 @@ export interface FirstRow {
   kind: string;
   timestamp: Date | null;
   createdAt: Date;
+  /** The B1.5 label, on the record's own column. */
+  emotion?: string | null;
   meta?: unknown;
 }
 
@@ -29,7 +31,8 @@ export interface FirstItem {
 }
 
 // i18n:allow-input — matched against the record, never shown as copy.
-const LOVE_RE = /我爱你|爱你|喜欢你|love you/i;
+// A negated line ("我不爱你了") is not a declaration of love.
+const LOVE_RE = /(?<!不)(?:我爱你|爱你|喜欢你|love you)/i;
 const NEGATIVE = new Set(["distant", "melancholy"]);
 
 function atOf(row: FirstRow): Date {
@@ -120,7 +123,7 @@ export function findFirsts(
     const scene = splitScenes(sorted).find((candidate) =>
       candidate.some((row) => {
         if (!isTextRecord(row) || sideOf(row) !== "them") return false;
-        const emotion = (row.meta as { emotion?: unknown } | null)?.emotion;
+        const emotion = row.emotion;
         return typeof emotion === "string" && NEGATIVE.has(emotion);
       }),
     );

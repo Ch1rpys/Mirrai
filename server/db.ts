@@ -1307,6 +1307,18 @@ export async function getPersonasWithStats(userId: number) {
     // columns.
     .orderBy(messages.personaId, desc(messages.createdAt));
 
+  // The number of record lines of each persona (C2.4's entry card).
+  const recordCounts = await db.select({
+    personaId: collectedMessages.personaId,
+    c: count(),
+  })
+    .from(collectedMessages)
+    .where(and(
+      eq(collectedMessages.userId, userId),
+      inArray(collectedMessages.personaId, ids),
+    ))
+    .groupBy(collectedMessages.personaId);
+
   // The number of files of each persona.
   const fileCounts = await db.select({
     personaId: personaFiles.personaId,
@@ -1341,6 +1353,7 @@ export async function getPersonasWithStats(userId: number) {
     });
   }
   const filesByPersona = new Map(fileCounts.map((r) => [r.personaId, Number(r.c)]));
+  const recordsByPersona = new Map(recordCounts.map((r) => [r.personaId, Number(r.c)]));
   const bindingsByPersona = new Map(bindings.map((r) => [r.personaId, Number(r.c)]));
 
   /**
@@ -1373,6 +1386,7 @@ export async function getPersonasWithStats(userId: number) {
       ...p,
       lastMessage: lastByPersona.get(p.id) ?? null,
       fileCount: filesByPersona.get(p.id) ?? 0,
+      recordCount: recordsByPersona.get(p.id) ?? 0,
       wechatBound: (bindingsByPersona.get(p.id) ?? 0) > 0,
       relationshipEnded,
     };
@@ -2543,7 +2557,15 @@ export async function searchMessages(personaId: number, userId: number, query: s
   // The wildcards are escaped, so a search for "50%" does not match
   // everything that contains a digit.
   const escaped = query.replace(/[\\%_]/g, (c) => `\\${c}`);
-  const tsQuery = toTsQuery(queryLexemes(query), "&");
+  /**
+   * The stored tokens are character bigrams. A one-character query has
+   * no token to match (the characters around it were stored, not the
+   * character alone), so the token condition must be left out and the
+   * substring test allowed to answer. This is the same rule the record
+   * search uses; without it, a search for "猫" stopped finding
+   * "我有一只猫" once the tokens were backfilled.
+   */
+  const tsQuery = toTsQuery(indexableLexemes(queryLexemes(query)), "&");
   return db.select().from(messages)
     .where(and(
       eq(messages.personaId, personaId),
@@ -2576,7 +2598,7 @@ export async function searchAllMessages(
   if (!db) return [];
   const escaped = query.replace(/[\\%_]/g, (c) => `\\${c}`);
   const pattern = `%${escaped}%`;
-  const messageTsQuery = toTsQuery(queryLexemes(query), "&");
+  const messageTsQuery = toTsQuery(indexableLexemes(queryLexemes(query)), "&");
 
   const [messageRows, memoryRows, diaryRows] = await Promise.all([
     db.select({
@@ -5819,6 +5841,8 @@ export interface SearchRecordsLexicalHit {
   id: number;
   content: string;
   timestamp: Date | null;
+  role: string;
+  speaker: string | null;
   coverage: number;
 }
 
@@ -5902,6 +5926,8 @@ export async function searchRecordsLexical(
       id: collectedMessages.id,
       content: collectedMessages.content,
       timestamp: collectedMessages.timestamp,
+      role: collectedMessages.role,
+      speaker: collectedMessages.speaker,
       rank,
     })
     .from(collectedMessages)
@@ -5944,6 +5970,8 @@ export async function searchRecordsLexical(
       id: row.id,
       content: text,
       timestamp: row.timestamp ?? null,
+      role: row.role,
+      speaker: row.speaker ?? null,
       coverage: 1,
     });
   }
@@ -5993,6 +6021,8 @@ export async function candidateRecordsByOverlap(
       id: collectedMessages.id,
       content: collectedMessages.content,
       timestamp: collectedMessages.timestamp,
+      role: collectedMessages.role,
+      speaker: collectedMessages.speaker,
       rank,
     })
     .from(collectedMessages)
@@ -6025,6 +6055,8 @@ export async function candidateRecordsByOverlap(
     id: row.id,
     content: String(row.content ?? ""),
     timestamp: row.timestamp ?? null,
+    role: row.role,
+    speaker: row.speaker ?? null,
     coverage: lexicalCoverage(text, String(row.content ?? "")),
   }));
 }
@@ -6044,6 +6076,7 @@ export interface SemanticRecordHit {
   content: string;
   timestamp: Date | null;
   role: string;
+  speaker: string | null;
   score: number;
 }
 
@@ -6083,7 +6116,13 @@ export function rankSemanticVectors(
 export async function searchRecordsSemantic(
   personaId: number,
   userId: number,
-  params: { q: string; role?: "assistant" | "user" | "all"; k?: number },
+  params: {
+    q: string;
+    role?: "assistant" | "user" | "all";
+    k?: number;
+    from?: Date;
+    to?: Date;
+  },
 ): Promise<SemanticSearchResult | null> {
   const q = String(params.q ?? "").trim();
   if (!q) return { hits: [], truncated: false };
@@ -6119,11 +6158,20 @@ export async function searchRecordsSemantic(
     const record = byId.get(hit.recordId);
     if (!record) continue;
     if (role && record.role !== role) continue;
+    /**
+     * The date range belongs to the whole search, not only the literal
+     * half. A line outside the range is not a hit just because its
+     * meaning is close.
+     */
+    const at = record.timestamp;
+    if (params.from && (!at || at.getTime() < params.from.getTime())) continue;
+    if (params.to && (!at || at.getTime() > params.to.getTime())) continue;
     hits.push({
       id: record.id,
       content: String(record.content ?? ""),
       timestamp: record.timestamp ?? null,
       role: record.role,
+      speaker: record.speaker ?? null,
       score: hit.score,
     });
     if (hits.length >= k) break;
@@ -6662,17 +6710,25 @@ export async function pageRecords(
   }
 
   if (options.direction === "around" && anchorKey && anchorRow) {
-    const half = Math.max(1, Math.floor(limit / 2));
+    /**
+     * The anchor counts as one of the requested lines.
+     *
+     * The old split read `limit / 2` on each side and then added the
+     * anchor, so an even limit returned one line too many (200 ->
+     * 201). The reader asks for 200 and must get at most 200.
+     */
+    const beforeCount = Math.max(0, Math.floor((limit - 1) / 2));
+    const afterCount = Math.max(0, limit - 1 - beforeCount);
     const [beforeDesc, afterAsc] = await Promise.all([
-      older(anchorKey, half),
-      newer(anchorKey, half),
+      older(anchorKey, beforeCount),
+      newer(anchorKey, afterCount),
     ]);
-    const hasOlder = beforeDesc.length > half;
-    const hasNewer = afterAsc.length > half;
+    const hasOlder = beforeDesc.length > beforeCount;
+    const hasNewer = afterAsc.length > afterCount;
     const rows = [
-      ...beforeDesc.slice(0, half).reverse(),
+      ...beforeDesc.slice(0, beforeCount).reverse(),
       anchorRow,
-      ...afterAsc.slice(0, half),
+      ...afterAsc.slice(0, afterCount),
     ];
     return { rows, hasOlder, hasNewer };
   }

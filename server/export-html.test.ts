@@ -269,6 +269,33 @@ describe("the printable manual", () => {
     expect(html).toContain("小满 的说明书");
   });
 
+  it("does not print an internal user-act key", () => {
+    const withTrigger = {
+      ...input,
+      styleProfile: {
+        ...input.styleProfile,
+        triggers: [{
+          userAct: "acknowledge",
+          to: "distant",
+          n: 4,
+          examples: [{ text: "嗯", at: "2022-03-01T00:00:00.000Z" }],
+        }],
+      },
+    };
+    const html = generateManualHTML(withTrigger as never, "zh");
+    expect(html).toContain("只应了一声");
+    expect(html).not.toContain("acknowledge");
+  });
+
+  it("leaves out a who section that has nothing in it", () => {
+    const html = generateManualHTML({
+      persona: { name: "小满", relationshipDesc: null, togetherFrom: null, togetherTo: null },
+      personaData: {},
+      styleProfile: {},
+    }, "zh");
+    expect(html).not.toContain("<h2>是谁</h2>");
+  });
+
   it("has no model import anywhere in the manual's file", () => {
     const source = readFileSync(path.join(__dirname, "_core", "export-html.ts"), "utf-8");
     expect(source).not.toMatch(/from\s+["'][^"']*server\/llm/);

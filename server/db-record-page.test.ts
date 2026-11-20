@@ -62,8 +62,27 @@ describe.skipIf(!DATABASE_URL)("the timeline reader's data", () => {
       });
       expect(page.rows.map((row) => row.id)).toContain(middle.id);
       expect(page.rows.length).toBeGreaterThan(1);
+      expect(page.rows.length).toBeLessThanOrEqual(10);
       expect(page.hasOlder).toBe(true);
       expect(page.hasNewer).toBe(true);
+    } finally {
+      await deletePersona(personaId, userId);
+    }
+  });
+
+  it("keeps an even around-page within its limit", async () => {
+    const userId = 9_965_000 + Math.floor(Math.random() * 10_000);
+    const { personaId } = await seedXiaoman(null, { userId });
+    try {
+      const first = await pageRecords(personaId, userId, { direction: "older", limit: 200 });
+      const anchor = first.rows[100];
+      const page = await pageRecords(personaId, userId, {
+        anchor: { recordId: anchor.id },
+        direction: "around",
+        limit: 200,
+      });
+      expect(page.rows.length).toBeLessThanOrEqual(200);
+      expect(page.rows.map((row) => row.id)).toContain(anchor.id);
     } finally {
       await deletePersona(personaId, userId);
     }

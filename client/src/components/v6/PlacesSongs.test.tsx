@@ -51,7 +51,10 @@ const place = {
   count: 2,
   first: "2022-03-01T12:00:00.000Z",
   last: "2022-03-02T12:00:00.000Z",
-  samples: [],
+  samples: [
+    { recordId: 11, at: "2022-03-01T12:00:00.000Z" },
+    { mediaId: 9, url: "/uploads/personas/1/5/a.jpg", at: "2022-03-02T12:00:00.000Z" },
+  ],
 };
 
 describe("the places panel", () => {
@@ -68,6 +71,15 @@ describe("the places panel", () => {
   it("shows the places and draws the points without a basemap", async () => {
     render(<PlacesPanel personaId={5} />);
     expect(screen.getByText("拾光咖啡")).toBeInTheDocument();
+    expect(screen.getByText(/最近一次/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "2022-03-01" })).toHaveAttribute(
+      "href",
+      "/persona/5/records?at=11",
+    );
+    expect(screen.getByRole("link", { name: "2022-03-02" })).toHaveAttribute(
+      "href",
+      "/uploads/personas/1/5/a.jpg",
+    );
     expect(screen.queryByLabelText(translate("zh", "report.places.mapToggle"))).not.toBeInTheDocument();
     await waitFor(() => expect(map).toHaveBeenCalled());
     expect(tileLayer).not.toHaveBeenCalled();

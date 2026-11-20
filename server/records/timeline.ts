@@ -54,6 +54,8 @@ export interface TimelineRow {
   kind: string;
   timestamp: Date | null;
   createdAt: Date;
+  /** The B1.5 label, on the record's own column. */
+  emotion?: string | null;
   meta?: unknown;
 }
 
@@ -73,7 +75,7 @@ function median(values: number[]): number | null {
 function negativeScene(rows: TimelineRow[]): boolean {
   const labels = rows
     .filter((row) => row.role === "assistant" && isTextRecord(row))
-    .map((row) => (row.meta as { emotion?: unknown } | null)?.emotion)
+    .map((row) => row.emotion)
     .filter((state): state is string => typeof state === "string");
   if (labels.length === 0) return false;
   const bad = labels.filter((state) => state === "distant" || state === "melancholy").length;
@@ -138,7 +140,12 @@ export function weeklySeries(
       const leftSide = left[0]?.role;
       const rightSide = right[0]?.role;
       if (leftSide === rightSide || (leftSide !== "user" && leftSide !== "assistant")) continue;
-      if (rightSide !== "user" && rightSide !== "assistant") continue;
+      if (rightSide !== "assistant") continue;
+      /**
+       * The curve is "how quickly *they* answered me". My own replies
+       * to them belong to a different number and must not pull the
+       * median towards my response time.
+       */
       const leftAt = [...left].reverse().find((row) => row.timestamp)?.timestamp;
       const rightAt = right.find((row) => row.timestamp)?.timestamp;
       if (!leftAt || !rightAt) continue;
@@ -318,10 +325,17 @@ export function normalizeStoredTurningPoints(value: unknown): StoredTurningPoint
 }
 
 /** The curves and the turns, with the user's decisions applied. */
+export interface TimelineEvent {
+  at: string;
+  week: string;
+  kind: string;
+  title: string;
+}
+
 export async function buildTimeline(params: {
   personaId: number;
   userId: number;
-}): Promise<{ series: WeeklyPoint[]; points: TurningPoint[] }> {
+}): Promise<{ series: WeeklyPoint[]; points: TurningPoint[]; events: TimelineEvent[] }> {
   const persona = await db.getPersonaById(params.personaId, params.userId);
   const timeZone = (persona as { timezone?: string | null } | null)?.timezone ?? null;
   const rows: TimelineRow[] = [];
@@ -333,6 +347,7 @@ export async function buildTimeline(params: {
       kind: row.kind,
       timestamp: row.timestamp,
       createdAt: row.createdAt,
+      emotion: row.emotion,
       meta: row.meta,
     });
   }
@@ -352,7 +367,22 @@ export async function buildTimeline(params: {
         ...(decision.note ? { note: decision.note } : {}),
       };
     });
-  return { series, points };
+  /**
+   * The relationship events the user already recorded, on the same
+   * week axis as the curves. They are markers, not measurements: the
+   * timeline says when something happened, not why a number moved.
+   */
+  const relationshipEvents = await db.getRelationshipEvents(params.personaId, params.userId, 100);
+  const events: TimelineEvent[] = relationshipEvents
+    .filter((event) => event.happenedAt instanceof Date && !Number.isNaN(event.happenedAt.getTime()))
+    .map((event) => ({
+      at: event.happenedAt.toISOString(),
+      week: isoWeekKey(event.happenedAt, timeZone),
+      kind: event.kind,
+      title: event.title,
+    }))
+    .sort((a, b) => a.at.localeCompare(b.at));
+  return { series, points, events };
 }
 
 /** Records one decision about a turning point. */

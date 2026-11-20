@@ -379,8 +379,8 @@ export default function Analytics() {
           const withRecords = ((personaList.data ?? []) as Array<{
             id: number;
             name: string;
-            fileCount?: number;
-          }>).filter((persona) => (persona.fileCount ?? 0) > 0);
+            recordCount?: number;
+          }>).filter((persona) => (persona.recordCount ?? 0) > 0);
           if (withRecords.length === 0) return null;
           return (
             <ChartCard title={t("analytics.recordsTitle")}>

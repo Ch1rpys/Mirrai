@@ -19,12 +19,16 @@ export interface PlaceMedia {
   id: number;
   at: Date | null;
   exif?: unknown;
+  /** The stored file, so a photo can be opened from the list. */
+  fileKey?: string | null;
 }
 
 export interface PlaceSample {
   recordId?: number;
   mediaId?: number;
   at: string;
+  /** A photo's stored URL, when the sample is a photograph. */
+  url?: string;
 }
 
 export interface Place {
@@ -96,7 +100,11 @@ export function collectPlacesFromRows(
     if (!media.at) continue;
     const point = coords(media.exif);
     if (!point) continue;
-    add("", point, media.at, { mediaId: media.id, at: media.at.toISOString() });
+    add("", point, media.at, {
+      mediaId: media.id,
+      at: media.at.toISOString(),
+      ...(media.fileKey ? { url: `/uploads/${media.fileKey}` } : {}),
+    });
   }
 
   return [...places.values()].sort(
@@ -123,6 +131,6 @@ export async function collectPlaces(params: {
   const media = await db.listMedia(params.personaId, params.userId, { kind: "photo" });
   return collectPlacesFromRows(
     records,
-    media.map((row) => ({ id: row.id, at: row.at, exif: row.exif })),
+    media.map((row) => ({ id: row.id, at: row.at, exif: row.exif, fileKey: row.fileKey })),
   );
 }

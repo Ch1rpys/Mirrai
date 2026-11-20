@@ -93,6 +93,32 @@ describe("the dictionary", () => {
     expect(sent.entries.map((entry: any) => entry.id)).toEqual(["l1"]);
   });
 
+  it("moves a confirmed candidate above after the query refreshes", async () => {
+    const first = render(<OurDictionary personaId={5} />);
+    await userEvent.type(
+      screen.getByLabelText(translate("zh", "report.dictionary.glossPlaceholder")),
+      "贴一贴",
+    );
+    await userEvent.click(screen.getByRole("button", { name: translate("zh", "report.dictionary.confirm") }));
+    expect(save).toHaveBeenCalledTimes(1);
+    first.unmount();
+
+    lexiconEntries = entries.map((entry) =>
+      entry.id === "l2" ? { ...entry, verified: true, gloss: "贴一贴", source: "manual" } : entry,
+    );
+    try {
+      render(<OurDictionary personaId={5} />);
+      // The confirmed entry is now in the confirmed group, so the
+      // candidate-only gloss box is gone.
+      expect(
+        screen.queryByLabelText(translate("zh", "report.dictionary.glossPlaceholder")),
+      ).not.toBeInTheDocument();
+      expect(screen.getAllByText(/贴贴/).length).toBeGreaterThan(0);
+    } finally {
+      lexiconEntries = entries;
+    }
+  });
+
   it("shows the empty state", () => {
     lexiconEntries = [];
     try {

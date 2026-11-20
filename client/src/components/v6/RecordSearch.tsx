@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
@@ -15,6 +15,8 @@ interface Hit {
   id: number;
   content: string;
   timestamp: string | null;
+  role?: string;
+  speaker?: string | null;
 }
 
 function Highlighted({ text, query }: { text: string; query: string }) {
@@ -39,9 +41,26 @@ export default function RecordSearch({
   onJump: (recordId: number) => void;
 }) {
   const { t } = useLocale();
+  const utils = trpc.useUtils();
   const [q, setQ] = useState("");
   const [role, setRole] = useState<"assistant" | "all">("assistant");
   const [contextFor, setContextFor] = useState<number | null>(null);
+  /**
+   * The extra pages of the literal results.
+   *
+   * The route answers thirty at a time and returns the next cursor.
+   * The panel used to ignore it, so lines beyond the first thirty were
+   * unreachable from the reader's search box.
+   */
+  const [moreExact, setMoreExact] = useState<Hit[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [fetchedMore, setFetchedMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  useEffect(() => {
+    setMoreExact([]);
+    setNextCursor(null);
+    setFetchedMore(false);
+  }, [q, role]);
   const query = trpc.record.search.useQuery(
     { personaId, q: q.trim(), role },
     { enabled: q.trim().length > 0 },
@@ -52,7 +71,30 @@ export default function RecordSearch({
   );
 
   const data = query.data;
+  const exact = [...(data?.exact ?? []), ...moreExact];
+  const next = fetchedMore ? nextCursor : data?.next ?? null;
+  const loadMore = async () => {
+    if (!next || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await utils.record.search.fetch({
+        personaId,
+        q: q.trim(),
+        role,
+        cursor: next,
+      });
+      setMoreExact((current) => [...current, ...page.exact]);
+      setNextCursor(page.next);
+      setFetchedMore(true);
+    } catch {
+      /* The list stays as it was; the query's own error state is shown. */
+    } finally {
+      setLoadingMore(false);
+    }
+  };
   const showGroups = q.trim().length > 0 && !query.isLoading;
+  const speakerOf = (hit: Hit) =>
+    hit.role === "user" ? t("records.me") : hit.speaker ?? name;
 
   return (
     <section className="space-y-2" aria-label={t("records.search", { name })}>
@@ -95,16 +137,16 @@ export default function RecordSearch({
         </p>
       )}
 
-      {showGroups && data && data.exact.length === 0 && (data.similar?.length ?? 0) === 0 && (
+      {showGroups && data && exact.length === 0 && (data.similar?.length ?? 0) === 0 && (
         <p className="text-xs text-muted-foreground">{t("records.noResults", { q: q.trim() })}</p>
       )}
 
-      {data && data.exact.length > 0 && (
+      {data && exact.length > 0 && (
         <div className="rounded-lg border border-border/70 p-2">
           <p className="px-1 py-1 text-[0.625rem] uppercase tracking-wide text-muted-subtle">
             {t("records.exactGroup")}
           </p>
-          {data.exact.map((hit: Hit) => (
+          {exact.map((hit: Hit) => (
             <div key={hit.id} className="rounded px-1 py-1 text-sm hover:bg-muted/40">
               <button
                 type="button"
@@ -113,11 +155,10 @@ export default function RecordSearch({
                 onClick={() => onJump(hit.id)}
               >
                 <Highlighted text={hit.content} query={q.trim()} />
-                {hit.timestamp && (
-                  <span className="ml-2 text-[11px] text-muted-foreground">
-                    {hit.timestamp.slice(0, 10)}
-                  </span>
-                )}
+                <span className="ml-2 text-[11px] text-muted-foreground">
+                  {speakerOf(hit)}
+                  {hit.timestamp ? ` · ${hit.timestamp.slice(0, 10)}` : ""}
+                </span>
               </button>
               <button
                 type="button"
@@ -137,6 +178,16 @@ export default function RecordSearch({
               )}
             </div>
           ))}
+          {next && (
+            <button
+              type="button"
+              className="mt-1 w-full rounded px-1 py-1 text-[11px] text-muted-foreground underline"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+            >
+              {t("records.loadMore")}
+            </button>
+          )}
         </div>
       )}
 
@@ -157,11 +208,10 @@ export default function RecordSearch({
               onClick={() => onJump(hit.id)}
             >
               {hit.content}
-              {hit.timestamp && (
-                <span className="ml-2 text-[11px] text-muted-foreground">
-                  {hit.timestamp.slice(0, 10)}
-                </span>
-              )}
+              <span className="ml-2 text-[11px] text-muted-foreground">
+                {speakerOf(hit)}
+                {hit.timestamp ? ` · ${hit.timestamp.slice(0, 10)}` : ""}
+              </span>
             </button>
           ))}
         </div>

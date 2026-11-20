@@ -39,6 +39,44 @@ describe("the weekly curves", () => {
     expect(Math.abs(lengthChange!.after - 6)).toBeLessThanOrEqual(1.5);
   });
 
+  it("counts a negative scene from the emotion column", () => {
+    const at = (iso: string) => new Date(iso);
+    const series = weeklySeries([
+      {
+        id: 1,
+        role: "assistant",
+        content: "哦。",
+        kind: "text",
+        timestamp: at("2022-03-01T20:00:00+08:00"),
+        createdAt: at("2022-03-01T20:00:00+08:00"),
+        emotion: "distant",
+        meta: null,
+      },
+      {
+        id: 2,
+        role: "assistant",
+        content: "随便。",
+        kind: "text",
+        timestamp: at("2022-03-01T20:01:00+08:00"),
+        createdAt: at("2022-03-01T20:01:00+08:00"),
+        emotion: "distant",
+        meta: null,
+      },
+    ], "Asia/Shanghai");
+    expect(series[0]?.negativeShare).toBe(1);
+  });
+
+  it("only counts their replies in the reply-time curve", () => {
+    const at = (second: number) => new Date(Date.UTC(2022, 0, 3, 12, 0, second));
+    const series = weeklySeries([
+      { id: 1, role: "user", content: "在吗", kind: "text", timestamp: at(0), createdAt: at(0), meta: null },
+      { id: 2, role: "assistant", content: "在", kind: "text", timestamp: at(10), createdAt: at(10), meta: null },
+      { id: 3, role: "user", content: "哦", kind: "text", timestamp: at(3600), createdAt: at(3600), meta: null },
+    ], "UTC");
+    // Their answer is about 10 seconds; my answer to them is 3590.
+    expect(series[0]?.replyMedianSec).toBe(10);
+  });
+
   it("finds nothing on a completely steady curve", () => {
     const flat = Array.from({ length: 24 }, (_, index) => ({
       week: `2024-W${String(index + 1).padStart(2, "0")}`,
@@ -53,16 +91,22 @@ describe("the weekly curves", () => {
   });
 
   it("does not make a turn out of a boundary with too few weeks on either side", () => {
-    const series = Array.from({ length: 10 }, (_, index) => ({
+    const at = (index: number) => ({
       week: `2024-W${String(index + 1).padStart(2, "0")}`,
       total: 10,
       myShare: 0.5,
-      replyMedianSec: index < 5 ? 10 : 100,
+      replyMedianSec: index === 3 ? 10 : index >= 4 ? 100 : null,
       charsMedian: 10,
       startsMeShare: 0.5,
       negativeShare: 0,
-    }));
-    expect(findTurningPoints(series).filter((point) => point.changes.some((c) => c.series === "replyMedianSec"))).toEqual([]);
+    });
+    // The boundary at week 4 has only three measured weeks before it
+    // and four after it: the four-week rule must refuse it.
+    const series = Array.from({ length: 8 }, (_, index) => at(index));
+    expect(
+      findTurningPoints(series, { window: 4 })
+        .filter((point) => point.changes.some((change) => change.series === "replyMedianSec")),
+    ).toEqual([]);
   });
 
   it("turns a week key into the date the reader can jump to", () => {
