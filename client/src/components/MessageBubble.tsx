@@ -14,6 +14,7 @@ import { EMOTIONS, type EmotionDefinition } from "@/lib/emotions";
 import { SAFE_REHYPE_PLUGINS } from "@/lib/safe-markdown";
 import { formatInstantInZone, formatTimeInZone } from "@/lib/dates";
 import { useAuth } from "@/_core/hooks/useAuth";
+import SaidBefore from "@/components/v6/SaidBefore";
 import { FEEDBACK_REASONS } from "@shared/speech-acts";
 import { renderRecordContent } from "@shared/records";
 
@@ -825,6 +826,9 @@ export function MessageBubble({
                   >
                     <Copy className="w-3 h-3" />
                   </button>
+                )}
+                {!isUser && !isNotice && personaId && msg.messageType === "text" && msg.content && (
+                  <SaidBefore personaId={personaId} text={msg.content} name={personaName} />
                 )}
                 {onQuote && (
                   <button

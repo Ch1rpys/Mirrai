@@ -30,6 +30,11 @@ vi.mock("@/lib/trpc", () => ({
       tts: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
       voices: { useQuery: () => ({ data: voiceInfo.value }) },
     },
+    record: {
+      nearest: {
+        useQuery: () => ({ data: undefined, isLoading: false, isError: false }),
+      },
+    },
     fidelity: {
       mark: {
         useMutation: (opts?: any) => ({

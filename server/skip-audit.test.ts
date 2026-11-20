@@ -45,6 +45,7 @@ const DATABASE_TEST_FILES = new Set([
   "server/db-stickers.test.ts",
   "server/db-unique-indexes.test.ts",
   "server/routers-v6/material.test.ts",
+  "server/records/nearest.test.ts",
 ]);
 
 function testFiles(dir: string): string[] {
