@@ -463,6 +463,7 @@
 | 251 | B7.8 | 没有 EXIF 的图 `at` 为空 | `readImageExif` 的 `at` 为空；`registerMedia` 的 `media.at` 退回消息时间（单独上传退回上传时间） | `media.at` 的列含义是「拍摄或发送时间」；没有拍摄时间时发送时间仍是合法排序键。`importers/media.test.ts` 同时断言这两层。 |
 | 252 | B7.3 | 语音列表按时间倒序 | `listVoices` 按 `media.id` 倒序；导入时 id 通常跟着时间走 | 分页 cursor 用 id 更稳定；多次导入可能让 id 顺序与时间顺序不一致。C2.10 或分页改造时再换成 `(at,id)` 复合 cursor。 |
 | 253 | B7.10 | `pipeline.test.ts` 新增视频用例 | 集成断言拆到 `routers.skill-engine.test.ts`（帧/转写/跳过数传进 pipeline）、`describe-images.test.ts`（3 帧交给模型）、`video-materials.test.ts`（转写在围栏内），以及 2026-11-20 独立验收后补的 `pipeline-video.test.ts`（走完整 `runSkillPipeline`：3 帧交给视觉阶段、转写带标题且在围栏内、没有转写时只读画面不报错）；`pipeline.test.ts` 本身仍没有视频用例 | `pipeline.test.ts` 的 mock 太重（它自带「必定失败」的 retry 设定），另起一个同样走完整 `runSkillPipeline` 的测试文件更干净。 |
+| 254 | 全部 | 手册 §2.1「跳过数不能增加」 | 2026-11-20 用户拍板：改成「已有测试不得改成跳过；跳过只允许来自 §2.3 新增的 `describe.skipIf(!DATABASE_URL)` 数据库测试，每次变化记进度」 | §2.2 的基线本身就有 2 个文件 8 条数据库跳过，§2.3 又要求继续新增这类测试，两条规则从写下起就互斥；`server/skip-audit.test.ts` 把「只允许四种环境条件、禁止无条件 `.skip`/`.todo`/`.only`、数据库测试文件清单固定」变成结构测试，放宽的只是数字，实质没有松。 |
 
 ## 未验证清单
 
@@ -2181,7 +2182,7 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 - [x] B7.10「均匀取 3 帧，缩到宽 768」对小于 768 宽的视频是放大：`server/_core/ffmpeg.ts` 的 `extractKeyframes` 用 `scale=768:-2`；我用本机 ffmpeg 9.0.2 生成 640×360 的 5 秒视频实跑 `prepareVideoMaterial`，帧 probe 回来是 `768x432`。手册写的是「缩到宽 768」，这条没有记偏差。低优先。
 - [x] 进度表里已修条目的证据行没更新，和当前代码对不上：例如 B7.4 行仍写 `service.test.ts`「事件只有 1 个 delta」（现在测试断言 0 个）；B7.2 行写 `local-endpoint.test.ts` 4 条（现在 5 条）、`stt.test.ts` 13 条（现在 14 条）、`tts.test.ts` 15 条（现在 19 条）。修复日志写了改了什么，但表格证据行还停在修复前，下一轮验收会误判。
 - [x] 3.7 的「每个新组件带一个同名 .test.tsx」：B7.12 新增的 `client/src/components/v6/MomentsImport.tsx` 没有 `MomentsImport.test.tsx`；`Upload.test.tsx` 只是把它挂载时没被其它用例撞坏，没有测它的预览/校对/确认行为。
-- [ ] 整体：无 `DATABASE_URL` 时跳过用例从 WP10 开工的 23 增到 36（跳过文件 5→8），按 2.1 节字面「跳过数不能增加」不合规；多出来的全部是 2.3 节要求用 `describe.skipIf` 的新数据库用例（`db-stickers` 2、`db-media` 3、`db-memory-media` 3，修复轮又加 5 条），没有既有用例被改成跳过。这是 2.1 与 2.3 的冲突，需要用户拍板，实现侧消不掉。
+- [x] 整体：无 `DATABASE_URL` 时跳过用例从 WP10 开工的 23 增到 36（跳过文件 5→8），按 2.1 节字面「跳过数不能增加」不合规；多出来的全部是 2.3 节要求用 `describe.skipIf` 的新数据库用例（`db-stickers` 2、`db-media` 3、`db-memory-media` 3，修复轮又加 5 条），没有既有用例被改成跳过。2026-11-20 用户拍板按偏差 254 收口：§2.1 改成「已有测试不得变跳过，只允许 §2.3 数据库测试增加跳过」，并加 `server/skip-audit.test.ts` 守着。
 - [x] 低：`server/routers-v6/sticker.ts` 的 `upload` 给「已经有图」的表情换图时，`setStickerImage` 之后不删旧 `fileKey`，旧图成了孤儿文件；路由层也没有测「换图」这条路径。
 
 **存疑（没有算成确定问题）**
@@ -2215,11 +2216,12 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 - **B7.15 界面**：`TimeBar` 在第一条消息（没有上一条）不再显示时间条（手册要求的是「相邻两条消息」之间的条），补测试；`setPersonaBackground(..., null)` 现在把 `skin.background` 置成 JSON null，`normalizeSkin` 会丢掉这个键（不再留空字符串），`db-media.test.ts` 加带库用例。
 - **进度表证据行**：B7.1/B7.2/B7.4/B7.6/B7.10/B7.11/B7.12/B7.14/B7.15 的条数与本轮修完后的实际值对齐；偏差 253 补上 `pipeline-video.test.ts`（从「三段拼接」改成「另起一个完整 pipeline 测试文件」）。
 
-**闸门**（无 `--fast`、无 `DATABASE_URL`，Node v24.14.1）：`Test Files  473 passed | 8 skipped (481)`，`Tests  4051 passed | 37 skipped (4088)`，`all six steps passed`；`audit-cn` 是 `0 Chinese strings without an English counterpart, in 0 files.`，`fidelity-gate` 7 条 ✓。相对上一轮独立验收时的 471/8 文件、4039/36 用例：通过文件 +2（`pipeline-video.test.ts`、`MomentsImport.test.tsx`），通过用例 +12；跳过用例 36→37，多的是新增的 `db-media`「清背景删键」1 条 §2.3 数据库用例，没有既有用例被跳过。
+**闸门**（无 `--fast`、无 `DATABASE_URL`，Node v24.14.1）：`Test Files  474 passed | 8 skipped (482)`，`Tests  4055 passed | 37 skipped (4092)`，`all six steps passed`；`audit-cn` 是 `0 Chinese strings without an English counterpart, in 0 files.`，`fidelity-gate` 7 条 ✓。相对上一轮独立验收时的 471/8 文件、4039/36 用例：通过文件 +3（`pipeline-video.test.ts`、`MomentsImport.test.tsx`、`skip-audit.test.ts`），通过用例 +16；跳过用例 36→37，多的是新增的 `db-media`「清背景删键」1 条 §2.3 数据库用例，没有既有用例被跳过。
 
 **数据库**：临时库 `mirrai_v6_verify` 上 `push --force` + `migrate`（0056–0058）后带库跑 `db-media`、`db-memory-media`、`db-stickers`、`db-records`、`db-delete-coverage`、`db-unique-indexes`、`idempotency-db` 共 39 条通过（新增的「清背景删键」在内）；用完 `dropdb`。迁移文件没有新增或修改，上一轮对 0056–0058 做的四步/升级路径仍然成立。
 
+**跳过数的规则收口**（按用户 2026-11-20 的决定，见偏差 254）：手册 §2.1 改成「已有测试不得改成跳过；跳过只允许来自 §2.3 新增的 `describe.skipIf(!process.env.DATABASE_URL)` 数据库测试，每次增加记进度文件」，§2.3 补了半句说明。新增 `server/skip-audit.test.ts`（4 条）守着：只认 `!DATABASE_URL` / `!process.env.DATABASE_URL` / `!PYTHON` / `!BASH` 四种条件，无条件的 `.skip`/`.todo`/`.only` 红，数据库测试文件清单固定，改清单就要同步进度文件。我临时塞了一个 `it.skip` 的探针文件验证它确实会红，删掉后恢复绿。
+
 **仍留下的**：
-- 「整体跳过数」那条（上面 `- [ ]`）：§2.1 说跳过数不能增加，§2.3 要求新数据库测试用 `describe.skipIf`，两条同时成立不了；需要用户决定以哪一条为准，实现侧不能再消。
 - B7.10 验收原文写的是 `pipeline.test.ts`，本轮把完整 pipeline 用例放在了新文件 `pipeline-video.test.ts`（偏差 253 已更新）。如果要求必须落在原文件，可以再搬，只是 `pipeline.test.ts` 自带「必定失败」的 retry 设定，要另配一套 mock。
 - 真 whisper.cpp / 真 piper、真实截图/视觉模型、真实 EXIF/人脸、真人麦克风的通话延迟与打断手感仍未验证，未验证清单原有行不变。

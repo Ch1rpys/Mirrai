@@ -210,7 +210,7 @@ WP0 的 P0.2 会把上面六步收成一条命令 `corepack pnpm gate`。
 | `fidelity-gate.ts` | 7 条 ✓ |
 | `migrate.mjs --replay` | 重放 41 条迁移，全部成功 |
 
-开工先自己跑一遍，确认和上表一致，把结果抄进进度文件。**之后任何时候通过数只能增加，不能减少；跳过数不能增加。**
+开工先自己跑一遍，确认和上表一致，把结果抄进进度文件。**之后任何时候通过数只能增加，不能减少。已有测试不得改成跳过；跳过只允许来自按 2.3 节新增的 `describe.skipIf(!process.env.DATABASE_URL)` 数据库测试，每次增加要在进度文件里记下新增文件、条数和原因。**（`server/skip-audit.test.ts` 守着这一条：它只认四种环境条件，无条件的 `.skip`/`.todo`/`.only` 一律红。）
 
 ### 2.3 数据库
 
@@ -239,7 +239,7 @@ dropdb mirrai_v6_scratch
 
 每个迁移的验收都包含四件事：`push` 之后 `migrate` 不报错；`--replay` 不报错；`--rollback 1` 之后对象消失；再 `migrate` 对象回来。「升级路径」还要多验一步：在一个只跑到上一条迁移的库上（先 `push` 旧 schema 不现实，所以做法是 `push` 之后手动 `DROP` 掉新对象、从 `schema_migrations` 里删掉新迁移那一行），再跑 `migrate`，新对象出现。
 
-需要数据库的新测试，照 `server/db-unique-indexes.test.ts` 的写法：`describe.skipIf(!process.env.DATABASE_URL)`。
+需要数据库的新测试，照 `server/db-unique-indexes.test.ts` 的写法：`describe.skipIf(!process.env.DATABASE_URL)`。这些测试在未设置 `DATABASE_URL` 时会跳过，属于 2.1 节允许的跳过；新增一个这样的文件要同时把它加进 `server/skip-audit.test.ts` 的清单，并在进度文件里记下跳过数的变化。
 
 ### 2.4 没有真模型的时候
 
