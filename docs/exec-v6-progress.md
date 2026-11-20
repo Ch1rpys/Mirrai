@@ -576,8 +576,6 @@
 | C4.3 | 真实数据上的趋势与毕业条件是否读得懂 | 在真实分身上打开分析页，核对四周对比与条件清单 | 有真实记录的人 |
 | C4.4 | 按记录重建的「你」像不像本人；本机没有非 stub 模型 | 配真实模型后在真实分身上换一次位置，人工判断重建的「我」像不像 | 配了真实模型和真实记录的人 |
 | C4.6 | 打印版式与真实数据的可读性；jsdom 只证明 HTML、转义与不含原文 | 在浏览器里打开导出的摘要 → 打印预览，逐项核对曲线、日期、页脚 | 有图形浏览器和真实记录的人 |
-
-
 | C7.4 | 真实模型从真实口述里抽出的说法是否成立、引用校验在长口述上的命中率。本机没有非 stub 的模型 | 主人在档案页写一段口述（或让一个家人账号写并提交），点「整理成记忆」，逐条核对标题、讲述人和原话；再点一次确认不重复 | 有真实模型和真实口述的人 |
 | C7.4 | 真实录音的转写：本机没有麦克风、也没有配置转写引擎，路由只用 mock 验证到 `transcribeAudio({ purpose: "chat" })` | 在档案页点「说一段」，录十几秒，看文字是否进到写作框、能不能改完再提交 | 有麦克风、装了 whisper.cpp 或配了转写 provider 的人 |
 | C7.4 | 浏览器里两个账号走完整条链路（邀请 → 家人提交 → 主人整理 → 裁决冲突）；机器测试走 tRPC caller 和临时库 | 两个浏览器会话：A 邀请 B；B 在档案页提交一段；A 看到并点「整理成记忆」；两边说法不同时 A 在冲突区点「采用这一条」 | 有两个账号和图形浏览器的人 |
@@ -640,7 +638,6 @@
 | 329 | C7.2 | 接受后家人的那一行存自己的东西 | 接受时把主人的名字、头像、关系和时间复制到家人行（档案页和列表在没有 hydrate 时也能显示），`personaData`/`styleProfile` 仍每次从主人读；`source: "shared"` | 名册、提醒、主动开口读的是家人行，不 hydrate；不复制一份名字，这些地方会显示空白。 |
 | 330 | C7.2 | 撤销或主人删除分身：家人的行还在，但不能聊 | `deletePersona` 删除任一方的 `persona_shares` 行；`runConversation` 在 `admitUserMessage` 里查 active share，没有就抛 `ChatClosedError`；`chat.getHistory`/导出不经过这道门 | 分享行是关系，不是数据；删分享不等于删对话。错的只是「还能不能开口」，历史仍在。 |
 | 331 | C7.2 | 家人能做的只有聊天、写信、档案、原声带 | `assertPersonaWritable` 另加在 `rehearsal.run/keep` 与 `roleplay.start/say` 上；`journal`、`checkin` 等用户级或未点名功能仍可按自己的 `userId` 使用 | 排练和角色互换都会读共用分身的人设与记录，属于「玩」，不在手册允许的四项里；直接拦住比留一个能进去的入口更符合边界。 |
-
 | 332 | C7.4 | `oral_accounts` 的索引 | 手册只给列；另建 `oral_accounts_persona_idx`（personaId, userId）与 `oral_accounts_submitted_idx`（personaId, submittedAt） | 列表按前者读、提取按后者读；和 C5.3 的 `scheduled_items` 同样处理。 |
 | 333 | C7.4 | 路由测试文件名 | 手册写 `server/routers.oral.test.ts`；实际 `server/routers-v6/oral.test.ts` | §3.7 要求新增路由组放 `server/routers-v6/` 并带同名测试。 |
 | 334 | C7.4 | 提取的产出与去重 | 让模型给 `kind`/`key`/`text`/`quote` 四项；`quote` 必须逐字出自某一份口述，否则丢弃；同一 `key` 同一句话不重复写，同一 `key` 不同说法两边都留 | `quote` 是唯一能核对的东西；去重让「家人又加了一段再点一次」不会把旧说法写两遍，冲突仍交给 v5 G2 的 `memory.adjudicate`。 |
