@@ -86,6 +86,11 @@ vi.mock("@/lib/trpc", () => ({
     fidelity: {
       mark: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    checkin: {
+      pending: { useQuery: () => ({ data: { pending: null, worse: false } }) },
+      answer: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      acknowledgeWorse: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     outbound: {
       list: { useQuery: () => ({ data: { letters: [] }, refetch: vi.fn() }) },
       addFromMessage: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },

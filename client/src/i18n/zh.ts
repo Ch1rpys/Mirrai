@@ -1591,6 +1591,17 @@ export const zh = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  afterChat: {
+    question: "上次聊完之后，感觉怎么样？",
+    better: "好一点了",
+    same: "差不多",
+    worse: "更难受了",
+    skipped: "不想答",
+    worseCard: "最近三次聊完，你都说更难受了。要不要先缓一缓？缓一缓的时候 {{name}} 不会主动找你，你想来随时能来。",
+    slowDown: "先缓一缓",
+    noThanks: "不用",
+  },
+
   meetDay: {
     entry: "今天见面。有 {{n}} 件「等 {{name}} 回来再说」的事 →",
   },

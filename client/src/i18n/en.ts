@@ -1590,6 +1590,17 @@ export const en = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  afterChat: {
+    question: "How do you feel after that conversation?",
+    better: "A little better",
+    same: "About the same",
+    worse: "Worse",
+    skipped: "Rather not say",
+    worseCard: "The last three conversations left you feeling worse. Would you like to slow down for a while? While you do, {{name}} will not reach out first — you can come back whenever you want.",
+    slowDown: "Slow down",
+    noThanks: "No thanks",
+  },
+
   meetDay: {
     entry: "You meet today. {{n}} things to say when {{name}} is back →",
   },

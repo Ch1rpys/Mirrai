@@ -37,6 +37,7 @@ import OutboundEntry from "@/components/v6/OutboundEntry";
 import OutboundDrawer from "@/components/v6/OutboundDrawer";
 import WaitGauge from "@/components/v6/WaitGauge";
 import MeetDayNote from "@/components/v6/MeetDayNote";
+import AfterChat from "@/components/v6/AfterChat";
 import { useTypingReveal, waitMs } from "@/components/v6/useTypingReveal";
 
 /** A message the reply carried besides its words (B7.1). */
@@ -2175,7 +2176,10 @@ export default function Chat() {
         <div className="container max-w-2xl mx-auto mb-4">
           <div className="rounded-xl border border-border/70 bg-muted/30 p-4 relative">
             <p className="text-xs font-medium text-foreground/80 mb-2">
-              {t("letters.todoTitle")}
+              {t("letters.todoTitle", {
+                name: displayName || t("common.them"),
+                open: waitingNotes.filter((note: any) => !note.doneAt).length,
+              })}
             </p>
             <ul className="space-y-1.5">
               {waitingNotes.map((note: any) => (
@@ -2194,6 +2198,8 @@ export default function Chat() {
           </div>
         </div>
       )}
+
+      <AfterChat personaId={personaId} name={displayName || t("common.them")} />
 
       {/* Messages */}
       {/**
