@@ -43,6 +43,11 @@ vi.mock("@/lib/trpc", () => ({
       applyCorrection: { useMutation: () => ({ mutate: applyCorrection, isPending: false }) },
       correctionLog: { useQuery: () => ({ data: { entries: [] } }) },
       graduationMode: { useQuery: () => ({ data: { mode: "suggest" } }) },
+      seal: {
+        set: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+        requestOpen: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+        cancelRequest: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      },
       reunionSummary: {
         useQuery: () => ({ data: null, isLoading: false, isError: false, refetch: vi.fn() }),
       },

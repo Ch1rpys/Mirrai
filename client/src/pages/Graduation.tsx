@@ -11,6 +11,7 @@ import NotFound from "@/pages/NotFound";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
 import OutboundLetters from "@/components/OutboundLetters";
 import GraduationReasons from "@/components/v6/GraduationReasons";
+import SealSettings from "@/components/v6/SealSettings";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -434,6 +435,15 @@ export default function Graduation() {
               {t("graduationPage.backHome")}
             </Button>
           </div>
+        </motion.section>
+        {/* The last step is optional: sealing until a day the user picks
+            (C6.2). The seal does not need the graduation, and the
+            graduation does not need the seal. */}
+        <motion.section
+          initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+          className="surface p-6 sm:p-8"
+        >
+          <SealSettings personaId={personaId} />
         </motion.section>
       </main>
     </div>

@@ -39,6 +39,7 @@ import { localDateKey, zonedDateKey, zonedHour, daysSinceContact } from "@shared
 import { attachmentStyleLabel, loveLanguageLabel } from "@/lib/persona-options";
 import { normalizeIntimacyLevel } from "@shared/intimacy";
 import { mayFeature } from "@/lib/lobby-eligibility";
+import { sealState } from "@shared/persona-state";
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 
@@ -908,6 +909,23 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
     onSuccess: () => { toast.success(t("lobby.card.awakened", { name: persona.name })); window.location.reload(); },
     onError: (e: any) => toast.error(e.message),
   });
+
+  /**
+   * A sealed persona is a closed card (C6.2).
+   *
+   * Its name and the day it opens, and nothing else: no countdown, no
+   * mood, no last message. The days are not something to count.
+   */
+  if (sealState(persona, new Date(), timezone) === "sealed") {
+    const until = persona?.settings?.seal?.until ?? "";
+    return (
+      <div className="surface p-5 animate-fade-in-up opacity-80">
+        <p className="text-sm text-foreground">
+          {t("lobby.card.sealed", { name: persona.name, date: until })}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className={`surface surface-interactive p-5 animate-fade-in-up relative ${isGraduated ? "opacity-80" : ""}`}>

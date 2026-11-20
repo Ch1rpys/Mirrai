@@ -1823,6 +1823,85 @@ export const appRouter = router({
         };
       }),
 
+    /**
+     * Sealing a persona until a day the user picked (C6.2).
+     *
+     * The controls are exempt from the sealed guard: the user has to be
+     * able to lift their own seal. Nothing here pushes or reminds.
+     */
+    seal: router({
+      set: protectedProcedure
+        .input(z.object({
+          personaId: z.number(),
+          /** A day in the user's calendar, or null to open the seal. */
+          until: z.string().nullable().optional(),
+          earlyOpen: z.enum(["never", "cooling"]).default("never"),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          return await withPersonaDataLock(input.personaId, async () => {
+            const persona = await getPersonaById(input.personaId, ctx.user.id);
+            if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+            const current = normalizePersonaSettings(
+              await getPersonaSettings(input.personaId, ctx.user.id),
+            );
+            if (!input.until) {
+              delete current.seal;
+              const written = await setPersonaSettings(input.personaId, ctx.user.id, current);
+              if (!written) throw new TRPCError({ code: "NOT_FOUND" });
+              return { sealed: false as const, until: null };
+            }
+            if (!isRealDayKey(input.until)) {
+              throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.sealBadDate") });
+            }
+            current.seal = { until: input.until, earlyOpen: input.earlyOpen };
+            const written = await setPersonaSettings(input.personaId, ctx.user.id, current);
+            if (!written) throw new TRPCError({ code: "NOT_FOUND" });
+            return { sealed: true as const, until: input.until };
+          });
+        }),
+
+      requestOpen: protectedProcedure
+        .input(z.object({ personaId: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          return await withPersonaDataLock(input.personaId, async () => {
+            const persona = await getPersonaById(input.personaId, ctx.user.id);
+            if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+            const current = normalizePersonaSettings(
+              await getPersonaSettings(input.personaId, ctx.user.id),
+            );
+            if (!current.seal?.until) {
+              throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.sealed") });
+            }
+            if (current.seal.earlyOpen !== "cooling") {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: copy(ctx.locale, "errors.sealNoEarlyOpen"),
+              });
+            }
+            current.seal.requestedAt = new Date().toISOString();
+            const written = await setPersonaSettings(input.personaId, ctx.user.id, current);
+            if (!written) throw new TRPCError({ code: "NOT_FOUND" });
+            return { requested: true as const };
+          });
+        }),
+
+      cancelRequest: protectedProcedure
+        .input(z.object({ personaId: z.number() }))
+        .mutation(async ({ ctx, input }) => {
+          return await withPersonaDataLock(input.personaId, async () => {
+            const persona = await getPersonaById(input.personaId, ctx.user.id);
+            if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+            const current = normalizePersonaSettings(
+              await getPersonaSettings(input.personaId, ctx.user.id),
+            );
+            if (current.seal) delete current.seal.requestedAt;
+            const written = await setPersonaSettings(input.personaId, ctx.user.id, current);
+            if (!written) throw new TRPCError({ code: "NOT_FOUND" });
+            return { requested: false as const };
+          });
+        }),
+    }),
+
     updatePersonaData: protectedProcedure
       .input(z.object({
         id: z.number(),

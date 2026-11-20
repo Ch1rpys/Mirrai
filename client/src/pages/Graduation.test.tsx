@@ -18,10 +18,21 @@ let diaryTotal = 0;
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    persona: { get: { useQuery: () => ({ data: persona }) } },
+    persona: {
+      get: { useQuery: () => ({ data: persona }) },
+      getSettings: {
+        useQuery: () => ({ data: {}, isLoading: false, isError: false, refetch: vi.fn() }),
+      },
+      seal: {
+        set: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+        requestOpen: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+        cancelRequest: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      },
+    },
     relationship: { list: { useQuery: () => ({ data: { events: [] } }) } },
     memory: { list: { useQuery: () => ({ data: { items: [] } }) } },
     diary: { list: { useQuery: () => ({ data: { items: diaryItems, total: diaryTotal } }) } },
+    useUtils: () => ({ persona: { get: { invalidate: vi.fn() } } }),
   },
 }));
 

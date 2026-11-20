@@ -946,6 +946,18 @@ export const V6 = {
     zh: "今天已经换过一次了。明天可以再来。",
     en: "You have already swapped once today. Come back tomorrow.",
   },
+  "errors.sealed": {
+    zh: "这个分身封存着，到你定的那天之前打不开。",
+    en: "This persona is sealed until the day you picked.",
+  },
+  "errors.sealNoEarlyOpen": {
+    zh: "这个分身设的是到那天之前绝不打开。",
+    en: "This persona was sealed to stay closed until that day.",
+  },
+  "errors.sealBadDate": {
+    zh: "请选一个真实的日期。",
+    en: "Pick a real day.",
+  },
   "chat.closedWeekend": {
     zh: "今天不是周末。这是你自己定的：只在周末和 {{name}} 聊。",
     en: "It is not the weekend. You set this yourself: only weekends with {{name}}.",

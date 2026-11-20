@@ -3,6 +3,7 @@ import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { rateLimiter, resolveRateLimitKey, type RateLimitRule } from "./rate-limit";
 import { copy, type CopyKey } from "@shared/copy";
+import { sealState } from "@shared/persona-state";
 
 /**
  * What the client is told when something goes wrong.
@@ -232,7 +233,76 @@ const requireUser = t.middleware(async opts => {
   });
 });
 
-export const protectedProcedure = t.procedure.use(requireUser);
+/**
+ * Procedures that stay usable while a persona is sealed (C6.2).
+ *
+ * The data is the user's: getting it out and deleting it must always
+ * work, and the seal's own controls have to be reachable or the user
+ * could not lift it. `persona.getSettings` is here because the seal
+ * controls read the stored dates through it.
+ */
+const SEAL_EXEMPT_PATHS = new Set([
+  "persona.seal.set",
+  "persona.seal.requestOpen",
+  "persona.seal.cancelRequest",
+  "persona.getSettings",
+  "persona.exportManual",
+  "persona.delete",
+  "personaCard.export",
+  "chat.export",
+]);
+
+/**
+ * Refuses every read or write that names a sealed persona (C6.2).
+ *
+ * The input is read raw — each procedure has its own shape, and the id
+ * is sometimes `personaId` and sometimes `id` (the persona's own
+ * routes). A procedure whose input has neither is left alone.
+ *
+ * The database is imported lazily and a failure to read the settings is
+ * treated as "not sealed": the guard must not take the whole app down
+ * because one read failed.
+ */
+export const sealedGuard = t.middleware(async (opts) => {
+  const user = opts.ctx.user;
+  if (!user) return opts.next();
+  if (SEAL_EXEMPT_PATHS.has(opts.path)) return opts.next();
+
+  let raw: unknown = null;
+  try {
+    // `getRawInput` may be synchronous or a promise, depending on how
+    // the input was parsed.
+    raw = await opts.getRawInput();
+  } catch {
+    return opts.next();
+  }
+  if (!raw || typeof raw !== "object") return opts.next();
+  const input = raw as Record<string, unknown>;
+  const personaId =
+    typeof input.personaId === "number"
+      ? input.personaId
+      : opts.path.startsWith("persona.") && typeof input.id === "number"
+        ? input.id
+        : null;
+  if (personaId === null) return opts.next();
+
+  let settings: unknown = null;
+  try {
+    const db = await import("../db");
+    settings = await db.getPersonaSettings(personaId, user.id);
+  } catch {
+    return opts.next();
+  }
+  if (settings && sealState({ settings }, new Date(), user.timezone) === "sealed") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: copy(opts.ctx.locale, "errors.sealed"),
+    });
+  }
+  return opts.next();
+});
+
+export const protectedProcedure = t.procedure.use(requireUser).use(sealedGuard);
 
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {

@@ -174,6 +174,19 @@ describe("the lobby", () => {
     expect(screen.queryByText(translate("zh", "lobby.emptyState.title"))).toBeNull();
   });
 
+  it("shows a sealed persona as a closed card with only the day (C6.2)", () => {
+    personas = [makePersona({
+      id: 5,
+      name: "小A",
+      settings: { seal: { until: "2099-04-01", earlyOpen: "never" } },
+    })];
+    render(<Lobby />);
+    expect(screen.getByText("小A · 封存到 2099-04-01")).toBeInTheDocument();
+    // No countdown, no days.
+    expect(screen.queryByText(/还有 \d+ 天/)).toBeNull();
+    expect(screen.queryByText(/封存到 2099-04-01。还有/)).toBeNull();
+  });
+
   it("says the user has no personas when there are none", () => {
     render(<Lobby />);
 

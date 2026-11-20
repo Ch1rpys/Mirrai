@@ -55,6 +55,9 @@ describe("the persona's own state (WP13)", () => {
       seal: { until: "2026-04-01", earlyOpen: "never", requestedAt: "2026-03-01T00:00:00Z" },
     });
     expect(sealState(never, new Date("2026-03-20T00:00:00Z"))).toBe("sealed");
+    // The acceptance's two hours: seventy-one is still sealed, seventy-three is open.
+    expect(sealState(sealed, new Date("2026-03-03T23:00:00Z"))).toBe("sealed");
+    expect(sealState(sealed, new Date("2026-03-04T01:00:00Z"))).toBe("open");
   });
 
   it("closes the chat on the taper's weekend step, and opens it on a weekend", () => {
