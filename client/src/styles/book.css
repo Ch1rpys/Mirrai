@@ -1,0 +1,28 @@
+/**
+ * The keepsake book, on paper (C6.3).
+ *
+ * The global print rule leaves only the dictionary visible. The book
+ * needs the same protection, so its own rules come later and are scoped
+ * to the book: the toolbar disappears, the pages are the only visible
+ * thing, and each section avoids being split across two sheets.
+ */
+@media print {
+  body * { visibility: hidden; }
+  .book-document,
+  .book-document * { visibility: visible; }
+  .book-document {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    color: #000;
+  }
+  .book-toolbar { display: none !important; }
+  .book-document section,
+  .book-document figure,
+  .book-document li { break-inside: avoid; }
+  .book-document img { max-width: 100%; }
+}

@@ -5,7 +5,7 @@ import { formatDayKey, formatInstantInZone } from "@/lib/dates";
 import { zonedDateKey } from "@shared/timezone";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocale } from "@/contexts/LocaleContext";
-import { ArrowLeft, Download, Quote, Calendar, Sprout } from "lucide-react";
+import { ArrowLeft, Download, Quote, Calendar, Sprout, BookOpen } from "lucide-react";
 import PageLoader from "@/components/PageLoader";
 import NotFound from "@/pages/NotFound";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
@@ -494,6 +494,9 @@ export default function Graduation() {
             {/* The button promises a download, so it lands on the tab
                 that has the download — not on the settings page's
                 first one. */}
+            <Button size="sm" variant="outline" className="rounded-md px-5 bg-transparent" onClick={() => navigate(`/persona/${personaId}/book`)}>
+              <BookOpen className="w-3.5 h-3.5" /> {t("book.open")}
+            </Button>
             <Button size="sm" variant="outline" className="rounded-md px-5 bg-transparent" onClick={() => navigate("/settings?tab=data")}>
               <Download className="w-3.5 h-3.5" /> {t("graduationPage.takeItWithYou")}
             </Button>
