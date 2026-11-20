@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { useLocale } from "@/contexts/LocaleContext";
 import { translate } from "@/i18n";
 import { EMOTIONS, resolveEmotionKey, type EmotionDefinition } from "@/lib/emotions";
+import MyJournal from "@/components/v6/MyJournal";
+import PersonalTimeline from "@/components/v6/PersonalTimeline";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -191,6 +193,8 @@ export default function Diary() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [selectedPersonaId, setSelectedPersonaId] = useState<number | null>(null);
+  /** The app's summary, the user's own diary, or both on one line (C4.5). */
+  const [view, setView] = useState<"generated" | "mine" | "timeline">("generated");
 
   /**
    * The four reads, and whether they worked.
@@ -298,6 +302,59 @@ export default function Diary() {
     } finally { setGenerating(false); }
   };
 
+  const tabPersonaId = selectedPersonaId ?? (personas?.[0]?.id ?? 0);
+  const viewTabs = (
+    <div className="flex gap-1 border-b border-border overflow-x-auto scrollbar-hide">
+      {([
+        ["generated", t("diary.tabGenerated")],
+        ["mine", t("diary.tabMine")],
+        ["timeline", t("diary.tabTogether")],
+      ] as const).map(([key, label]) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => setView(key)}
+          className={`flex-shrink-0 px-3 sm:px-4 py-2.5 -mb-px text-sm border-b-2 transition-colors ${
+            view === key
+              ? "border-cinnabar text-foreground font-medium"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (view !== "generated") {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="sticky top-0 z-40 app-header">
+          <div className="container app-nav max-w-2xl">
+            <button onClick={() => navigate("/")} className="app-nav-back -ml-1" aria-label={t("common.back")}>
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div className="app-nav-spacer" />
+          </div>
+        </header>
+        <main className="flex-1 container max-w-3xl page-main space-y-6">
+          <div>
+            <p className="kicker kicker-accent mb-3">{t("diary.kicker")}</p>
+            <h1 className="page-title">{t("diary.title")}</h1>
+          </div>
+          {viewTabs}
+          {view === "mine" ? (
+            <MyJournal personaId={tabPersonaId || undefined} />
+          ) : tabPersonaId ? (
+            <PersonalTimeline personaId={tabPersonaId} />
+          ) : (
+            <p className="text-xs text-muted-foreground">{t("diary.emptyNoPersona")}</p>
+          )}
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="sticky top-0 z-40 app-header">
@@ -317,6 +374,8 @@ export default function Diary() {
             {t("diary.intro")}
           </p>
         </motion.div>
+
+        {viewTabs}
 
         {/* Persona selector */}
         <motion.div variants={fadeUp} initial="hidden" animate="visible" className="flex gap-1 border-b border-border overflow-x-auto scrollbar-hide">

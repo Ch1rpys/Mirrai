@@ -1262,6 +1262,9 @@ export const zh = {
     deleted: "已删除",
     kicker: "每日回顾",
     intro: "把一天的对话收成一封信，留给以后的自己。",
+    tabGenerated: "对话日记",
+    tabMine: "我写的",
+    tabTogether: "放在一起看",
     emptyKicker: "尚未开卷",
     emptyNoPersona: "还没有分身，先去大厅创建一位",
     emptySelect: "选择一个分身查看日记",
@@ -1591,6 +1594,28 @@ export const zh = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  myJournal: {
+    title: "我写的",
+    hint: "这里是你自己写的东西，不是应用对聊天的总结。",
+    privacyNote: "这里的字只存在你的机器上，不会发给模型。",
+    placeholder: "今天想写点什么？",
+    save: "写下来",
+    saved: "写好了。",
+    empty: "还没有写过。",
+    edit: "改一改",
+    delete: "删掉",
+    deleteConfirm: "删掉这一篇？写下的内容不会留下。",
+  },
+  timeline: {
+    title: "放在一起看",
+    hint: "你写的、你的心情、你们之间发生的事、每次聊完之后的回答，按日期排在一起。",
+    empty: "还没有可以放在一起看的东西。",
+    journal: "你写的",
+    mood: "心情打卡",
+    event: "你们之间",
+    checkin: "聊完之后",
+  },
+
   afterChat: {
     question: "上次聊完之后，感觉怎么样？",
     better: "好一点了",

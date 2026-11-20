@@ -1267,6 +1267,9 @@ export const en = {
     deleted: "Deleted",
     kicker: "Daily review",
     intro: "Fold a day of conversation into a letter, for yourself later.",
+    tabGenerated: "Conversation diary",
+    tabMine: "What I wrote",
+    tabTogether: "Seen together",
     emptyKicker: "Not opened yet",
     emptyNoPersona: "No personas yet — create one in the lobby first",
     emptySelect: "Choose a persona to read their diary",
@@ -1590,6 +1593,28 @@ export const en = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  myJournal: {
+    title: "What I wrote",
+    hint: "These are your own words, not the app's summary of a conversation.",
+    privacyNote: "These words stay on your machine and are never sent to a model.",
+    placeholder: "What is on your mind today?",
+    save: "Write it down",
+    saved: "Written.",
+    empty: "Nothing written yet.",
+    edit: "Edit",
+    delete: "Delete",
+    deleteConfirm: "Delete this entry? The words will not be kept.",
+  },
+  timeline: {
+    title: "Seen together",
+    hint: "What you wrote, how you felt, what happened between the two of you, and how each conversation left you — in one line by date.",
+    empty: "Nothing to see together yet.",
+    journal: "You wrote",
+    mood: "Mood check-in",
+    event: "Between you",
+    checkin: "After a conversation",
+  },
+
   afterChat: {
     question: "How do you feel after that conversation?",
     better: "A little better",
