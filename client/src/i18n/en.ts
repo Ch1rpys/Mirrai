@@ -1593,6 +1593,27 @@ export const en = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  mirror: {
+    title: "Mirror",
+    note: "The same records, seen from your side. Only you can see this.",
+    entryNote: "Your side of the record: the short replies you repeat, when you go quiet, how fast you answer, and who opens.",
+    empty: "There is not enough record to measure this yet.",
+    example: "See it in the record",
+    seconds: "{{n}}s",
+    minutes: "{{n}} min",
+    shortTitle: "The short replies you repeat",
+    shortLine: "You replied “{{text}}” {{n}} times. After {{k}} of them, {{name}} said less.",
+    goingShortTitle: "The stretches where you went short",
+    goingShortLine: "For {{n}} stretches, your lines were much shorter than usual.",
+    delayTitle: "How fast you reply",
+    delayRow: "{{band}}: half within {{value}}",
+    delayThin: "{{band}}: too little to measure",
+    repairTitle: "Who speaks first after a fight",
+    repairLine: "After a fight, the first to speak: you {{me}} times, {{name}} {{them}} times.",
+    startsTitle: "Who opens each scene",
+    startsLine: "You {{me}} times, {{name}} {{them}} times.",
+  },
+
   wellbeing: {
     title: "How you have been",
     note: "Stated, not graded.",

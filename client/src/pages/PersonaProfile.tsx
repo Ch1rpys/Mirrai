@@ -482,6 +482,16 @@ export default function PersonaProfile() {
           </button>
           <button
             type="button"
+            onClick={() => navigate(`/persona/${personaId}/mirror`)}
+            className="w-full rounded-lg border border-border/70 p-3 text-left transition-colors hover:bg-muted/30"
+          >
+            <span className="block text-sm text-foreground">{t("mirror.title")}</span>
+            <span className="block text-xs text-muted-foreground leading-relaxed">
+              {t("mirror.entryNote")}
+            </span>
+          </button>
+          <button
+            type="button"
             onClick={() => void openManual()}
             className="w-full rounded-lg border border-border/70 p-3 text-left transition-colors hover:bg-muted/30"
           >

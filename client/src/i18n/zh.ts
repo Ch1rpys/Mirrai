@@ -1594,6 +1594,27 @@ export const zh = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  mirror: {
+    title: "镜子",
+    note: "同一批记录里，你自己的样子。只有你看得到。",
+    entryNote: "从记录里看你这一侧：常回的短句、突然变短、回消息的快慢、谁先开口。",
+    empty: "记录还太少，量不出来。",
+    example: "在记录里看",
+    seconds: "{{n}} 秒",
+    minutes: "{{n}} 分钟",
+    shortTitle: "你常回的短句",
+    shortLine: "你回「{{text}}」有 {{n}} 次。其中 {{k}} 次之后，{{name}} 的话变少了。",
+    goingShortTitle: "你也有突然变短的时候",
+    goingShortLine: "连着 {{n}} 段，你的话比平时短很多。",
+    delayTitle: "你回消息的快慢",
+    delayRow: "{{band}}：一半在 {{value}} 之内",
+    delayThin: "{{band}}：记录太少",
+    repairTitle: "吵架之后先开口的",
+    repairLine: "吵架之后先开口的：你 {{me}} 次，{{name}} {{them}} 次。",
+    startsTitle: "每个场景谁先开口",
+    startsLine: "你 {{me}} 次，{{name}} {{them}} 次。",
+  },
+
   wellbeing: {
     title: "最近的你",
     note: "只陈述，不评价。",

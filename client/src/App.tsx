@@ -34,6 +34,7 @@ const Report = lazy(() => import("./pages/Report"));
 const Call = lazy(() => import("./pages/Call"));
 const Decode = lazy(() => import("./pages/Decode"));
 const Rehearsal = lazy(() => import("./pages/Rehearsal"));
+const Mirror = lazy(() => import("./pages/Mirror"));
 
 function Router() {
   const [location] = useLocation();
@@ -68,6 +69,7 @@ function Router() {
           <Route path="/persona/:id/call" component={Call} />
           <Route path="/persona/:id/decode" component={Decode} />
           <Route path="/persona/:id/rehearsal" component={Rehearsal} />
+          <Route path="/persona/:id/mirror" component={Mirror} />
           <Route path="/blind/:token" component={BlindGuest} />
           <Route path="/persona/:id/graduation" component={Graduation} />
           <Route path="/upload/:id" component={Upload} />
