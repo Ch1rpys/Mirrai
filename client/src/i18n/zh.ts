@@ -1683,6 +1683,7 @@ export const zh = {
     save: "写下来",
     saved: "写好了。",
     empty: "还没有写过。",
+    loadOlder: "再往前看",
     edit: "改一改",
     delete: "删掉",
     deleteConfirm: "删掉这一篇？写下的内容不会留下。",

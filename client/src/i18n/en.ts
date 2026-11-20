@@ -1682,6 +1682,7 @@ export const en = {
     save: "Write it down",
     saved: "Written.",
     empty: "Nothing written yet.",
+    loadOlder: "Show older entries",
     edit: "Edit",
     delete: "Delete",
     deleteConfirm: "Delete this entry? The words will not be kept.",

@@ -46,8 +46,30 @@ export default function MyJournal({ personaId }: { personaId?: number }) {
   const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState<number | null>(null);
   const [editBody, setEditBody] = useState("");
+  const [older, setOlder] = useState<any[]>([]);
+  const [nextCursor, setNextCursor] = useState<number | null | undefined>(undefined);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const next = nextCursor === undefined ? (data?.next ?? null) : nextCursor;
 
-  const entries = data?.entries ?? [];
+  const entries = [...(data?.entries ?? []), ...older];
+
+  async function loadOlder() {
+    if (next == null || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const page = await utils.journal.list.fetch({
+        ...(personaId ? { personaId } : {}),
+        cursor: next,
+      });
+      setOlder((current) => {
+        const seen = new Set(current.map((entry: any) => entry.id));
+        return [...current, ...page.entries.filter((entry: any) => !seen.has(entry.id))];
+      });
+      setNextCursor(page.next ?? null);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }
 
   return (
     <section className="space-y-4">
@@ -153,6 +175,14 @@ export default function MyJournal({ personaId }: { personaId?: number }) {
           ))}
         </ul>
       )}
+
+      {next != null ? (
+        <div className="flex justify-center">
+          <Button size="sm" variant="ghost" onClick={loadOlder} disabled={loadingOlder}>
+            {loadingOlder ? t("common.loading") : t("myJournal.loadOlder")}
+          </Button>
+        </div>
+      ) : null}
     </section>
   );
 }

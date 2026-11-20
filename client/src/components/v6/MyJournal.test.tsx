@@ -15,13 +15,15 @@ const create = vi.fn();
 const update = vi.fn();
 const remove = vi.fn();
 const invalidate = vi.fn();
+const fetchOlder = vi.fn();
 let entries: any[] = [];
+let next: number | null = null;
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    useUtils: () => ({ journal: { list: { invalidate } } }),
+    useUtils: () => ({ journal: { list: { invalidate, fetch: fetchOlder } } }),
     journal: {
-      list: { useQuery: () => ({ data: { entries }, isLoading: false, isError: false, refetch: vi.fn() }) },
+      list: { useQuery: () => ({ data: { entries, next }, isLoading: false, isError: false, refetch: vi.fn() }) },
       create: {
         useMutation: (options: any) => ({
           mutate: (input: any) => {
@@ -63,6 +65,7 @@ describe("my own diary", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     entries = [];
+    next = null;
   });
 
   it("says where the words stay", () => {
@@ -89,6 +92,25 @@ describe("my own diary", () => {
     await user.type(box, "今天其实不太好。");
     await user.click(screen.getByRole("button", { name: translate("zh", "microRules.save") }));
     expect(update).toHaveBeenCalledWith({ id: 7, body: "今天其实不太好。" });
+  });
+
+  it("loads the older entries beyond the first page", async () => {
+    entries = Array.from({ length: 30 }, (_, index) => ({
+      id: index + 1,
+      entryDate: "2026-03-01",
+      body: `第 ${index + 1} 篇`,
+    }));
+    next = 30;
+    fetchOlder.mockResolvedValue({
+      entries: [{ id: 31, entryDate: "2026-02-01", body: "更早的一篇" }],
+      next: null,
+    });
+    const user = userEvent.setup();
+    render(<ConfirmProvider><MyJournal /></ConfirmProvider>);
+    await user.click(screen.getByRole("button", { name: translate("zh", "myJournal.loadOlder") }));
+    expect(fetchOlder).toHaveBeenCalledWith({ cursor: 30 });
+    expect(screen.getByText("更早的一篇")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: translate("zh", "myJournal.loadOlder") })).toBeNull();
   });
 
   it("deletes only after the app's own confirmation", async () => {
