@@ -1,4 +1,14 @@
 import { intimacyLevelLabel } from "@shared/intimacy";
+import { normalizePersonaData } from "./persona-schema";
+import { describeFingerprint } from "@shared/fingerprint-prose";
+import { normalizeMicroRules } from "@shared/micro-rules";
+import { normalizeStances } from "@shared/stances";
+import { normalizePeople } from "@shared/people";
+import { normalizeLexicon } from "@shared/lexicon";
+import { normalizeLifeEvents } from "@shared/life-events";
+import { normalizeTriggers, normalizeConflictProfile } from "@shared/conflicts";
+import { normalizeRoutine } from "@shared/routine-profile";
+
 
 const EMOTION_COLORS: Record<string, string> = {
   warm: "#7CB69D", playful: "#F59E0B", nostalgic: "#8B5CF6",
@@ -366,6 +376,253 @@ ${lettersHtml}
 </section>
 ${diaryHtml}
 <div class="footer">${copy.exportedOn} ${new Date().toLocaleString(locale === "en" ? "en-US" : "zh-CN")} · Mirrai</div>
+</body>
+</html>`;
+}
+
+/**
+ * "The manual" of a persona (C2.9)
+ *
+ * A printable page built from what the user confirmed and what was
+ * measured. It is not a prompt and it is not written by a model: every
+ * section is a list of facts, each with the line it came from.
+ */
+export interface ManualInput {
+  persona: {
+    name: string;
+    relationshipDesc?: string | null;
+    togetherFrom?: string | null;
+    togetherTo?: string | null;
+  };
+  personaData?: {
+    microRules?: unknown;
+    stances?: unknown;
+    people?: unknown;
+    lexicon?: unknown;
+    lifeEvents?: unknown;
+  } | null;
+  styleProfile?: {
+    fingerprint?: unknown;
+    triggers?: unknown;
+    conflict?: unknown;
+    routine?: unknown;
+  } | null;
+}
+
+const MANUAL_COPY = {
+  zh: {
+    title: "{{name}} 的说明书",
+    who: "是谁",
+    voice: "说话的样子",
+    meaning: "这些话的意思",
+    triggers: "这些话之后通常会不高兴",
+    repair: "怎么和好",
+    likes: "喜欢和讨厌",
+    people: "身边的人",
+    routine: "作息",
+    lexicon: "我们的词",
+    footer: "这份文档是从你导入的记录里整理的。记录是过去的，人会变。它不是 {{name}} 本人写的，也不能代替去问 {{name}}。",
+    when: "当我说「{{trigger}}」",
+    means: "意思是：{{meaning}}",
+    renders: "当时 TA 的反应：{{rendering}}",
+    mention: "提到 {{n}} 次",
+    relation: "关系：{{relation}}",
+    evidence: "原话",
+    episodes: "记到的冲突有 {{n}} 次",
+    duration: "一般持续 {{median}} 分钟",
+    repairBy: "{{them}} 次是 TA 先开口，{{me}} 次是我先开口",
+    sleep: "一般 {{start}} 到 {{end}} 不在线",
+    routineWindow: "{{title}}（{{start}}–{{end}}）",
+    weekdays: ["日", "一", "二", "三", "四", "五", "六"],
+  },
+  en: {
+    title: "The manual of {{name}}",
+    who: "Who they are",
+    voice: "How they speak",
+    meaning: "What those words mean",
+    triggers: "What usually comes after these",
+    repair: "How you make up",
+    likes: "Likes and dislikes",
+    people: "People around them",
+    routine: "Daily rhythm",
+    lexicon: "Words of your own",
+    footer: "This document is put together from the record you imported. The record is the past, and people change. It was not written by {{name}}, and it is no substitute for asking {{name}}.",
+    when: "When I say “{{trigger}}”",
+    means: "It means: {{meaning}}",
+    renders: "What they did: {{rendering}}",
+    mention: "mentioned {{n}} times",
+    relation: "Relation: {{relation}}",
+    evidence: "In the record",
+    episodes: "{{n}} fights were counted",
+    duration: "usually lasting {{median}} minutes",
+    repairBy: "They reached out {{them}} times; I did {{me}} times",
+    sleep: "Usually offline from {{start}} to {{end}}",
+    routineWindow: "{{title}} ({{start}}–{{end}})",
+    weekdays: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+  },
+} as const;
+
+function minutesText(value: number): string {
+  const hour = Math.floor(value / 60);
+  const minute = value % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+export function generateManualHTML(
+  input: ManualInput,
+  locale: ExportLocale = "zh",
+): string {
+  const copy = MANUAL_COPY[locale];
+  const name = escapeHtml(input.persona.name);
+  const data = normalizePersonaData(
+    (input.personaData ?? {}) as Record<string, unknown>,
+    { name: input.persona.name, locale },
+  );
+  const style = input.styleProfile ?? {};
+  const fingerprint = (style.fingerprint ?? null) as Parameters<typeof describeFingerprint>[0];
+  const rules = normalizeMicroRules(data.microRules).filter((rule) => rule.verified);
+  const stances = normalizeStances(data.stances).filter((stance) => stance.verified);
+  const people = normalizePeople(data.people).filter((person) => person.verified);
+  const lexicon = normalizeLexicon(data.lexicon).filter((entry) => entry.verified);
+  const lifeEvents = normalizeLifeEvents(data.lifeEvents);
+  const triggers = normalizeTriggers(style.triggers) ?? [];
+  const conflict = normalizeConflictProfile(style.conflict);
+  const routine = normalizeRoutine(style.routine);
+
+  const quote = (snippet: string, at?: string) =>
+    `<p class="quote">${copy.evidence}: “${escapeHtml(snippet)}”${
+      at ? ` <span class="date">${escapeHtml(at.slice(0, 10))}</span>` : ""
+    }</p>`;
+
+  const section = (title: string, body: string[]) =>
+    body.length > 0
+      ? `<section><h2>${escapeHtml(title)}</h2>${body.join("")}</section>`
+      : "";
+
+  const who = [
+    `<p>${escapeHtml(input.persona.relationshipDesc ?? "")}</p>`,
+    input.persona.togetherFrom
+      ? `<p class="date">${escapeHtml(input.persona.togetherFrom)}${
+          input.persona.togetherTo ? ` — ${escapeHtml(input.persona.togetherTo)}` : ""
+        }</p>`
+      : "",
+  ].filter(Boolean);
+
+  const voice = describeFingerprint(fingerprint, locale).map(
+    (line) => `<p>${escapeHtml(line.text)}</p>`,
+  );
+
+  const meaning = rules.flatMap((rule) => [
+    `<div class="item"><p>${escapeHtml(
+      copy.when.replace("{{trigger}}", rule.trigger.join(locale === "zh" ? "、" : ", ")),
+    )}</p><p>${escapeHtml(copy.means.replace("{{meaning}}", rule.meaning))}</p><p>${escapeHtml(
+      copy.renders.replace("{{rendering}}", rule.rendering),
+    )}</p>${rule.evidence.map((evidence) => quote(evidence.snippet, evidence.at)).join("")}</div>`,
+  ]);
+
+  const triggerSection = triggers.map(
+    (trigger) =>
+      `<div class="item"><p>${escapeHtml(
+        copy.when.replace("{{trigger}}", trigger.userAct),
+      )}</p>${trigger.examples.map((example) => quote(example.text, example.at)).join("")}</div>`,
+  );
+
+  const repair = conflict
+    ? [
+        `<p>${escapeHtml(copy.episodes.replace("{{n}}", String(conflict.episodes)))}，${escapeHtml(
+          copy.duration.replace("{{median}}", String(conflict.durationMin.median)),
+        )}。</p>`,
+        `<p>${escapeHtml(
+          copy.repairBy
+            .replace("{{them}}", String(conflict.repairBy.them))
+            .replace("{{me}}", String(conflict.repairBy.me)),
+        )}</p>`,
+        ...conflict.repairLines.map((line) => quote(line)),
+      ]
+    : [];
+
+  const likes = stances.map(
+    (stance) =>
+      `<div class="item"><p>${escapeHtml(stance.statement)}</p>${stance.evidence
+        .map((evidence) => quote(evidence.snippet, evidence.at))
+        .join("")}</div>`,
+  );
+
+  const peopleSection = people.map(
+    (person) =>
+      `<div class="item"><p>${escapeHtml(person.name)} · ${escapeHtml(
+        copy.relation.replace("{{relation}}", person.relation),
+      )} · ${escapeHtml(copy.mention.replace("{{n}}", String(person.mentions)))}</p>${person.evidence
+        .map((evidence) => quote(evidence.snippet, evidence.at))
+        .join("")}</div>`,
+  );
+
+  const routineLines: string[] = [];
+  if (routine?.sleep) {
+    routineLines.push(
+      `<p>${escapeHtml(
+        copy.sleep
+          .replace("{{start}}", minutesText(routine.sleep.startMin))
+          .replace("{{end}}", minutesText(routine.sleep.endMin)),
+      )}</p>`,
+    );
+  }
+  for (const event of lifeEvents) {
+    if (!event.verified || event.kind !== "routine" || !event.schedule) continue;
+    const weekdays = event.schedule.weekdays
+      .map((day) => copy.weekdays[day] ?? "")
+      .join(locale === "zh" ? "" : ", ");
+    routineLines.push(
+      `<p>${escapeHtml(
+        copy.routineWindow
+          .replace("{{title}}", event.title)
+          .replace("{{start}}", `${weekdays} ${minutesText(event.schedule.startHour * 60)}`)
+          .replace("{{end}}", minutesText(event.schedule.endHour * 60)),
+      )}</p>`,
+    );
+  }
+
+  const lexiconSection = lexicon.map(
+    (entry) =>
+      `<div class="item"><p>${escapeHtml(entry.term)} —— ${escapeHtml(entry.gloss)}</p>${entry.evidence
+        .slice(0, 2)
+        .map((evidence) => quote(evidence.snippet, evidence.at))
+        .join("")}</div>`,
+  );
+
+  const body = [
+    section(copy.who, who),
+    section(copy.voice, voice),
+    section(copy.meaning, meaning),
+    section(copy.triggers, triggerSection),
+    section(copy.repair, repair),
+    section(copy.likes, likes),
+    section(copy.people, peopleSection),
+    section(copy.routine, routineLines),
+    section(copy.lexicon, lexiconSection),
+  ].join("");
+
+  return `<!DOCTYPE html>
+<html lang="${locale === "zh" ? "zh-CN" : "en"}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(copy.title.replace("{{name}}", name))}</title>
+<style>
+  body { font-family: -apple-system, "Noto Sans CJK SC", sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1.25rem; line-height: 1.7; color: #222; }
+  h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.05rem; margin-top: 1.75rem; border-bottom: 1px solid #ddd; padding-bottom: 0.25rem; }
+  .item { margin: 0.75rem 0; }
+  .quote { color: #555; font-size: 0.9rem; margin: 0.25rem 0; }
+  .date { color: #888; font-size: 0.8rem; }
+  footer { margin-top: 2.5rem; border-top: 1px solid #ddd; padding-top: 0.75rem; color: #666; font-size: 0.85rem; }
+  @media print { body { margin: 0; } }
+</style>
+</head>
+<body>
+<h1>${escapeHtml(copy.title.replace("{{name}}", name))}</h1>
+${body}
+<footer>${escapeHtml(copy.footer.replace("{{name}}", name))}</footer>
 </body>
 </html>`;
 }

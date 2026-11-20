@@ -52,3 +52,30 @@ describe("the headers every response carries", () => {
     expect(contentSecurityPolicy()).toContain("style-src 'self' 'unsafe-inline'");
   });
 });
+
+describe("the map basemap and the content policy", () => {
+  it("has no external image origin when MAP_TILE_URL is not set", () => {
+    const previous = process.env.MAP_TILE_URL;
+    delete process.env.MAP_TILE_URL;
+    try {
+      expect(contentSecurityPolicy()).toContain("img-src 'self' data: blob:;");
+      expect(contentSecurityPolicy()).not.toContain("https://tiles.example.com");
+    } finally {
+      if (previous === undefined) delete process.env.MAP_TILE_URL;
+      else process.env.MAP_TILE_URL = previous;
+    }
+  });
+
+  it("allows exactly the configured tile origin", () => {
+    const previous = process.env.MAP_TILE_URL;
+    process.env.MAP_TILE_URL = "https://tiles.example.com/{z}/{x}/{y}.png";
+    try {
+      const policy = contentSecurityPolicy();
+      expect(policy).toContain("https://tiles.example.com");
+      expect(policy).not.toContain("{z}");
+    } finally {
+      if (previous === undefined) delete process.env.MAP_TILE_URL;
+      else process.env.MAP_TILE_URL = previous;
+    }
+  });
+});

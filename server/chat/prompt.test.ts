@@ -386,3 +386,28 @@ describe("a stretch of the same person", () => {
     expect(built).toContain("周三下午有课");
   });
 });
+
+describe("the turning points stay out of the prompt", () => {
+  it("never puts the timeline's markers or notes into the persona's words", async () => {
+    const prompt = await buildPromptForPersona({
+      persona: {
+        ...persona,
+        personaData: {
+          ...persona.personaData,
+          turningPoints: [{
+            id: "2023-W29",
+            at: "2023-W29",
+            changes: [{ series: "charsMedian", before: 10, after: 6 }],
+            status: "confirmed",
+            note: "MARKER-TURN-NOTE",
+          }],
+        },
+      },
+      userId: 1,
+      userMessage: "在吗",
+    });
+    expect(prompt).not.toContain("MARKER-TURN-NOTE");
+    expect(prompt).not.toContain("2023-W29");
+    expect(prompt).not.toContain("charsMedian");
+  });
+});

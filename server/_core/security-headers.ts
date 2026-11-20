@@ -46,7 +46,7 @@ export function contentSecurityPolicy(): string {
     // user uploaded is a file the user uploaded, and it is never a
     // script and never a frame.
     "connect-src 'self'",
-    "img-src 'self' data: blob:",
+    `img-src 'self' data: blob:${mapImageOrigin()}`,
     "media-src 'self' blob:",
     "font-src 'self'",
     "object-src 'none'",
@@ -59,6 +59,20 @@ export function contentSecurityPolicy(): string {
 /**
  * Express middleware that sets the headers.
  */
+/** The origin a map basemap may load images from, when one is set. */
+function mapImageOrigin(): string {
+  const raw = process.env.MAP_TILE_URL?.trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === "https:" || parsed.protocol === "http:"
+      ? ` ${parsed.origin}`
+      : "";
+  } catch {
+    return "";
+  }
+}
+
 export function securityHeaders(
   req: Request,
   res: Response,

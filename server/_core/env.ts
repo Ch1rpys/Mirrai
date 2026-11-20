@@ -170,6 +170,8 @@ export const ENV = {
   cookieSecret: resolveJwtSecret(),
   databaseUrl: resolveDatabaseUrl(),
   isProduction: process.env.NODE_ENV === "production",
+  /** Optional third-party map tiles (C2.8). Empty means no basemap. */
+  mapTileUrl: process.env.MAP_TILE_URL ?? "",
 
   defaultLlmProvider: process.env.DEFAULT_LLM_PROVIDER ?? "openai",
 

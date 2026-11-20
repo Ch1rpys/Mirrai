@@ -8,14 +8,20 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import {
+  countRecords,
   countRecordsByMonth,
   deleteRecordRow,
   deleteRecordsBySource,
   getFilesByPersonaId,
   getPersonaById,
   getPersonasByUserId,
+  getPersonaStyleProfile,
+  getRecordReportCache,
   getRecordSourceSummary,
+  getRecordsVersion,
   getRecordsAround,
+  iterateRecords,
+  saveRecordReportCache,
   searchRecordsLexical,
   searchRecordsSemantic,
   listMediaForRecordIds,
@@ -29,7 +35,16 @@ import { renderRecordContent } from "@shared/records";
 import { findHarmKind, normalizeHarmReport } from "@shared/harm";
 import { findNearest } from "../records/nearest";
 import { onThisDay } from "../records/on-this-day";
+import { buildReport } from "../records/report";
+import { buildTimeline } from "../records/timeline";
+import { findFirsts, type FirstRow } from "../records/firsts";
+import { collectPlaces } from "../records/places";
+import { collectSongs } from "../records/songs";
+import { ENV } from "../_core/env";
 import type { ParseReport } from "../importers/types";
+
+/** Reports being built in the background, so one page does not start two. */
+const reportBuilds = new Set<number>();
 
 export const recordRouter = router({
   sources: protectedProcedure
@@ -260,6 +275,111 @@ export const recordRouter = router({
         before: around.before.map(render),
         after: around.after.map(render),
       };
+    }),
+
+  /**
+   * C2.4: the relationship's numbers, cached by records version.
+   *
+   * A record of a hundred thousand lines is not reprocessed for every
+   * page load. Above two hundred thousand lines the answer is
+   * "building" and the page asks again.
+   */
+  /** C2.8: the places the record mentions, from locations and photo EXIF. */
+  places: protectedProcedure
+    .input(z.object({ personaId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      const places = await collectPlaces({ personaId: input.personaId, userId: ctx.user.id });
+      /**
+       * The basemap is optional and off by default. The browser only
+       * learns the address when the operator has set one.
+       */
+      return { places, tileUrl: ENV.mapTileUrl.trim() || null };
+    }),
+
+  /** C2.8: the songs shared in the record. */
+  songs: protectedProcedure
+    .input(z.object({ personaId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      return collectSongs({ personaId: input.personaId, userId: ctx.user.id });
+    }),
+
+  /** C2.6: the first and the last of each thing in the record. */
+  firsts: protectedProcedure
+    .input(z.object({ personaId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      const rows: FirstRow[] = [];
+      for await (const row of iterateRecords(input.personaId, ctx.user.id)) {
+        rows.push({
+          id: row.id,
+          role: row.role,
+          content: row.content,
+          kind: row.kind,
+          timestamp: row.timestamp,
+          createdAt: row.createdAt,
+          meta: row.meta,
+        });
+      }
+      const profile = await getPersonaStyleProfile(input.personaId, ctx.user.id);
+      return findFirsts(rows, { conflict: profile?.conflict ?? null }).map((item) => ({
+        ...item,
+        text: renderRecordContent(
+          { kind: "text", content: item.text },
+          ctx.locale,
+        ),
+      }));
+    }),
+
+  /** C2.5: the six weekly curves and the changes the user has decided on. */
+  timeline: protectedProcedure
+    .input(z.object({ personaId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      return buildTimeline({ personaId: input.personaId, userId: ctx.user.id });
+    }),
+
+  report: protectedProcedure
+    .input(z.object({ personaId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      const version = await getRecordsVersion(input.personaId, ctx.user.id);
+      const cached = await getRecordReportCache(input.personaId, ctx.user.id);
+      if (cached && cached.recordsVersion === version) {
+        return { status: "ready" as const, report: cached.report };
+      }
+      const total = await countRecords(input.personaId, ctx.user.id);
+      if (total > 200_000) {
+        if (!reportBuilds.has(input.personaId)) {
+          reportBuilds.add(input.personaId);
+          void buildReport({ personaId: input.personaId, userId: ctx.user.id })
+            .then((report) =>
+              saveRecordReportCache({
+                personaId: input.personaId,
+                userId: ctx.user.id,
+                recordsVersion: version,
+                report,
+              }),
+            )
+            .catch((error) => console.warn("[Report] The build failed:", error))
+            .finally(() => reportBuilds.delete(input.personaId));
+        }
+        return { status: "building" as const };
+      }
+      const report = await buildReport({ personaId: input.personaId, userId: ctx.user.id });
+      await saveRecordReportCache({
+        personaId: input.personaId,
+        userId: ctx.user.id,
+        recordsVersion: version,
+        report,
+      });
+      return { status: "ready" as const, report };
     }),
 
   /** C2.1: the same calendar day in the years before. */

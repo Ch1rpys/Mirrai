@@ -4,6 +4,43 @@
 import type { CopyTable } from "./index";
 
 export const V6 = {
+  "fingerprintProse.neverPeriodUpset": {
+    zh: "几乎不用句号，除非不高兴",
+    en: "Almost never ends a line with a full stop — unless upset",
+  },
+  "fingerprintProse.periodOften": {
+    zh: "句号用得多，{{percent}} 的行以句号结尾",
+    en: "Uses full stops often: {{percent}} of lines end with one",
+  },
+  "fingerprintProse.neverPeriod": {
+    zh: "几乎不用句号",
+    en: "Almost never ends a line with a full stop",
+  },
+  "fingerprintProse.ellipsisEnd": {
+    zh: "有 {{percent}} 的行用省略号收尾",
+    en: "{{percent}} of lines trail off with an ellipsis",
+  },
+  "fingerprintProse.particleEnd": {
+    zh: "句末常用「{{particle}}」，占 {{percent}}",
+    en: "Often ends with “{{particle}}” ({{percent}} of lines)",
+  },
+  "fingerprintProse.neverParticle": {
+    zh: "从不用「{{particle}}」",
+    en: "Never uses “{{particle}}”",
+  },
+  "fingerprintProse.shortLines": {
+    zh: "一次发得很短，中位 {{n}} 个字",
+    en: "Sends short lines: {{n}} characters at the median",
+  },
+  "fingerprintProse.noEmoji": {
+    zh: "不用表情符号",
+    en: "Does not use emoji",
+  },
+  "fingerprintProse.laughOften": {
+    zh: "常常笑，{{percent}} 的行里有笑",
+    en: "Laughs often: {{percent}} of lines",
+  },
+
   "skillPrompts.pipeline.videoTranscriptsHeading": {
     zh: "视频里说的话：",
     en: "What was said in the videos:",

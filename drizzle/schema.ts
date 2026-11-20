@@ -1896,3 +1896,26 @@ export const recordMarks = pgTable("record_marks", {
 
 export type RecordMark = typeof recordMarks.$inferSelect;
 export type InsertRecordMark = typeof recordMarks.$inferInsert;
+
+/**
+ * The cached numbers of one persona's report (C2.4).
+ *
+ * A full pass over the record is not something to do every time the
+ * page is opened, so the report is kept with the records version it was
+ * built from. A new import changes the version and the next read
+ * rebuilds it.
+ */
+export const recordReports = pgTable("record_reports", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  recordsVersion: varchar("recordsVersion", { length: 64 }).notNull(),
+  report: jsonb("report").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  onePerPersona: uniqueIndex("record_reports_persona_idx").on(table.personaId, table.userId),
+  userIdx: index("record_reports_user_idx").on(table.userId),
+}));
+
+export type RecordReportRow = typeof recordReports.$inferSelect;
+export type InsertRecordReport = typeof recordReports.$inferInsert;

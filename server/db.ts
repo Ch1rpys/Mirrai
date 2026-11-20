@@ -11,7 +11,7 @@ import {
   collectionJobs,
   distillationChunks, distillationCards, personaVersions,
   evalCases, evalRuns, outboundLetters, fidelityFeedback, fidelityPairs, blindSessions,
-  recordEmbeddings, pushSubscriptions, recordMarks,
+  recordEmbeddings, pushSubscriptions, recordMarks, recordReports,
   InsertRecordMark, RecordMark,
   InsertPersona, InsertPersonaFile, InsertMessage,
   InsertWechatBinding, InsertSkillJob, InsertLlmConfig,
@@ -1200,6 +1200,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(media).where(eq(media.userId, id));
     await tx.delete(recordEmbeddings).where(eq(recordEmbeddings.userId, id));
     await tx.delete(recordMarks).where(eq(recordMarks.userId, id));
+    await tx.delete(recordReports).where(eq(recordReports.userId, id));
     await tx.delete(relationshipEvents).where(eq(relationshipEvents.userId, id));
     await tx.delete(reminderDeliveries).where(eq(reminderDeliveries.userId, id));
     await tx.delete(researchProfiles).where(eq(researchProfiles.userId, id));
@@ -1585,6 +1586,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(collectedMessages).where(and(eq(collectedMessages.personaId, id), eq(collectedMessages.userId, userId)));
     await tx.delete(recordEmbeddings).where(and(eq(recordEmbeddings.personaId, id), eq(recordEmbeddings.userId, userId)));
     await tx.delete(recordMarks).where(and(eq(recordMarks.personaId, id), eq(recordMarks.userId, userId)));
+    await tx.delete(recordReports).where(and(eq(recordReports.personaId, id), eq(recordReports.userId, userId)));
     await tx.delete(collectionJobs).where(and(eq(collectionJobs.personaId, id), eq(collectionJobs.userId, userId)));
     await tx.delete(diaryEntries).where(and(eq(diaryEntries.personaId, id), eq(diaryEntries.userId, userId)));
     await tx.delete(distillationCards).where(and(eq(distillationCards.personaId, id), eq(distillationCards.userId, userId)));
@@ -6849,6 +6851,59 @@ export async function deleteRecordRow(
       ));
   }
   return rows.length > 0;
+}
+
+export interface RecordReportCache {
+  recordsVersion: string;
+  report: unknown;
+  createdAt: Date;
+}
+
+export async function getRecordReportCache(
+  personaId: number,
+  userId: number,
+): Promise<RecordReportCache | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .select({
+      recordsVersion: recordReports.recordsVersion,
+      report: recordReports.report,
+      createdAt: recordReports.createdAt,
+    })
+    .from(recordReports)
+    .where(and(
+      eq(recordReports.personaId, personaId),
+      eq(recordReports.userId, userId),
+    ))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function saveRecordReportCache(data: {
+  userId: number;
+  personaId: number;
+  recordsVersion: string;
+  report: unknown;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .insert(recordReports)
+    .values({
+      userId: data.userId,
+      personaId: data.personaId,
+      recordsVersion: data.recordsVersion,
+      report: data.report,
+    })
+    .onConflictDoUpdate({
+      target: [recordReports.personaId, recordReports.userId],
+      set: {
+        recordsVersion: data.recordsVersion,
+        report: data.report,
+        createdAt: new Date(),
+      },
+    });
 }
 
 /** The media rows attached to some record lines, for the reader. */

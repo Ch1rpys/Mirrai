@@ -25,6 +25,27 @@ export interface EgressItem {
 
 export const EGRESS_ITEMS: EgressItem[] = [
   {
+    id: "map-tiles",
+    side: "client",
+    destination: {
+      zh: "运营方设置的 MAP_TILE_URL 指向的地图瓦片服务器（默认没有）",
+      en: "The map tile server set by the operator in MAP_TILE_URL (none by default)",
+    },
+    payload: {
+      zh: "正在看的那一片地图的图片请求。不发送记录内容、地名或坐标以外的任何东西",
+      en: "The image requests for the part of the map being viewed. No record content is sent; only the tile coordinates",
+    },
+    when: {
+      zh: "用户在「去过的地方」里打开「加载地图底图」之后",
+      en: "After the user turns on the basemap in Places",
+    },
+    defaultOn: false,
+    offHow: {
+      zh: "不打开地图底图；运营方不设 MAP_TILE_URL 时这个开关根本不出现",
+      en: "Leave the basemap off; without MAP_TILE_URL the switch does not appear at all",
+    },
+  },
+  {
     id: "llm-openai-compatible",
     side: "server",
     destination: {

@@ -153,6 +153,7 @@ import { personaSettingsPatchSchema } from "./routers-v6/persona-settings-patch"
 import { styleRouter } from "./routers-v6/style";
 import { importRouter } from "./routers-v6/import";
 import { recordRouter } from "./routers-v6/record";
+import { turningPointRouter } from "./routers-v6/turning-point";
 import { personaVersionRouter } from "./routers-v6/persona-version";
 import { blindRouter } from "./routers-v6/blind";
 import { materialRouter } from "./routers-v6/material";
@@ -1185,6 +1186,40 @@ export const appRouter = router({
         const persona = await getPersonaById(input.id, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         return persona;
+      }),
+
+    /**
+     * The printable manual (C2.9).
+     *
+     * It returns HTML, not a file: the browser opens it in a new tab
+     * and the user prints or saves it from there.
+     */
+    exportManual: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const profile = await getPersonaStyleProfile(input.personaId, ctx.user.id);
+        const { generateManualHTML } = await import("./_core/export-html");
+        const html = generateManualHTML(
+          {
+            persona: {
+              name: persona.name,
+              relationshipDesc: persona.relationshipDesc,
+              togetherFrom: persona.togetherFrom,
+              togetherTo: persona.togetherTo,
+            },
+            personaData: persona.personaData as never,
+            styleProfile: {
+              fingerprint: profile?.fingerprint ?? null,
+              triggers: profile?.triggers ?? null,
+              conflict: profile?.conflict ?? null,
+              routine: profile?.routine ?? null,
+            },
+          },
+          ctx.locale,
+        );
+        return { html };
       }),
 
     getSettings: protectedProcedure
@@ -6968,6 +7003,7 @@ export const appRouter = router({
   style: styleRouter,
   import: importRouter,
   record: recordRouter,
+  turningPoint: turningPointRouter,
   personaVersion: personaVersionRouter,
   blind: blindRouter,
   material: materialRouter,

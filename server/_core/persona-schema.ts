@@ -130,6 +130,20 @@ export interface PersonaData {
    * (B7.12). Shown on the profile; never used in a one-to-one prompt.
    */
   publicVoice?: string;
+  /**
+   * Places where a curve of the record visibly changed (C2.5).
+   *
+   * These are for the user only: they are never put into a prompt.
+   * Only the user's own decisions are stored; the curves themselves are
+   * recomputed from the record.
+   */
+  turningPoints?: Array<{
+    id: string;
+    at: string;
+    changes: Array<{ series: string; before: number; after: number }>;
+    status: "auto" | "confirmed" | "rejected";
+    note?: string;
+  }>;
 }
 
 /** The stages a relationship can be in. */
@@ -169,6 +183,7 @@ export const PERSONA_DATA_FIELDS: Array<keyof PersonaData> = [
   "people",
   "stances",
   "publicVoice",
+  "turningPoints",
 ];
 
 /**
@@ -219,6 +234,7 @@ export const PERSONA_DOCUMENT_EXCLUDED_FIELDS: Array<keyof PersonaData> = [
   "people",
   "stances",
   "publicVoice",
+  "turningPoints",
 ];
 
 /** The default realism level: noticeably imperfect, but not a mess. */
