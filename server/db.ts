@@ -11,7 +11,8 @@ import {
   collectionJobs,
   distillationChunks, distillationCards, personaVersions,
   evalCases, evalRuns, outboundLetters, fidelityFeedback, fidelityPairs, blindSessions,
-  recordEmbeddings, pushSubscriptions,
+  recordEmbeddings, pushSubscriptions, recordMarks,
+  InsertRecordMark, RecordMark,
   InsertPersona, InsertPersonaFile, InsertMessage,
   InsertWechatBinding, InsertSkillJob, InsertLlmConfig,
   InsertMemory, InsertEmotionSnapshot, InsertDiaryEntry, InsertScene,
@@ -1198,6 +1199,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(stickers).where(eq(stickers.userId, id));
     await tx.delete(media).where(eq(media.userId, id));
     await tx.delete(recordEmbeddings).where(eq(recordEmbeddings.userId, id));
+    await tx.delete(recordMarks).where(eq(recordMarks.userId, id));
     await tx.delete(relationshipEvents).where(eq(relationshipEvents.userId, id));
     await tx.delete(reminderDeliveries).where(eq(reminderDeliveries.userId, id));
     await tx.delete(researchProfiles).where(eq(researchProfiles.userId, id));
@@ -1582,6 +1584,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(chatSummaries).where(and(eq(chatSummaries.personaId, id), eq(chatSummaries.userId, userId)));
     await tx.delete(collectedMessages).where(and(eq(collectedMessages.personaId, id), eq(collectedMessages.userId, userId)));
     await tx.delete(recordEmbeddings).where(and(eq(recordEmbeddings.personaId, id), eq(recordEmbeddings.userId, userId)));
+    await tx.delete(recordMarks).where(and(eq(recordMarks.personaId, id), eq(recordMarks.userId, userId)));
     await tx.delete(collectionJobs).where(and(eq(collectionJobs.personaId, id), eq(collectionJobs.userId, userId)));
     await tx.delete(diaryEntries).where(and(eq(diaryEntries.personaId, id), eq(diaryEntries.userId, userId)));
     await tx.delete(distillationCards).where(and(eq(distillationCards.personaId, id), eq(distillationCards.userId, userId)));
@@ -6512,6 +6515,331 @@ export async function getRecordsAround(
           .limit(after)
       : [];
   return { target, before: earlier.reverse(), after: later };
+}
+
+/** One page of the timeline reader (C2.10). */
+export interface RecordPage {
+  rows: CollectedMessage[];
+  hasOlder: boolean;
+  hasNewer: boolean;
+}
+
+export interface RecordPageOptions {
+  anchor?: { recordId?: number; at?: Date };
+  direction: "older" | "newer" | "around";
+  limit?: number;
+  register?: string;
+}
+
+/**
+ * A Date as the naive UTC string the column stores.
+ *
+ * The driver binds a JavaScript Date as a local-time string; comparing
+ * that against a `timestamp without time zone` shifted the cursor by
+ * the server's offset, so "older than the first line" matched every
+ * line and the reader repeated pages. The stored column is UTC, so the
+ * cursor is sent the same way.
+ */
+function naiveUtc(date: Date): string {
+  return date.toISOString().slice(0, 23).replace("T", " ");
+}
+
+function recordKeyCondition(comparison: "<" | ">", key: { at: Date; id: number }) {
+  return sql`(
+    COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt}),
+    ${collectedMessages.id}
+  ) ${sql.raw(comparison)} (
+    ${naiveUtc(key.at)}::timestamp,
+    ${key.id}
+  )`;
+}
+
+/**
+ * Pages the record table around an anchor (C2.10).
+ *
+ * The reader cannot load a hundred thousand lines at once, so this is
+ * a keyset page: the time *and* the id make the cursor unique even
+ * when two lines were said in the same second.
+ */
+export async function pageRecords(
+  personaId: number,
+  userId: number,
+  options: RecordPageOptions,
+): Promise<RecordPage> {
+  const db = await getDb();
+  if (!db) return { rows: [], hasOlder: false, hasNewer: false };
+  const limit = Math.max(1, Math.min(200, options.limit ?? 200));
+  const base = recordsWhere(personaId, userId, { register: options.register ?? "private" });
+  const spokenAt = spokenAtColumn();
+
+  let anchorRow: CollectedMessage | undefined;
+  if (options.anchor?.recordId != null) {
+    const [row] = await db
+      .select()
+      .from(collectedMessages)
+      .where(and(
+        eq(collectedMessages.id, options.anchor.recordId),
+        eq(collectedMessages.personaId, personaId),
+        eq(collectedMessages.userId, userId),
+      ))
+      .limit(1);
+    anchorRow = row;
+  } else if (options.anchor?.at) {
+    /**
+     * "Jump to this date" lands on the last line said at or before the
+     * moment, so the anchor line is visible rather than the first line
+     * of the next day.
+     */
+    const [row] = await db
+      .select()
+      .from(collectedMessages)
+      .where(and(base, lte(spokenAt, sql`${naiveUtc(options.anchor.at)}::timestamp`)))
+      .orderBy(desc(spokenAt), desc(collectedMessages.id))
+      .limit(1);
+    anchorRow = row;
+  }
+
+  const anchorKey = anchorRow
+    ? { at: anchorRow.timestamp ?? anchorRow.createdAt, id: anchorRow.id }
+    : null;
+
+  const older = async (key: { at: Date; id: number } | null, count: number) => {
+    const query = db
+      .select()
+      .from(collectedMessages)
+      .where(key ? and(base, recordKeyCondition("<", key)) : base)
+      .orderBy(desc(spokenAt), desc(collectedMessages.id))
+      .limit(count + 1);
+    return query;
+  };
+  const newer = async (key: { at: Date; id: number } | null, count: number) => {
+    const query = db
+      .select()
+      .from(collectedMessages)
+      .where(key ? and(base, recordKeyCondition(">", key)) : base)
+      .orderBy(asc(spokenAt), asc(collectedMessages.id))
+      .limit(count + 1);
+    return query;
+  };
+
+  if (options.direction === "newer") {
+    const rows = await newer(anchorKey, limit);
+    const hasNewer = rows.length > limit;
+    return {
+      rows: rows.slice(0, limit),
+      hasOlder: anchorKey != null,
+      hasNewer,
+    };
+  }
+
+  if (options.direction === "around" && anchorKey && anchorRow) {
+    const half = Math.max(1, Math.floor(limit / 2));
+    const [beforeDesc, afterAsc] = await Promise.all([
+      older(anchorKey, half),
+      newer(anchorKey, half),
+    ]);
+    const hasOlder = beforeDesc.length > half;
+    const hasNewer = afterAsc.length > half;
+    const rows = [
+      ...beforeDesc.slice(0, half).reverse(),
+      anchorRow,
+      ...afterAsc.slice(0, half),
+    ];
+    return { rows, hasOlder, hasNewer };
+  }
+
+  // "older", or "around" with no anchor: the newest page.
+  const rowsDesc = await older(anchorKey, limit);
+  const hasOlder = rowsDesc.length > limit;
+  const rows = rowsDesc.slice(0, limit).reverse();
+  return {
+    rows,
+    hasOlder,
+    // With an anchor there are rows at or after it; without one this is
+    // the newest page, so there is nothing newer to load.
+    hasNewer: anchorKey != null,
+  };
+}
+
+/**
+ * The record count of each month, in the reader's own clock (C2.10).
+ *
+ * The outline is a list of chapter sizes; reading the whole table to
+ * count them would defeat the page-at-a-time reader.
+ */
+export interface RecordMonthCount {
+  month: string;
+  count: number;
+}
+
+export async function countRecordsByMonth(
+  personaId: number,
+  userId: number,
+  timeZone?: string | null,
+  register = "private",
+): Promise<RecordMonthCount[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const zone = timeZone && timeZone.trim() ? timeZone.trim() : "UTC";
+  const month = sql<string>`to_char(
+    (COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt}) AT TIME ZONE 'UTC')
+      AT TIME ZONE ${zone},
+    'YYYY-MM'
+  )`;
+  const rows = await db
+    .select({ month, c: count() })
+    .from(collectedMessages)
+    .where(and(
+      eq(collectedMessages.personaId, personaId),
+      eq(collectedMessages.userId, userId),
+      recordsWhere(personaId, userId, { register }),
+    ))
+    // The expression is the first select column; grouping by its
+    // position avoids the planner reading the raw column as ungrouped.
+    .groupBy(sql`1`)
+    .orderBy(sql`1`);
+  return rows.map((row) => ({ month: row.month, count: Number(row.c) }));
+}
+
+/** A bookmark or note with the line it points at. */
+export interface RecordMarkWithLine extends RecordMark {
+  content: string | null;
+  timestamp: Date | null;
+}
+
+export async function listRecordMarks(
+  personaId: number,
+  userId: number,
+): Promise<RecordMarkWithLine[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({
+      id: recordMarks.id,
+      userId: recordMarks.userId,
+      personaId: recordMarks.personaId,
+      recordId: recordMarks.recordId,
+      kind: recordMarks.kind,
+      note: recordMarks.note,
+      createdAt: recordMarks.createdAt,
+      content: collectedMessages.content,
+      timestamp: collectedMessages.timestamp,
+    })
+    .from(recordMarks)
+    .leftJoin(
+      collectedMessages,
+      and(
+        eq(collectedMessages.id, recordMarks.recordId),
+        eq(collectedMessages.userId, userId),
+        eq(collectedMessages.personaId, personaId),
+      ),
+    )
+    .where(and(eq(recordMarks.personaId, personaId), eq(recordMarks.userId, userId)))
+    .orderBy(desc(recordMarks.createdAt));
+  return rows;
+}
+
+/**
+ * Adds or updates one mark.
+ *
+ * Returns null when the record is not this persona's — the caller is
+ * told "not found" rather than being allowed to bookmark another
+ * account's line.
+ */
+export async function upsertRecordMark(
+  data: InsertRecordMark,
+): Promise<RecordMark | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [record] = await db
+    .select({ id: collectedMessages.id })
+    .from(collectedMessages)
+    .where(and(
+      eq(collectedMessages.id, data.recordId),
+      eq(collectedMessages.personaId, data.personaId),
+      eq(collectedMessages.userId, data.userId),
+    ))
+    .limit(1);
+  if (!record) return null;
+  const [row] = await db
+    .insert(recordMarks)
+    .values({
+      userId: data.userId,
+      personaId: data.personaId,
+      recordId: data.recordId,
+      kind: data.kind,
+      note: data.note ?? null,
+    })
+    .onConflictDoUpdate({
+      target: [recordMarks.personaId, recordMarks.userId, recordMarks.recordId, recordMarks.kind],
+      set: { note: data.note ?? null },
+    })
+    .returning();
+  return row ?? null;
+}
+
+export async function removeRecordMark(
+  id: number,
+  userId: number,
+  personaId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .delete(recordMarks)
+    .where(and(
+      eq(recordMarks.id, id),
+      eq(recordMarks.userId, userId),
+      eq(recordMarks.personaId, personaId),
+    ))
+    .returning({ id: recordMarks.id });
+  return rows.length > 0;
+}
+
+/** Removes one line of the record. The caller has already checked the persona. */
+export async function deleteRecordRow(
+  recordId: number,
+  personaId: number,
+  userId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .delete(collectedMessages)
+    .where(and(
+      eq(collectedMessages.id, recordId),
+      eq(collectedMessages.personaId, personaId),
+      eq(collectedMessages.userId, userId),
+    ))
+    .returning({ id: collectedMessages.id });
+  if (rows.length > 0) {
+    await db
+      .delete(recordMarks)
+      .where(and(
+        eq(recordMarks.recordId, recordId),
+        eq(recordMarks.personaId, personaId),
+        eq(recordMarks.userId, userId),
+      ));
+  }
+  return rows.length > 0;
+}
+
+/** The media rows attached to some record lines, for the reader. */
+export async function listMediaForRecordIds(
+  personaId: number,
+  userId: number,
+  recordIds: number[],
+): Promise<Media[]> {
+  const db = await getDb();
+  if (!db || recordIds.length === 0) return [];
+  return db
+    .select()
+    .from(media)
+    .where(and(
+      eq(media.personaId, personaId),
+      eq(media.userId, userId),
+      inArray(media.recordId, [...new Set(recordIds)]),
+    ));
 }
 
 export async function deleteRecordsByFile(

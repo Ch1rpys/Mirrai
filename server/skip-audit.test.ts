@@ -39,6 +39,7 @@ const DATABASE_TEST_FILES = new Set([
   "server/db-persona-versions.test.ts",
   "server/db-push.test.ts",
   "server/db-exemplars.test.ts",
+  "server/db-record-page.test.ts",
   "server/db-records.test.ts",
   "server/db-search.test.ts",
   "server/db-stickers.test.ts",

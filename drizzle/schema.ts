@@ -1866,3 +1866,33 @@ export const memoryMedia = pgTable("memory_media", {
 
 export type MemoryMedia = typeof memoryMedia.$inferSelect;
 export type InsertMemoryMedia = typeof memoryMedia.$inferInsert;
+
+/**
+ * A bookmark or a note on one record (C2.10).
+ *
+ * The reader lets the user keep a line. It is their own copy of the
+ * archive, so the mark is scoped to both the persona and the user; a
+ * line can have one bookmark and one note.
+ */
+export const recordMarks = pgTable("record_marks", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  recordId: integer("recordId").notNull(),
+  /** `bookmark` or `note`. */
+  kind: varchar("kind", { length: 8 }).notNull(),
+  note: text("note"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  onePerKind: uniqueIndex("record_marks_pair_idx").on(
+    table.personaId,
+    table.userId,
+    table.recordId,
+    table.kind,
+  ),
+  personaIdx: index("record_marks_persona_idx").on(table.personaId, table.userId),
+  recordIdx: index("record_marks_record_idx").on(table.recordId),
+}));
+
+export type RecordMark = typeof recordMarks.$inferSelect;
+export type InsertRecordMark = typeof recordMarks.$inferInsert;
