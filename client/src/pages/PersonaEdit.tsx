@@ -35,6 +35,7 @@ import LetterEmailToggle from "@/components/v6/LetterEmailToggle";
 import TaperPicker from "@/components/v6/TaperPicker";
 import SealSettings from "@/components/v6/SealSettings";
 import MemorialSettings from "@/components/v6/MemorialSettings";
+import ShareSettings from "@/components/v6/ShareSettings";
 import PersonaSampling from "@/components/v6/PersonaSampling";
 import HarmNotice from "@/components/v6/HarmNotice";
 import VersionHistory from "@/components/v6/VersionHistory";
@@ -539,6 +540,7 @@ export default function PersonaEdit() {
           <TaperPicker personaId={personaId} name={name} />
           <SealSettings personaId={personaId} />
           <MemorialSettings personaId={personaId} name={name} />
+          <ShareSettings personaId={personaId} name={name} />
           <div className="space-y-1.5">
             <Label htmlFor="persona-proactive" className="text-xs text-muted-foreground">{t("proactive.label")}</Label>
             <select id="persona-proactive" value={String(proactiveHours)} onChange={e => setProactiveHours(Number(e.target.value))}

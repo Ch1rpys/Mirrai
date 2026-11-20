@@ -64,6 +64,11 @@ vi.mock("@/lib/trpc", () => ({
       uploadBackground: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       clearBackground: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    share: {
+      list: { useQuery: () => ({ data: [], refetch: vi.fn() }) },
+      invite: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      revoke: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     media: {
       capabilities: { useQuery: () => ({ data: { faceModels: false }, isLoading: false }) },
       listPhotos: {
