@@ -2067,6 +2067,13 @@ export const en = {
     takeItWithYou: "Take it with you",
     backHome: "Back home",
   },
+  mutualLetters: {
+    theirLabel: "{{name}}'s letter (written by the persona)",
+    yourLabel: "Your letter",
+    pick: "Choose one you have written",
+    placeholder: "What you want to say to {{name}}. This letter stays here; it is not sent.",
+    save: "Keep this letter",
+  },
   unsaid: {
     title: "Things {{name}} started and did not finish",
     note: "These are lines in the record where {{name}} began something and did not go on. They are the original words.",

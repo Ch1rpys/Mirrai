@@ -2072,6 +2072,13 @@ export const zh = {
     takeItWithYou: "把这些带走",
     backHome: "回到首页",
   },
+  mutualLetters: {
+    theirLabel: "{{name}} 的信（分身写的）",
+    yourLabel: "你的信",
+    pick: "从写过的信里选一封",
+    placeholder: "想对 {{name}} 说的话。这封信只放在这里，不会发出去。",
+    save: "保存这封信",
+  },
   unsaid: {
     title: "{{name}} 起了头、没说完的话",
     note: "这些是记录里 {{name}} 起了头、没有说下去的话。都是原话。",

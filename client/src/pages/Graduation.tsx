@@ -15,6 +15,7 @@ import SealSettings from "@/components/v6/SealSettings";
 import KeepThree from "@/components/v6/KeepThree";
 import GraduationKindPicker from "@/components/v6/GraduationKindPicker";
 import UnfinishedWords from "@/components/v6/UnfinishedWords";
+import MutualLetters from "@/components/v6/MutualLetters";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -218,9 +219,12 @@ export default function Graduation() {
             <p className="text-xs uppercase tracking-wide text-muted-subtle mb-4">
               {t("graduationPage.letter")}
             </p>
-            <p className="text-[0.9375rem] leading-[1.9] whitespace-pre-wrap text-foreground/90">
-              {letter}
-            </p>
+            {/* Their letter and the user's, side by side (C6.5). */}
+            <MutualLetters
+              personaId={personaId}
+              name={persona.name}
+              theirLetter={letter}
+            />
             {persona.farewellDegraded ? (
               <p className="text-xs text-muted-subtle mt-3">
                 {t("graduationPage.simplified")}

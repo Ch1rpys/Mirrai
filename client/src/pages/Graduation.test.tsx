@@ -55,6 +55,10 @@ vi.mock("@/lib/trpc", () => ({
       },
       complete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    outbound: {
+      list: { useQuery: () => ({ data: { letters: [] } }) },
+      addOwn: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     useUtils: () => ({ persona: { get: { invalidate: vi.fn() } } }),
   },
 }));
@@ -181,6 +185,19 @@ describe("the goodbye", () => {
   it("shows the farewell", () => {
     render(<Graduation />);
     expect(screen.getByText("我一直都知道，只是没说。")).toBeInTheDocument();
+  });
+
+  it("shows both letters, and a box when the user has not picked one (C6.5)", () => {
+    render(<Graduation />);
+    expect(
+      screen.getByText(translate("zh", "mutualLetters.theirLabel", { name: "小A" })),
+    ).toBeInTheDocument();
+    expect(screen.getByText(translate("zh", "mutualLetters.yourLabel"))).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText(
+        translate("zh", "mutualLetters.placeholder", { name: "小A" }),
+      ),
+    ).toBeInTheDocument();
   });
 
   it("has the exit", () => {
