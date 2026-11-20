@@ -29,7 +29,46 @@ describe("measuring voice notes", () => {
     expect(stats!.durationSec.median).toBe(12);
     expect(stats!.samples).toBeGreaterThan(0);
     expect(stats!.rate).toBeGreaterThan(0);
-    expect(stats!.afterMyVoiceRate === null || typeof stats!.afterMyVoiceRate === "number").toBe(true);
+  });
+
+  it("measures how often a voice note is answered with one", () => {
+    // Ten exchanges: the user sends a voice note, they answer with one.
+    const exchanged = Array.from({ length: 10 }, (_, index) => {
+      const at = Date.UTC(2024, 0, 1 + index, 12, 0, 0);
+      return [
+        { role: "user", kind: "voice", content: "[voice:5]", timestamp: new Date(at), meta: { durationSec: 5 } },
+        {
+          role: "assistant",
+          kind: "voice",
+          content: "[voice:12]",
+          timestamp: new Date(at + 30_000),
+          meta: { durationSec: 12 },
+        },
+      ];
+    }).flat();
+    expect(measureVoice(exchanged)?.afterMyVoiceRate).toBe(1);
+
+    // And a control where only half of the answers are voice. Twenty
+    // exchanges keep ten voice notes, the measurement's floor.
+    const twenty = Array.from({ length: 20 }, (_, index) => {
+      const at = Date.UTC(2024, 0, 1 + index, 12, 0, 0);
+      return [
+        { role: "user", kind: "voice", content: "[voice:5]", timestamp: new Date(at), meta: { durationSec: 5 } },
+        {
+          role: "assistant",
+          kind: "voice",
+          content: "[voice:12]",
+          timestamp: new Date(at + 30_000),
+          meta: { durationSec: 12 },
+        },
+      ];
+    }).flat();
+    const mixed = twenty.map((row, index) =>
+      row.role === "assistant" && index % 4 === 3
+        ? { ...row, kind: "text", content: "嗯", meta: null }
+        : row,
+    );
+    expect(measureVoice(mixed)?.afterMyVoiceRate).toBe(0.5);
   });
 
   it("has no measurement with fewer than ten voice notes", () => {

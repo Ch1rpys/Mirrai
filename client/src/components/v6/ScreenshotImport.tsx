@@ -12,6 +12,8 @@ interface EditableRow {
   kind: RecordKind;
   at: string | null;
   unclear: boolean;
+  /** The time came from the date the user chose, not from a time bar. */
+  timeApprox?: boolean;
 }
 
 const MAX_SCREENSHOTS = 30;
@@ -245,6 +247,7 @@ export default function ScreenshotImport({
                   content: row.content,
                   kind: row.kind,
                   at: row.at,
+                  timeApprox: row.timeApprox === true,
                 })),
               })
             }

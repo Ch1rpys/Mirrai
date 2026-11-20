@@ -258,7 +258,15 @@ export default function Call() {
     try {
       await next.play();
     } catch {
+      /**
+       * The browser refused the clip (autoplay policy, or the audio
+       * element was torn down). Dropping `playingRef` without moving on
+       * left the rest of the answer queued for ever; the next clip is a
+       * better attempt than a silent stop.
+       */
+      if (currentAudioRef.current === next) currentAudioRef.current = null;
       playingRef.current = false;
+      void playNext();
     }
   }
 

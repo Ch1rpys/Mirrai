@@ -142,6 +142,16 @@ export async function extractKeyframes(
   const dir = path.isAbsolute(outDir) ? outDir : resolveUploadPath(ENV.uploadDir, outDir);
   await mkdir(dir, { recursive: true });
 
+  /**
+   * The frame width.
+   *
+   * The vision model is shown 768-wide pictures; a 4K frame costs tokens
+   * and adds nothing. A smaller video is left at its own width instead of
+   * being enlarged — upscaling adds no detail and only the word "shrink"
+   * was missing from the first version.
+   */
+  const width = info.width && info.width > 0 ? Math.min(768, info.width) : 768;
+
   const frames: string[] = [];
   for (let index = 0; index < count; index += 1) {
     const at = (info.durationSec * (index + 0.5)) / count;
@@ -160,7 +170,7 @@ export async function extractKeyframes(
         "-frames:v",
         "1",
         "-vf",
-        "scale=768:-2",
+        `scale=${width}:-2`,
         "-q:v",
         "2",
         target,

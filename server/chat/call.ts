@@ -120,13 +120,22 @@ export function splitCallSentences(text: string): string[] {
     .filter(Boolean);
 }
 
-/** Whether the persona is inside one of the slots they answer in. */
+/**
+ * Whether the persona is inside one of the slots they answer in.
+ *
+ * An empty list is "the records have no usual time", not "any time":
+ * the manual asks the call to be declined when there are slots and the
+ * current moment is not one of them, and with no slot there is no
+ * recorded time to be inside. `begin` only calls this when the records
+ * contain a call measurement at all; a persona with no call data has no
+ * slots to check and is allowed.
+ */
 export function isAnswerSlot(
   slots: Array<{ weekday: number; hour: number }>,
   now: Date,
   timeZone?: string | null,
 ): boolean {
-  if (slots.length === 0) return true;
+  if (slots.length === 0) return false;
   const weekday = zonedWeekday(now, timeZone);
   const hour = zonedHour(now, timeZone);
   return slots.some((slot) => slot.weekday === weekday && slot.hour === hour);
@@ -295,10 +304,19 @@ export function attachCallServer(server: Server, overrides: Partial<CallDeps> = 
     async function begin(force: boolean) {
       if (started) return;
       const calls = normalizeStyleProfile(persona.styleProfile).calls;
-      const slots = calls?.answerSlots ?? [];
-      if (!force && !isAnswerSlot(slots, deps.now(), persona.timezone ?? user.timezone)) {
-        send(ws, { type: "declined", slots });
-        return;
+      /**
+       * A persona with no call measurement has no recorded answering
+       * habit, so there is nothing to check. One that has calls is only
+       * reachable in the slots it answered in before — even when no
+       * slot repeated often enough to be kept, which is "no usual
+       * time", and the user can still force the call through.
+       */
+      if (calls) {
+        const slots = calls.answerSlots ?? [];
+        if (!force && !isAnswerSlot(slots, deps.now(), persona.timezone ?? user.timezone)) {
+          send(ws, { type: "declined", slots });
+          return;
+        }
       }
       started = true;
       send(ws, { type: "ready" });
@@ -364,6 +382,12 @@ export function attachCallServer(server: Server, overrides: Partial<CallDeps> = 
           signal: controller.signal,
         })) {
           if (event.type === "delta" && typeof event.text === "string") reply += event.text;
+          /**
+           * A projection (B3.4) arrives as a replacement for what was
+           * streamed before it. The web chat applies it; the call was
+           * only collecting deltas, so it spoke the unprojected text.
+           */
+          if (event.type === "replace" && typeof event.text === "string") reply = event.text;
           if (event.type === "done") {
             if (event.crisis === true) crisis = true;
           }

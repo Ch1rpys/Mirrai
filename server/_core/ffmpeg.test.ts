@@ -175,6 +175,24 @@ describe("the ffmpeg helper", () => {
     }
   });
 
+  it("does not enlarge a video that is already narrower than the frame width", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "mirrai-frames-small-"));
+    try {
+      execFileMock.mockImplementation(
+        succeed(
+          "",
+          "  Duration: 00:00:10.00, start: 0.0, bitrate: 8 kb/s\n" +
+            "  Stream #0:0: Video: h264 (High), yuv420p, 640x360, 25 fps\n",
+        ),
+      );
+      await extractKeyframes("/tmp/small.mp4", dir, 3);
+      const frameCall = execFileMock.mock.calls[1] as [string, string[], unknown, Callback];
+      expect(frameCall[1]).toContain("scale=640:-2");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("uses the silencedetect threshold and reports the trailing silence", async () => {
     execFileMock.mockImplementation(
       (_bin: string, args: string[], _options: unknown, callback: Callback) => {

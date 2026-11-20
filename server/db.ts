@@ -3079,7 +3079,7 @@ export async function setPersonaBackground(
           true
         ),
         '{skin,background}',
-        ${JSON.stringify(background ?? "")}::jsonb,
+        ${JSON.stringify(background)}::jsonb,
         true
       )`,
     })

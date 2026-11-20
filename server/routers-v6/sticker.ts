@@ -158,6 +158,13 @@ export const stickerRouter = router({
           fileKey,
           mime: type.mime,
         });
+        /**
+         * A replacement makes the old copy dead. It was left in the
+         * uploads directory for ever because only the row was updated.
+         */
+        if (existing.fileKey && existing.fileKey !== fileKey) {
+          await storageDelete(existing.fileKey);
+        }
         return { stickerId: existing.id, imageUrl: urlOf(fileKey) };
       }
       const created = await upsertSticker({

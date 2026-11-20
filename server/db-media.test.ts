@@ -181,6 +181,19 @@ describe.skipIf(!DATABASE_URL)("the media table", () => {
     }
   });
 
+  it("removes the background key when the picture is cleared", async () => {
+    const userId = 9_969_000 + Math.floor(Math.random() * 10_000);
+    const personaId = await createPersona({ userId, name: "background-cleared" });
+    try {
+      await setPersonaBackground(personaId, userId, "/uploads/personas/bg.png");
+      await setPersonaBackground(personaId, userId, null);
+      const settings = await getPersonaSettings(personaId, userId);
+      expect(settings?.skin).toEqual({ theme: "classic" });
+    } finally {
+      await deletePersona(personaId, userId);
+    }
+  });
+
   it("takes the media rows with the persona", async () => {
     const userId = 9_970_000 + Math.floor(Math.random() * 10_000);
     const personaId = await createPersona({ userId, name: "media-persona" });

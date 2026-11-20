@@ -31,6 +31,7 @@ vi.mock("@/lib/trpc", () => ({
                   kind: "text",
                   at: "2024-06-01T04:30:00.000Z",
                   unclear: false,
+                  timeApprox: true,
                 },
                 {
                   role: "user",
@@ -140,6 +141,7 @@ describe("importing screenshots", () => {
           content: "在吗？",
           kind: "text",
           at: "2024-06-01T04:30:00.000Z",
+          timeApprox: true,
         },
       ],
     });

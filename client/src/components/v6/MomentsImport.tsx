@@ -84,9 +84,13 @@ export default function MomentsImport({ personaId }: { personaId: number }) {
         <p className="text-xs text-muted-foreground leading-relaxed mt-1">
           {t("moments.note")}
         </p>
-        {canSee && (
+        {canSee ? (
           <p className="text-xs text-muted-foreground leading-relaxed mt-1">
             {t("moments.screenshotNote", { provider: providerName })}
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+            {t("moments.noVision")}
           </p>
         )}
       </div>

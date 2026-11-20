@@ -306,14 +306,10 @@ export const ENV = {
   /**
    * Whether the read-aloud button may be used.
    *
-   * The voice is Microsoft's *online* Edge read-aloud service: the text
-   * of the reply is streamed to Microsoft and the audio comes back.
-   *
-   * That is the one thing the app does that leaves the machine — and
-   * the app's own promise is that the data does not. So it can be
-   * switched off, and the interface says so when it is.
-   *
-   * An operator who wants the promise kept exactly sets this to false.
+   * The default voice is Microsoft's *online* Edge read-aloud service,
+   * which streams the text of the reply to Microsoft; the other engines
+   * are local. The interface says which one is configured, and the whole
+   * feature can be switched off here.
    */
   ttsEnabled: (process.env.TTS_ENABLED ?? "true").toLowerCase() !== "false",
 };

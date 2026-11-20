@@ -67,12 +67,21 @@ function percentile(values: number[], share: number): number {
 }
 
 export function measureVoice(rows: VoiceRow[]): VoiceStats | null {
-  const turns: VoiceRow[][] = [];
+  /**
+   * Both sides' turns, in order.
+   *
+   * "After my voice note, how often did they answer with one" needs the
+   * *user's* turns to be looked at — the answer lives between a user
+   * turn and the persona's next turn. The measurement used to keep only
+   * the persona's turns and then ask whether the previous one was the
+   * user's, so the condition could never hold and the rate was always
+   * null.
+   */
+  const allTurns: VoiceRow[][] = [];
   for (const scene of splitScenes(rows)) {
-    for (const turn of toTurns(scene)) {
-      if (turn[0]?.role === "assistant") turns.push(turn);
-    }
+    for (const turn of toTurns(scene)) allTurns.push(turn);
   }
+  const turns = allTurns.filter((turn) => turn[0]?.role === "assistant");
 
   const durations: number[] = [];
   let samples = 0;
@@ -98,10 +107,15 @@ export function measureVoice(rows: VoiceRow[]): VoiceStats | null {
         if (duration != null) durations.push(duration);
       }
     }
-    if (index > 0 && turns[index - 1]!.some(isVoice) && turns[index - 1]![0]?.role === "user") {
-      afterMyVoiceTurns += 1;
-      if (issued[index]) afterMyVoice += 1;
-    }
+  }
+
+  for (let index = 1; index < allTurns.length; index += 1) {
+    const previous = allTurns[index - 1]!;
+    const current = allTurns[index]!;
+    if (previous[0]?.role !== "user" || !previous.some(isVoice)) continue;
+    if (current[0]?.role !== "assistant") continue;
+    afterMyVoiceTurns += 1;
+    if (current.some(isVoice)) afterMyVoice += 1;
   }
 
   if (samples < VOICE_MIN_SAMPLES) return null;

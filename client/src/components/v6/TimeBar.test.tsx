@@ -35,6 +35,11 @@ describe("the time bar", () => {
     expect(screen.queryByRole("separator")).toBeNull();
   });
 
+  it("does not appear before the first message", () => {
+    render(<TimeBar at={later} skin="im-green" locale="zh" timeZone="Asia/Shanghai" />);
+    expect(screen.queryByRole("separator")).toBeNull();
+  });
+
   it("does not change the classic layout", () => {
     render(
       <TimeBar

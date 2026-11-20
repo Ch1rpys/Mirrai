@@ -134,6 +134,27 @@ describe("the sticker library router", () => {
     );
   });
 
+  it("removes the old picture when a different one replaces it", async () => {
+    listStickers.mockResolvedValue([
+      {
+        id: 1,
+        key: "a".repeat(32),
+        label: "狗狗探头",
+        usesByThem: 12,
+        usesByMe: 0,
+        enabled: true,
+        fileKey: "personas/1/5/stickers/old.png",
+        lastUsedAt: new Date("2023-05-01T12:00:00Z"),
+      },
+    ]);
+    await appRouter
+      .createCaller(ctxFor(1))
+      .sticker.upload({ personaId: 5, label: "狗狗探头", base64: png.toString("base64") });
+
+    expect(setStickerImage).toHaveBeenCalledTimes(1);
+    expect(storageDelete).toHaveBeenCalledWith("personas/1/5/stickers/old.png");
+  });
+
   it("refuses something that is not a picture", async () => {
     await expect(
       appRouter

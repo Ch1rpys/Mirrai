@@ -97,7 +97,13 @@ describe("importing a chat from screenshots", () => {
     const result = await appRouter.createCaller(ctxFor()).import.screenshotConfirm({
       personaId: 5,
       rows: [
-        { role: "assistant", content: "在吗", kind: "text", at: "2024-06-01T04:30:00.000Z" },
+        {
+          role: "assistant",
+          content: "在吗",
+          kind: "text",
+          at: "2024-06-01T04:30:00.000Z",
+          timeApprox: true,
+        },
         { role: "user", content: "在", kind: "text", at: "2024-06-01T04:30:01.000Z" },
       ],
     });
@@ -108,7 +114,10 @@ describe("importing a chat from screenshots", () => {
       role: "assistant",
       content: "在吗",
       timestamp: new Date("2024-06-01T04:30:00.000Z"),
+      // The approximate time travels with the record, not just the preview.
+      meta: { timeApprox: true },
     });
+    expect(call.records[1]?.meta).toBeUndefined();
     expect(afterRecordsChanged).toHaveBeenCalledWith({ personaId: 5, userId: 1, added: 2 });
   });
 

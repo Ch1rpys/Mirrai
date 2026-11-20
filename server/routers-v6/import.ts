@@ -349,6 +349,12 @@ export const importRouter = router({
         kind: z.enum(RECORD_KINDS),
         at: z.string().nullable(),
         unclear: z.boolean().optional(),
+        /**
+         * The time came from the date the user chose, not from a time
+         * bar on the screenshot. Stored on the record so a later reader
+         * can tell an exact time from an approximation.
+         */
+        timeApprox: z.boolean().optional(),
       })).min(1).max(2000),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -361,6 +367,7 @@ export const importRouter = router({
         timestamp: row.at ? new Date(row.at) : null,
         kind: row.kind as RecordKind,
         lineNo: index + 1,
+        ...(row.timeApprox ? { meta: { timeApprox: true } } : {}),
       }));
       let written = 0;
       try {

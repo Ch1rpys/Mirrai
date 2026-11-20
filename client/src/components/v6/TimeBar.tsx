@@ -25,12 +25,15 @@ export default function TimeBar({
 }) {
   if (skin === "classic") return null;
   if (!at) return null;
+  /**
+   * The bar sits *between* two messages, so the first message of the
+   * thread has no bar: there is no gap to mark yet.
+   */
+  if (!previousAt) return null;
   const current = new Date(at).getTime();
   if (Number.isNaN(current)) return null;
-  if (previousAt) {
-    const previous = new Date(previousAt).getTime();
-    if (!Number.isNaN(previous) && current - previous <= TIME_BAR_GAP_MS) return null;
-  }
+  const previous = new Date(previousAt).getTime();
+  if (!Number.isNaN(previous) && current - previous <= TIME_BAR_GAP_MS) return null;
   return (
     <div className="time-bar hidden justify-center my-2" role="separator">
       <span>{formatTimeInZone(at, locale, timeZone)}</span>
