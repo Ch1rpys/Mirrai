@@ -44,8 +44,8 @@ describe("the sentence given to the wording assistant", () => {
   it("is material, fenced, and not an instruction", () => {
     const messages = buildWordingMessages(HOSTILE_NOTE, "zh");
     const user = messages.find((message) => message.role === "user")!;
-    expect(user.content).toContain(HOSTILE_NOTE);
-    const unfencedUser = user.content.replace(
+    expect(String(user.content)).toContain(HOSTILE_NOTE);
+    const unfencedUser = String(user.content).replace(
       /MATERIAL>>>:[0-9a-f]+\n[\s\S]*?<<<END MATERIAL>>>:[0-9a-f]+/g,
       "",
     );
@@ -466,8 +466,8 @@ describe("a record line being finished for the user (C6.5)", () => {
       context: ["在吗"],
     });
     const user = messages.find((message) => message.role === "user")!;
-    expect(user.content).toContain(HOSTILE_NOTE);
-    const unfencedUser = user.content.replace(
+    expect(String(user.content)).toContain(HOSTILE_NOTE);
+    const unfencedUser = String(user.content).replace(
       /MATERIAL>>>:[0-9a-f]+\n[\s\S]*?<<<END MATERIAL>>>:[0-9a-f]+/g,
       "",
     );
@@ -477,5 +477,37 @@ describe("a record line being finished for the user (C6.5)", () => {
     const system = messages.find((message) => message.role === "system")!;
     expect(system.content).toContain("不要替");
     expect(unfenced(system.content)).toContain("不要替");
+  });
+});
+
+describe("an account a family member told us (C7.4)", () => {
+  it("reaches the prompt only inside the fence", async () => {
+    const { oralMemoryRow } = await import("./oral/extract");
+    const { parseOralStatements } = await import("@shared/oral");
+    const parsed = parseOralStatements(
+      [{ kind: "story", key: "the_quarrel", text: "那次吵架是因为一句话。", quote: HOSTILE_NOTE }],
+      [{ id: 1, tellerName: "琪琪", body: `我记得她说：${HOSTILE_NOTE}` }],
+    );
+    const row = oralMemoryRow(parsed.statements[0], "zh");
+
+    const prompt = buildSystemPrompt(persona(), {
+      memorySection: `${row.title}：${row.description}`,
+    });
+    expect(prompt).toContain(HOSTILE_NOTE);
+    expect(unfenced(prompt)).not.toContain(HOSTILE_NOTE);
+  });
+
+  it("is fenced when the accounts are sent to the extraction model", async () => {
+    const { buildOralMessages } = await import("./oral/extract");
+    const messages = buildOralMessages({
+      accounts: [{ id: 1, tellerName: "琪琪", body: HOSTILE_NOTE }],
+    });
+    const user = messages.find((message) => message.role === "user")!;
+    expect(String(user.content)).toContain(HOSTILE_NOTE);
+    const unfencedUser = String(user.content).replace(
+      /MATERIAL>>>:[0-9a-f]+\n[\s\S]*?<<<END MATERIAL>>>:[0-9a-f]+/g,
+      "",
+    );
+    expect(unfencedUser).not.toContain(HOSTILE_NOTE);
   });
 });

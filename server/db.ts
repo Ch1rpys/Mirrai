@@ -1,4 +1,4 @@
-import { eq, ne, desc, and, or, sql, count, sum, gte, ilike, asc, lt, lte, max, min, inArray, notInArray, isNull, isNotNull } from "drizzle-orm";
+import { eq, ne, desc, and, or, sql, count, sum, gte, ilike, asc, lt, lte, max, min, inArray, notInArray, isNull, isNotNull, exists } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import {
   InsertUser, users,
@@ -37,6 +37,7 @@ import {
   roleplaySessions, InsertRoleplaySession,
   scheduledItems, InsertScheduledItem, ScheduledItem,
   personaShares, InsertPersonaShare,
+  oralAccounts, InsertOralAccount, OralAccount,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
@@ -1292,6 +1293,23 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(userMoods).where(eq(userMoods.userId, id));
     await tx.delete(wechatBindings).where(eq(wechatBindings.userId, id));
     await tx.delete(wechatBotState).where(eq(wechatBotState.userId, id));
+    /**
+     * What they told about other people, and what the family told about
+     * theirs (C7.4).
+     *
+     * The second half needs the persona rows, which are about to go: an
+     * account told by a family member carries *their* user id, so
+     * deleting by `userId` alone would leave it orphaned under a persona
+     * that no longer exists.
+     */
+    const ownedPersonaIds = await tx.select({ id: personas.id }).from(personas)
+      .where(eq(personas.userId, id));
+    await tx.delete(oralAccounts).where(or(
+      eq(oralAccounts.userId, id),
+      // An empty list is the word `false`, so this is the same one
+      // statement whether the user owns personas or not.
+      inArray(oralAccounts.personaId, ownedPersonaIds.map((row) => row.id)),
+    ));
     await tx.delete(personas).where(eq(personas.userId, id));
     await tx.delete(users).where(eq(users.id, id));
   });
@@ -1782,6 +1800,130 @@ export async function leavePersonaShare(
   return rows.length > 0;
 }
 
+// ─── What people remember about them (C7.4) ──────────────────────────────
+
+/** How many characters one oral account may hold. */
+export const ORAL_ACCOUNT_MAX_CHARS = 20_000;
+
+/**
+ * Writes a new oral account.
+ *
+ * It starts as a draft: `submittedAt` is null, so only the teller reads
+ * it. The owner's persona id is passed in by the route — a family
+ * member's row is not where the accounts live.
+ */
+export async function createOralAccount(data: InsertOralAccount): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [row] = await db.insert(oralAccounts).values(data).returning({ id: oralAccounts.id });
+  return row.id;
+}
+
+/**
+ * Edits one of the caller's own accounts.
+ *
+ * The write is scoped to the teller and to the persona the account was
+ * written for, so nobody edits another person's words — and an id from
+ * one persona cannot be used to change an account on another.
+ */
+export async function updateOralAccount(
+  id: number,
+  userId: number,
+  personaId: number,
+  patch: { body?: string; submittedAt?: Date | null },
+): Promise<OralAccount | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.update(oralAccounts)
+    .set(patch)
+    .where(and(
+      eq(oralAccounts.id, id),
+      eq(oralAccounts.userId, userId),
+      eq(oralAccounts.personaId, personaId),
+    ))
+    .returning();
+  return rows[0] ?? null;
+}
+
+/**
+ * The accounts the caller may read.
+ *
+ * Two sets meet here: everything the caller told (drafts included), and
+ * — only when the caller owns the persona — every account that has been
+ * submitted, including the family's. Ownership is checked in SQL against
+ * the personas row, so passing somebody else's persona id returns only
+ * the caller's own accounts, and usually none.
+ */
+export async function listOralAccounts(
+  personaId: number,
+  userId: number,
+): Promise<OralAccount[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const ownedPersona = db.select({ id: personas.id }).from(personas)
+    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)));
+  return db.select().from(oralAccounts)
+    .where(and(
+      eq(oralAccounts.personaId, personaId),
+      or(
+        eq(oralAccounts.userId, userId),
+        and(isNotNull(oralAccounts.submittedAt), exists(ownedPersona)),
+      ),
+    ))
+    .orderBy(asc(oralAccounts.createdAt));
+}
+
+/**
+ * The submitted accounts of a persona, for the owner's extraction.
+ *
+ * The personas join is the ownership check: a family member who knows
+ * the persona id reads nothing here, because the join needs the row to
+ * belong to their user id.
+ */
+export async function listSubmittedOralAccounts(
+  personaId: number,
+  userId: number,
+): Promise<Array<Pick<OralAccount, "id" | "userId" | "tellerName" | "body" | "submittedAt">>> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: oralAccounts.id,
+    userId: oralAccounts.userId,
+    tellerName: oralAccounts.tellerName,
+    body: oralAccounts.body,
+    submittedAt: oralAccounts.submittedAt,
+  })
+    .from(oralAccounts)
+    .innerJoin(
+      personas,
+      and(eq(personas.id, oralAccounts.personaId), eq(personas.userId, userId)),
+    )
+    .where(and(
+      eq(oralAccounts.personaId, personaId),
+      isNotNull(oralAccounts.submittedAt),
+    ))
+    .orderBy(asc(oralAccounts.id));
+}
+
+/**
+ * The memories that came from what people told us.
+ *
+ * Only these can conflict with each other in the oral panel: a story
+ * told by two people is a disagreement about the same `factKey`, while
+ * a memory mined from the chat is a different kind of claim.
+ */
+export async function getOralMemories(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(memories)
+    .where(and(
+      eq(memories.personaId, personaId),
+      eq(memories.userId, userId),
+      eq(memories.source, "oral"),
+    ))
+    .orderBy(asc(memories.id));
+}
+
 /**
  * Adds one to a persona's chat count.
  *
@@ -1888,6 +2030,21 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(fidelityFeedback).where(and(eq(fidelityFeedback.personaId, id), eq(fidelityFeedback.userId, userId)));
     await tx.delete(graduationAssessments).where(and(eq(graduationAssessments.personaId, id), eq(graduationAssessments.userId, userId)));
     await tx.delete(memories).where(and(eq(memories.personaId, id), eq(memories.userId, userId)));
+    /**
+     * Every account of the persona, whoever told it.
+     *
+     * The rows of a shared persona's family accounts belong to *their*
+     * user ids, not the owner's — so the ordinary (persona, user) pair
+     * would leave them behind, and the words a person told about
+     * somebody would outlive the persona itself.
+     */
+    await tx.delete(oralAccounts).where(and(
+      eq(oralAccounts.personaId, id),
+      exists(
+        tx.select({ id: personas.id }).from(personas)
+          .where(and(eq(personas.id, id), eq(personas.userId, userId))),
+      ),
+    ));
     await tx.delete(memoryExtractions).where(and(eq(memoryExtractions.personaId, id), eq(memoryExtractions.userId, userId)));
     await tx.delete(memoryMedia).where(and(eq(memoryMedia.personaId, id), eq(memoryMedia.userId, userId)));
     await tx.delete(messages).where(and(eq(messages.personaId, id), eq(messages.userId, userId)));

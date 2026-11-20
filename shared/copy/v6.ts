@@ -1090,4 +1090,28 @@ export const V6 = {
     zh: "{{date}} 之后发生的事，你不知道。",
     en: "You do not know what happened after {{date}}.",
   },
+  "prompts.oralExtract": {
+    zh: "下面是一些人讲起同一个人的话。把它们整理成一条条关于这个人的说法。每条给四项：kind（trait、habit、saying、fact、story 之一）、key（小写英文、下划线分隔，说的是同一件事就用同一个 key）、text（一句陈述）、quote（这段话里原样的一段，必须逐字出自下面某一段）。只整理下面确实说到的；没有说到的不要补。用 JSON 数组回答，不要别的字。",
+    en: "Below is what several people said about the same person. Turn it into statements about them. Each one has four fields: kind (one of trait, habit, saying, fact, story), key (lowercase ASCII with underscores; the same thing gets the same key), text (one sentence), quote (a passage copied word for word from one of the accounts below). Only what is actually said; do not fill in anything that is not. Answer with a JSON array and nothing else.",
+  },
+  "oral.memoryNote": {
+    zh: "来自 {{teller}} 的讲述：「{{quote}}」",
+    en: "Told by {{teller}}: “{{quote}}”",
+  },
+  "errors.oralEmpty": {
+    zh: "先写一点东西再保存。",
+    en: "Write something before saving.",
+  },
+  "errors.oralTooLong": {
+    zh: "一段最多两万字。",
+    en: "One account can be at most 20,000 characters.",
+  },
+  "errors.oralNotYours": {
+    zh: "这一段不是你写的。",
+    en: "That account was not written by you.",
+  },
+  "errors.oralOwnerOnly": {
+    zh: "只有这个分身的主人能整理口述。",
+    en: "Only the persona's owner can turn these accounts into memories.",
+  },
 } as const satisfies CopyTable;

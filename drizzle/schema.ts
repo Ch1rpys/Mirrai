@@ -349,6 +349,53 @@ export const personaShares = pgTable("persona_shares", {
 export type PersonaShare = typeof personaShares.$inferSelect;
 export type InsertPersonaShare = typeof personaShares.$inferInsert;
 
+/**
+ * What somebody remembers about the person (C7.4).
+ *
+ * The owner, or a family member who was let in through C7.2, writes or
+ * speaks a passage about who the person was. A draft is the teller's
+ * alone: it becomes visible to the persona's owner only when the teller
+ * submits it, and the owner is told that before submitting.
+ *
+ * `personaId` is always the *owner's* row, so both sides' accounts meet
+ * in one place. `userId` is the teller — it is not the owner for a
+ * family member's account, which is why the read helpers check
+ * ownership of the persona rather than matching `userId` blindly.
+ */
+export const oralAccounts = pgTable("oral_accounts", {
+  id: serial("id").primaryKey(),
+  /** The owner's persona row. */
+  personaId: integer("personaId").notNull(),
+  /** Who told it. */
+  userId: integer("userId").notNull(),
+  /** Their name, as it read on the day they submitted it. */
+  tellerName: varchar("tellerName", { length: 64 }).notNull(),
+  /** Up to 20,000 characters — enforced by the route, not by the column. */
+  body: text("body").notNull(),
+  /** Null until the teller submits; a draft is theirs alone. */
+  submittedAt: timestamp("submittedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  /**
+   * One teller's accounts on one persona.
+   *
+   * The list reads "mine" and "the family's" separately, so the two
+   * columns are always used together.
+   */
+  personaUserIdx: index("oral_accounts_persona_idx").on(table.personaId, table.userId),
+  /**
+   * The accounts waiting to be turned into memories.
+   *
+   * The owner's extracts read only the submitted ones; the partial
+   * condition is not expressible here, so the index covers both
+   * columns and the query filters the null.
+   */
+  submittedIdx: index("oral_accounts_submitted_idx").on(table.personaId, table.submittedAt),
+}));
+
+export type OralAccount = typeof oralAccounts.$inferSelect;
+export type InsertOralAccount = typeof oralAccounts.$inferInsert;
+
 export const personaFiles = pgTable("persona_files", {
   id: serial("id").primaryKey(),
   personaId: integer("personaId").notNull(),

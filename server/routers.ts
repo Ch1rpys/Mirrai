@@ -179,6 +179,7 @@ import { mediaRouter } from "./routers-v6/media";
 import { unsaidRouter } from "./routers-v6/unsaid";
 import { bookRouter } from "./routers-v6/book";
 import { shareRouter } from "./routers-v6/share";
+import { oralRouter } from "./routers-v6/oral";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { stateRulesFromTranscript } from "./skill-engine/state-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
@@ -7607,6 +7608,7 @@ export const appRouter = router({
   unsaid: unsaidRouter,
   book: bookRouter,
   share: shareRouter,
+  oral: oralRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {

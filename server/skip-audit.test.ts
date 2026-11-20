@@ -35,6 +35,7 @@ const ALLOWED_SKIP_CONDITIONS = new Set([
 const DATABASE_TEST_FILES = new Set([
   "server/collectors/idempotency-db.test.ts",
   "server/db-media.test.ts",
+  "server/db-oral.test.ts",
   "server/db-memory-media.test.ts",
   "server/db-persona-versions.test.ts",
   "server/db-push.test.ts",
