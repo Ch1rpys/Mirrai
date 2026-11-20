@@ -157,6 +157,7 @@ import { mergePersonaSettings, normalizePersonaSettings } from "@shared/persona-
 import { isMemorial } from "@shared/persona-state";
 import { buildWordingMessages, selectWordingSuggestions } from "@shared/wording";
 import { personaSettingsPatchSchema } from "./routers-v6/persona-settings-patch";
+import { assertPersonaWritable } from "./_core/persona-access";
 import { styleRouter } from "./routers-v6/style";
 import { importRouter } from "./routers-v6/import";
 import { recordRouter } from "./routers-v6/record";
@@ -177,6 +178,7 @@ import { stickerRouter } from "./routers-v6/sticker";
 import { mediaRouter } from "./routers-v6/media";
 import { unsaidRouter } from "./routers-v6/unsaid";
 import { bookRouter } from "./routers-v6/book";
+import { shareRouter } from "./routers-v6/share";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { stateRulesFromTranscript } from "./skill-engine/state-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
@@ -1365,6 +1367,7 @@ export const appRouter = router({
         return await withPersonaDataLock(input.id, async () => {
           const persona = await getPersonaById(input.id, ctx.user.id);
           if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          assertPersonaWritable(persona, ctx.locale);
           const current = await getPersonaSettings(input.id, ctx.user.id);
           const next = mergePersonaSettings(current, input.patch);
           const written = await setPersonaSettings(input.id, ctx.user.id, next);
@@ -1388,6 +1391,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        assertPersonaWritable(persona, ctx.locale);
         const buffer = decodeBase64Image(input.base64, MAX_AVATAR_BYTES);
         if (!buffer) {
           const decoded = decodeBase64Image(input.base64, Number.MAX_SAFE_INTEGER);
@@ -1674,6 +1678,7 @@ export const appRouter = router({
         const { id, ...rest } = input;
         const currentPersona = await getPersonaById(id, ctx.user.id);
         if (!currentPersona) throw new TRPCError({ code: "NOT_FOUND" });
+        assertPersonaWritable(currentPersona, ctx.locale);
         /**
          * Coming back (C5.4).
          *
@@ -1846,6 +1851,7 @@ export const appRouter = router({
         return await withPersonaDataLock(input.personaId, async () => {
           const persona = await getPersonaById(input.personaId, ctx.user.id);
           if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          assertPersonaWritable(persona, ctx.locale);
           const ids = Array.from(new Set(input.recordIds));
           const rows = ids.length > 0 ? await getRecordsByIds(ids, ctx.user.id) : [];
           const byId = new Map(rows.map((row) => [row.id, row]));
@@ -1898,6 +1904,7 @@ export const appRouter = router({
           return await withPersonaDataLock(input.personaId, async () => {
             const persona = await getPersonaById(input.personaId, ctx.user.id);
             if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+            assertPersonaWritable(persona, ctx.locale);
             const current = normalizePersonaSettings(
               await getPersonaSettings(input.personaId, ctx.user.id),
             );
@@ -1923,6 +1930,7 @@ export const appRouter = router({
           return await withPersonaDataLock(input.personaId, async () => {
             const persona = await getPersonaById(input.personaId, ctx.user.id);
             if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+            assertPersonaWritable(persona, ctx.locale);
             const current = normalizePersonaSettings(
               await getPersonaSettings(input.personaId, ctx.user.id),
             );
@@ -1948,6 +1956,7 @@ export const appRouter = router({
           return await withPersonaDataLock(input.personaId, async () => {
             const persona = await getPersonaById(input.personaId, ctx.user.id);
             if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+            assertPersonaWritable(persona, ctx.locale);
             const current = normalizePersonaSettings(
               await getPersonaSettings(input.personaId, ctx.user.id),
             );
@@ -1981,6 +1990,7 @@ export const appRouter = router({
         return await withPersonaDataLock(input.id, async () => {
           const persona = await getPersonaById(input.id, ctx.user.id);
           if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          assertPersonaWritable(persona, ctx.locale);
           const merged = { ...((persona.personaData as any) || {}), ...input.personaData };
           /**
            * The ceiling is on the *merged* record, not on the part that
@@ -2172,6 +2182,7 @@ export const appRouter = router({
         // comes back as "not found" rather than being silently wiped.
         const persona = await getPersonaById(input.id, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        assertPersonaWritable(persona, ctx.locale);
         await deletePersona(input.id, ctx.user.id);
         return { success: true };
       }),
@@ -2616,6 +2627,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.id, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        assertPersonaWritable(persona, ctx.locale);
         if (persona.graduationStatus !== "graduated") throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.personaNotGraduated") });
         await setGraduationStatus(input.id, ctx.user.id, null);
         return { success: true };
@@ -7594,6 +7606,7 @@ export const appRouter = router({
   media: mediaRouter,
   unsaid: unsaidRouter,
   book: bookRouter,
+  share: shareRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {

@@ -32,6 +32,7 @@ import {
 } from "../db";
 import { afterRecordsRemoved } from "../_core/style-profile";
 import { renderRecordContent } from "@shared/records";
+import { assertPersonaWritable } from "../_core/persona-access";
 import { findHarmKind, normalizeHarmReport } from "@shared/harm";
 import { findNearest } from "../records/nearest";
 import { decodeLine } from "../records/decode";
@@ -53,6 +54,7 @@ export const recordRouter = router({
     .query(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       const [summary, files] = await Promise.all([
         getRecordSourceSummary(input.personaId, ctx.user.id),
         getFilesByPersonaId(input.personaId, ctx.user.id),
@@ -79,6 +81,7 @@ export const recordRouter = router({
     .mutation(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       const deletedRecords = await deleteRecordsBySource(
         input.personaId,
         ctx.user.id,
@@ -115,6 +118,7 @@ export const recordRouter = router({
     .query(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       const anchor = input.anchor
         ? "recordId" in input.anchor
           ? { recordId: input.anchor.recordId }
@@ -202,6 +206,7 @@ export const recordRouter = router({
     .query(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       const offset = Math.max(0, Number.parseInt(input.cursor ?? "0", 10) || 0);
       const exactHits = await searchRecordsLexical(input.personaId, ctx.user.id, {
         q: input.q,
@@ -259,6 +264,7 @@ export const recordRouter = router({
     .query(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       const around = await getRecordsAround(input.recordId, ctx.user.id, input.before, input.after);
       if (!around.target || around.target.personaId !== input.personaId) {
         throw new TRPCError({ code: "NOT_FOUND" });
@@ -297,6 +303,7 @@ export const recordRouter = router({
     .query(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       const places = await collectPlaces({ personaId: input.personaId, userId: ctx.user.id });
       /**
        * The basemap is optional and off by default. The browser only
@@ -311,6 +318,7 @@ export const recordRouter = router({
     .query(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       return collectSongs({ personaId: input.personaId, userId: ctx.user.id });
     }),
 
@@ -320,6 +328,7 @@ export const recordRouter = router({
     .query(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       const rows: FirstRow[] = [];
       for await (const row of iterateRecords(input.personaId, ctx.user.id)) {
         rows.push({
@@ -349,6 +358,7 @@ export const recordRouter = router({
     .query(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       return buildTimeline({ personaId: input.personaId, userId: ctx.user.id });
     }),
 
@@ -357,6 +367,7 @@ export const recordRouter = router({
     .query(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       const version = await getRecordsVersion(input.personaId, ctx.user.id);
       const cached = await getRecordReportCache(input.personaId, ctx.user.id);
       if (cached && cached.recordsVersion === version) {
@@ -396,6 +407,7 @@ export const recordRouter = router({
     .query(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       return decodeLine({
         personaId: input.personaId,
         userId: ctx.user.id,
@@ -408,6 +420,7 @@ export const recordRouter = router({
     .query(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       const years = await onThisDay({
         personaId: input.personaId,
         userId: ctx.user.id,
@@ -439,6 +452,7 @@ export const recordRouter = router({
     .query(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       return findNearest({
         personaId: input.personaId,
         userId: ctx.user.id,
@@ -483,6 +497,7 @@ export const recordRouter = router({
     .query(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       const months = await countRecordsByMonth(
         input.personaId,
         ctx.user.id,
@@ -508,6 +523,7 @@ export const recordRouter = router({
       .query(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        assertPersonaWritable(persona, ctx.locale);
         const marks = await listRecordMarks(input.personaId, ctx.user.id);
         return marks.map((mark) => ({
           id: mark.id,
@@ -536,6 +552,7 @@ export const recordRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        assertPersonaWritable(persona, ctx.locale);
         const mark = await upsertRecordMark({
           userId: ctx.user.id,
           personaId: input.personaId,
@@ -552,6 +569,7 @@ export const recordRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        assertPersonaWritable(persona, ctx.locale);
         const removed = await removeRecordMark(input.id, ctx.user.id, input.personaId);
         if (!removed) throw new TRPCError({ code: "NOT_FOUND" });
         return { removed: true };
@@ -564,6 +582,7 @@ export const recordRouter = router({
     .mutation(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       const deleted = await deleteRecordRow(input.recordId, input.personaId, ctx.user.id);
       if (!deleted) throw new TRPCError({ code: "NOT_FOUND" });
       try {

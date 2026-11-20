@@ -10,6 +10,7 @@ import { z } from "zod";
 import { isUnparsedChatUpload, RECORD_KINDS, type RecordKind } from "@shared/records";
 import { copy } from "@shared/copy";
 import { protectedProcedure, rateLimit, router } from "../_core/trpc";
+import { assertPersonaWritable } from "../_core/persona-access";
 import { RATE_LIMITS } from "../_core/rate-limit";
 import { getFilesByPersonaId, getPersonaById, getPersonaFileById } from "../db";
 import {
@@ -110,6 +111,9 @@ export const importRouter = router({
     .mutation(async ({ ctx, input }) => {
       const file = await getPersonaFileById(input.fileId, ctx.user.id);
       if (!file) throw new TRPCError({ code: "NOT_FOUND" });
+      const persona = await getPersonaById(file.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       if (file.parseStatus === "needs_roles" && (input.me.length === 0 || input.them.length === 0)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -152,6 +156,9 @@ export const importRouter = router({
     .mutation(async ({ ctx, input }) => {
       const file = await getPersonaFileById(input.fileId, ctx.user.id);
       if (!file) throw new TRPCError({ code: "NOT_FOUND" });
+      const persona = await getPersonaById(file.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       return startImport({
         fileId: input.fileId,
         userId: ctx.user.id,
