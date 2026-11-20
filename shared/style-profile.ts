@@ -28,6 +28,7 @@ import { normalizeRoutine, type RoutineProfile } from "./routine-profile";
 import { normalizeTyping, type TypingProfile } from "./typing-profile";
 import { normalizeQuirks, type QuirksProfile } from "./quirks-profile";
 import { normalizeDoubleText, type DoubleTextProfile } from "./double-text";
+import { normalizeMirror, type MirrorProfile } from "./mirror";
 import type { StyleFingerprint } from "./style-fingerprint";
 import type { ImperfectionDrafts } from "./imperfection-draft";
 import { normalizeRituals, type RitualEntry } from "./ritual-table";
@@ -97,7 +98,7 @@ export interface StyleProfile {
   publicFingerprint?: StyleFingerprint; // B7.12
   writtenFingerprint?: unknown; // 由 C1.8 填
   group?: unknown; // 由 C9.8 填
-  mirror?: unknown; // 由 C4.1 填
+  mirror?: MirrorProfile;
   rerankWeights?: unknown; // 由 B8.8 填
 }
 
@@ -137,6 +138,11 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
       if (key === "emotionDynamics") {
         const emotionDynamics = normalizeEmotionDynamics(source.emotionDynamics);
         if (emotionDynamics) profile.emotionDynamics = emotionDynamics;
+        continue;
+      }
+      if (key === "mirror") {
+        const mirror = normalizeMirror(source.mirror);
+        if (mirror) profile.mirror = mirror;
         continue;
       }
       if (key === "conflict") {

@@ -45,6 +45,7 @@ import { groupConflictTriggers, mineConflictEpisodes, summarizeConflicts } from 
 import { measureSessions } from "@shared/session-profile";
 import { measureMultiPoint } from "@shared/multi-point";
 import { measureInSessionFromScenes } from "@shared/in-session";
+import { measureMirror } from "@shared/mirror";
 import { measureReplyDelay } from "@shared/reply-delay";
 import { measureRoutine } from "@shared/routine-profile";
 import { measureTyping } from "@shared/typing-profile";
@@ -185,6 +186,24 @@ export async function measureStyleProfile(params: {
   const multiPoint = measureMultiPoint(labelledScenes.flatMap((scene) => toTurns(scene)));
   const inSession = measureInSessionFromScenes(labelledScenes);
   /**
+   * The user's own side (C4.1).
+   *
+   * Read from the same rows, with the roles as they are; the mirror
+   * swaps them where the question is about the user's timing. It is
+   * stored on the profile but never read by a prompt.
+   */
+  const mirror = measureMirror(
+    rows.map((row) => ({
+      id: row.id,
+      role: row.role,
+      content: row.content,
+      timestamp: row.timestamp,
+      kind: row.kind,
+      emotion: row.emotion,
+    })),
+    { repairBy: conflict?.repairBy ?? null, personaTimeZone: sessionZone },
+  );
+  /**
    * Built as one record rather than a literal full of conditional
    * spreads: the type checker drops the whole expression when the
    * union of twenty optional measurements gets too large.
@@ -217,6 +236,7 @@ export async function measureStyleProfile(params: {
     photos,
     multiPoint,
     inSession,
+    mirror: mirror ?? undefined,
   });
   const next = normalizeStyleProfile(nextRaw);
   return applyRerankWeightsFromPairs(personaId, userId, next, { persistAlways: true });

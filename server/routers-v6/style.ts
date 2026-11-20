@@ -20,7 +20,7 @@ export const styleRouter = router({
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
       const stored = await getPersonaStyleProfile(input.personaId, ctx.user.id);
-      return { profile: stored ?? normalizeStyleProfile(null) };
+      return { profile: stored ? normalizeStyleProfile(stored) : normalizeStyleProfile(null) };
     }),
 
   measure: protectedProcedure
