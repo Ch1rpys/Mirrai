@@ -117,6 +117,24 @@ export const PROMPTS = {
    * It is written in the persona's voice rather than as a system notice,
    * so the user is not handed an error at the moment they said goodbye.
    */
+  /**
+   * The other endings (C6.6).
+   *
+   * Only the three non-farewell kinds add anything. The farewell path
+   * must stay byte for byte what it was, so it has no key at all.
+   */
+  "prompt.farewellKind.said_it": {
+    zh: "这封信不是告别这段关系；写的是对方做到了来这里想练的那件事。不要说真人现在怎么想、怎么感觉；你只知道记录里的事。",
+    en: "This letter is not a goodbye to the relationship. It is about the other person having done the thing they came here to practise. Do not say what the real person thinks or feels now; you only know what is in the record.",
+  },
+  "prompt.farewellKind.reconciled": {
+    zh: "对方和你和好了，这里可以放下了。不要说真人现在怎么想、怎么感觉；你只知道记录里的事。",
+    en: "The two of you made up. This can be put down now. Do not say what the real person thinks or feels now; you only know what is in the record.",
+  },
+  "prompt.farewellKind.not_afraid": {
+    zh: "对方不再害怕了。不要说真人现在怎么想、怎么感觉；你只知道记录里的事。",
+    en: "The other person is no longer afraid. Do not say what the real person thinks or feels now; you only know what is in the record.",
+  },
   "prompts.farewellFallback": {
     zh: "亲爱的，感谢你一路的陪伴。虽然此刻没能用我自己的话好好说一声，但我还是想说：那些日子是真实的，你也真实地重要过。愿你往后温柔顺遂。 —— {{name}}",
     en: "Dear one, thank you for all the way we walked together. Even if I cannot say it in my own words right now, I want you to know: those days mattered, and you mattered. May you find warmth and ease ahead. — {{name}}",

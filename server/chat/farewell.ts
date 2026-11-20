@@ -22,6 +22,7 @@ import { llmService, type LLMProvider } from "../llm";
 import { withTimeout } from "../llm/timeout";
 import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 import { copy } from "@shared/copy";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 import * as db from "../db";
 import { userTimeZone } from "./prompt";
 import {
@@ -105,7 +106,21 @@ export async function buildFarewellPrompt(params: {
   // handed to the model on purpose. The persona's name is in the
   // identity block, where it is fenced; the instruction only needs to
   // say "your own voice".
-  const userPrompt = copy(locale, "prompts.farewellLetter");
+  /**
+   * The kind of ending (C6.6).
+   *
+   * The default — a farewell — adds nothing at all, so the prompt is the
+   * same one it was before this stage. The other three add one paragraph
+   * after the instruction; all of them forbid speaking for the real
+   * person.
+   */
+  const kind = normalizePersonaSettings(persona.settings).graduationKind ?? "farewell";
+  const basePrompt = copy(locale, "prompts.farewellLetter");
+  const kindInstruction =
+    kind === "farewell"
+      ? ""
+      : copy(locale, `prompt.farewellKind.${kind}` as never);
+  const userPrompt = [basePrompt, kindInstruction].filter(Boolean).join("\n\n");
 
   return { systemPrompt, userPrompt, memoryCount: context.memoryCount };
 }

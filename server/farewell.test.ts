@@ -53,6 +53,7 @@ vi.mock("./llm", () => ({
 }));
 
 import { buildFarewellPrompt, fallbackFarewellLetter, writeFarewellLetter } from "./chat/farewell";
+import { copy } from "@shared/copy";
 
 /**
  * The farewell letter.
@@ -87,6 +88,27 @@ describe("buildFarewellPrompt", () => {
     getLatestChatSummary.mockResolvedValue(null);
     getRelationshipEvents.mockResolvedValue([]);
     retrieveMemories.mockResolvedValue([]);
+  });
+
+  it("adds the paragraph for each ending, and nothing for a farewell (C6.6)", async () => {
+    const now = new Date("2026-06-01T12:00:00Z");
+    const base = await buildFarewellPrompt({ persona: persona(), userId: 1, now });
+    expect(base.userPrompt).toBe(copy("zh", "prompts.farewellLetter"));
+    expect(base.userPrompt).not.toContain("不要说真人现在怎么想");
+    // The whole prompt for the default ending is snapshotted: the
+    // farewell path must stay exactly what it was.
+    expect(base).toMatchSnapshot();
+
+    for (const kind of ["said_it", "reconciled", "not_afraid"] as const) {
+      const built = await buildFarewellPrompt({
+        persona: persona({ settings: { graduationKind: kind } }),
+        userId: 1,
+        now,
+      });
+      expect(built.userPrompt).toContain(copy("zh", `prompt.farewellKind.${kind}`));
+      expect(built.userPrompt).toContain("不要说真人现在怎么想");
+      expect(built.userPrompt).not.toBe(base.userPrompt);
+    }
   });
 
   it("puts the milestones into the letter's context", async () => {

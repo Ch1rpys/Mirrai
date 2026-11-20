@@ -2002,6 +2002,27 @@ export const en = {
   },
 
   graduation: {
+    kindStepTitle: "Which ending is this",
+    farewell: {
+      title: "Say goodbye to {{name}}",
+      note: "A farewell letter to {{name}}, as a keepsake of this stretch.",
+    },
+    said_it: {
+      title: "I said it out loud",
+      note: "You did the thing you came here to practise. This letter is about that.",
+    },
+    reconciled: {
+      title: "We made up",
+      note: "The two of you made up. This letter is about putting it down.",
+    },
+    not_afraid: {
+      title: "I am not afraid any more",
+      note: "You are not afraid any more. This letter is about that.",
+    },
+    stillAfraid: "This can be closed now. What graduated is the fear, not {{name}}.",
+    recordReconciliation: "Mark a relationship event",
+    reconciliationSaved: "Marked.",
+    kindSaved: "Chosen.",
     sent: "The letter is written.",
     moment: "The moment of farewell",
     keepCompanionship: "Keep the company",

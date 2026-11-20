@@ -2007,6 +2007,27 @@ export const zh = {
   },
 
   graduation: {
+    kindStepTitle: "这一次，是哪一种结束",
+    farewell: {
+      title: "和 {{name}} 告别",
+      note: "给 {{name}} 写一封告别信，作为这段路的纪念。",
+    },
+    said_it: {
+      title: "我把话说出口了",
+      note: "你做到了来这里想练的那件事，这封信写的是这件事。",
+    },
+    reconciled: {
+      title: "我们和好了",
+      note: "你们和好了，这封信写的是放下。",
+    },
+    not_afraid: {
+      title: "我不再害怕了",
+      note: "你不再害怕了，这封信写的是这件事。",
+    },
+    stillAfraid: "这里可以合上了。毕业的是害怕，不是 {{name}}。",
+    recordReconciliation: "记一条关系事件",
+    reconciliationSaved: "记下了。",
+    kindSaved: "选好了。",
     sent: "信已经写好了。",
     moment: "毕业时刻",
     keepCompanionship: "继续陪伴",

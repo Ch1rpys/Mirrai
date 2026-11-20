@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { translate } from "@/i18n";
 
 /**
@@ -15,6 +15,7 @@ let persona: any;
 /** The diaries the server sends, and how many there are in all. */
 let diaryItems: any[] = [];
 let diaryTotal = 0;
+const updateSettings = vi.fn();
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -24,13 +25,17 @@ vi.mock("@/lib/trpc", () => ({
         useQuery: () => ({ data: {}, isLoading: false, isError: false, refetch: vi.fn() }),
       },
       setKeptQuotes: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      updateSettings: { useMutation: () => ({ mutate: updateSettings, isPending: false }) },
       seal: {
         set: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
         requestOpen: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
         cancelRequest: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       },
     },
-    relationship: { list: { useQuery: () => ({ data: { events: [] } }) } },
+    relationship: {
+      list: { useQuery: () => ({ data: { events: [] } }) },
+      add: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     memory: { list: { useQuery: () => ({ data: { items: [] } }) } },
     diary: { list: { useQuery: () => ({ data: { items: diaryItems, total: diaryTotal } }) } },
     record: {
@@ -106,6 +111,60 @@ describe("the goodbye", () => {
       farewellDegraded: false,
       personaData: null,
     };
+  });
+
+  it("offers the four endings and saves the chosen one (C6.6)", () => {
+    persona = {
+      id: 1,
+      userId: 1,
+      name: "小A",
+      farewellLetter: null,
+      graduatedAt: null,
+      personaData: null,
+      settings: { graduationKind: "farewell" },
+    };
+    render(<Graduation />);
+    expect(screen.getByText("这一次，是哪一种结束")).toBeInTheDocument();
+    expect(screen.getByText("和 小A 告别")).toBeInTheDocument();
+    expect(screen.getByText("我把话说出口了")).toBeInTheDocument();
+    expect(screen.getByText("我们和好了")).toBeInTheDocument();
+    expect(screen.getByText("我不再害怕了")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("我不再害怕了"));
+    expect(updateSettings).toHaveBeenCalledWith({
+      id: 1,
+      patch: { graduationKind: "not_afraid" },
+    });
+  });
+
+  it("closes a non-farewell ending with its own words (C6.6)", () => {
+    persona = {
+      id: 1,
+      userId: 1,
+      name: "小A",
+      farewellLetter: "嗯。",
+      graduatedAt: new Date("2026-03-01T00:00:00Z"),
+      personaData: null,
+      settings: { graduationKind: "not_afraid" },
+    };
+    render(<Graduation />);
+    expect(
+      screen.getAllByText("这里可以合上了。毕业的是害怕，不是 小A。").length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "记一条关系事件" })).toBeNull();
+  });
+
+  it("asks to mark the day when the two of them made up (C6.6)", () => {
+    persona = {
+      id: 1,
+      userId: 1,
+      name: "小A",
+      farewellLetter: "嗯。",
+      graduatedAt: new Date("2026-03-01T00:00:00Z"),
+      personaData: null,
+      settings: { graduationKind: "reconciled" },
+    };
+    render(<Graduation />);
+    expect(screen.getByRole("button", { name: "记一条关系事件" })).toBeInTheDocument();
   });
 
   it("shows the farewell", () => {

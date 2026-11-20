@@ -13,7 +13,10 @@ import OutboundLetters from "@/components/OutboundLetters";
 import GraduationReasons from "@/components/v6/GraduationReasons";
 import SealSettings from "@/components/v6/SealSettings";
 import KeepThree from "@/components/v6/KeepThree";
+import GraduationKindPicker from "@/components/v6/GraduationKindPicker";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 /**
  * The goodbye.
@@ -117,6 +120,12 @@ export default function Graduation() {
     );
   }
   const letter = persona.farewellLetter;
+  const kind = normalizePersonaSettings(persona.settings).graduationKind ?? "farewell";
+  const nonFarewell = kind !== "farewell";
+  const addReconciliation = trpc.relationship.add.useMutation({
+    onSuccess: () => toast.success(t("graduation.reconciliationSaved")),
+    onError: (error: { message: string }) => toast.error(error.message),
+  });
   /** Which lines the second pass kept, and which it cut. */
   const draft = (persona as any).farewellDraft as
     | { kept?: string[]; removed?: string[] }
@@ -160,6 +169,45 @@ export default function Graduation() {
             {t("graduationPage.subtitle")}
           </p>
         </motion.div>
+
+        {!persona.graduatedAt && (
+          <motion.section
+            initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.02 }}
+            className="surface p-6 sm:p-8"
+          >
+            <GraduationKindPicker personaId={personaId} name={persona.name} />
+          </motion.section>
+        )}
+
+        {nonFarewell && (
+          <motion.p
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            className="text-sm text-muted-foreground leading-relaxed text-center"
+          >
+            {persona.graduatedAt
+              ? t("graduation.stillAfraid", { name: persona.name })
+              : t(`graduation.${kind}.note` as never, { name: persona.name })}
+          </motion.p>
+        )}
+
+        {persona.graduatedAt && kind === "reconciled" && (
+          <div className="text-center">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={addReconciliation.isPending}
+              onClick={() =>
+                addReconciliation.mutate({
+                  personaId,
+                  kind: "reconciliation",
+                  title: t("graduation.reconciled.title", { name: persona.name }),
+                })
+              }
+            >
+              {t("graduation.recordReconciliation")}
+            </Button>
+          </div>
+        )}
 
         {letter ? (
           <motion.section
@@ -423,7 +471,9 @@ export default function Graduation() {
           className="surface p-6 sm:p-8 text-center space-y-4"
         >
           <p className="text-sm text-muted-foreground leading-relaxed">
-            {t("graduationPage.afterward")}
+            {nonFarewell
+              ? t("graduation.stillAfraid", { name: persona.name })
+              : t("graduationPage.afterward")}
           </p>
           <div className="flex flex-wrap gap-2 justify-center">
             {/* The button promises a download, so it lands on the tab
