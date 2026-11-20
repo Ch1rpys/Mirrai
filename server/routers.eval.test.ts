@@ -221,7 +221,17 @@ describe("the fidelity evaluation", () => {
 
   it("does not start a second audition while one is going", async () => {
     const caller = appRouter.createCaller(ctxFor(1));
+
+    let entered!: () => void;
+    const enteredRun = new Promise<void>((resolve) => { entered = resolve; });
+    runAudition.mockImplementation(async () => {
+      entered();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return { results: [], cases: 1, calls: 0 };
+    });
+
     const first = caller.eval.audition({ personaId: 5, locale: "zh" });
+    await enteredRun;
     const second = caller.eval.audition({ personaId: 5, locale: "zh" });
     await expect(second).rejects.toMatchObject({ code: "CONFLICT" });
     await first;
