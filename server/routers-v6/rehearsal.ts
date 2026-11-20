@@ -11,6 +11,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, router, rateLimit } from "../_core/trpc";
+import { assertPersonaWritable } from "../_core/persona-access";
 import { RATE_LIMITS } from "../_core/rate-limit";
 import { copy } from "@shared/copy";
 import { normalizeActProfile, countsForCondition } from "@shared/act-profile";
@@ -63,6 +64,7 @@ export const rehearsalRouter = router({
     .mutation(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       const settings = normalizePersonaSettings(persona.settings);
       if (
         persona.graduationStatus === "graduated" ||
@@ -192,6 +194,7 @@ export const rehearsalRouter = router({
     .query(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       return { rehearsals: await listRehearsals(input.personaId, ctx.user.id, input.limit) };
     }),
 

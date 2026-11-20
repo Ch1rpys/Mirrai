@@ -8,6 +8,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
+import { assertPersonaWritable } from "../_core/persona-access";
 import { copy } from "@shared/copy";
 import { normalizeStyleProfile } from "@shared/style-profile";
 import { zonedDateKey, zonedDayStart } from "@shared/timezone";
@@ -55,6 +56,7 @@ export const roleplayRouter = router({
     .mutation(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
 
       const lines = await countRecords(input.personaId, ctx.user.id, {
         role: "user",
@@ -115,6 +117,7 @@ export const roleplayRouter = router({
 
       const persona = await getPersonaById(session.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      assertPersonaWritable(persona, ctx.locale);
       const stored = await getPersonaStyleProfile(session.personaId, ctx.user.id);
       const profile = normalizeStyleProfile(stored);
       const candidates = await candidateRecordsByOverlap(session.personaId, ctx.user.id, {
