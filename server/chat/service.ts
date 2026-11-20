@@ -617,6 +617,8 @@ export async function composeMessages(params: {
   reanchorIssues?: ReanchorIssue[] | null;
   peopleSection?: string | null;
   stancesSection?: string | null;
+  /** The exemplars already chosen for this turn (C8.7). */
+  exemplarSection?: string;
 }): Promise<{
   messages: LLMMessage[];
   recalled: Array<{ id: number; title: string; subject: string; description?: string | null }>;
@@ -724,6 +726,7 @@ export async function composeMessages(params: {
     })),
     peopleSection: params.peopleSection,
     stancesSection: params.stancesSection,
+    exemplarSection: params.exemplarSection,
   });
 
   const recent = await Promise.all(

@@ -27,6 +27,7 @@ import {
 import type { SpeechAct } from "@shared/speech-acts";
 import { renderExemplars } from "./exemplars";
 import { retrieveExemplarsWithEmbed } from "./embeddings";
+import { retrieveExemplarsFromTable } from "./exemplar-query";
 import type { ReanchorIssue } from "@shared/style-reminder";
 import { preferredClockZone } from "@shared/timezone";
 
@@ -182,6 +183,14 @@ export interface PromptContext {
   seedTurnsNote?: string | null;
   styleReminderLines?: string[] | null;
   reanchorIssues?: ReanchorIssue[] | null;
+  /**
+   * A section the caller already built.
+   *
+   * C8.7 computes the exemplars once per turn and gives the same ones
+   * to the seed turns and to the prompt; without the override the
+   * prompt would read them a second time.
+   */
+  exemplarSection?: string | null;
   /** Unlike/like pairs. Empty when the exemplars layer is off. */
   contrastSection?: string | null;
   /** Planner-only subset: no speaking style, exemplars, seeds, or samples. */
@@ -316,7 +325,9 @@ export async function buildPromptBundleForPersona(
     exemplarSection:
       context.promptMode === "planner" || context.skipExemplars
         ? ""
-        : await exemplarSectionFor(context, locale),
+        : context.exemplarSection !== undefined
+          ? context.exemplarSection
+          : await exemplarSectionFor(context, locale),
     contrastSection:
       context.promptMode === "planner" || context.skipExemplars
         ? ""
@@ -446,14 +457,11 @@ async function exemplarSectionFor(
   locale: "zh" | "en",
 ): Promise<string> {
   if (!context.userMessage) return "";
-  const records = await optionalCall(
-    () => db.getCollectedMessagesForPersona(context.persona.id, context.userId, { newest: true }),
-    [],
-  );
   const period = periodOf(context.persona, context.periodId);
-  const found = await retrieveExemplarsWithEmbed({
+  const common = {
+    personaId: context.persona.id,
+    userId: context.userId,
     userMessage: context.userMessage,
-    records: records as never,
     excludeIds: context.excludeExemplarIds,
     excludeTexts: context.excludeExemplarTexts,
     personaData: context.persona.personaData as never,
@@ -464,8 +472,24 @@ async function exemplarSectionFor(
     timeZone: (context.persona as { timezone?: string | null }).timezone ?? null,
     period: period?.from && period?.to ? { from: period.from, to: period.to } : null,
     history: context.history,
-    personaId: context.persona.id,
-    userId: context.userId,
+  };
+  /**
+   * C8.7: the candidates come from the index. The old full read is
+   * only for a persona whose rows have not been indexed yet — or for a
+   * caller whose database layer is a test double.
+   */
+  const fromTable = await optionalCall(
+    () => retrieveExemplarsFromTable(common),
+    null as Awaited<ReturnType<typeof retrieveExemplarsFromTable>>,
+  );
+  if (fromTable !== null) return renderExemplars(fromTable, locale);
+  const records = await optionalCall(
+    () => db.getCollectedMessagesForPersona(context.persona.id, context.userId, { newest: true }),
+    [],
+  );
+  const found = await retrieveExemplarsWithEmbed({
+    ...common,
+    records: records as never,
   });
   return renderExemplars(found, locale);
 }

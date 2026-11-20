@@ -53,6 +53,9 @@ const getLastExtractionAttemptAt = vi.fn();
 const getLastExtractionAt = vi.fn();
 const getRecordsVersion = vi.fn();
 const getCollectedMessagesForPersona = vi.fn();
+const countRecords = vi.fn();
+const candidateRecordsByOverlap = vi.fn();
+const getWindowsAroundUserRecords = vi.fn();
 
 const storageToDataUrl = vi.fn();
 vi.mock("../storage", () => ({
@@ -111,6 +114,9 @@ vi.mock("../db", () => ({
   getLastExtractionAt: (...a: unknown[]) => getLastExtractionAt(...a),
   getRecordsVersion: (...a: unknown[]) => getRecordsVersion(...a),
   getCollectedMessagesForPersona: (...a: unknown[]) => getCollectedMessagesForPersona(...a),
+  countRecords: (...a: unknown[]) => countRecords(...a),
+  candidateRecordsByOverlap: (...a: unknown[]) => candidateRecordsByOverlap(...a),
+  getWindowsAroundUserRecords: (...a: unknown[]) => getWindowsAroundUserRecords(...a),
   cancelPendingReplyJobs: vi.fn().mockResolvedValue(0),
   getPendingReplyJob: vi.fn().mockResolvedValue(null),
   createReplyJob: vi.fn(),
@@ -207,6 +213,7 @@ describe("runConversation", () => {
       incrementChatCount, updateMessageMetadata, createFidelityPair, clearMessagePendingChoice,
       getMessageById, updateEmotionSnapshot, searchRecordsLexical, deleteMessage,
       iterateRecords, getRecordsVersion, getCollectedMessagesForPersona, listEnabledStickers,
+      countRecords, candidateRecordsByOverlap, getWindowsAroundUserRecords,
       listMemoryMediaForMemories, listRecentlySentPhotoMediaIds,
       getLastExtractionAttemptAt, getLastExtractionAt, generateTTS, ttsEngineMock,
       invoke, invokeWithProvider,
@@ -281,6 +288,9 @@ describe("runConversation", () => {
     iterateRecords.mockImplementation(async function* (): AsyncGenerator<unknown> {});
     getRecordsVersion.mockResolvedValue("0:0");
     getCollectedMessagesForPersona.mockResolvedValue([]);
+    countRecords.mockResolvedValue(0);
+    candidateRecordsByOverlap.mockResolvedValue([]);
+    getWindowsAroundUserRecords.mockResolvedValue(new Map());
     listEnabledStickers.mockResolvedValue([]);
     getLastExtractionAttemptAt.mockResolvedValue(null);
     getLastExtractionAt.mockResolvedValue(null);
@@ -308,6 +318,53 @@ describe("runConversation", () => {
 
     const done = events.find((e) => e.type === "done");
     expect(done).toBeDefined();
+  });
+
+  it("reads no whole history on a turn once every row is indexed (C8.7)", async () => {
+    const at = new Date("2022-03-01T12:00:00.000Z");
+    countRecords.mockImplementation(async (_personaId: number, _userId: number, options: { tokensMissing?: boolean } = {}) =>
+      options.tokensMissing ? 0 : 10,
+    );
+    candidateRecordsByOverlap.mockResolvedValue([
+      { id: 11, content: "在吗", timestamp: at, coverage: 1 },
+    ]);
+    const candidate = {
+      id: 11,
+      userId: 1,
+      personaId: 1,
+      source: "generic",
+      role: "user",
+      content: "在吗",
+      timestamp: at,
+      createdAt: at,
+      kind: "text",
+      speaker: "阿树",
+      meta: null,
+    };
+    const reply = {
+      ...candidate,
+      id: 12,
+      role: "assistant",
+      content: "在的呀",
+      speaker: "小A",
+    };
+    getWindowsAroundUserRecords.mockResolvedValue(
+      new Map([[11, { candidate, before: [], after: [reply] }]]),
+    );
+
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+    })) {
+      events.push(event);
+    }
+    expect(events.some((event) => event.type === "done")).toBe(true);
+    expect(getCollectedMessagesForPersona).toHaveBeenCalledTimes(0);
+    expect(iterateRecords).toHaveBeenCalledTimes(0);
+    expect(candidateRecordsByOverlap).toHaveBeenCalled();
   });
 
   it("checks on the person once, not once per message", async () => {

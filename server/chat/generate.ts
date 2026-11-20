@@ -27,6 +27,8 @@ import { pickRerankWinner, type RerankResult } from "./rerank";
 import { buildRerankModel, getRerankModel } from "./rerank-model";
 import { sparseModelFromUnknown } from "../eval/ab-pairs";
 import { retrieveExemplarsWithEmbed } from "./embeddings";
+import { retrieveExemplarsFromTable } from "./exemplar-query";
+import { renderExemplars, type Exemplar } from "./exemplars";
 import { buildPromptBundleForPersona } from "./prompt";
 import { personaAsOfPeriod } from "@shared/period-boundary";
 import { clipPromptFact, isSafeSeedLine } from "@shared/seed-safety";
@@ -144,6 +146,14 @@ export interface TurnPlan {
   maxChars?: number;
   layersUsed: LayerId[];
   exemplarIds: number[];
+  /**
+   * The exemplars the prompt used, so the reranker reuses them.
+   *
+   * It used to read the records again to score the candidates against
+   * example lines. That was a second full read of the history in one
+   * turn (C8.7).
+   */
+  exemplars?: Exemplar[];
   seedRecordIds: number[];
   recalled: Array<{ id: number; title: string; subject: string; description?: string | null }>;
   rng: () => number;
@@ -184,6 +194,45 @@ async function clockZoneFor(input: TurnInput): Promise<string | null> {
     userZone = null;
   }
   return preferredClockZone(null, userZone);
+}
+
+/**
+ * The exemplars for one turn, once (C8.7).
+ *
+ * The table path answers when every row has search tokens. The old
+ * full read stays as the fallback for an unindexed persona and for a
+ * caller whose database is a test double.
+ */
+async function exemplarsForTurn(
+  input: TurnInput,
+  sampledAct: SpeechAct | null,
+): Promise<Exemplar[]> {
+  const period = periodForTurn(input.persona, input.periodId ?? null);
+  const common = {
+    personaId: input.persona.id,
+    userId: input.userId,
+    userMessage: input.userMessage,
+    excludeIds: input.exclude?.recordIds,
+    excludeTexts: input.exclude?.texts,
+    personaData: input.persona.personaData as { harmReport?: never } | null,
+    sampledAct,
+    emotion: input.actCondition?.emotion ?? input.persona.emotionalState ?? null,
+    now: input.now,
+    timeZone: (input.persona as { timezone?: string | null }).timezone ?? null,
+    period: period?.from && period?.to ? { from: period.from, to: period.to } : null,
+    history: input.history,
+  };
+  const fromTable = await retrieveExemplarsFromTable(common);
+  if (fromTable !== null) return fromTable;
+  let records: Array<Record<string, unknown>> = [];
+  try {
+    records = await db.getCollectedMessagesForPersona(input.persona.id, input.userId, {
+      newest: true,
+    });
+  } catch {
+    records = [];
+  }
+  return retrieveExemplarsWithEmbed({ ...common, records: records as never });
 }
 
 export async function planTurn(input: TurnInput): Promise<TurnPlan> {
@@ -293,12 +342,39 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     };
   }
 
+  const turnExemplars = layers.exemplars || layers.seededTurns
+    ? await exemplarsForTurn(input, sampledAct)
+    : [];
   const seeds = await seedPlanForTurn(
     input,
     layers.seededTurns,
     sampledAct,
     Boolean(layers.styleReminder && layers.exemplars),
+    turnExemplars,
   );
+  /**
+   * The prompt shows the exemplars that were not used as seed turns.
+   *
+   * The old path passed the seed plan's exclusions to the prompt
+   * retrieval. Now that both read one list, the same exclusions are
+   * applied here — otherwise a line the seed filter refused (a
+   * hostile record line) would still appear in the fenced material.
+   */
+  const seedExcluded = new Set(seeds.excludeTexts);
+  const promptExemplars = seedExcluded.size
+    ? turnExemplars.filter((item) => {
+        const lines = [
+          item.content,
+          ...item.turn,
+          ...(item.rawTurn ?? []),
+          ...item.previousUserTurn,
+        ];
+        return !lines.some((line) => seedExcluded.has(line));
+      })
+    : turnExemplars;
+  const exemplarSection = layers.exemplars
+    ? renderExemplars(promptExemplars, input.locale)
+    : "";
   const seedMsgs = seedMessagesFor(seeds.exchanges, input.locale);
   const seededOn = seeds.exchanges.length > 0;
   const reminder = await styleReminderForTurn(input, layers.styleReminder, [
@@ -351,6 +427,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       seedTurnsNote: seeds.note,
       styleReminderLines: reminder.lines,
       reanchorIssues: reminder.issues,
+      exemplarSection,
       markRecalled: false,
       history: input.history,
     });
@@ -403,7 +480,8 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
         peopleLayerOn(layers.people, messages, input.locale),
         factRewriteOn,
       ),
-      exemplarIds: [],
+      exemplarIds: turnExemplars.map((item) => item.id),
+      exemplars: turnExemplars,
       seedRecordIds: seeds.excludeIds,
       recalled: [],
       rng,
@@ -441,6 +519,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     seedTurnsNote: seeds.note,
     styleReminderLines: reminder.lines,
     reanchorIssues: reminder.issues,
+    exemplarSection,
     peopleSection: layers.people ? undefined : null,
     stancesSection: layers.people ? undefined : null,
   });
@@ -493,6 +572,7 @@ async function seedPlanForTurn(
   enabled: boolean,
   sampledAct: SpeechAct | null,
   retrieveForSkip = false,
+  precomputed?: Exemplar[],
 ): Promise<{
   exchanges: SeedExchange[];
   excludeIds: number[];
@@ -508,30 +588,42 @@ async function seedPlanForTurn(
     foundTexts: [] as string[],
   };
   if (!enabled && !retrieveForSkip) return empty;
-  let records: Array<{ role: string; content: string; id?: number; kind?: string | null }> = [];
-  try {
-    records = await db.getCollectedMessagesForPersona(input.persona.id, input.userId, { newest: true });
-  } catch {
-    records = [];
+  /**
+   * The same candidates the prompt will use (C8.7).
+   *
+   * They are computed once per turn by `planTurn`. The fallback exists
+   * only for a caller that built a seed plan by itself.
+   */
+  let found: Exemplar[];
+  if (precomputed) {
+    found = precomputed;
+  } else {
+    const period = ((input.persona.personaData as { periods?: Array<{ id?: string; from?: string; to?: string }> } | null)?.periods ?? [])
+      .find((item) => item.id === input.periodId);
+    let records: Array<{ role: string; content: string; id?: number; kind?: string | null }> = [];
+    try {
+      records = await db.getCollectedMessagesForPersona(input.persona.id, input.userId, { newest: true });
+    } catch {
+      records = [];
+    }
+    if (!records.length) return empty;
+    found = await retrieveExemplarsWithEmbed({
+      userMessage: input.userMessage,
+      records: records as never,
+      excludeIds: input.exclude?.recordIds,
+      excludeTexts: input.exclude?.texts,
+      personaData: input.persona.personaData as never,
+      sampledAct,
+      emotion: input.actCondition?.emotion ?? input.persona.emotionalState ?? null,
+      now: input.now,
+      timeZone: (input.persona as { timezone?: string | null }).timezone ?? null,
+      period: period?.from && period?.to ? { from: period.from, to: period.to } : null,
+      history: input.history,
+      personaId: input.persona.id,
+      userId: input.userId,
+    });
   }
-  if (!records.length) return empty;
-  const period = ((input.persona.personaData as { periods?: Array<{ id?: string; from?: string; to?: string }> } | null)?.periods ?? [])
-    .find((item) => item.id === input.periodId);
-  const found = await retrieveExemplarsWithEmbed({
-    userMessage: input.userMessage,
-    records: records as never,
-    excludeIds: input.exclude?.recordIds,
-    excludeTexts: input.exclude?.texts,
-    personaData: input.persona.personaData as never,
-    sampledAct,
-    emotion: input.actCondition?.emotion ?? input.persona.emotionalState ?? null,
-    now: input.now,
-    timeZone: (input.persona as { timezone?: string | null }).timezone ?? null,
-    period: period?.from && period?.to ? { from: period.from, to: period.to } : null,
-    history: input.history,
-    personaId: input.persona.id,
-    userId: input.userId,
-  });
+  if (!found.length) return empty;
   const foundTexts = found.flatMap((item) => [...(item.rawTurn ?? item.turn), ...item.previousUserTurn]);
   if (!enabled) return { ...empty, foundTexts };
   const exchanges = selectSeedExchanges({
@@ -1210,31 +1302,13 @@ export async function* executePlan(
         }
       }
     }
-    let records: Array<{ role: string; content: string; id?: number; kind?: string | null }> = [];
-    try {
-      records = await db.getCollectedMessagesForPersona(input.persona.id, input.userId, { newest: true });
-    } catch {
-      records = [];
-    }
-    const personaData = input.persona.personaData as { harmReport?: unknown } | null;
-    const period = ((input.persona.personaData as { periods?: Array<{ id?: string; from?: string; to?: string }> } | null)?.periods ?? [])
-      .find((item) => item.id === input.periodId);
-    const exemplars = await retrieveExemplarsWithEmbed({
-      userMessage: input.userMessage,
-      records: records as never,
-      excludeTexts: input.exclude?.texts,
-      excludeIds: input.exclude?.recordIds,
-      personaData: personaData as never,
-      sampledAct: plan.sampledAct,
-      restrictToSampledAct: plan.layersUsed.includes("actClusters"),
-      emotion: input.actCondition?.emotion ?? input.persona.emotionalState ?? null,
-      now: input.now,
-      timeZone: (input.persona as { timezone?: string | null }).timezone ?? null,
-      period: period?.from && period?.to ? { from: period.from, to: period.to } : null,
-      history: input.history,
-      personaId: input.persona.id,
-      userId: input.userId,
-    });
+    /**
+     * The exemplars the prompt already used (C8.7).
+     *
+     * Reading the whole history again just to score the four rerank
+     * candidates was the second full read of a single turn.
+     */
+    const exemplars = plan.exemplars ?? [];
     const profile = effectiveStyleProfile(input.persona);
     const picked = pickRerankWinner({
       candidates: texts.map((text) => ({ text })),
