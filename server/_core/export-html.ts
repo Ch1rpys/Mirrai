@@ -678,7 +678,7 @@ const COUNSELOR_COPY = {
     moodCount: "打卡 {{n}} 次",
     noMoods: "这段时间没有打卡。",
     weeks: "每周来的次数",
-    week: "{{start}} 那一周：{{visits}} 天，深夜（0–5 点）{{late}} 次",
+    week: "{{start}} 那一周：{{visits}} 天，深夜 0–5 点来的 {{late}}/{{messages}} 条",
     noWeeks: "这段时间没有记录。",
     checkins: "聊完之后的回答",
     checkinBetter: "好一点",
@@ -703,7 +703,7 @@ const COUNSELOR_COPY = {
     moodCount: "{{n}} check-ins",
     noMoods: "No check-ins in this period.",
     weeks: "Days you came, by week",
-    week: "Week of {{start}}: {{visits}} days, {{late}} late-night (0–5)",
+    week: "Week of {{start}}: {{visits}} days, {{late}}/{{messages}} late-night (0–5)",
     noWeeks: "Nothing recorded in this period.",
     checkins: "After-conversation answers",
     checkinBetter: "Better",
@@ -727,6 +727,8 @@ export interface CounselorWeek {
   start: string;
   visits: number;
   lateNight: number;
+  /** The user's own messages in the week, the denominator of the share. */
+  messages: number;
 }
 
 export interface CounselorSummaryInput {
@@ -786,7 +788,8 @@ export function generateCounselorSummaryHTML(
       copy.week
         .replace("{{start}}", week.start)
         .replace("{{visits}}", String(week.visits))
-        .replace("{{late}}", String(week.lateNight)),
+        .replace("{{late}}", String(week.lateNight))
+        .replace("{{messages}}", String(week.messages)),
     )}</li>`,
   );
   const eventRows = input.events.map((event) =>

@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
+import { toast } from "sonner";
 
 /**
  * The way out.
@@ -377,6 +378,10 @@ describe("after the words have been said (C3.5)", () => {
       id: 7,
       note: "她沉默了一会儿，说「我知道了」。",
     });
+    // Saying it and writing down how it went are quiet acts: no toast,
+    // no badge, no notification.
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it("offers the last page only while the hint has not been made", () => {
@@ -389,6 +394,8 @@ describe("after the words have been said (C3.5)", () => {
       <ConfirmProvider><OutboundLetters personaId={5} name="小满" /></ConfirmProvider>,
     );
     expect(screen.getAllByText(/画个句号/)).toHaveLength(1);
+    // Seeing it is what makes it a one-time offer.
+    expect(dismissSaidItHint).toHaveBeenCalledWith({ personaId: 5 });
     unmount();
 
     saidItHint = false;

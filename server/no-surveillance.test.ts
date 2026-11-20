@@ -94,6 +94,9 @@ describe("the app does not become a surveillance tool", () => {
         : []),
       "server/routers-v6/record.ts",
       "server/routers-v6/style.ts",
+      // The mirror's measurement lives in the style-profile builder, not
+      // just in the route that reads it.
+      "server/_core/style-profile.ts",
     ];
     const offenders: string[] = [];
     for (const file of readingFiles) {
@@ -141,7 +144,9 @@ describe("the app does not become a surveillance tool", () => {
   it("has no column for watching the other person", () => {
     const schema = read("drizzle/schema.ts");
     for (const banned of ["lastSeen", "onlineStatus", "readReceipt", "liveLocation"]) {
-      expect(schema).not.toMatch(new RegExp(`["']${banned}["']`, "i"));
+      // A substring, not a whole column name: `lastSeenAt` would be the
+      // same kind of watching column.
+      expect(schema).not.toMatch(new RegExp(banned, "i"));
     }
   });
 });

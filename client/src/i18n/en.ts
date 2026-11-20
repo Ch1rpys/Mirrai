@@ -1654,7 +1654,7 @@ export const en = {
     visitsLabel: "Days you came",
     visitsLine: "You came on {{a}} days in the last four weeks; the four before that, {{b}}.",
     lateLabel: "Late night (0–5)",
-    lateLine: "{{a}} late-night visits in the last four weeks; the four before that, {{b}}.",
+    lateLine: "In the last four weeks, {{a}} of {{total}} messages came between 0 and 5; the four weeks before, {{b}} of {{previousTotal}}.",
   },
   graduationReasons: {
     title: "When the app will suggest a goodbye",

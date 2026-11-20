@@ -12,7 +12,9 @@ const getSessionStartAt = vi.fn();
 const getLastMessageAt = vi.fn();
 const countUserMessagesSince = vi.fn();
 const getSessionCheckin = vi.fn();
+const getSessionCheckinPrompt = vi.fn();
 const countCheckinsSince = vi.fn();
+const countCheckinPromptsSince = vi.fn();
 const getUserTimezone = vi.fn();
 const getRecentCheckinAnswers = vi.fn();
 const getSafetyEvents = vi.fn();
@@ -23,14 +25,22 @@ vi.mock("../db", () => ({
   getLastMessageAt: (...a: unknown[]) => getLastMessageAt(...a),
   countUserMessagesSince: (...a: unknown[]) => countUserMessagesSince(...a),
   getSessionCheckin: (...a: unknown[]) => getSessionCheckin(...a),
+  getSessionCheckinPrompt: (...a: unknown[]) => getSessionCheckinPrompt(...a),
   countCheckinsSince: (...a: unknown[]) => countCheckinsSince(...a),
+  countCheckinPromptsSince: (...a: unknown[]) => countCheckinPromptsSince(...a),
   getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
   getRecentCheckinAnswers: (...a: unknown[]) => getRecentCheckinAnswers(...a),
   getSafetyEvents: (...a: unknown[]) => getSafetyEvents(...a),
   createSafetyEvent: (...a: unknown[]) => createSafetyEvent(...a),
 }));
 
-import { isWorseStreak, pendingCheckin, worseSuggestion } from "./checkins";
+import {
+  isWorseStreak,
+  pendingCheckin,
+  recordWorseSuggestion,
+  worseStreakStartedAt,
+  worseSuggestion,
+} from "./checkins";
 
 const now = new Date("2026-03-10T12:00:00Z");
 const sessionStart = new Date("2026-03-10T10:00:00Z");
@@ -43,7 +53,9 @@ describe("pendingCheckin", () => {
     getLastMessageAt.mockResolvedValue(quietSince);
     countUserMessagesSince.mockResolvedValue(7);
     getSessionCheckin.mockResolvedValue(null);
+    getSessionCheckinPrompt.mockResolvedValue(null);
     countCheckinsSince.mockResolvedValue(0);
+    countCheckinPromptsSince.mockResolvedValue(0);
     getUserTimezone.mockResolvedValue("Asia/Shanghai");
   });
 
@@ -78,6 +90,25 @@ describe("pendingCheckin", () => {
     expect(await pendingCheckin({ userId: 1, personaId: 5, now })).toBeNull();
   });
 
+  it("does not ask again after a question the user ignored", async () => {
+    // The question was shown but not answered: there is a prompt row,
+    // no answer row.
+    countCheckinPromptsSince.mockResolvedValue(1);
+    expect(await pendingCheckin({ userId: 1, personaId: 5, now })).toBeNull();
+  });
+
+  it("does not ask the same session twice, even on a later day", async () => {
+    getSessionCheckinPrompt.mockResolvedValue({ id: 3 });
+    expect(await pendingCheckin({ userId: 1, personaId: 5, now })).toBeNull();
+  });
+
+  it("still lets the answer route find a session that was already shown", async () => {
+    countCheckinPromptsSince.mockResolvedValue(1);
+    getSessionCheckinPrompt.mockResolvedValue({ id: 3 });
+    expect(await pendingCheckin({ userId: 1, personaId: 5, now, includeAsked: true }))
+      .toEqual({ sessionStartAt: sessionStart });
+  });
+
   it("returns null with no session at all", async () => {
     getSessionStartAt.mockResolvedValue(null);
     expect(await pendingCheckin({ userId: 1, personaId: 5, now })).toBeNull();
@@ -102,9 +133,9 @@ describe("worseSuggestion", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getRecentCheckinAnswers.mockResolvedValue([
-      { answer: "worse" },
-      { answer: "worse" },
-      { answer: "worse" },
+      { answer: "worse", createdAt: new Date("2026-03-09T12:00:00Z") },
+      { answer: "worse", createdAt: new Date("2026-03-08T12:00:00Z") },
+      { answer: "worse", createdAt: new Date("2026-03-07T12:00:00Z") },
     ]);
     getSafetyEvents.mockResolvedValue([]);
     createSafetyEvent.mockResolvedValue(1);
@@ -114,16 +145,46 @@ describe("worseSuggestion", () => {
     expect(await worseSuggestion({ userId: 1, personaId: 5, now })).toBe(true);
   });
 
-  it("does not suggest it again once the card was shown", async () => {
+  it("does not suggest it again once the card was shown for this streak", async () => {
     getSafetyEvents.mockResolvedValue([
       {
         type: "usage",
         personaId: 5,
         excerpt: "checkins:worse×3",
-        createdAt: new Date("2026-03-09T10:00:00Z"),
+        createdAt: new Date("2026-03-09T13:00:00Z"),
       },
     ]);
     expect(await worseSuggestion({ userId: 1, personaId: 5, now })).toBe(false);
+  });
+
+  it("asks again when a new worse streak starts", async () => {
+    // The card was shown after the old third answer; the new third
+    // answer is newer, so this is a different group.
+    getRecentCheckinAnswers.mockResolvedValue([
+      { answer: "worse", createdAt: new Date("2026-03-10T09:00:00Z") },
+      { answer: "worse", createdAt: new Date("2026-03-10T08:00:00Z") },
+      { answer: "worse", createdAt: new Date("2026-03-10T07:00:00Z") },
+    ]);
+    getSafetyEvents.mockResolvedValue([
+      {
+        type: "usage",
+        personaId: 5,
+        excerpt: "checkins:worse×3",
+        createdAt: new Date("2026-03-09T13:00:00Z"),
+      },
+    ]);
+    expect(await worseSuggestion({ userId: 1, personaId: 5, now })).toBe(true);
+  });
+
+  it("ignores answers older than fourteen days", async () => {
+    getRecentCheckinAnswers.mockResolvedValue([]);
+    expect(await worseSuggestion({ userId: 1, personaId: 5, now })).toBe(false);
+    expect(getRecentCheckinAnswers).toHaveBeenCalledWith(
+      1,
+      5,
+      20,
+      new Date("2026-02-24T12:00:00Z"),
+    );
   });
 
   it("does not suggest it after a better answer", async () => {
@@ -134,5 +195,72 @@ describe("worseSuggestion", () => {
       { answer: "worse" },
     ]);
     expect(await worseSuggestion({ userId: 1, personaId: 5, now })).toBe(false);
+  });
+});
+
+describe("worseStreakStartedAt", () => {
+  it("returns the start of the worse run", () => {
+    expect(worseStreakStartedAt([
+      { answer: "worse", createdAt: new Date("2026-03-09T12:00:00Z") },
+      { answer: "worse", createdAt: new Date("2026-03-08T12:00:00Z") },
+      { answer: "worse", createdAt: new Date("2026-03-07T12:00:00Z") },
+      { answer: "worse", createdAt: new Date("2026-03-06T12:00:00Z") },
+    ])).toEqual(new Date("2026-03-07T12:00:00Z"));
+  });
+
+  it("ignores skipped answers and refuses a broken run", () => {
+    expect(worseStreakStartedAt([
+      { answer: "worse", createdAt: new Date("2026-03-09T12:00:00Z") },
+      { answer: "skipped", createdAt: new Date("2026-03-08T12:00:00Z") },
+      { answer: "worse", createdAt: new Date("2026-03-07T12:00:00Z") },
+      { answer: "worse", createdAt: new Date("2026-03-06T12:00:00Z") },
+    ])).toEqual(new Date("2026-03-06T12:00:00Z"));
+    expect(worseStreakStartedAt([
+      { answer: "better", createdAt: new Date("2026-03-09T12:00:00Z") },
+      { answer: "worse", createdAt: new Date("2026-03-08T12:00:00Z") },
+      { answer: "worse", createdAt: new Date("2026-03-07T12:00:00Z") },
+      { answer: "worse", createdAt: new Date("2026-03-06T12:00:00Z") },
+    ])).toBeNull();
+  });
+});
+
+describe("recordWorseSuggestion", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getRecentCheckinAnswers.mockResolvedValue([
+      { answer: "worse", createdAt: new Date("2026-03-09T12:00:00Z") },
+      { answer: "worse", createdAt: new Date("2026-03-08T12:00:00Z") },
+      { answer: "worse", createdAt: new Date("2026-03-07T12:00:00Z") },
+    ]);
+  });
+
+  it("writes one safety event and does not write it twice", async () => {
+    getSafetyEvents.mockResolvedValue([]);
+    createSafetyEvent.mockResolvedValue(1);
+    expect(await recordWorseSuggestion({ userId: 1, personaId: 5 })).toBe(true);
+    expect(createSafetyEvent).toHaveBeenCalledTimes(1);
+    getSafetyEvents.mockResolvedValue([
+      {
+        type: "usage",
+        personaId: 5,
+        excerpt: "checkins:worse×3",
+        createdAt: new Date("2026-03-09T13:00:00Z"),
+      },
+    ]);
+    expect(await recordWorseSuggestion({ userId: 1, personaId: 5 })).toBe(false);
+    expect(createSafetyEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes a new event for a new run after an older card", async () => {
+    getSafetyEvents.mockResolvedValue([
+      {
+        type: "usage",
+        personaId: 5,
+        excerpt: "checkins:worse×3",
+        createdAt: new Date("2026-03-06T13:00:00Z"),
+      },
+    ]);
+    await recordWorseSuggestion({ userId: 1, personaId: 5 });
+    expect(createSafetyEvent).toHaveBeenCalledTimes(1);
   });
 });

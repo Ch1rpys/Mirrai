@@ -1099,13 +1099,14 @@ export const appRouter = router({
           date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
           return date.toISOString().slice(0, 10);
         };
-        const weeks = new Map<string, { start: string; days: Set<string>; lateNight: number }>();
+        const weeks = new Map<string, { start: string; days: Set<string>; lateNight: number; messages: number }>();
         for (const message of messages) {
           if (message.role !== "user") continue;
           const day = zonedDateKey(message.createdAt, timezone);
           const start = weekStartOf(day);
-          const week = weeks.get(start) ?? { start, days: new Set<string>(), lateNight: 0 };
+          const week = weeks.get(start) ?? { start, days: new Set<string>(), lateNight: 0, messages: 0 };
           week.days.add(day);
+          week.messages += 1;
           const hour = Number(
             new Intl.DateTimeFormat("en-GB", {
               hour: "2-digit",
@@ -1133,6 +1134,7 @@ export const appRouter = router({
                 start: week.start,
                 visits: week.days.size,
                 lateNight: week.lateNight,
+                messages: week.messages,
               })),
             checkins: checkins.map((row) => ({ answer: row.answer })),
             events: events.map((event) => ({ happenedAt: event.happenedAt, title: event.title })),
@@ -7353,7 +7355,6 @@ export const appRouter = router({
   rehearsal: rehearsalRouter,
   checkin: checkinRouter,
   journal: journalRouter,
-  wellbeing: wellbeingRouter,
   roleplay: roleplayRouter,
   sticker: stickerRouter,
   media: mediaRouter,
@@ -7444,6 +7445,9 @@ export const appRouter = router({
         ]);
         return { stats, messageVolume, emotionTimeline, personaEngagement, hourlyDistribution, moods };
       }),
+
+    /** The user's own wellbeing trend (C4.3). */
+    wellbeing: wellbeingRouter,
   }),
 });
 

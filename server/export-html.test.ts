@@ -313,7 +313,7 @@ describe("the counsellor summary (C4.6)", () => {
       { date: "2026-02-02", mood: "happy" },
       { date: "2026-02-03", mood: "melancholy" },
     ],
-    weeks: [{ start: "2026-02-02", visits: 3, lateNight: 1 }],
+    weeks: [{ start: "2026-02-02", visits: 3, lateNight: 1, messages: 5 }],
     checkins: [{ answer: "worse" }, { answer: "skipped" }, { answer: "worse" }],
     events: [{ happenedAt: new Date("2026-02-10T12:00:00Z"), title: "关系事件" }],
     safetyCounts: { usage: 1 },
@@ -334,6 +334,7 @@ describe("the counsellor summary (C4.6)", () => {
     expect(html).toContain("心情打卡");
     expect(html).toContain("更难受");
     expect(html).toContain("关系事件");
+    expect(html).toContain("深夜 0–5 点来的 1/5 条");
   });
 
   it("includes the diary only when asked, and never the persona's reply", () => {

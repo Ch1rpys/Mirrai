@@ -3,7 +3,10 @@ import { createHash } from "node:crypto";
 import {
   countRecords,
   createCollectedMessages,
+  createLetter,
   createPersona,
+  createUser,
+  deleteUserAccount,
   createPersonaFile,
   deletePersona,
   deletePersonaFile,
@@ -12,7 +15,9 @@ import {
   getPersonaStyleProfile,
   getRecordsAround,
   getRecordSourceSummary,
+  getWaitingNotes,
   iterateRecords,
+  setLetterDone,
 } from "./db";
 import { importRecords } from "./collectors/db-store";
 import { measureStyleProfile } from "./_core/style-profile";
@@ -464,6 +469,46 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
       ]);
     } finally {
       await deletePersona(personaId, userId);
+    }
+  });
+
+  it("keeps the open notes on the page when the ticked ones are many", async () => {
+    const userId = await createUser({
+      username: `notes-order-${Date.now()}-${Math.floor(Math.random() * 10_000)}`,
+      passwordHash: "x",
+      name: "notes-order",
+    });
+    const personaId = await createPersona({ userId, name: "notes-order" });
+    try {
+      for (let index = 0; index < 20; index++) {
+        const done = await createLetter({
+          userId,
+          personaId,
+          body: `已经说过的事 ${index}`,
+          status: "private",
+          kind: "todo",
+        });
+        expect(done).not.toBeNull();
+        await setLetterDone(done!.id, userId, true);
+      }
+      const open = await createLetter({
+        userId,
+        personaId,
+        body: "还没说的事",
+        status: "private",
+        kind: "todo",
+      });
+      expect(open).not.toBeNull();
+
+      const rows = await getWaitingNotes(personaId, userId);
+      expect(rows).toHaveLength(20);
+      // The old order put the twenty ticked notes first, so the only
+      // open one was cut off by the limit and never reached the page.
+      expect(rows.some((row) => row.id === open!.id)).toBe(true);
+      expect(rows.filter((row) => row.doneAt === null)).toHaveLength(1);
+      expect(rows[0].id).toBe(open!.id);
+    } finally {
+      await deleteUserAccount(userId);
     }
   });
 });

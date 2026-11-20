@@ -4,6 +4,8 @@ import path from "path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { translate } from "@/i18n";
+import { measureReplyDelay } from "@shared/reply-delay";
+import { buildXiaomanRecords } from "../../../../server/test-fixtures/xiaoman";
 
 /**
  * The waiting gauge (C3.1).
@@ -43,19 +45,17 @@ vi.mock("@/contexts/LocaleContext", () => ({
 
 import WaitGauge from "./WaitGauge";
 
-const evening = { n: 40, mu: Math.log(40), sigma: 0.8 };
-
 const profile = {
-  replyDelay: {
-    samples: 120,
-    resolution: "second",
-    buckets: {
-      evening,
-      morning: { n: 30, mu: Math.log(30), sigma: 0.7 },
-      afternoon: { n: 5, mu: Math.log(120), sigma: 0.8 },
-      all: { n: 120, mu: Math.log(45), sigma: 0.8 },
-    },
-  },
+  replyDelay: measureReplyDelay(
+    buildXiaomanRecords().map((row) => ({
+      role: row.role,
+      content: row.content,
+      timestamp: row.timestamp,
+      kind: row.kind,
+      emotion: row.role === "assistant" ? row.truth.state : null,
+    })),
+    "Asia/Shanghai",
+  ),
 };
 
 /** 21:00 in Shanghai. */
@@ -75,11 +75,11 @@ describe("the waiting gauge", () => {
     render(<WaitGauge personaId={5} name="小满" timezone="Asia/Shanghai" now={atNine} />);
     expect(screen.getByText("晚上")).toBeInTheDocument();
     expect(screen.getByText("晚上", { selector: "th" }).nextElementSibling).toHaveTextContent("一半 40 秒 之内");
-    // The afternoon bucket has five gaps; it is not a measurement.
+    // The fixture has an afternoon bucket and no night bucket; the
+    // missing one is reported as "too few records".
     const afternoon = screen.getByText("下午", { selector: "th" });
-    expect(afternoon.nextElementSibling).toHaveTextContent("记录太少");
-    // Night has no bucket at all, so it is thin too.
-    expect(screen.getAllByText("记录太少")).toHaveLength(2);
+    expect(afternoon.nextElementSibling).toHaveTextContent("一半");
+    expect(screen.getByText("夜里", { selector: "th" }).nextElementSibling).toHaveTextContent("记录太少");
   });
 
   it("always carries the note that this is not a promise", () => {

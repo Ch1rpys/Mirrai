@@ -49,6 +49,15 @@ describe("measureMirror", () => {
   it("has a delay measured with the roles swapped", () => {
     const mirror = measureMirror(rows(), { personaTimeZone: "Asia/Shanghai" });
     expect(mirror!.myDelay?.samples ?? 0).toBeGreaterThan(30);
+    expect(mirror!.myDelayExampleIds.length).toBeGreaterThan(0);
+  });
+
+  it("carries an example line for every block", () => {
+    const labelled = rows();
+    const scenes = splitScenes(labelled as never);
+    const mirror = measureMirror(labelled, { personaTimeZone: "Asia/Shanghai" });
+    expect(mirror!.repairExampleIds.length).toBeGreaterThan(0);
+    expect(mirror!.startExampleIds.length).toBe(scenes.length);
   });
 
   it("is absent when the record is too short", () => {

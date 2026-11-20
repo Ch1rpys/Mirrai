@@ -1,83 +1,77 @@
 import { readFileSync } from "fs";
 import path from "path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
 
 /**
  * "Read this line" (C3.4).
  *
- * It gives precedents and the numbers around them, never a conclusion.
- * The two rules the test holds it to are the ones the page promises: an
- * unconfirmed guess is not shown as if the user had decided it, and
- * nothing about the line is written down or sent to a model.
+ * The rows come from the Xiaoman fixture, so the precedents and the
+ * state of their conversations are the designed ones — not rows the
+ * test invented. An unconfirmed guess is not shown as if the user had
+ * decided it, and nothing about the line is written down or sent to a
+ * model.
  */
 const getPersonaById = vi.fn();
 const candidateRecordsByOverlap = vi.fn();
 const getRecordsAround = vi.fn();
+const accessed = vi.hoisted(() => new Set<string>());
 
-vi.mock("../db", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  getPersonaById: (...a: unknown[]) => getPersonaById(...a),
-  candidateRecordsByOverlap: (...a: unknown[]) => candidateRecordsByOverlap(...a),
-  getRecordsAround: (...a: unknown[]) => getRecordsAround(...a),
-}));
+vi.mock("../db", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const mocked = {
+    ...actual,
+    getPersonaById: (...a: unknown[]) => getPersonaById(...a),
+    candidateRecordsByOverlap: (...a: unknown[]) => candidateRecordsByOverlap(...a),
+    getRecordsAround: (...a: unknown[]) => getRecordsAround(...a),
+  };
+  return new Proxy(mocked, {
+    get(target, property) {
+      if (typeof property === "string") accessed.add(property);
+      return (target as Record<string | symbol, unknown>)[property];
+    },
+  });
+});
 
 import { decodeLine, median } from "./decode";
 
-function at(iso: string): Date {
-  return new Date(iso);
+const fixture = buildXiaomanRecords();
+const conflictStarts = fixture.filter(
+  (row) => row.role === "assistant" && row.content === "就嗯？",
+);
+const position = new Map(fixture.map((row, index) => [row.id, index]));
+
+function decodeRow(row: (typeof fixture)[number]) {
+  return {
+    id: row.id,
+    personaId: 5,
+    role: row.role,
+    speaker: row.speaker,
+    content: row.content,
+    kind: row.kind,
+    meta: (row.meta ?? null) as Record<string, unknown> | null,
+    timestamp: row.timestamp,
+    createdAt: row.timestamp,
+    emotion: row.role === "assistant" ? row.truth.state : null,
+  };
 }
 
-/** The six conflict starts of the fixture: I said "嗯", they said "就嗯？". */
-const conflictStarts = Array.from({ length: 6 }, (_, index) => index + 1);
-
 function aroundFor(id: number) {
+  const index = position.get(id);
+  if (index === undefined) return { target: undefined, before: [], after: [] };
+  const target = fixture[index];
   return {
-    target: {
-      id,
-      personaId: 5,
-      role: "assistant",
-      speaker: "小满",
-      content: "就嗯？",
-      kind: "text",
-      meta: null,
-      timestamp: at(`2023-0${id}-01T12:00:00.000Z`),
-      createdAt: at(`2023-0${id}-01T12:00:00.000Z`),
-      emotion: "distant",
-    },
-    before: [
-      {
-        id: 100 + id,
-        personaId: 5,
-        role: "user",
-        speaker: "阿树",
-        content: "嗯",
-        kind: "text",
-        meta: null,
-        timestamp: at(`2023-0${id}-01T11:59:00.000Z`),
-        createdAt: at(`2023-0${id}-01T11:59:00.000Z`),
-        emotion: null,
-      },
-    ],
-    after: [
-      {
-        id: 200 + id,
-        personaId: 5,
-        role: "assistant",
-        speaker: "小满",
-        content: "哦。",
-        kind: "text",
-        meta: null,
-        timestamp: at(`2023-0${id}-01T13:00:00.000Z`),
-        createdAt: at(`2023-0${id}-01T13:00:00.000Z`),
-        emotion: "distant",
-      },
-    ],
+    target: decodeRow(target),
+    // `getRecordsAround` returns the earlier rows newest-first.
+    before: fixture.slice(Math.max(0, index - 3), index).reverse().map(decodeRow),
+    after: fixture.slice(index + 1, index + 6).map(decodeRow),
   };
 }
 
 describe("decodeLine", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    accessed.clear();
     getPersonaById.mockResolvedValue({
       id: 5,
       userId: 1,
@@ -91,7 +85,7 @@ describe("decodeLine", () => {
             confidence: 1,
             source: "manual",
             verified: true,
-            evidence: [{ recordId: 1, snippet: "就嗯？", at: "2023-01-01T12:00:00.000Z" }],
+            evidence: [{ recordId: 552, snippet: "就嗯？", at: "2022-03-17T04:54:38.000Z" }],
           },
           {
             id: "r2",
@@ -107,12 +101,12 @@ describe("decodeLine", () => {
       },
     });
     candidateRecordsByOverlap.mockResolvedValue(
-      conflictStarts.map((id) => ({
-        id,
-        content: "就嗯？",
-        timestamp: at(`2023-0${id}-01T12:00:00.000Z`),
-        role: "assistant",
-        speaker: "小满",
+      conflictStarts.map((row) => ({
+        id: row.id,
+        content: row.content,
+        timestamp: row.timestamp,
+        role: row.role,
+        speaker: row.speaker,
         coverage: 1,
       })),
     );
@@ -129,19 +123,20 @@ describe("decodeLine", () => {
     const result = await decodeLine({ personaId: 5, userId: 1, text: "就嗯？" });
     expect(result.precedents).toHaveLength(5);
     for (const precedent of result.precedents) {
-      expect(precedent.before).toHaveLength(1);
-      expect(precedent.before[0]).toMatchObject({ role: "user", content: "嗯" });
-      expect(precedent.after[0]).toMatchObject({ role: "assistant", content: "哦。" });
+      const mine = precedent.before.filter((row) => row.role === "user");
+      expect(mine[mine.length - 1]).toMatchObject({ content: "嗯" });
+      expect(precedent.after).toHaveLength(5);
     }
   });
 
-  it("counts how often the conversation after was labeled 疏远", async () => {
+  it("counts the conversation's state, once per precedent", async () => {
     const result = await decodeLine({ personaId: 5, userId: 1, text: "就嗯？" });
     expect(result.after.count).toBe(5);
     const distant = result.after.states.find((state) => state.state === "distant");
     expect(distant?.n).toBe(5);
-    // Each precedent's next line is an hour later.
-    expect(result.after.gapMedianSec).toBe(3600);
+    // The fixture's conflict durations are 3/4/5/5/6/8 hours; the
+    // median of the five gaps the decoder counts is five hours.
+    expect(result.after.gapMedianSec).toBe(18_000);
   });
 
   it("says nothing was found when the record has no such line", async () => {
@@ -153,16 +148,31 @@ describe("decodeLine", () => {
 
   it("uses the characteristic words, not just any overlap", async () => {
     candidateRecordsByOverlap.mockResolvedValue([
-      { id: 9, content: "今天吃什么", timestamp: at("2023-01-01T12:00:00Z"), role: "assistant", speaker: null, coverage: 1 },
+      {
+        id: 9,
+        content: "今天吃什么",
+        timestamp: new Date("2023-01-01T12:00:00Z"),
+        role: "assistant",
+        speaker: null,
+        coverage: 1,
+      },
     ]);
     const result = await decodeLine({ personaId: 5, userId: 1, text: "就嗯？" });
     expect(result.precedents).toEqual([]);
   });
 
-  it("never calls a model and never writes", () => {
+  it("touches no database function except the three reads", async () => {
+    await decodeLine({ personaId: 5, userId: 1, text: "就嗯？" });
+    expect([...accessed].sort()).toEqual([
+      "candidateRecordsByOverlap",
+      "getPersonaById",
+      "getRecordsAround",
+    ]);
+  });
+
+  it("never calls a model", () => {
     const source = readFileSync(path.resolve(__dirname, "decode.ts"), "utf8");
     expect(source).not.toMatch(/from\s+["'][^"']*llm/);
-    expect(source).not.toMatch(/\.insert\(|\.update\(|\.delete\(/);
   });
 
   it("takes the median of an even and an odd list", () => {

@@ -12,7 +12,7 @@ import { translate } from "@/i18n";
 let state: any = { data: null, isLoading: false, isError: false, refetch: vi.fn() };
 
 vi.mock("@/lib/trpc", () => ({
-  trpc: { wellbeing: { get: { useQuery: () => state } } },
+  trpc: { analytics: { wellbeing: { get: { useQuery: () => state } } } },
 }));
 
 vi.mock("@/contexts/LocaleContext", () => ({
@@ -38,8 +38,8 @@ const weeks = Array.from({ length: 8 }, (_, index) => ({
 
 const data = {
   weeks,
-  recent: { moods: 22, checkins: { better: 4, same: 2, worse: 1 }, visits: 18, lateNight: 3 },
-  previous: { moods: 10, checkins: { better: 1, same: 1, worse: 4 }, visits: 9, lateNight: 5 },
+  recent: { moods: 22, checkins: { better: 4, same: 2, worse: 1 }, visits: 18, lateNight: 3, messages: 50 },
+  previous: { moods: 10, checkins: { better: 1, same: 1, worse: 4 }, visits: 9, lateNight: 5, messages: 40 },
 };
 
 describe("the wellbeing trend", () => {
@@ -50,7 +50,7 @@ describe("the wellbeing trend", () => {
     expect(screen.getByText(/最近四周心情打卡 22 次，之前四周是 10 次/)).toBeInTheDocument();
     expect(screen.getByText(/好一点 4 次、差不多 2 次、更难受 1 次/)).toBeInTheDocument();
     expect(screen.getByText(/最近四周你来了 18 天，之前四周是 9 天/)).toBeInTheDocument();
-    expect(screen.getByText(/最近四周深夜来的有 3 次，之前四周是 5 次/)).toBeInTheDocument();
+    expect(screen.getByText(/最近四周，深夜 0–5 点来的有 3 条，占 50 条；之前四周是 5 条，占 40 条/)).toBeInTheDocument();
   });
 
   it("has four curves and no score or progress bar", () => {

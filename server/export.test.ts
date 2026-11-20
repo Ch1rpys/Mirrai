@@ -1,5 +1,33 @@
-import { describe, expect, it } from "vitest";
-import { exportAsJson, exportAsMarkdown, type ExportBundle } from "./_core/export-data";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("./db", () => ({
+  getUserById: vi.fn().mockResolvedValue({
+    id: 1,
+    username: "someone",
+    name: "小张",
+    email: undefined,
+    timezone: "Asia/Shanghai",
+    addressStyle: undefined,
+    boundaries: undefined,
+    createdAt: new Date("2025-01-01T00:00:00Z"),
+  }),
+  getUserLocale: vi.fn().mockResolvedValue("zh"),
+  getPersonasByUserId: vi.fn().mockResolvedValue([]),
+  getUserMoods: vi.fn().mockResolvedValue([]),
+  getUserJournal: vi.fn().mockResolvedValue([
+    {
+      id: 3,
+      personaId: null,
+      body: "今天想起第一次见面。",
+      mood: "nostalgic",
+      entryDate: "2026-03-01",
+      createdAt: new Date("2026-03-01T10:00:00Z"),
+      updatedAt: new Date("2026-03-01T10:00:00Z"),
+    },
+  ]),
+}));
+
+import { buildExportBundle, exportAsJson, exportAsMarkdown, type ExportBundle } from "./_core/export-data";
 
 /**
  * The user's data, in a form they can keep.
@@ -158,6 +186,15 @@ describe("the export", () => {
     // The user's own diary goes with everything else (C4.5).
     expect(parsed.journal).toHaveLength(1);
     expect(parsed.journal[0].body).toBe("今天想起第一次见面。");
+  });
+
+  it("puts the user's own diary into the bundle and the Markdown", async () => {
+    const built = await buildExportBundle(1);
+    expect(built?.journal).toHaveLength(1);
+    expect(built?.journal[0].body).toBe("今天想起第一次见面。");
+    const markdown = exportAsMarkdown(built!, "zh");
+    expect(markdown).toContain("我写的");
+    expect(markdown).toContain("今天想起第一次见面。");
   });
 
   it("writes the farewell letter into the Markdown", () => {

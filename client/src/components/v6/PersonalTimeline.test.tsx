@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { translate } from "@/i18n";
+import { formatDayKey } from "@/lib/dates";
 
 /**
  * The four streams on one line (C4.5).
@@ -17,7 +18,7 @@ const journalData = [
 const moodData = [
   { date: "2026-03-02", mood: "happy", note: "心情打卡第二件事" },
 ];
-const eventData = {
+const baseEventData = {
   events: [
     {
       id: 1,
@@ -31,6 +32,8 @@ const checkinData = {
     { answer: "worse", createdAt: new Date("2026-03-04T10:00:00Z") },
   ],
 };
+
+let eventData: any = baseEventData;
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -53,6 +56,10 @@ vi.mock("@/contexts/LocaleContext", () => ({
 import PersonalTimeline from "./PersonalTimeline";
 
 describe("the personal timeline", () => {
+  beforeEach(() => {
+    eventData = baseEventData;
+  });
+
   it("puts the four kinds in date order, newest first", () => {
     render(<PersonalTimeline personaId={5} />);
     const items = screen.getAllByText(/第一件事|第二件事|第三件事|更难受了/);
@@ -60,6 +67,23 @@ describe("the personal timeline", () => {
     expect(items[1].textContent).toBe("我写的第三件事");
     expect(items[2].textContent).toBe("心情打卡第二件事");
     expect(items[3].textContent).toBe("关系事件第一件事");
+  });
+
+  it("reads an event instant in the user's own zone", () => {
+    eventData = {
+      events: [
+        {
+          id: 9,
+          title: "深夜的事",
+          happenedAt: new Date("2026-03-01T23:30:00Z"),
+        },
+      ],
+    };
+    render(<PersonalTimeline personaId={5} timezone="Asia/Shanghai" />);
+    // 23:30 UTC is already 2 March in Shanghai; the mood is on the
+    // same local day, so there are two 2 March rows.
+    expect(screen.getAllByText(formatDayKey("2026-03-02", "zh")).length).toBeGreaterThan(0);
+    expect(screen.queryByText(formatDayKey("2026-03-01", "zh"))).toBeNull();
   });
 
   it("marks each item with the stream it came from", () => {

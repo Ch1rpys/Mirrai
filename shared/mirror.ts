@@ -42,10 +42,16 @@ export interface MirrorProfile {
   };
   /** How fast I reply, by the hour, with the roles swapped. */
   myDelay: DelayBuckets | null;
+  /** A few of the lines behind the delay numbers. */
+  myDelayExampleIds: number[];
   /** Who speaks first after a fight. */
   repairBy: { me: number; them: number } | null;
+  /** The lines that opened the way back. */
+  repairExampleIds: number[];
   /** Who opens each scene. */
   starts: { me: number; them: number };
+  /** The first line of each scene. */
+  startExampleIds: number[];
 }
 
 const SHORT_MAX_CHARS = 2;
@@ -109,6 +115,7 @@ export function measureMirror(
   const nextStates = new Map<string, Record<string, number>>();
   const nextGaps = new Map<string, number[]>();
   const shortIds = new Map<string, number[]>();
+  const myDelayExampleIds: number[] = [];
   for (const scene of scenes) {
     const turns = toTurns(scene as never);
     for (let index = 0; index < turns.length - 1; index++) {
@@ -135,6 +142,9 @@ export function measureMirror(
         const list = nextGaps.get(text) ?? [];
         list.push((to.getTime() - from.getTime()) / 1000);
         nextGaps.set(text, list);
+        if (last?.id != null && !myDelayExampleIds.includes(last.id)) {
+          myDelayExampleIds.push(last.id);
+        }
       }
     }
   }
@@ -201,14 +211,17 @@ export function measureMirror(
   const myDelay = measureReplyDelay(swapped as never, timeZone);
 
   // ── Who makes peace first ──────────────────────────────────────────────
-  const conflictProfile = extras.repairBy
-    ? null
-    : summarizeConflicts(mineConflictEpisodes(scenes as never), null);
+  const conflictEpisodes = mineConflictEpisodes(scenes as never);
+  const conflictProfile = extras.repairBy ? null : summarizeConflicts(conflictEpisodes, null);
   const repairBy = extras.repairBy ?? conflictProfile?.repairBy ?? null;
+  const repairExampleIds = conflictEpisodes
+    .map((episode) => episode.repairRecordId)
+    .filter((id): id is number => typeof id === "number");
 
   // ── Who opens a scene ──────────────────────────────────────────────────
   let me = 0;
   let them = 0;
+  const startExampleIds: number[] = [];
   // Every scene, including a scene that is only a call or a sticker: the
   // question is who opened the conversation, not who opened a text-only
   // one.
@@ -219,14 +232,18 @@ export function measureMirror(
     if (!first) continue;
     if (first.role === "user") me += 1;
     else if (first.role === "assistant") them += 1;
+    if (first.id != null) startExampleIds.push(first.id);
   }
 
   return {
     shortReplies,
     goingShort: { episodes, byBand, exampleIds: goingShortIds },
     myDelay,
+    myDelayExampleIds,
     repairBy,
+    repairExampleIds,
     starts: { me, them },
+    startExampleIds,
   };
 }
 
@@ -279,6 +296,8 @@ export function normalizeMirror(value: unknown): MirrorProfile | null {
     me: typeof startsRaw.me === "number" ? startsRaw.me : 0,
     them: typeof startsRaw.them === "number" ? startsRaw.them : 0,
   };
+  const numberArray = (value: unknown): number[] =>
+    Array.isArray(value) ? value.filter((id): id is number => typeof id === "number") : [];
   const hasAnything =
     shortReplies.length > 0 ||
     Object.keys(byBand).length > 0 ||
@@ -296,10 +315,13 @@ export function normalizeMirror(value: unknown): MirrorProfile | null {
         : [],
     },
     myDelay: normalizeReplyDelay(record.myDelay),
+    myDelayExampleIds: numberArray(record.myDelayExampleIds),
     repairBy:
       repairRaw && typeof repairRaw.me === "number" && typeof repairRaw.them === "number"
         ? { me: repairRaw.me, them: repairRaw.them }
         : null,
+    repairExampleIds: numberArray(record.repairExampleIds),
     starts,
+    startExampleIds: numberArray(record.startExampleIds),
   };
 }

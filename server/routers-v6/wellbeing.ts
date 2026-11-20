@@ -126,6 +126,9 @@ export const wellbeingRouter = router({
         ),
         visits: slice.reduce((total, week) => total + week.visits, 0),
         lateNight: slice.reduce((total, week) => total + week.lateNight, 0),
+        // The denominator for the late-night share: the user's own
+        // messages, not the persona's.
+        messages: slice.reduce((total, week) => total + week.messages, 0),
       });
 
       return {

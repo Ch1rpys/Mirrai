@@ -54,8 +54,11 @@ const full = {
       all: { n: 60, mu: Math.log(45), sigma: 0.8 },
     },
   },
+  myDelayExampleIds: [31],
   repairBy: { me: 2, them: 4 },
+  repairExampleIds: [41, 42],
   starts: { me: 80, them: 80 },
+  startExampleIds: [51, 52],
 };
 
 describe("the mirror", () => {
@@ -71,6 +74,13 @@ describe("the mirror", () => {
     expect(screen.getByText(/你 2 次，小满 4 次/)).toBeInTheDocument();
   });
 
+  it("gives every block an example list", () => {
+    mirror = full;
+    render(<Mirror />);
+    expect(screen.getAllByRole("button", { name: translate("zh", "mirror.example") }).length)
+      .toBeGreaterThanOrEqual(5);
+  });
+
   it("points an example back at the record line", async () => {
     mirror = full;
     const user = userEvent.setup();
@@ -80,7 +90,7 @@ describe("the mirror", () => {
   });
 
   it("does not show a block it could not measure", () => {
-    mirror = { shortReplies: [], goingShort: { episodes: 0, byBand: {}, exampleIds: [] }, myDelay: null, repairBy: null, starts: { me: 3, them: 4 } };
+    mirror = { shortReplies: [], goingShort: { episodes: 0, byBand: {}, exampleIds: [] }, myDelay: null, myDelayExampleIds: [], repairBy: null, repairExampleIds: [], starts: { me: 3, them: 4 }, startExampleIds: [] };
     render(<Mirror />);
     expect(screen.getByText("每个场景谁先开口")).toBeInTheDocument();
     expect(screen.queryByText("你常回的短句")).toBeNull();

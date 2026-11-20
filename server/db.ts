@@ -32,6 +32,7 @@ import {
   memoryMedia, InsertMemoryMedia, MemoryMedia,
   rehearsals, InsertRehearsal,
   sessionCheckins, InsertSessionCheckin,
+  sessionCheckinPrompts, InsertSessionCheckinPrompt,
   userJournal, InsertUserJournalEntry,
   roleplaySessions, InsertRoleplaySession,
 } from "../drizzle/schema";
@@ -458,8 +459,13 @@ export async function getWaitingNotes(personaId: number, userId: number) {
    *
    * A checklist that stays in the order it was written is a list where
    * the finished items are in the way. The ticked ones sink to the
-   * bottom, oldest first, and the open ones keep the order they were
-   * written in.
+   * bottom, and both groups stay newest-first, which is the order the
+   * component also keeps.
+   *
+   * The first sort key is an explicit boolean, not `doneAt asc`: in
+   * PostgreSQL `ASC` sorts NULLs last, so `doneAt asc` put the *ticked*
+   * notes first. With the limit below, twenty ticked notes pushed the
+   * open ones off the page entirely.
    */
   return db.select().from(letters)
     .where(and(
@@ -467,7 +473,7 @@ export async function getWaitingNotes(personaId: number, userId: number) {
       eq(letters.userId, userId),
       eq(letters.kind, "todo"),
     ))
-    .orderBy(asc(letters.doneAt), desc(letters.createdAt))
+    .orderBy(sql`(${letters.doneAt} is null) desc`, desc(letters.createdAt), desc(letters.id))
     .limit(20);
 }
 
@@ -1239,6 +1245,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(outboundLetters).where(eq(outboundLetters.userId, id));
     await tx.delete(rehearsals).where(eq(rehearsals.userId, id));
     await tx.delete(sessionCheckins).where(eq(sessionCheckins.userId, id));
+    await tx.delete(sessionCheckinPrompts).where(eq(sessionCheckinPrompts.userId, id));
     await tx.delete(userJournal).where(eq(userJournal.userId, id));
     await tx.delete(roleplaySessions).where(eq(roleplaySessions.userId, id));
     await tx.delete(personaFiles).where(eq(personaFiles.userId, id));
@@ -1670,6 +1677,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(outboundLetters).where(and(eq(outboundLetters.personaId, id), eq(outboundLetters.userId, userId)));
     await tx.delete(rehearsals).where(and(eq(rehearsals.personaId, id), eq(rehearsals.userId, userId)));
     await tx.delete(sessionCheckins).where(and(eq(sessionCheckins.personaId, id), eq(sessionCheckins.userId, userId)));
+    await tx.delete(sessionCheckinPrompts).where(and(eq(sessionCheckinPrompts.personaId, id), eq(sessionCheckinPrompts.userId, userId)));
     await tx.delete(userJournal).where(and(eq(userJournal.personaId, id), eq(userJournal.userId, userId)));
     await tx.delete(roleplaySessions).where(and(eq(roleplaySessions.personaId, id), eq(roleplaySessions.userId, userId)));
     await tx.delete(personaFiles).where(and(eq(personaFiles.personaId, id), eq(personaFiles.userId, userId)));
@@ -8303,16 +8311,79 @@ export async function countCheckinsSince(userId: number, since: Date): Promise<n
 }
 
 /**
+ * Records that the after-chat question was shown (C4.2).
+ *
+ * The row is the difference between "asked" and "answered". It is
+ * upserted on the session so the same session is never asked twice; the
+ * update keeps `promptedAt` at the latest asking, which is what the
+ * once-a-day check reads.
+ */
+export async function createSessionCheckinPrompt(data: {
+  userId: number;
+  personaId: number;
+  sessionStartAt: Date;
+  promptedAt?: Date;
+}): Promise<number | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const promptedAt = data.promptedAt ?? new Date();
+  const [row] = await db.insert(sessionCheckinPrompts).values({
+    userId: data.userId,
+    personaId: data.personaId,
+    sessionStartAt: data.sessionStartAt,
+    promptedAt,
+  }).onConflictDoUpdate({
+    target: [
+      sessionCheckinPrompts.userId,
+      sessionCheckinPrompts.personaId,
+      sessionCheckinPrompts.sessionStartAt,
+    ],
+    set: { promptedAt },
+  }).returning({ id: sessionCheckinPrompts.id });
+  return row?.id;
+}
+
+/** Whether this session's question has already been put on screen. */
+export async function getSessionCheckinPrompt(
+  userId: number,
+  personaId: number,
+  sessionStartAt: Date,
+) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(sessionCheckinPrompts).where(and(
+    eq(sessionCheckinPrompts.userId, userId),
+    eq(sessionCheckinPrompts.personaId, personaId),
+    eq(sessionCheckinPrompts.sessionStartAt, sessionStartAt),
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
+/** How many questions were put on screen for this user since an instant. */
+export async function countCheckinPromptsSince(userId: number, since: Date): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [row] = await db.select({ n: count() }).from(sessionCheckinPrompts).where(and(
+    eq(sessionCheckinPrompts.userId, userId),
+    gte(sessionCheckinPrompts.promptedAt, since),
+  ));
+  return Number(row?.n ?? 0);
+}
+
+/**
  * The most recent answers for one persona, newest first.
  *
  * The three-worse-in-a-row rule and the graduation veto both read this;
  * `skipped` is dropped before the streak is counted, because not
- * answering is not the same as answering "fine".
+ * answering is not the same as answering "fine". `since` is optional so
+ * the graduation veto can keep the manual's "last three answers" rule
+ * while the pause card uses a fourteen-day window.
  */
 export async function getRecentCheckinAnswers(
   userId: number,
   personaId: number,
   limit = 20,
+  since?: Date | null,
 ) {
   const db = await getDb();
   if (!db) return [];
@@ -8321,6 +8392,7 @@ export async function getRecentCheckinAnswers(
     .where(and(
       eq(sessionCheckins.userId, userId),
       eq(sessionCheckins.personaId, personaId),
+      ...(since ? [gte(sessionCheckins.createdAt, since)] : []),
     ))
     .orderBy(desc(sessionCheckins.createdAt))
     .limit(Math.max(1, Math.min(100, limit)));
@@ -8487,11 +8559,16 @@ export async function getRoleplaySession(id: number, userId: number) {
 }
 
 /** How many practices the user has started since an instant. */
-export async function countRoleplaySessionsSince(userId: number, since: Date): Promise<number> {
+export async function countRoleplaySessionsSince(
+  userId: number,
+  since: Date,
+  personaId?: number,
+): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
   const [row] = await db.select({ n: count() }).from(roleplaySessions).where(and(
     eq(roleplaySessions.userId, userId),
+    ...(personaId !== undefined ? [eq(roleplaySessions.personaId, personaId)] : []),
     gte(roleplaySessions.createdAt, since),
   ));
   return Number(row?.n ?? 0);

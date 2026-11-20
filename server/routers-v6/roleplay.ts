@@ -69,7 +69,7 @@ export const roleplayRouter = router({
 
       const now = new Date();
       const since = zonedDayStart(now, ctx.user.timezone);
-      if ((await countRoleplaySessionsSince(ctx.user.id, since)) >= 1) {
+      if ((await countRoleplaySessionsSince(ctx.user.id, since, input.personaId)) >= 1) {
         throw new TRPCError({
           code: "TOO_MANY_REQUESTS",
           message: copy(ctx.locale, "roleplay.todayUsed"),

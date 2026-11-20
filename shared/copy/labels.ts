@@ -219,6 +219,10 @@ export const LABELS = {
     zh: "我的状态",
     en: "My state",
   },
+  "labels.export.myJournal": {
+    zh: "我写的",
+    en: "My own diary",
+  },
   "labels.export.intimacy": {
     zh: "亲密度：{{score}}（{{level}}）",
     en: "Intimacy: {{score}} ({{level}})",

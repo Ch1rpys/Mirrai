@@ -82,9 +82,9 @@ describe("the role swap", () => {
     expect(screen.getByText(/还能说 30 轮/)).toBeInTheDocument();
   });
 
-  it("shows both sides of the practice", async () => {
+  it("shows both sides of the practice, with their avatars swapped", async () => {
     const user = userEvent.setup();
-    render(<Roleplay />);
+    const { container } = render(<Roleplay />);
     await user.click(screen.getByRole("button", { name: translate("zh", "roleplay.start") }));
     act(() => startOptions.onSuccess({ sessionId: 11, remainingSeconds: 900, remainingTurns: 30 }));
     await user.type(screen.getByLabelText(translate("zh", "roleplay.placeholder", { name: "小满" })), "在吗");
@@ -94,6 +94,9 @@ describe("the role swap", () => {
     expect(screen.getByText("你（小满）")).toBeInTheDocument();
     expect(screen.getByText("按记录重建的「你」")).toBeInTheDocument();
     expect(screen.getByText("我在。")).toBeInTheDocument();
+    expect(container.querySelectorAll("[data-roleplay-avatar]")).toHaveLength(2);
+    expect(container.querySelector('[data-roleplay-avatar="user"]')).not.toBeNull();
+    expect(container.querySelector('[data-roleplay-avatar="assistant"]')).not.toBeNull();
   });
 
   it("offers the note only after the practice ends", () => {

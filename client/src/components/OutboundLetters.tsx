@@ -148,6 +148,22 @@ export default function OutboundLetters({ personaId, name }: { personaId: number
   const firstSentId = letters.find((letter: any) => letter.status === "sent")?.id;
   const [editing, setEditing] = useState<number | null>(null);
   const [text, setText] = useState("");
+  /**
+   * The one-time invitation to the last page (C3.5).
+   *
+   * It has to be marked as shown when it is shown, not only when it is
+   * clicked — otherwise a person who reads it and does nothing sees it
+   * again on every visit. The local flag keeps it on screen for this
+   * visit while the server records that it was offered.
+   */
+  const [saidItHintVisible, setSaidItHintVisible] = useState(false);
+  const saidItHintMarked = useRef(false);
+  useEffect(() => {
+    if (!data?.saidItHint || firstSentId == null || saidItHintMarked.current) return;
+    saidItHintMarked.current = true;
+    setSaidItHintVisible(true);
+    dismissSaidItHint.mutate({ personaId });
+  }, [data?.saidItHint, firstSentId, dismissSaidItHint, personaId]);
 
   /**
    * The letters that have been pointed out in this session.
@@ -462,7 +478,7 @@ export default function OutboundLetters({ personaId, name }: { personaId: number
                     </div>
                   </>
                 )}
-                {data?.saidItHint && firstSentId === letter.id ? (
+                {saidItHintVisible && firstSentId === letter.id ? (
                   <button
                     type="button"
                     onClick={() => {

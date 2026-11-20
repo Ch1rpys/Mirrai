@@ -123,11 +123,14 @@ describe("roleplay routes", () => {
     expect(createRoleplaySession).not.toHaveBeenCalled();
   });
 
-  it("allows one practice a day", async () => {
+  it("allows one practice a day for each persona", async () => {
     countRoleplaySessionsSince.mockResolvedValue(1);
     await expect(
       appRouter.createCaller(ctxFor(1)).roleplay.start({ personaId: 5 }),
     ).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+    // The cap is per persona, not per user: another persona has its own
+    // one practice.
+    expect(countRoleplaySessionsSince).toHaveBeenCalledWith(1, expect.any(Date), 5);
   });
 
   it("starts a practice with fifteen minutes and thirty turns", async () => {

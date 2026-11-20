@@ -22,6 +22,10 @@ const createOutboundLetter = vi.fn();
 const planTurn = vi.fn();
 const executePlan = vi.fn();
 const retrieveMemories = vi.fn();
+const createMessage = vi.fn();
+const extractMemories = vi.fn();
+const updatePersona = vi.fn();
+const incrementChatCount = vi.fn();
 
 vi.mock("./db", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -33,6 +37,10 @@ vi.mock("./db", async (importOriginal) => ({
   setRehearsalOutboundLetter: (...a: unknown[]) => setRehearsalOutboundLetter(...a),
   deleteRehearsal: (...a: unknown[]) => deleteRehearsal(...a),
   createOutboundLetter: (...a: unknown[]) => createOutboundLetter(...a),
+  createMessage: (...a: unknown[]) => createMessage(...a),
+  extractMemories: (...a: unknown[]) => extractMemories(...a),
+  updatePersona: (...a: unknown[]) => updatePersona(...a),
+  incrementChatCount: (...a: unknown[]) => incrementChatCount(...a),
 }));
 
 vi.mock("./chat/generate", async (importOriginal) => ({
@@ -167,6 +175,20 @@ describe("rehearsal.run", () => {
     expect(retrieveMemories).not.toHaveBeenCalled();
   });
 
+  it("refuses a persona that is asleep or sealed", async () => {
+    getPersonaById.mockResolvedValue({ ...persona, presence: "asleep" });
+    await expect(
+      appRouter.createCaller(ctxFor(1)).rehearsal.run({ personaId: 5, line: "对不起" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(planTurn).not.toHaveBeenCalled();
+
+    getPersonaById.mockResolvedValue({ ...persona, settings: { locked: true } });
+    await expect(
+      appRouter.createCaller(ctxFor(1)).rehearsal.run({ personaId: 5, line: "对不起" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(planTurn).not.toHaveBeenCalled();
+  });
+
   it("goes to the crisis card before anything else", async () => {
     const result = await appRouter
       .createCaller(ctxFor(1))
@@ -198,10 +220,14 @@ describe("rehearsal.run", () => {
     expect(planTurn).not.toHaveBeenCalled();
   });
 
-  it("leaves the conversation alone", () => {
-    // The room writes one rehearsal row and nothing else. A structure
-    // test is the honest way to say "no message, no memory extraction, no
-    // mood, no chat count" — the router does not even import them.
+  it("leaves the conversation alone", async () => {
+    // The room writes one rehearsal row and nothing else. Both the
+    // write-helper spies and the import structure say so.
+    await appRouter.createCaller(ctxFor(1)).rehearsal.run({ personaId: 5, line: "对不起" });
+    expect(createMessage).not.toHaveBeenCalled();
+    expect(extractMemories).not.toHaveBeenCalled();
+    expect(updatePersona).not.toHaveBeenCalled();
+    expect(incrementChatCount).not.toHaveBeenCalled();
     const source = readFileSync(path.resolve(__dirname, "routers-v6/rehearsal.ts"), "utf8");
     expect(source).not.toMatch(/createMessage|updatePersona|incrementChatCount|extractMemories|updateEmotionalState/);
   });

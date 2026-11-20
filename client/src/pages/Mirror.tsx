@@ -138,6 +138,9 @@ export default function Mirror() {
                   );
                 })}
               </ul>
+              <div className="mt-0.5 flex gap-2">
+                {mirror.myDelayExampleIds.slice(0, 3).map(exampleLink)}
+              </div>
             </section>
           ) : null}
 
@@ -151,6 +154,9 @@ export default function Mirror() {
                   name,
                 })}
               </p>
+              <div className="mt-0.5 flex gap-2">
+                {mirror.repairExampleIds.slice(0, 3).map(exampleLink)}
+              </div>
             </section>
           ) : null}
 
@@ -160,6 +166,9 @@ export default function Mirror() {
               <p className="text-sm leading-relaxed text-foreground/90">
                 {t("mirror.startsLine", { me: mirror.starts.me, them: mirror.starts.them, name })}
               </p>
+              <div className="mt-0.5 flex gap-2">
+                {mirror.startExampleIds.slice(0, 3).map(exampleLink)}
+              </div>
             </section>
           ) : null}
         </>

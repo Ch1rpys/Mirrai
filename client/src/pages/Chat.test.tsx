@@ -90,6 +90,7 @@ vi.mock("@/lib/trpc", () => ({
       pending: { useQuery: () => ({ data: { pending: null, worse: false } }) },
       answer: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       acknowledgeWorse: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      markPrompted: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     outbound: {
       list: { useQuery: () => ({ data: { letters: [] }, refetch: vi.fn() }) },
@@ -179,6 +180,17 @@ describe("Chat", () => {
     const { container } = render(<Chat />);
     expect(container.querySelector(".chat-root")?.getAttribute("data-skin")).toBe("classic");
     expect(screen.getByText("数字分身")).toBeInTheDocument();
+  });
+
+  it("keeps the way-out entry in the more menu, with its count", async () => {
+    const user = userEvent.setup();
+    render(<Chat />);
+    await user.click(screen.getByRole("button", { name: translate("zh", "chat.moreActions") }));
+    expect(
+      screen.getByRole("button", {
+        name: translate("zh", "chat.outboundEntry", { name: "小A", n: 0 }),
+      }),
+    ).toBeInTheDocument();
   });
 
   it("lets the composer take another line while a reply is still arriving", async () => {

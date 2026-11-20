@@ -1655,7 +1655,7 @@ export const zh = {
     visitsLabel: "你来的天数",
     visitsLine: "最近四周你来了 {{a}} 天，之前四周是 {{b}} 天。",
     lateLabel: "深夜（0–5 点）",
-    lateLine: "最近四周深夜来的有 {{a}} 次，之前四周是 {{b}} 次。",
+    lateLine: "最近四周，深夜 0–5 点来的有 {{a}} 条，占 {{total}} 条；之前四周是 {{b}} 条，占 {{previousTotal}} 条。",
   },
   graduationReasons: {
     title: "应用什么时候会建议告别",

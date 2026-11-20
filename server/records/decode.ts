@@ -178,12 +178,12 @@ export async function decodeLine(params: {
       }
     }
 
-    // The labels of what came after this line. Only rows that carry a
-    // label take part; a record without B1.5 has none. The line itself
-    // is not counted — the page asks what followed.
-    for (const row of after) {
-      if (row.role !== "assistant" || !row.emotion) continue;
-      states.set(row.emotion, (states.get(row.emotion) ?? 0) + 1);
+    // The label of the conversation this line belongs to. The target
+    // row carries the state B1.5 assigned to the scene; counting every
+    // later row would count long conversations many times and make
+    // "three of the five times" depend on how talkative the scene was.
+    if (target.emotion) {
+      states.set(target.emotion, (states.get(target.emotion) ?? 0) + 1);
     }
   }
 

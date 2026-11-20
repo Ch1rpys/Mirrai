@@ -2167,7 +2167,7 @@ export default function Chat() {
             >
               <X className="w-4 h-4" />
             </button>
-            <WaitGauge personaId={personaId} name={displayName || t("common.them")} timezone={persona?.timezone} />
+            <WaitGauge personaId={personaId} name={displayName || t("common.them")} timezone={persona?.timezone || user?.timezone} />
           </div>
         </div>
       )}

@@ -45,6 +45,12 @@ export async function pendingCheckin(params: {
   userId: number;
   personaId: number;
   now: Date;
+  /**
+   * The answer route has to find the session it is being asked about
+   * even after the question was shown. The read path leaves this false:
+   * once shown, the page should not ask again.
+   */
+  includeAsked?: boolean;
 }): Promise<{ sessionStartAt: Date } | null> {
   const sessionStartAt = await db.getSessionStartAt(params.personaId, params.userId);
   if (!sessionStartAt) return null;
@@ -61,12 +67,27 @@ export async function pendingCheckin(params: {
 
   if (await db.getSessionCheckin(params.userId, params.personaId, sessionStartAt)) return null;
 
-  const timezone = await db.getUserTimezone(params.userId);
-  const askedToday = await db.countCheckinsSince(
-    params.userId,
-    zonedDayStart(params.now, timezone),
-  );
-  if (askedToday > 0) return null;
+  if (!params.includeAsked) {
+    /**
+     * Asked is not answered.
+     *
+     * Counting only the answers meant a question the person saw and
+     * ignored left no record, and the next session that day asked
+     * again. Both the question records and the answers count as
+     * "asked today"; the session record means one session is never
+     * asked twice.
+     */
+    if (await db.getSessionCheckinPrompt(params.userId, params.personaId, sessionStartAt)) {
+      return null;
+    }
+    const timezone = await db.getUserTimezone(params.userId);
+    const today = zonedDayStart(params.now, timezone);
+    const [promptsToday, answersToday] = await Promise.all([
+      db.countCheckinPromptsSince(params.userId, today),
+      db.countCheckinsSince(params.userId, today),
+    ]);
+    if (promptsToday > 0 || answersToday > 0) return null;
+  }
 
   return { sessionStartAt };
 }
@@ -80,19 +101,44 @@ export async function pendingCheckin(params: {
  * not repeat the card and does not fill the transparency panel with
  * copies of the same sentence.
  */
+export function worseStreakStartedAt(
+  answers: Array<{ answer: string; createdAt: Date }>,
+  needed = 3,
+): Date | null {
+  const valid = answers.filter((row) => row.answer !== "skipped");
+  const first = valid.slice(0, needed);
+  if (first.length < needed) return null;
+  if (!first.every((row) => row.answer === "worse")) return null;
+  // The query is newest-first, so the last of the three is the oldest.
+  // A card already shown after that moment belongs to this same run.
+  return first[needed - 1].createdAt;
+}
+
+/**
+ * Has the user just had three conversations in a row that left them
+ * worse?
+ *
+ * The window is the manual's: the last three answers within fourteen
+ * days. The card is shown once per run: the safety-event record must be
+ * newer than the oldest answer of the three. An extra worse answer
+ * extends the same run; a new run after a better answer starts after
+ * the old record and is allowed through again.
+ */
 export async function worseSuggestion(params: {
   userId: number;
   personaId: number;
   now: Date;
 }): Promise<boolean> {
-  const answers = await db.getRecentCheckinAnswers(params.userId, params.personaId, 20);
-  if (!isWorseStreak(answers.map((row) => row.answer))) return false;
+  const since = new Date(params.now.getTime() - 14 * 24 * 60 * 60 * 1000);
+  const answers = await db.getRecentCheckinAnswers(params.userId, params.personaId, 20, since);
+  const startedAt = worseStreakStartedAt(answers);
+  if (!startedAt) return false;
   const events = await db.getSafetyEvents(params.userId, 50);
   const already = events.some((event) =>
     event.type === "usage" &&
     event.personaId === params.personaId &&
     event.excerpt === "checkins:worse×3" &&
-    event.createdAt.getTime() >= params.now.getTime() - 14 * 24 * 60 * 60 * 1000,
+    event.createdAt.getTime() >= startedAt.getTime(),
   );
   return !already;
 }
@@ -103,16 +149,20 @@ export async function worseStreakFor(userId: number, personaId: number): Promise
   return isWorseStreak(answers.map((row) => row.answer)) ? 3 : 0;
 }
 
-/** Records that the card was shown. Idempotent within the same visit. */
+/** Records that the card was shown. Idempotent within the same run. */
 export async function recordWorseSuggestion(params: {
   userId: number;
   personaId: number;
 }): Promise<boolean> {
+  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const answers = await db.getRecentCheckinAnswers(params.userId, params.personaId, 20, since);
+  const startedAt = worseStreakStartedAt(answers);
+  if (!startedAt) return false;
   const already = (await db.getSafetyEvents(params.userId, 50)).some((event) =>
     event.type === "usage" &&
     event.personaId === params.personaId &&
     event.excerpt === "checkins:worse×3" &&
-    event.createdAt.getTime() >= Date.now() - 14 * 24 * 60 * 60 * 1000,
+    event.createdAt.getTime() >= startedAt.getTime(),
   );
   if (already) return false;
   await db.createSafetyEvent({

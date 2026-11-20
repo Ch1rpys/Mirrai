@@ -346,7 +346,7 @@ export default function Diary() {
           {view === "mine" ? (
             <MyJournal personaId={tabPersonaId || undefined} />
           ) : tabPersonaId ? (
-            <PersonalTimeline personaId={tabPersonaId} />
+            <PersonalTimeline personaId={tabPersonaId} timezone={user?.timezone} />
           ) : (
             <p className="text-xs text-muted-foreground">{t("diary.emptyNoPersona")}</p>
           )}

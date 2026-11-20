@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { ArrowLeft, Send } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -6,6 +6,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import DigitalPersonaBadge from "@/components/DigitalPersonaBadge";
+import { PersonaAvatar } from "@/components/PersonaAvatar";
 import CrisisCard from "@/components/CrisisCard";
 import PageLoader from "@/components/PageLoader";
 import NotFound from "@/pages/NotFound";
@@ -68,6 +69,20 @@ export default function Roleplay() {
     },
     onError: (error: any) => toast.error(error.message),
   });
+
+  /**
+   * The remaining time is a clock, not a number frozen at 15:00.
+   *
+   * The server still enforces the limit; this only keeps the line the
+   * page promised to show honest while the practice is open.
+   */
+  useEffect(() => {
+    if (!sessionId || ended) return;
+    const timer = setInterval(() => {
+      setRemaining((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [sessionId, ended]);
 
   if (!Number.isFinite(personaId) || personaId <= 0) return <NotFound />;
   if (persona.isLoading) return <PageLoader />;
@@ -136,10 +151,20 @@ export default function Roleplay() {
                 turn.role === "assistant" ? "bg-muted/20" : ""
               }`}
             >
-              <p className="text-[11px] text-muted-subtle mb-1">
-                {turn.role === "assistant" ? t("roleplay.rebuiltYou") : t("roleplay.youAreThem", { name })}
-              </p>
-              <p className="text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">{turn.content}</p>
+              <div className="flex items-start gap-2">
+                <span data-roleplay-avatar={turn.role} className="shrink-0">
+                  <PersonaAvatar
+                    name={turn.role === "assistant" ? t("common.me") : name}
+                    className="w-7 h-7 rounded-full text-xs"
+                  />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] text-muted-subtle mb-1">
+                    {turn.role === "assistant" ? t("roleplay.rebuiltYou") : t("roleplay.youAreThem", { name })}
+                  </p>
+                  <p className="text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">{turn.content}</p>
+                </div>
+              </div>
             </li>
           ))}
         </ul>

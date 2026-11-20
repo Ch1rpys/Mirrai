@@ -54,7 +54,7 @@ export default function PersonaProfile() {
   const personaId = Number.parseInt(params.id ?? "", 10);
   const hasPersonaId = Number.isInteger(personaId) && personaId > 0;
   const [, navigate] = useLocation();
-  const { isAuthenticated, loading: authLoading } = useAuth({ redirectOnUnauthenticated: true });
+  const { isAuthenticated, user, loading: authLoading } = useAuth({ redirectOnUnauthenticated: true });
   const { t, locale } = useLocale();
 
   const { data: persona, isLoading, isError, error, refetch } = trpc.persona.get.useQuery(
@@ -312,7 +312,7 @@ export default function PersonaProfile() {
             <WaitGauge
               personaId={persona.id}
               name={persona.name}
-              timezone={persona.timezone}
+              timezone={persona.timezone || user?.timezone}
             />
             <SleepWindow name={persona.name} routine={styleProfile.routine} />
             <CallsView name={persona.name} calls={styleProfile.calls} />

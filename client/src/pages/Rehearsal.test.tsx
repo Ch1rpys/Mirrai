@@ -121,6 +121,17 @@ describe("the rehearsal room", () => {
     expect(keep).toHaveBeenCalledWith({ id: 7 });
   });
 
+  it("leads to the wording assistant through the way-out list", async () => {
+    const user = userEvent.setup();
+    render(<Rehearsal />);
+    await user.type(screen.getByLabelText(translate("zh", "rehearsal.placeholder")), "对不起");
+    await user.click(screen.getByRole("button", { name: translate("zh", "rehearsal.run") }));
+    act(() => runOptions.onSuccess({ mode: "my_side_only", id: 9 }));
+    await user.click(screen.getByRole("button", { name: translate("zh", "rehearsal.sayAnotherWay") }));
+    expect(keep).toHaveBeenCalledWith({ id: 9 });
+    expect(navigate).toHaveBeenCalledWith("/persona/5/graduation");
+  });
+
   it("is closed for a persona that has gone to sleep", () => {
     personaValue = { id: 5, name: "小满", graduationStatus: "graduated", presence: "asleep" };
     render(<Rehearsal />);

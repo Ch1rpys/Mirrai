@@ -48,6 +48,20 @@ export default function Rehearsal() {
     onSuccess: () => toast.success(t("rehearsal.kept")),
     onError: (error: any) => toast.error(error.message),
   });
+  /**
+   * "Say it another way" goes through the wording assistant (C3.6).
+   *
+   * The assistant works on a sentence in the way-out list, so the line
+   * is kept first and the user lands on the page that holds the list.
+   * The old button went back to the chat, where there is no assistant.
+   */
+  const keepForWording = trpc.rehearsal.keep.useMutation({
+    onSuccess: () => {
+      toast.success(t("rehearsal.kept"));
+      navigate(`/persona/${personaId}/graduation`);
+    },
+    onError: (error: any) => toast.error(error.message),
+  });
 
   if (!Number.isFinite(personaId) || personaId <= 0) return <NotFound />;
   if (persona.isLoading) return <PageLoader />;
@@ -168,7 +182,9 @@ export default function Rehearsal() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => navigate(`/chat/${personaId}`)}
+                  onClick={() => {
+                    if (result.id) keepForWording.mutate({ id: result.id });
+                  }}
                 >
                   <CornerUpLeft className="w-3.5 h-3.5" />
                   {t("rehearsal.sayAnotherWay")}

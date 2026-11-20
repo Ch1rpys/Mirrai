@@ -44,7 +44,11 @@ export default function WaitGauge({
     return t("waitGauge.seconds", { n: Math.round(seconds) });
   }
 
-  const band = profile ? bandOf(now ?? new Date(), timezone || "Asia/Shanghai") : null;
+  // The persona's zone is the record's zone; when they have none, the
+  // user's own browser zone is a better fallback than Shanghai.
+  const band = profile
+    ? bandOf(now ?? new Date(), timezone || Intl.DateTimeFormat().resolvedOptions().timeZone)
+    : null;
   const current = band && profile ? profile.buckets[band] : undefined;
 
   const bandLabel = {

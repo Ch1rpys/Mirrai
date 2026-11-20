@@ -267,8 +267,22 @@ describe("the letters", () => {
     expect(whereOf().flatMap((c) => c.params)).toContain("todo");
     // The notes are a checklist: the open ones first, the ticked ones
     // below, each group newest first (C3.7).
-    expect(orderOf()[0].sql).toContain('"letters"."doneAt" asc');
+    expect(orderOf()[0].sql).toMatch(/"letters"\."doneAt" is null\) desc/i);
     expect(orderOf()[1].sql).toContain('"letters"."createdAt" desc');
+    expect(orderOf()[2].sql).toContain('"letters"."id" desc');
+  });
+
+  it("counts one persona's roleplay sessions, not the user's other personas", async () => {
+    registry.select.roleplay_sessions = [{ n: 2 }];
+    const since = new Date("2026-03-10T00:00:00.000Z");
+    const count = await db.countRoleplaySessionsSince(7, since, 5);
+
+    expect(count).toBe(2);
+    const conditions = whereOf().map((c) => c.sql).join(" ");
+    expect(conditions).toContain('"roleplay_sessions"."userId"');
+    expect(whereOf().flatMap((c) => c.params)).toContain(7);
+    expect(conditions).toContain('"roleplay_sessions"."personaId"');
+    expect(whereOf().flatMap((c) => c.params)).toContain(5);
   });
 
   it("says whether a letter was deleted", async () => {

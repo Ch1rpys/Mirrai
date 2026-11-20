@@ -1,6 +1,7 @@
 import { useLocale } from "@/contexts/LocaleContext";
 import { trpc } from "@/lib/trpc";
 import { formatDayKey } from "@/lib/dates";
+import { zonedDateKey } from "@shared/timezone";
 
 /**
  * Everything the user wrote or recorded about themselves, in one line of
@@ -12,10 +13,17 @@ import { formatDayKey } from "@/lib/dates";
  * page by date, with a mark for which stream each one came from. Nothing
  * here is read by a model.
  */
-/** A UTC calendar day, for sorting and for the date column. */
-function isoDay(value: string | Date): string {
+/**
+ * A calendar day in the user's own zone.
+ *
+ * The diary and the mood check-ins carry a `YYYY-MM-DD` key already
+ * written in that zone. The events and the after-chat answers carry an
+ * instant; reading it in UTC put a late-night event on the previous
+ * day next to the local-keyed items.
+ */
+function isoDay(value: string | Date, timezone?: string | null): string {
   const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+  return Number.isNaN(date.getTime()) ? "" : zonedDateKey(date, timezone);
 }
 
 type TimelineItem = {
@@ -26,7 +34,7 @@ type TimelineItem = {
   detail: string | null;
 };
 
-export default function PersonalTimeline({ personaId }: { personaId: number }) {
+export default function PersonalTimeline({ personaId, timezone }: { personaId: number; timezone?: string | null }) {
   const { t, locale } = useLocale();
   const journal = trpc.journal.list.useQuery({ personaId });
   const moods = trpc.user.moods.useQuery({ days: 365 });
@@ -56,7 +64,7 @@ export default function PersonalTimeline({ personaId }: { personaId: number }) {
     items.push({
       key: `event:${event.id}`,
       kind: "event",
-      date: isoDay(event.happenedAt),
+      date: isoDay(event.happenedAt, timezone),
       title: t("timeline.event"),
       detail: event.title,
     });
@@ -66,7 +74,7 @@ export default function PersonalTimeline({ personaId }: { personaId: number }) {
     items.push({
       key: `checkin:${index}`,
       kind: "checkin",
-      date: Number.isNaN(at.getTime()) ? "" : isoDay(at),
+      date: Number.isNaN(at.getTime()) ? "" : isoDay(at, timezone),
       title: t("timeline.checkin"),
       detail:
         answer.answer === "better"

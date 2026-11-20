@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,13 @@ export default function AfterChat({
 }) {
   const { t } = useLocale();
   const [answered, setAnswered] = useState(false);
+  /**
+   * The session being asked about, captured when the query first
+   * returned it. Marking the question as shown makes the query return
+   * null afterwards, and a background refetch must not take the
+   * question away from the person who is still looking at it.
+   */
+  const [prompt, setPrompt] = useState<{ sessionStartAt: string } | null>(null);
   const [worseDismissed, setWorseDismissed] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
 
@@ -27,6 +34,25 @@ export default function AfterChat({
   const answer = trpc.checkin.answer.useMutation({
     onSuccess: () => setAnswered(true),
   });
+  const markPrompted = trpc.checkin.markPrompted.useMutation();
+  const prompted = useRef<string | null>(null);
+
+  /**
+   * Record the asking, not just the answer.
+   *
+   * A person who sees the question and ignores it has not answered —
+   * but they have been asked, and that is what the once-a-day rule is
+   * about. The question stays on screen for this visit; the record
+   * keeps the next visit from asking again.
+   */
+  useEffect(() => {
+    const sessionStartAt = data?.pending?.sessionStartAt;
+    if (!sessionStartAt || answered) return;
+    setPrompt((current) => current ?? { sessionStartAt });
+    if (prompted.current === sessionStartAt) return;
+    prompted.current = sessionStartAt;
+    markPrompted.mutate({ personaId, sessionStartAt });
+  }, [data?.pending, answered, markPrompted, personaId]);
   const acknowledge = trpc.checkin.acknowledgeWorse.useMutation();
   const setQuiet = trpc.persona.update.useMutation({
     onSuccess: () => setWorseDismissed(true),
@@ -45,8 +71,11 @@ export default function AfterChat({
     acknowledge.mutate({ personaId });
   }, [data?.worse, acknowledged, acknowledge, personaId]);
 
-  if (data?.pending && !answered) {
-    const sessionStartAt = data.pending.sessionStartAt;
+  // The first render uses the query's answer; once captured, the local
+  // copy keeps the question on screen through a refetch.
+  const activePrompt = prompt ?? data?.pending ?? null;
+  if (activePrompt && !answered) {
+    const sessionStartAt = activePrompt.sessionStartAt;
     return (
       <div
         className="container max-w-2xl mx-auto mb-3"

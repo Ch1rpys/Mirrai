@@ -938,6 +938,10 @@ export const V6 = {
     zh: "今天已经换过一次了。明天可以再来。",
     en: "You have already swapped once today. Come back tomorrow.",
   },
+  "rehearsal.unavailable": {
+    zh: "这个分身已经休眠或封存，排练不可用。",
+    en: "This persona is asleep or sealed. The rehearsal room is not available.",
+  },
   "rehearsal.dailyLimit": {
     zh: "今天已经排练 20 次了。明天再来。",
     en: "That is twenty rehearsals today. Come back tomorrow.",

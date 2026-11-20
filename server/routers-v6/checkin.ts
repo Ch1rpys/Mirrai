@@ -16,6 +16,7 @@ import {
 } from "../safety/checkins";
 import {
   createSessionCheckin,
+  createSessionCheckinPrompt,
   getPersonaById,
   getRecentCheckinAnswers,
 } from "../db";
@@ -66,6 +67,13 @@ export const checkinRouter = router({
         userId: ctx.user.id,
         personaId: input.personaId,
         now,
+        /**
+         * The question was shown already (that is what `pending` did),
+         * so the answer route must not use the "have we shown it?"
+         * filter — otherwise the only moment the user can answer is
+         * before the question is on screen.
+         */
+        includeAsked: true,
       });
       // The answer has to be about the session the app is asking about.
       // A stale page can try to answer a session that has been answered
@@ -80,6 +88,41 @@ export const checkinRouter = router({
         answer: input.answer,
       });
       return { success: true };
+    }),
+
+  /**
+   * Records that the question was put on screen.
+   *
+   * This is what makes "one question a day" true for a person who sees
+   * it and does not answer. It is a separate write from the answer; the
+   * page calls it when it shows the question, and the server accepts it
+   * only for the session that is currently due.
+   */
+  markPrompted: protectedProcedure
+    .input(z.object({
+      personaId: z.number(),
+      sessionStartAt: z.string().datetime(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      const now = new Date();
+      const pending = await pendingCheckin({
+        userId: ctx.user.id,
+        personaId: input.personaId,
+        now,
+        includeAsked: true,
+      });
+      if (!pending || pending.sessionStartAt.toISOString() !== input.sessionStartAt) {
+        throw new TRPCError({ code: "BAD_REQUEST" });
+      }
+      const id = await createSessionCheckinPrompt({
+        userId: ctx.user.id,
+        personaId: input.personaId,
+        sessionStartAt: pending.sessionStartAt,
+        promptedAt: now,
+      });
+      return { success: id !== undefined };
     }),
 
   /** The recent answers, for the personal timeline (C4.5). */

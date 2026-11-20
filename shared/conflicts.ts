@@ -45,6 +45,8 @@ export interface ConflictEpisode {
   /** The negative state this freeze entered. */
   to: "distant" | "melancholy";
   repairBy: "them" | "me";
+  /** The line that opened the way back, so the mirror can point at it. */
+  repairRecordId?: number;
   repairLine?: string;
   coldLines: string[];
   /** When I spoke first, they came back to a non-negative state in the same scene. */
@@ -233,6 +235,7 @@ export function mineConflictEpisodes(scenes: ConflictScene[]): ConflictEpisode[]
       },
       to,
       repairBy,
+      ...(afterLine.id != null ? { repairRecordId: afterLine.id } : {}),
       ...(repairBy === "them" ? { repairLine: afterLine.content } : {}),
       coldLines: coldFromStretch(lines, stretchStart, recovery),
       repairAccepted: repairBy === "me" && recovered.scene === afterLine.scene,

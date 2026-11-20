@@ -10,6 +10,7 @@ import type { TrpcContext } from "./_core/context";
  */
 const getPersonaById = vi.fn();
 const createSessionCheckin = vi.fn();
+const createSessionCheckinPrompt = vi.fn();
 const pendingCheckin = vi.fn();
 const worseSuggestion = vi.fn();
 const recordWorseSuggestion = vi.fn();
@@ -18,6 +19,7 @@ vi.mock("./db", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   createSessionCheckin: (...a: unknown[]) => createSessionCheckin(...a),
+  createSessionCheckinPrompt: (...a: unknown[]) => createSessionCheckinPrompt(...a),
 }));
 
 vi.mock("./safety/checkins", async (importOriginal) => ({
@@ -62,6 +64,7 @@ describe("checkin routes", () => {
     pendingCheckin.mockResolvedValue({ sessionStartAt: sessionStart });
     worseSuggestion.mockResolvedValue(false);
     createSessionCheckin.mockResolvedValue(1);
+    createSessionCheckinPrompt.mockResolvedValue(3);
     recordWorseSuggestion.mockResolvedValue(true);
   });
 
@@ -94,6 +97,31 @@ describe("checkin routes", () => {
       }),
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(createSessionCheckin).not.toHaveBeenCalled();
+  });
+
+  it("records that the question was shown", async () => {
+    const result = await appRouter.createCaller(ctxFor(1)).checkin.markPrompted({
+      personaId: 5,
+      sessionStartAt: sessionStart.toISOString(),
+    });
+    expect(createSessionCheckinPrompt).toHaveBeenCalledWith({
+      userId: 1,
+      personaId: 5,
+      sessionStartAt: sessionStart,
+      promptedAt: expect.any(Date),
+    });
+    expect(result).toEqual({ success: true });
+  });
+
+  it("refuses to record a question for a session that is not due", async () => {
+    pendingCheckin.mockResolvedValue(null);
+    await expect(
+      appRouter.createCaller(ctxFor(1)).checkin.markPrompted({
+        personaId: 5,
+        sessionStartAt: sessionStart.toISOString(),
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(createSessionCheckinPrompt).not.toHaveBeenCalled();
   });
 
   it("records that the pause card was shown", async () => {

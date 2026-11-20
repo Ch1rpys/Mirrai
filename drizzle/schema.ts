@@ -1697,6 +1697,34 @@ export type SessionCheckin = typeof sessionCheckins.$inferSelect;
 export type InsertSessionCheckin = typeof sessionCheckins.$inferInsert;
 
 /**
+ * That the after-chat question was *shown* (C4.2).
+ *
+ * The question is allowed once a day. Counting answers is not enough:
+ * a person who sees the question and ignores it has not answered it,
+ * and without a record of having asked, the next session that day asked
+ * again. This row is the record of the asking, separate from the answer.
+ *
+ * It is unique per session: the same session is not asked twice.
+ */
+export const sessionCheckinPrompts = pgTable("session_checkin_prompts", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  /** The session the question was about. */
+  sessionStartAt: timestamp("sessionStartAt").notNull(),
+  /** When the question was put on the screen. */
+  promptedAt: timestamp("promptedAt").defaultNow().notNull(),
+}, (table) => ({
+  sessionUnique: uniqueIndex("session_checkin_prompts_session_idx")
+    .on(table.userId, table.personaId, table.sessionStartAt),
+  userTimeIdx: index("session_checkin_prompts_user_time_idx").on(table.userId, table.promptedAt),
+  personaTimeIdx: index("session_checkin_prompts_persona_time_idx").on(table.personaId, table.promptedAt),
+}));
+
+export type SessionCheckinPrompt = typeof sessionCheckinPrompts.$inferSelect;
+export type InsertSessionCheckinPrompt = typeof sessionCheckinPrompts.$inferInsert;
+
+/**
  * The user's own diary (C4.5).
  *
  * `diary_entries` is the app's summary of a conversation. This is the

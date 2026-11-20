@@ -15,6 +15,7 @@ import { translate } from "@/i18n";
  */
 const answer = vi.fn();
 const acknowledge = vi.fn();
+const markPrompted = vi.fn();
 const update = vi.fn();
 let pendingState: any = { data: { pending: null, worse: false } };
 
@@ -39,6 +40,9 @@ vi.mock("@/lib/trpc", () => ({
           },
           isPending: false,
         }),
+      },
+      markPrompted: {
+        useMutation: () => ({ mutate: markPrompted, isPending: false }),
       },
     },
     persona: {
@@ -82,6 +86,23 @@ describe("after a conversation", () => {
     await user.click(screen.getByRole("button", { name: translate("zh", "afterChat.better") }));
     expect(answer).toHaveBeenCalledWith({ personaId: 5, sessionStartAt, answer: "better" });
     expect(document.querySelector("[data-after-chat]")).toBeNull();
+  });
+
+  it("records that the question was shown, so it is not asked again", () => {
+    pendingState = { data: { pending: { sessionStartAt }, worse: false } };
+    const { unmount } = render(<AfterChat personaId={5} name="小满" />);
+    expect(markPrompted).toHaveBeenCalledTimes(1);
+    expect(markPrompted).toHaveBeenCalledWith({ personaId: 5, sessionStartAt });
+    unmount();
+  });
+
+  it("keeps the question while a refetch already says it was shown", async () => {
+    pendingState = { data: { pending: { sessionStartAt }, worse: false } };
+    const { rerender } = render(<AfterChat personaId={5} name="小满" />);
+    expect(screen.getByText(translate("zh", "afterChat.question"))).toBeInTheDocument();
+    pendingState = { data: { pending: null, worse: false } };
+    rerender(<AfterChat personaId={5} name="小满" />);
+    expect(await screen.findByText(translate("zh", "afterChat.question"))).toBeInTheDocument();
   });
 
   it("sends skipped as an answer too", async () => {

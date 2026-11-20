@@ -16,6 +16,7 @@ import { copy } from "@shared/copy";
 import { normalizeActProfile, countsForCondition } from "@shared/act-profile";
 import { labelUserActByRule } from "@shared/speech-acts";
 import { zonedDayStart } from "@shared/timezone";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 import {
   containsCommitment,
   isCommitmentQuestion,
@@ -62,6 +63,17 @@ export const rehearsalRouter = router({
     .mutation(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      const settings = normalizePersonaSettings(persona.settings);
+      if (
+        persona.graduationStatus === "graduated" ||
+        persona.presence === "asleep" ||
+        settings.locked
+      ) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: copy(ctx.locale, "rehearsal.unavailable"),
+        });
+      }
 
       const now = new Date();
       const since = zonedDayStart(now, ctx.user.timezone);

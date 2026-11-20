@@ -397,6 +397,20 @@ export function exportAsMarkdown(bundle: ExportBundle, locale: Locale = bundle.l
     lines.push("");
   }
 
+  if (bundle.journal.length > 0) {
+    lines.push(`## ${copy(locale, "labels.export.myJournal")}`);
+    lines.push("");
+    for (const entry of bundle.journal) {
+      const mood = entry.mood
+        ? ` · ${USER_MOOD_LABELS[entry.mood as UserMood]?.[locale] ?? entry.mood}`
+        : "";
+      lines.push(`**${entry.entryDate}${mood}**`);
+      lines.push("");
+      lines.push(entry.body);
+      lines.push("");
+    }
+  }
+
   for (const persona of bundle.personas) {
     lines.push(`# ${persona.name}`);
     lines.push("");

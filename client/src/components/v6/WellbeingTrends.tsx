@@ -33,7 +33,7 @@ function Spark({ values, label }: { values: number[]; label: string }) {
 
 export default function WellbeingTrends() {
   const { t } = useLocale();
-  const { data, isLoading, isError, refetch } = trpc.wellbeing.get.useQuery();
+  const { data, isLoading, isError, refetch } = trpc.analytics.wellbeing.get.useQuery();
 
   if (isLoading) {
     return <p className="text-xs text-muted-foreground">{t("common.loading")}</p>;
@@ -82,7 +82,12 @@ export default function WellbeingTrends() {
       key: "late",
       label: t("wellbeing.lateLabel"),
       values: weeks.map((week: any) => week.lateNight),
-      line: t("wellbeing.lateLine", { a: recent.lateNight, b: previous.lateNight }),
+      line: t("wellbeing.lateLine", {
+        a: recent.lateNight,
+        b: previous.lateNight,
+        total: recent.messages,
+        previousTotal: previous.messages,
+      }),
     },
   ];
 
