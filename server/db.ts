@@ -5838,6 +5838,28 @@ function lexicalCoverage(query: string, haystack: string): number {
   return hits / left.size;
 }
 
+/**
+ * Whether the bigram index can answer this query at all.
+ *
+ * A one-character query has no bigram to look up — the index stores
+ * "喜欢" and "欢海", not "海" — so it falls back to the substring
+ * test. That is a scan, but only for one-character queries, and the
+ * alternative (storing every single character as well) would nearly
+ * double the index for a rare search.
+ */
+function indexableLexemes(lexemes: string[]): string[] {
+  return lexemes.every((lexeme) => [...lexeme].length >= 2) ? lexemes : [];
+}
+
+/** The register filter the search and the fact check share: private only. */
+function privateRegisterCondition() {
+  return sql`(
+    ${collectedMessages.meta} IS NULL
+    OR ${collectedMessages.meta}->>'register' IS NULL
+    OR ${collectedMessages.meta}->>'register' = 'private'
+  )`;
+}
+
 /** Escape the wildcards of a `LIKE` pattern, so `50%` does not match everything. */
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (character) => `\\${character}`);
@@ -5866,7 +5888,7 @@ export async function searchRecordsLexical(
   if (!q) return [];
   const role = params.role && params.role !== "all" ? params.role : undefined;
   const lexemes = queryLexemes(q);
-  const tsQuery = toTsQuery(lexemes, "&");
+  const tsQuery = toTsQuery(indexableLexemes(lexemes), "&");
   const pattern = `%${escapeLike(q)}%`;
   const offset = Math.max(0, params.offset ?? 0);
   const limit = Math.max(1, params.limit ?? 20);
@@ -5884,6 +5906,7 @@ export async function searchRecordsLexical(
     .where(and(
       eq(collectedMessages.personaId, personaId),
       eq(collectedMessages.userId, userId),
+      privateRegisterCondition(),
       ...(role ? [eq(collectedMessages.role, role)] : []),
       ...(params.from ? [gte(collectedMessages.timestamp, params.from)] : []),
       ...(params.to ? [lte(collectedMessages.timestamp, params.to)] : []),
@@ -5949,7 +5972,7 @@ export async function candidateRecordsByOverlap(
   if (!text) return [];
   const role = params.role && params.role !== "all" ? params.role : undefined;
   const lexemes = queryLexemes(text);
-  const tsQuery = toTsQuery(lexemes, "|");
+  const tsQuery = toTsQuery(indexableLexemes(lexemes), "|");
   const limit = Math.max(1, Math.min(1000, params.limit ?? 200));
   /**
    * Rows that predate the column are matched on their substring, one
@@ -5974,6 +5997,7 @@ export async function candidateRecordsByOverlap(
     .where(and(
       eq(collectedMessages.personaId, personaId),
       eq(collectedMessages.userId, userId),
+      privateRegisterCondition(),
       ...(role ? [eq(collectedMessages.role, role)] : []),
       ...(params.from ? [gte(collectedMessages.timestamp, params.from)] : []),
       ...(params.to ? [lte(collectedMessages.timestamp, params.to)] : []),
@@ -5982,7 +6006,10 @@ export async function candidateRecordsByOverlap(
           ? sql`${collectedMessages.searchTokens} @@ to_tsquery('simple', ${tsQuery})`
           : sql`false`,
         fallback.length > 0
-          ? and(isNull(collectedMessages.searchTokens), or(...fallback))
+          ? and(
+              tsQuery ? isNull(collectedMessages.searchTokens) : sql`true`,
+              or(...fallback),
+            )
           : sql`false`,
       ),
     ))

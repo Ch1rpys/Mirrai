@@ -16,6 +16,7 @@ import { translate } from "@/i18n";
 const navigate = vi.fn();
 let personas: any[] = [];
 let results: any[] = [];
+let records: any[] = [];
 /** Whether the search failed. */
 let searchFailed = false;
 
@@ -27,6 +28,7 @@ vi.mock("@/lib/trpc", () => ({
   trpc: {
     persona: { list: { useQuery: () => ({ data: personas }) } },
     chat: { searchAll: { useQuery: () => ({ data: results, isError: searchFailed, isFetching: false }) } },
+    record: { searchAll: { useQuery: () => ({ data: records, isError: false, isFetching: false }) } },
   },
 }));
 
@@ -46,6 +48,7 @@ describe("the command palette", () => {
     vi.clearAllMocks();
     personas = [];
     results = [];
+    records = [];
     searchFailed = false;
   });
 
@@ -102,6 +105,25 @@ describe("the command palette", () => {
     await waitFor(() => {
       expect(screen.queryByPlaceholderText(translate("zh", "commandPalette.placeholder"))).toBeNull();
     });
+  });
+
+  it("lists the original lines and jumps to the reader at that row", async () => {
+    records = [{
+      personaId: 5,
+      personaName: "小满",
+      recordId: 11,
+      content: "我在海边等你",
+      timestamp: "2022-03-01T12:00:00.000Z",
+    }];
+    const user = userEvent.setup();
+    render(<CommandPalette />);
+    await user.keyboard("{Meta>}k{/Meta}");
+    await user.type(screen.getByPlaceholderText(translate("zh", "commandPalette.placeholder")), "海边");
+    await waitFor(() => {
+      expect(screen.getByText(translate("zh", "commandPalette.records"))).toBeInTheDocument();
+    });
+    await user.click(screen.getByText("我在海边等你"));
+    expect(navigate).toHaveBeenCalledWith("/persona/5/records?at=11");
   });
 
   it("shows what kind of thing each result is", async () => {

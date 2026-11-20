@@ -7,6 +7,7 @@ import { translate } from "@/i18n";
 const pageState: { value: any } = { value: undefined };
 const outlineState: { value: any } = { value: undefined };
 const marksState: { value: any } = { value: undefined };
+const searchState: { value: any } = { value: undefined };
 const lastPageInput: { value: any } = { value: undefined };
 const refetch = vi.fn();
 const addMark = vi.fn();
@@ -52,6 +53,8 @@ vi.mock("@/lib/trpc", () => ({
         },
       },
       outline: { useQuery: () => outlineState.value },
+      search: { useQuery: () => searchState.value },
+      context: { useQuery: () => ({ data: undefined }) },
       marks: {
         list: { useQuery: () => marksState.value },
         add: { useMutation: () => ({ mutate: addMark }) },
@@ -96,6 +99,7 @@ describe("the record reader", () => {
       },
     };
     marksState.value = { data: [] };
+    searchState.value = { data: undefined, isLoading: false, isError: false };
     confirm.mockResolvedValue(true);
   });
 
@@ -172,6 +176,27 @@ describe("the record reader", () => {
     await userEvent.click(screen.getByRole("button", { name: translate("zh", "records.delete") }));
     await waitFor(() => expect(confirm).toHaveBeenCalled());
     expect(deleteRow).toHaveBeenCalledWith({ personaId: 5, recordId: 11 });
+  });
+
+  it("jumps to a searched line and puts ?at= in the address bar", async () => {
+    searchState.value = {
+      data: {
+        exact: [{ id: 11, content: "喜欢海", timestamp: "2022-03-01T12:00:00.000Z" }],
+        similar: [],
+        next: null,
+      },
+      isLoading: false,
+      isError: false,
+    };
+    render(<Records />);
+    await screen.findByText("在的呀");
+    await userEvent.type(
+      screen.getByRole("searchbox", { name: translate("zh", "records.search", { name: "小满" }) }),
+      "海",
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "喜欢海" }));
+    expect(window.location.search).toContain("at=11");
+    expect(lastPageInput.value).toMatchObject({ anchor: { recordId: 11 }, direction: "around" });
   });
 
   it("loads older lines from the first row it has", async () => {

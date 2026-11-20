@@ -13,7 +13,11 @@ import {
   deleteRecordsBySource,
   getFilesByPersonaId,
   getPersonaById,
+  getPersonasByUserId,
   getRecordSourceSummary,
+  getRecordsAround,
+  searchRecordsLexical,
+  searchRecordsSemantic,
   listMediaForRecordIds,
   listRecordMarks,
   pageRecords,
@@ -23,6 +27,8 @@ import {
 import { afterRecordsRemoved } from "../_core/style-profile";
 import { renderRecordContent } from "@shared/records";
 import { findHarmKind, normalizeHarmReport } from "@shared/harm";
+import { findNearest } from "../records/nearest";
+import { onThisDay } from "../records/on-this-day";
 import type { ParseReport } from "../importers/types";
 
 export const recordRouter = router({
@@ -159,6 +165,176 @@ export const recordRouter = router({
         hasOlder: page.hasOlder,
         hasNewer: page.hasNewer,
       };
+    }),
+
+  /**
+   * C2.2: the original lines, and the ones that mean something similar.
+   *
+   * `exact` is the literal search over the record index. `similar` is
+   * null when the local embedding model is unavailable — a different
+   * answer from "nothing similar", and the reader says which.
+   */
+  search: protectedProcedure
+    .input(z.object({
+      personaId: z.number(),
+      q: z.string().min(1).max(200),
+      role: z.enum(["assistant", "user", "all"]).default("assistant"),
+      from: z.string().optional(),
+      to: z.string().optional(),
+      cursor: z.string().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      const offset = Math.max(0, Number.parseInt(input.cursor ?? "0", 10) || 0);
+      const exactHits = await searchRecordsLexical(input.personaId, ctx.user.id, {
+        q: input.q,
+        role: input.role,
+        limit: 31,
+        offset,
+        from: input.from ? new Date(input.from) : undefined,
+        to: input.to ? new Date(input.to) : undefined,
+      });
+      const hasMore = exactHits.length > 30;
+      const exact = exactHits.slice(0, 30).map((hit) => ({
+        id: hit.id,
+        content: hit.content,
+        timestamp: hit.timestamp?.toISOString() ?? null,
+      }));
+      const semantic = await searchRecordsSemantic(input.personaId, ctx.user.id, {
+        q: input.q,
+        role: input.role,
+        k: 8,
+      });
+      const exactIds = new Set(exact.map((hit) => hit.id));
+      const similar = semantic
+        ? semantic.hits
+            .filter((hit) => !exactIds.has(hit.id) && hit.content)
+            .slice(0, 5)
+            .map((hit) => ({
+              id: hit.id,
+              content: hit.content,
+              timestamp: hit.timestamp?.toISOString() ?? null,
+            }))
+        : null;
+      return {
+        exact,
+        similar,
+        next: hasMore ? String(offset + 30) : null,
+        /** True when the semantic index covers only its most recent turns. */
+        semanticTruncated: semantic?.truncated ?? false,
+      };
+    }),
+
+  /** The lines around one hit (C2.2). */
+  context: protectedProcedure
+    .input(z.object({
+      personaId: z.number(),
+      recordId: z.number(),
+      before: z.number().int().min(0).max(20).default(3),
+      after: z.number().int().min(0).max(20).default(3),
+    }))
+    .query(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      const around = await getRecordsAround(input.recordId, ctx.user.id, input.before, input.after);
+      if (!around.target || around.target.personaId !== input.personaId) {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      const render = (row: (typeof around.before)[number]) => ({
+        id: row.id,
+        role: row.role,
+        speaker: row.speaker,
+        content: renderRecordContent(
+          {
+            kind: row.kind,
+            content: row.content,
+            meta: (row.meta ?? null) as Record<string, unknown> | null,
+          },
+          ctx.locale,
+        ),
+        timestamp: (row.timestamp ?? row.createdAt).toISOString(),
+      });
+      return {
+        target: render(around.target),
+        before: around.before.map(render),
+        after: around.after.map(render),
+      };
+    }),
+
+  /** C2.1: the same calendar day in the years before. */
+  onThisDay: protectedProcedure
+    .input(z.object({ personaId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      const years = await onThisDay({
+        personaId: input.personaId,
+        userId: ctx.user.id,
+        today: new Date(),
+        timeZone: ctx.user.timezone ?? (persona as { timezone?: string | null }).timezone ?? null,
+      });
+      return years.map((year) => ({
+        year: year.year,
+        date: year.date,
+        rows: year.rows.map((row) => ({
+          id: row.id,
+          role: row.role,
+          content: renderRecordContent(
+            {
+              kind: row.kind,
+              content: row.content,
+              meta: (row.meta ?? null) as Record<string, unknown> | null,
+            },
+            ctx.locale,
+          ),
+          timestamp: row.timestamp?.toISOString() ?? null,
+        })),
+      }));
+    }),
+
+  /** C2.3: which of these sentences did they actually say? */
+  nearest: protectedProcedure
+    .input(z.object({ personaId: z.number(), text: z.string().min(1).max(2000) }))
+    .query(async ({ ctx, input }) => {
+      const persona = await getPersonaById(input.personaId, ctx.user.id);
+      if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      return findNearest({
+        personaId: input.personaId,
+        userId: ctx.user.id,
+        text: input.text,
+      });
+    }),
+
+  /** Original lines across all of the user's personas, for ⌘K (C2.2). */
+  searchAll: protectedProcedure
+    .input(z.object({ q: z.string().min(1).max(200) }))
+    .query(async ({ ctx, input }) => {
+      const personas = await getPersonasByUserId(ctx.user.id);
+      const out: Array<{
+        personaId: number;
+        personaName: string;
+        recordId: number;
+        content: string;
+        timestamp: string | null;
+      }> = [];
+      for (const persona of personas) {
+        if (out.length >= 20) break;
+        const hits = await searchRecordsLexical(persona.id, ctx.user.id, {
+          q: input.q,
+          limit: Math.min(5, 20 - out.length),
+        });
+        for (const hit of hits) {
+          out.push({
+            personaId: persona.id,
+            personaName: persona.name,
+            recordId: hit.id,
+            content: hit.content,
+            timestamp: hit.timestamp?.toISOString() ?? null,
+          });
+        }
+      }
+      return out;
     }),
 
   /** The chapter list of the reader: months with counts, and the periods. */

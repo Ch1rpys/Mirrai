@@ -24,6 +24,10 @@ export default function CommandPalette() {
     { query: query.trim(), limit: 20 },
     { enabled: open && query.trim().length > 0 },
   );
+  const recordHits = trpc.record.searchAll.useQuery(
+    { q: query.trim() },
+    { enabled: open && query.trim().length > 0 },
+  );
 
   // ⌘K / Ctrl-K, and Escape to close.
   useEffect(() => {
@@ -60,6 +64,13 @@ export default function CommandPalette() {
   }, [personas.data, query]);
 
   const matchingMessages = (results.data ?? []) as any[];
+  const matchingRecords = (recordHits.data ?? []) as Array<{
+    personaId: number;
+    personaName: string;
+    recordId: number;
+    content: string;
+    timestamp: string | null;
+  }>;
 
   const go = (path: string) => {
     setOpen(false);
@@ -118,7 +129,8 @@ export default function CommandPalette() {
           <div role="status" aria-live="polite" className="sr-only">
             {query.trim() && !results.isFetching
               ? t("commandPalette.resultCount", {
-                  count: matchingPersonas.length + matchingMessages.length,
+                  count:
+                    matchingPersonas.length + matchingMessages.length + matchingRecords.length,
                 })
               : ""}
           </div>
@@ -184,6 +196,32 @@ export default function CommandPalette() {
             </div>
           )}
 
+          {matchingRecords.length > 0 && (
+            <div>
+              <p className="text-[0.625rem] uppercase tracking-wide text-muted-subtle px-2 py-1.5">
+                {t("commandPalette.records")}
+              </p>
+              {matchingRecords.map((hit) => (
+                <button
+                  key={`${hit.personaId}-${hit.recordId}`}
+                  onClick={() => go(`/persona/${hit.personaId}/records?at=${hit.recordId}`)}
+                  className="w-full flex items-start gap-2.5 px-2.5 py-2 rounded-md hover:bg-muted/50 transition-colors text-left"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-xs text-muted-foreground">
+                      {hit.personaName}
+                      {hit.timestamp && (
+                        <span className="ml-1.5 opacity-70">{hit.timestamp.slice(0, 10)}</span>
+                      )}
+                    </span>
+                    <span className="block text-sm text-foreground line-clamp-2">{hit.content}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* The search is still running.
               The data is `undefined` while the query key changes, so the
               palette flashed "no results" before the first results
@@ -209,7 +247,7 @@ export default function CommandPalette() {
             </p>
           )}
 
-          {query.trim() && !results.isFetching && !results.isError && matchingPersonas.length === 0 && matchingMessages.length === 0 && (
+          {query.trim() && !results.isFetching && !results.isError && matchingPersonas.length === 0 && matchingMessages.length === 0 && matchingRecords.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-6" role="status">
               {t("commandPalette.noResults")}
             </p>

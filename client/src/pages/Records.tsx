@@ -6,6 +6,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { formatInstantInZone } from "@/lib/dates";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import RecordSearch from "@/components/v6/RecordSearch";
 import { useConfirm } from "@/components/ConfirmDialog";
 import PageLoader from "@/components/PageLoader";
 import NotFound from "@/pages/NotFound";
@@ -80,7 +81,6 @@ export default function Records() {
   const [noteText, setNoteText] = useState("");
   const [copied, setCopied] = useState(false);
   const [jumpDate, setJumpDate] = useState("");
-  const [search, setSearch] = useState("");
 
   const persona = trpc.persona.get.useQuery({ id: personaId }, { enabled: personaId > 0 });
   const pageQuery = trpc.record.page.useQuery(
@@ -230,17 +230,21 @@ export default function Records() {
           <Button size="sm" variant="outline" onClick={loadDate} disabled={!jumpDate}>
             {t("records.jump")}
           </Button>
-          <label className="relative flex-1 min-w-[220px]">
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder={t("records.search", { name })}
-              aria-label={t("records.search", { name })}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary/50"
-            />
-          </label>
           {copied && <span className="text-xs text-muted-foreground">{t("records.copied")}</span>}
+        </div>
+        <div className="pt-1">
+          <RecordSearch
+            personaId={personaId}
+            name={name}
+            onJump={(recordId) => {
+              window.history.replaceState(
+                {},
+                "",
+                `/persona/${personaId}/records?at=${recordId}`,
+              );
+              jumpTo({ recordId }, "around");
+            }}
+          />
         </div>
       </header>
 

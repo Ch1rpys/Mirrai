@@ -8,6 +8,7 @@ import {
   searchRecordsLexical,
 } from "./db";
 import { backfillSearchTokens } from "./records/backfill-tokens";
+import { seedXiaoman } from "./test-fixtures/seed-db";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -123,5 +124,61 @@ describe.skipIf(!DATABASE_URL)("search over the record table", () => {
       "collected_messages_search_tokens_idx",
       "messages_search_tokens_idx",
     ]);
+  });
+});
+
+
+describe.skipIf(!DATABASE_URL)("search over the Xiaoman fixture", () => {
+  it("finds the four lines where they said they liked the sea", async () => {
+    const userId = 9_930_500 + Math.floor(Math.random() * 10_000);
+    const { personaId } = await seedXiaoman(null, { userId });
+    try {
+      const theirs = await searchRecordsLexical(personaId, userId, {
+        q: "海",
+        role: "assistant",
+      });
+      expect(theirs).toHaveLength(4);
+      expect(theirs.every((hit) => hit.content === "喜欢海")).toBe(true);
+      expect(theirs.every((hit) => hit.timestamp != null)).toBe(true);
+
+      const mine = await searchRecordsLexical(personaId, userId, {
+        q: "海",
+        role: "user",
+      });
+      expect(mine).toEqual([]);
+
+      // The two-character query still uses the index and finds the same
+      // four lines.
+      const phrase = await searchRecordsLexical(personaId, userId, {
+        q: "喜欢海",
+        role: "assistant",
+      });
+      expect(phrase.map((hit) => hit.id).sort()).toEqual(
+        theirs.map((hit) => hit.id).sort(),
+      );
+
+      // A time range narrows it, and a page offset pages it.
+      const firstAt = theirs[0].timestamp!;
+      const narrowed = await searchRecordsLexical(personaId, userId, {
+        q: "喜欢海",
+        role: "assistant",
+        from: new Date(firstAt.getTime() - 1000),
+        to: new Date(firstAt.getTime() + 1000),
+      });
+      expect(narrowed.length).toBeGreaterThanOrEqual(1);
+      expect(narrowed.length).toBeLessThanOrEqual(4);
+      const secondPage = await searchRecordsLexical(personaId, userId, {
+        q: "喜欢海",
+        role: "assistant",
+        limit: 2,
+        offset: 2,
+      });
+      expect(secondPage).toHaveLength(2);
+      expect(secondPage.map((hit) => hit.id)).not.toEqual(
+        phrase.slice(0, 2).map((hit) => hit.id),
+      );
+    } finally {
+      await deletePersona(personaId, userId);
+    }
   });
 });
