@@ -946,6 +946,10 @@ export const V6 = {
     zh: "今天已经换过一次了。明天可以再来。",
     en: "You have already swapped once today. Come back tomorrow.",
   },
+  "errors.keptQuoteInvalid": {
+    zh: "只能留下 TA 说过的原话。",
+    en: "Only lines they actually said can be kept.",
+  },
   "errors.sealed": {
     zh: "这个分身封存着，到你定的那天之前打不开。",
     en: "This persona is sealed until the day you picked.",

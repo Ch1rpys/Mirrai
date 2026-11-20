@@ -1824,6 +1824,56 @@ export const appRouter = router({
       }),
 
     /**
+     * The three lines the user keeps (C6.4).
+     *
+     * Selected records, not typed text: the server reads each one and
+     * takes its words and its date from the record itself. It has to be
+     * their line, in a one-to-one chat, and there can be at most three.
+     */
+    setKeptQuotes: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        recordIds: z.array(z.number()).max(3),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        return await withPersonaDataLock(input.personaId, async () => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const ids = Array.from(new Set(input.recordIds));
+          const rows = ids.length > 0 ? await getRecordsByIds(ids, ctx.user.id) : [];
+          const byId = new Map(rows.map((row) => [row.id, row]));
+          const quotes: Array<{ recordId: number; text: string; at: string }> = [];
+          for (const id of ids) {
+            const row = byId.get(id);
+            if (
+              !row ||
+              row.personaId !== input.personaId ||
+              row.role !== "assistant" ||
+              row.kind !== "text"
+            ) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: copy(ctx.locale, "errors.keptQuoteInvalid"),
+              });
+            }
+            const at = row.timestamp ?? row.createdAt;
+            quotes.push({
+              recordId: row.id,
+              text: row.content,
+              at: at instanceof Date ? at.toISOString() : new Date(at).toISOString(),
+            });
+          }
+          const current = normalizePersonaSettings(
+            await getPersonaSettings(input.personaId, ctx.user.id),
+          );
+          current.keptQuotes = quotes;
+          const written = await setPersonaSettings(input.personaId, ctx.user.id, current);
+          if (!written) throw new TRPCError({ code: "NOT_FOUND" });
+          return { quotes };
+        });
+      }),
+
+    /**
      * Sealing a persona until a day the user picked (C6.2).
      *
      * The controls are exempt from the sealed guard: the user has to be

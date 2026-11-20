@@ -12,6 +12,7 @@ import { PersonaAvatar } from "@/components/PersonaAvatar";
 import OutboundLetters from "@/components/OutboundLetters";
 import GraduationReasons from "@/components/v6/GraduationReasons";
 import SealSettings from "@/components/v6/SealSettings";
+import KeepThree from "@/components/v6/KeepThree";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -436,6 +437,14 @@ export default function Graduation() {
             </Button>
           </div>
         </motion.section>
+        {/* Three lines they really said, chosen by hand (C6.4). */}
+        <motion.section
+          initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}
+          className="surface p-6 sm:p-8 space-y-4"
+        >
+          <KeepThree personaId={personaId} name={persona.name} />
+        </motion.section>
+
         {/* The last step is optional: sealing until a day the user picks
             (C6.2). The seal does not need the graduation, and the
             graduation does not need the seal. */}

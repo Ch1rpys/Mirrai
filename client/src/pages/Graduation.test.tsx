@@ -23,6 +23,7 @@ vi.mock("@/lib/trpc", () => ({
       getSettings: {
         useQuery: () => ({ data: {}, isLoading: false, isError: false, refetch: vi.fn() }),
       },
+      setKeptQuotes: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       seal: {
         set: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
         requestOpen: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -32,6 +33,12 @@ vi.mock("@/lib/trpc", () => ({
     relationship: { list: { useQuery: () => ({ data: { events: [] } }) } },
     memory: { list: { useQuery: () => ({ data: { items: [] } }) } },
     diary: { list: { useQuery: () => ({ data: { items: diaryItems, total: diaryTotal } }) } },
+    record: {
+      marks: { list: { useQuery: () => ({ data: [], isLoading: false }) } },
+      search: {
+        useQuery: () => ({ data: { exact: [], similar: null }, isLoading: false }),
+      },
+    },
     useUtils: () => ({ persona: { get: { invalidate: vi.fn() } } }),
   },
 }));
