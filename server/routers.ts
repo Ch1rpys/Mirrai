@@ -2313,6 +2313,7 @@ export const appRouter = router({
           await registerUploadedImage({
             personaId: input.personaId,
             userId: ctx.user.id,
+            fileId,
             fileKey,
             buffer,
             mime: input.mimeType,
@@ -2694,7 +2695,10 @@ export const appRouter = router({
               careNote = event.careNote;
               crisis = event.crisis;
               if (event.extra && event.extra.length > 0) extra = event.extra;
-              if (event.voice) voice = event.voice;
+              if (event.voice) {
+                voice = event.voice;
+                if (!reply) reply = event.voice.content;
+              }
             }
           }
         } catch (e) {
@@ -2873,7 +2877,10 @@ export const appRouter = router({
             careNote = event.careNote;
             crisis = event.crisis;
             if (event.extra && event.extra.length > 0) extra = event.extra;
-            if (event.voice) voice = event.voice;
+            if (event.voice) {
+              voice = event.voice;
+              if (!reply) reply = event.voice.content;
+            }
           }
         }
         // A failure is reported, not swallowed. See the note in `send`.
@@ -3035,7 +3042,10 @@ export const appRouter = router({
             careNote = event.careNote;
             crisis = event.crisis;
             if (event.extra && event.extra.length > 0) extra = event.extra;
-            if (event.voice) voice = event.voice;
+            if (event.voice) {
+              voice = event.voice;
+              if (!reply) reply = event.voice.content;
+            }
           }
         }
         // A failure is reported, not swallowed. See the note in `send`.

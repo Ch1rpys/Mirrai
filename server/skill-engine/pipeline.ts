@@ -1024,6 +1024,34 @@ async function loadPipelineRecords(input: PipelineInput): Promise<RecordLine[]> 
   return rows;
 }
 
+/**
+ * The public register, read separately (B7.12).
+ *
+ * A public post is not something said in a one-to-one conversation,
+ * but it is still something they said. It becomes a fact card with
+ * `source: "moments"` and never enters the private analysis.
+ */
+async function loadPublicPipelineRecords(input: PipelineInput): Promise<RecordLine[]> {
+  const iterate = dbFn("iterateRecords") as
+    | ((
+        personaId: number,
+        userId: number,
+        options?: { register?: string },
+      ) => AsyncIterable<unknown>)
+    | undefined;
+  if (!iterate) return [];
+  try {
+    const rows: RecordLine[] = [];
+    for await (const row of iterate(input.personaId, input.userId, { register: "public" })) {
+      const line = toRecordLine(row as Parameters<typeof toRecordLine>[0]);
+      if (line) rows.push(line);
+    }
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
 type TranscriptRow = {
   id: number;
   role: string;
@@ -1287,6 +1315,7 @@ async function runSkillPipelineOnce(
 
   try {
     const recordLines = await loadPipelineRecords(input);
+    const publicRecordLines = await loadPublicPipelineRecords(input);
 
     // ── Celebrity research (researching → auditing → synthesizing → validating)
     let research: CelebrityResearchResult | null = null;
@@ -1403,6 +1432,13 @@ async function runSkillPipelineOnce(
     let usedChunkedAnalysis = false;
     const recordChunks = recordLines.length > 0
       ? chunkRecords(recordLines, {
+          locale,
+          timeZone: input.timeZone,
+          themName: name,
+        })
+      : [];
+    const publicRecordChunks = publicRecordLines.length > 0
+      ? chunkRecords(publicRecordLines, {
           locale,
           timeZone: input.timeZone,
           themName: name,
@@ -1909,6 +1945,36 @@ async function runSkillPipelineOnce(
           );
         }
       }
+    }
+
+    /**
+     * The public register contributes facts too (B7.12).
+     *
+     * These are things they posted for everyone, not things they said
+     * to the user. They are read in their own batch and written with
+     * `source: "moments"`, so the memory panel can tell the two apart
+     * and a one-to-one conversation does not present a post as a
+     * private message.
+     */
+    if (publicRecordChunks.length > 0) {
+      await extractFactsFromRecords({
+        chunks: publicRecordChunks,
+        rows: publicRecordLines,
+        personaId,
+        userId,
+        name,
+        locale,
+        timeZone: input.timeZone,
+        themName: name,
+        mode: input.mode,
+        source: "moments",
+        invoke: invokeForDistill,
+        onProgress: (message) => {
+          void setPersonaProgress(stageProgress.analyzing_persona, message);
+        },
+      }).catch((e) =>
+        console.warn("[SkillEngine] The facts could not be extracted from the public posts:", e.message),
+      );
     }
 
     /**

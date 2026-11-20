@@ -25,6 +25,7 @@ import PhotoTimeline from "@/components/v6/PhotoTimeline";
 import FingerprintView from "@/components/v6/FingerprintView";
 import { Button } from "@/components/ui/button";
 import { resolveRelationshipPhase } from "@shared/user-side";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 
 /**
  * What the app has understood.
@@ -71,6 +72,12 @@ export default function PersonaProfile() {
     { enabled: isAuthenticated && hasPersonaId },
   );
   const evidenceDimensions = evidence?.dimensions ?? emptyEvidenceByDimension();
+  /**
+   * The call entry is a paid, heavier layer (B7.14). Until the switch
+   * is on it should not be offered at all; the default-off setting is
+   * only half the promise if the entry is always there.
+   */
+  const callEnabled = normalizePersonaSettings(persona?.settings).layers.callMode;
 
   // The spinner used to spin for ever.
   //
@@ -457,18 +464,20 @@ export default function PersonaProfile() {
               {t("profile.voicesEntryNote")}
             </span>
           </button>
-          <button
-            type="button"
-            onClick={() => navigate(`/persona/${personaId}/call`)}
-            className="w-full rounded-lg border border-border/70 p-3 text-left transition-colors hover:bg-muted/30"
-          >
-            <span className="block text-sm text-foreground">
-              {t("profile.callEntry", { name: persona.name })}
-            </span>
-            <span className="block text-xs text-muted-foreground leading-relaxed">
-              {t("profile.callEntryNote")}
-            </span>
-          </button>
+          {callEnabled && (
+            <button
+              type="button"
+              onClick={() => navigate(`/persona/${personaId}/call`)}
+              className="w-full rounded-lg border border-border/70 p-3 text-left transition-colors hover:bg-muted/30"
+            >
+              <span className="block text-sm text-foreground">
+                {t("profile.callEntry", { name: persona.name })}
+              </span>
+              <span className="block text-xs text-muted-foreground leading-relaxed">
+                {t("profile.callEntryNote")}
+              </span>
+            </button>
+          )}
           <details className="rounded-lg border border-border/70 p-3">
             <summary className="cursor-pointer text-sm text-foreground">
               {t("profile.photosEntry", { name: persona.name })}

@@ -31,6 +31,7 @@ vi.mock("../db", () => ({
 }));
 
 import { registerMedia, registerUploadedImage } from "./media";
+import { readImageExif } from "../_core/image-exif";
 
 const importDir = path.join(uploadRoot, "personas", "1", "5", "imports", "9");
 
@@ -160,6 +161,16 @@ describe("registering media", () => {
     expect((photo.at as Date).toISOString()).toBe("2022-04-03T12:30:00.000Z");
     expect(photo.width).toBeNull();
     expect(photo.exif).toBeNull();
+  });
+
+  it("returns no camera time for a picture that has no EXIF", async () => {
+    const exif = await readImageExif(
+      path.resolve(__dirname, "../test-fixtures/media/no-exif.jpg"),
+      "Asia/Shanghai",
+    );
+    expect(exif.at).toBeNull();
+    // The media row keeps the message time as a fallback for sorting;
+    // the camera data itself is empty.
   });
 
   it("registers a photo uploaded on its own", async () => {

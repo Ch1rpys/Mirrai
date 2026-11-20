@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   clusterFaceDescriptors,
   cropSquareForFace,
+  largestFace,
   type DescribedFace,
 } from "@/lib/face-clusters";
 
@@ -203,7 +204,7 @@ export default function AvatarPicker({
   }
 
   function chooseCluster(cluster: ClusterView) {
-    const face = cluster.items[0];
+    const face = largestFace(cluster.items);
     if (!face) return;
     setSource(face.photoUrl);
     setNatural({ width: face.imageWidth, height: face.imageHeight });

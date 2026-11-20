@@ -45,6 +45,27 @@ describe("retrieving past replies", () => {
     expect(found.some((item) => item.content.includes("老地方"))).toBe(true);
   });
 
+  it("never uses a public post as a one-to-one exemplar", () => {
+    const mixed = [
+      { id: 1, role: "user", content: "那家店叫什么" },
+      {
+        id: 2,
+        role: "assistant",
+        content: "公开动态：老地方那家面",
+        meta: { register: "public" },
+      },
+      { id: 3, role: "user", content: "那家店叫什么" },
+      { id: 4, role: "assistant", content: "老地方那家面", meta: { register: "private" } },
+    ];
+    const found = retrieveExemplars({
+      userMessage: "那家店叫什么",
+      records: mixed,
+      minScore: 0,
+    });
+    expect(found.some((item) => item.id === 2)).toBe(false);
+    expect(found.some((item) => item.id === 4)).toBe(true);
+  });
+
   it("excludes a held-out id", () => {
     const found = retrieveExemplars({
       userMessage: "那家店叫什么",

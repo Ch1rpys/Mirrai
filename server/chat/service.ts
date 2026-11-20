@@ -144,7 +144,7 @@ export type ChatEvent =
         mediaUrl?: string | null;
       }>;
       /** This reply was sent as a voice note (B7.4). */
-      voice?: { url: string; durationSec: number };
+      voice?: { url: string; durationSec: number; content: string };
     }
   | {
       /**
@@ -2135,23 +2135,37 @@ async function* runConversationTurn(
       showMs: recallShowMs(seededRandom(`${turnInput.seed}:recall-show`)),
     };
   }
-  if (voiceNote) {
-    yield { type: "delta", text: spoken };
-  } else if (!timingEnabled && (typoStar || deferReplyForRecall)) {
-    yield { type: "burst", texts: parts };
-  } else if (!timingEnabled && spoken !== finalText) {
-    yield { type: "replace", text: spoken };
-  }
-  if (timingEnabled && behavior) {
-    if (parts.length > 1) {
-      const typing = typingForTurn(persona, options.channel);
-      if (typing) {
-        const timing = burstTypingMs(parts, typing, seededRandom(`${turnInput.seed}:typing`));
-        yield { type: "burst", texts: parts, gapsMs: timing.gapsMs, typingMs: timing.typingMs };
-      } else {
-        yield { type: "burst", texts: parts };
-      }
-    } else if (parts[0]) yield { type: "delta", text: parts[0] };
+  /**
+   * A voice note is announced only in `done.voice`.
+   *
+   * Sending a delta first put the words on the screen as a text bubble
+   * and then turned it into a voice bubble at `done` — exactly the
+   * flash the feature is supposed to avoid. The client uses
+   * `done.voice.content` for the bubble instead.
+   *
+   * If synthesis failed, there is no voice note and the turn is an
+   * ordinary text turn. The text has to be sent here: the usual delta
+   * path was suppressed while the voice note was still possible.
+   */
+  if (!voiceNote) {
+    if (voiceNoteDecision && !timingEnabled) {
+      yield { type: "delta", text: spoken };
+    } else if (!timingEnabled && (typoStar || deferReplyForRecall)) {
+      yield { type: "burst", texts: parts };
+    } else if (!timingEnabled && spoken !== finalText) {
+      yield { type: "replace", text: spoken };
+    }
+    if (timingEnabled && behavior) {
+      if (parts.length > 1) {
+        const typing = typingForTurn(persona, options.channel);
+        if (typing) {
+          const timing = burstTypingMs(parts, typing, seededRandom(`${turnInput.seed}:typing`));
+          yield { type: "burst", texts: parts, gapsMs: timing.gapsMs, typingMs: timing.typingMs };
+        } else {
+          yield { type: "burst", texts: parts };
+        }
+      } else if (parts[0]) yield { type: "delta", text: parts[0] };
+    }
   }
   let messageId = 0;
   if (voiceNote) {
@@ -2496,7 +2510,7 @@ async function* runConversationTurn(
     ...(plan.routine ? { routine: plan.routine } : {}),
     ...(claims && claims.length > 0 ? { claims } : {}),
     ...(extra.length > 0 ? { extra } : {}),
-    ...(voiceNote ? { voice: voiceNote } : {}),
+    ...(voiceNote ? { voice: { ...voiceNote, content: spoken } } : {}),
   };
 }
 

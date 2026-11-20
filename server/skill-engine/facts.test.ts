@@ -215,6 +215,14 @@ describe("extractFactsFromRecords", () => {
     );
   });
 
+  it("labels a fact read from the public register as a moment", async () => {
+    const result = await extractFactsFromRecords({ ...base, source: "moments" });
+    expect(result.created).toBe(1);
+    expect(createMemory).toHaveBeenCalledWith(
+      expect.objectContaining({ source: "moments" }),
+    );
+  });
+
   it("counts the lines that mention the fact's title", async () => {
     const chunk = chunkWith([
       { id: 11, role: "user", content: "我生日是5月21号" },

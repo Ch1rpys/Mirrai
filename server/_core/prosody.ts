@@ -31,7 +31,10 @@ export async function measureProsody(params: {
   personaId: number;
   userId: number;
 }): Promise<ProsodyProfile | null> {
-  const rows = (await listMedia(params.personaId, params.userId, { kind: "voice" })).filter(
+  const rows = (await listMedia(params.personaId, params.userId, {
+    kind: "voice",
+    fromThem: true,
+  })).filter(
     (row) =>
       typeof row.transcript === "string" &&
       row.transcript.trim().length > 0 &&

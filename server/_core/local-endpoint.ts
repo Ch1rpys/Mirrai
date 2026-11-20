@@ -13,20 +13,40 @@
  * out loud, with a second environment variable, rather than happening
  * because a port number was mistyped.
  */
+import { isIP } from "node:net";
 
-/** The hosts that mean "this machine, or a machine on the same LAN". */
+/**
+ * The hosts that mean "this machine, or a machine on the same LAN".
+ *
+ * The check is deliberately an IP-literal check. Matching the beginning
+ * of the string (`/^127\./`) treats `127.0.0.1.evil.com` as loopback:
+ * a public hostname that happens to start with a private-looking label.
+ * If the host is not one of the named hosts, it has to parse as an IP
+ * address before its octets are inspected.
+ */
 export function isLocalHostname(hostname: string): boolean {
   // `new URL("http://[::1]:8000").hostname` keeps the brackets.
-  const host = hostname.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+  const host = hostname
+    .toLowerCase()
+    .replace(/^\[/, "")
+    .replace(/\]$/, "")
+    .replace(/\.$/, "");
   if (host === "localhost" || host === "::1") return true;
+  if (isIP(host) !== 4) return false;
+
+  const octets = host.split(".").map(Number);
+  if (octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+    return false;
+  }
+  const [first, second] = octets as [number, number, number, number];
   // 127.0.0.0/8
-  if (/^127\./.test(host)) return true;
+  if (first === 127) return true;
   // 10.0.0.0/8
-  if (/^10\./.test(host)) return true;
+  if (first === 10) return true;
   // 172.16.0.0/12
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
+  if (first === 172 && second >= 16 && second <= 31) return true;
   // 192.168.0.0/16
-  if (/^192\.168\./.test(host)) return true;
+  if (first === 192 && second === 168) return true;
   return false;
 }
 
@@ -63,7 +83,7 @@ export function assertLocalEndpoint(rawUrl: string, allowRemote = false): URL {
   if (!allowRemote && !isLocalHostname(url.hostname)) {
     throw new Error(
       `The speech service at ${url.hostname} is not on this machine. ` +
-        "Set the allow-remote switch for this feature if you really mean to send the audio there.",
+        "The speech features only send to a local or private address.",
     );
   }
   return url;

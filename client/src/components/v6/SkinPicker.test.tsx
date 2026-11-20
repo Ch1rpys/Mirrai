@@ -53,6 +53,9 @@ describe("the skin picker", () => {
     render(<SkinPicker personaId={5} />);
     expect(screen.getByText("默认")).toBeInTheDocument();
     expect(screen.getByText("绿色气泡")).toBeInTheDocument();
+    for (const id of ["classic", "im-green", "im-blue"]) {
+      expect(screen.getByTestId(`skin-preview-${id}`)).toBeInTheDocument();
+    }
     expect(screen.getByText("蓝色气泡")).toBeInTheDocument();
     await user.click(screen.getByText("绿色气泡"));
     expect(updateMutation).toHaveBeenCalledWith({

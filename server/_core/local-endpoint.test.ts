@@ -20,6 +20,17 @@ describe("the local endpoint guard", () => {
     expect(isLocalEndpoint("not a url")).toBe(false);
   });
 
+  it("does not mistake a hostname that starts with a private label for an address", () => {
+    // A domain is not an IP literal, even when its first label is a
+    // private-looking number. `127.evil.com` can resolve anywhere.
+    expect(isLocalEndpoint("http://127.evil.com:8000/v1")).toBe(false);
+    expect(isLocalEndpoint("http://127.0.0.1.evil.com:8000/v1")).toBe(false);
+    expect(isLocalEndpoint("http://10.evil.com:8000/v1")).toBe(false);
+    expect(isLocalEndpoint("http://192.168.evil.com:8000/v1")).toBe(false);
+    expect(isLocalEndpoint("http://172.16.evil.com:8000/v1")).toBe(false);
+    expect(isLocalEndpoint("http://localhost.evil.com:8000/v1")).toBe(false);
+  });
+
   it("refuses a public address unless remote is allowed", () => {
     expect(() => assertLocalEndpoint("https://speech.example.com/v1")).toThrow(
       /not on this machine/,

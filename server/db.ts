@@ -2737,18 +2737,26 @@ export async function upsertMedia(data: InsertMedia): Promise<Media> {
       target: [media.personaId, media.userId, media.hash],
       set: {
         fileKey: data.fileKey,
-        mime: data.mime ?? null,
-        bytes: data.bytes ?? null,
-        at: data.at ?? null,
-        recordId: data.recordId ?? null,
-        fileId: data.fileId ?? null,
-        fromThem: data.fromThem ?? false,
-        durationSec: data.durationSec ?? null,
-        width: data.width ?? null,
-        height: data.height ?? null,
-        ...(data.transcript ? { transcript: data.transcript } : {}),
-        ...(data.transcriptEngine ? { transcriptEngine: data.transcriptEngine } : {}),
-        ...(data.exif ? { exif: data.exif } : {}),
+        // A field the caller did not mention is not a request to
+        // erase it. `registerUploadedVideos` re-registers every
+        // uploaded video on each run and has no duration or frame size
+        // to give; the old `?? null` wrote those columns away.
+        ...(data.mime !== undefined ? { mime: data.mime } : {}),
+        ...(data.bytes !== undefined ? { bytes: data.bytes } : {}),
+        ...(data.at !== undefined ? { at: data.at } : {}),
+        ...(data.recordId !== undefined ? { recordId: data.recordId } : {}),
+        ...(data.fileId !== undefined ? { fileId: data.fileId } : {}),
+        ...(data.fromThem !== undefined ? { fromThem: data.fromThem } : {}),
+        ...(data.durationSec !== undefined ? { durationSec: data.durationSec } : {}),
+        ...(data.width !== undefined ? { width: data.width } : {}),
+        ...(data.height !== undefined ? { height: data.height } : {}),
+        ...(data.transcript !== undefined && data.transcript !== null
+          ? { transcript: data.transcript }
+          : {}),
+        ...(data.transcriptEngine !== undefined && data.transcriptEngine !== null
+          ? { transcriptEngine: data.transcriptEngine }
+          : {}),
+        ...(data.exif !== undefined && data.exif !== null ? { exif: data.exif } : {}),
       },
     })
     .returning();
@@ -2758,7 +2766,7 @@ export async function upsertMedia(data: InsertMedia): Promise<Media> {
 export async function listMedia(
   personaId: number,
   userId: number,
-  options: { kind?: string } = {},
+  options: { kind?: string; fromThem?: boolean } = {},
 ): Promise<Media[]> {
   const db = await getDb();
   if (!db) return [];
@@ -2770,6 +2778,7 @@ export async function listMedia(
         eq(media.personaId, personaId),
         eq(media.userId, userId),
         ...(options.kind ? [eq(media.kind, options.kind)] : []),
+        ...(options.fromThem === undefined ? [] : [eq(media.fromThem, options.fromThem)]),
       ),
     )
     .orderBy(desc(media.at), desc(media.id));
@@ -3012,6 +3021,9 @@ export async function listMemoryMediaForMemories(
         inArray(memoryMedia.memoryId, unique),
         eq(memoryMedia.userId, userId),
         eq(media.userId, userId),
+        // Only photographs are offered to the photo layer. The link
+        // route checks this too; the reader should not depend on it.
+        eq(media.kind, "photo"),
       ),
     )
     .orderBy(asc(media.at), asc(media.id));
@@ -3055,7 +3067,17 @@ export async function setPersonaBackground(
     .update(personas)
     .set({
       settings: sql`jsonb_set(
-        COALESCE(${personas.settings}, '{}'::jsonb),
+        jsonb_set(
+          COALESCE(${personas.settings}, '{}'::jsonb),
+          '{skin}',
+          jsonb_set(
+            COALESCE(${personas.settings}->'skin', '{}'::jsonb),
+            '{theme}',
+            COALESCE(${personas.settings}->'skin'->'theme', '"classic"'::jsonb),
+            true
+          ),
+          true
+        ),
         '{skin,background}',
         ${JSON.stringify(background ?? "")}::jsonb,
         true
@@ -5656,10 +5678,32 @@ export const MAX_RECORDS_PER_PERSONA = 1_000_000;
 export async function getCollectedMessagesForPersona(
   personaId: number,
   userId: number,
-  options: { limit?: number; source?: string | null; newest?: boolean } = {},
+  options: {
+    limit?: number;
+    source?: string | null;
+    newest?: boolean;
+    /**
+     * Which register to read. Missing means private only, the same
+     * default as `iterateRecords`: a public post imported for the
+     * archive must not become an exemplar or a fact in a one-to-one
+     * conversation.
+     */
+    register?: "private" | "public" | "all";
+  } = {},
 ) {
   const db = await getDb();
   if (!db) return [];
+  const register = options.register ?? "private";
+  const registerFilter =
+    register === "all"
+      ? []
+      : register === "private"
+        ? [sql`(
+            ${collectedMessages.meta} IS NULL
+            OR ${collectedMessages.meta}->>'register' IS NULL
+            OR ${collectedMessages.meta}->>'register' = 'private'
+          )`]
+        : [sql`${collectedMessages.meta}->>'register' = ${register}`];
   // Ordered by when the message was *said*, not by when it was
   // imported. Two imports of two different conversations used to be
   // laid end to end, and the ruler cut cases across the seam — a case
@@ -5667,6 +5711,7 @@ export async function getCollectedMessagesForPersona(
   const query = db.select().from(collectedMessages).where(and(
     eq(collectedMessages.personaId, personaId),
     eq(collectedMessages.userId, userId),
+    ...registerFilter,
     ...(options.source ? [eq(collectedMessages.source, options.source)] : []),
   ));
   /**
@@ -6078,13 +6123,19 @@ export async function deletePersonaFile(
         ),
       )
       .returning({ id: collectedMessages.id });
+    /**
+     * Standalone uploads registered before `fileId` was stored have
+     * `fileId: null` but point at the same key. Matching the key as
+     * well keeps their row (and the memory links under it) from
+     * outliving the bytes the route deletes next.
+     */
     const removedMedia = await tx
       .delete(media)
       .where(
         and(
           eq(media.personaId, file.personaId),
           eq(media.userId, userId),
-          eq(media.fileId, fileId),
+          or(eq(media.fileId, fileId), eq(media.fileKey, file.fileKey)),
         ),
       )
       .returning({ id: media.id });

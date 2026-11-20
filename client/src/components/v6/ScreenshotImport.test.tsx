@@ -120,6 +120,8 @@ describe("importing screenshots", () => {
     expect(previewMutate).toHaveBeenCalledWith(
       expect.objectContaining({ personaId: 5, images: [{ name: "chat.png", base64: "data:image/png;base64,AAAA" }] }),
     );
+    // The row the model was not sure about is visually marked.
+    expect(document.querySelector('[data-unclear="true"]')).not.toBeNull();
     const textInputs = screen.getAllByLabelText(translate("zh", "screenshot.text"));
     await user.clear(textInputs[0]!);
     await user.type(textInputs[0]!, "在吗？");

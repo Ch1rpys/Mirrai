@@ -20,6 +20,14 @@ interface Line {
   text: string;
 }
 
+/** The energy above which the user is speaking, not room noise. */
+export const BARGE_IN_RMS = 0.035;
+
+/** Whether the user speaking should stop the answer being played. */
+export function shouldBargeIn(rms: number, playing: boolean): boolean {
+  return playing && rms > BARGE_IN_RMS;
+}
+
 /**
  * Phone mode (B7.14).
  *
@@ -51,6 +59,7 @@ export default function Call() {
   const wsRef = useRef<WebSocket | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioQueue = useRef<HTMLAudioElement[]>([]);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const playingRef = useRef(false);
   const mutedRef = useRef(false);
 
@@ -133,6 +142,7 @@ export default function Call() {
     let silenceSince: number | null = null;
     let speaking = false;
     let speakingSince: number | null = null;
+    let bargedIn = false;
 
     void (async () => {
       try {
@@ -158,7 +168,22 @@ export default function Call() {
           }
           const rms = Math.sqrt(sum / buffer.length);
           const now = Date.now();
-          if (rms > 0.035) {
+          /**
+           * Barge-in (B7.14).
+           *
+           * While the answer is playing, the user speaking means they
+           * want to say something now. Stop the audio, drop the queued
+           * sentences and tell the server not to send the rest. This is
+           * what makes a call a conversation instead of a broadcast.
+           */
+          if (!bargedIn && shouldBargeIn(rms, playingRef.current || audioQueue.current.length > 0)) {
+            bargedIn = true;
+            stopAudio();
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: "interrupt" }));
+            }
+          }
+          if (rms > BARGE_IN_RMS) {
             if (!speaking) {
               speaking = true;
               speakingSince = now;
@@ -170,6 +195,7 @@ export default function Call() {
               speaking = false;
               speakingSince = null;
               silenceSince = null;
+              bargedIn = false;
             }
           }
           // Recording starts on speech; it stops after 700 ms of silence.
@@ -223,7 +249,9 @@ export default function Call() {
     const next = audioQueue.current.shift();
     if (!next) return;
     playingRef.current = true;
+    currentAudioRef.current = next;
     next.onended = () => {
+      if (currentAudioRef.current === next) currentAudioRef.current = null;
       playingRef.current = false;
       void playNext();
     };
@@ -235,6 +263,10 @@ export default function Call() {
   }
 
   function stopAudio() {
+    // The clip that is already playing is paused too; pausing only the
+    // queue left the last sentence talking over the user.
+    currentAudioRef.current?.pause();
+    currentAudioRef.current = null;
     for (const audio of audioQueue.current) audio.pause();
     audioQueue.current = [];
     playingRef.current = false;

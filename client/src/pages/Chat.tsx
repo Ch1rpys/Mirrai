@@ -941,7 +941,10 @@ export default function Chat() {
                 ? {
                     ...m,
                     id: `ai-${info.messageId}`,
-                    content: m.content || t("chat.silence"),
+                    // A voice note carries its words in `done.voice`;
+                    // no text delta was sent, so an empty stream bubble
+                    // would otherwise become "（沉默）".
+                    content: info.voice?.content || m.content || t("chat.silence"),
                     emotionalState: info.emotionalState,
                     createdAt: new Date(),
                     isStreaming: false,

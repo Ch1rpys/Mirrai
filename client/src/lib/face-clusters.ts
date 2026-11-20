@@ -29,6 +29,20 @@ export interface FaceCluster {
 
 export const FACE_CLUSTER_DISTANCE = 0.5;
 
+/**
+ * The biggest face in a cluster.
+ *
+ * A cluster is a person, not a particular photo. When the user picks
+ * it, the crop should start on the clearest look at that person, not
+ * on whichever face the detector happened to report first.
+ */
+export function largestFace(items: DescribedFace[]): DescribedFace | undefined {
+  return items.reduce<DescribedFace | undefined>((best, face) => {
+    if (!best) return face;
+    return face.box.width * face.box.height > best.box.width * best.box.height ? face : best;
+  }, undefined);
+}
+
 export function euclideanDistance(a: number[], b: number[]): number {
   const length = Math.min(a.length, b.length);
   if (length === 0) return Number.POSITIVE_INFINITY;

@@ -2339,7 +2339,7 @@ export const en = {
     classic: "Default",
     green: "Green bubbles",
     blue: "Blue bubbles",
-    aliasLabel: "Your name for them",
+    aliasLabel: "Your name for {{name}}",
     aliasPlaceholder: "Shown in the header",
     saveAlias: "Save the name",
     chooseBackground: "Change the background",

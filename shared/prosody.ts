@@ -87,7 +87,10 @@ export function prepareForSpeech(
     next = next.replace(/([\p{Script=Han}])\s+(?=[\p{Script=Han}])/gu, "$1，");
   }
   if (options.lengthenEllipsis) {
-    next = next.replace(/\.{3,}|…/g, "……");
+    // Any run of ellipsis characters becomes exactly one "……". The
+    // function is called from both the read-aloud and the voice-note
+    // path, and a second pass must not turn "……" into "…………".
+    next = next.replace(/\.{3,}|…+/g, "……");
   }
   return next;
 }

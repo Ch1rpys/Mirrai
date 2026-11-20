@@ -20,6 +20,31 @@ describe("merging screenshots", () => {
     expect(rows.map((row) => row.content)).toEqual(["在吗", "在", "晚上吃什么", "随便"]);
   });
 
+  it("keeps a three-message overlap once at the seam", () => {
+    const rows = mergeScreenshotPages(
+      [
+        [
+          { side: "left", text: "A" },
+          { side: "right", text: "B" },
+          { side: "left", text: "C" },
+        ],
+        [
+          { side: "left", text: "A" },
+          { side: "right", text: "B" },
+          { side: "left", text: "C" },
+          { side: "right", text: "D" },
+        ],
+      ],
+      { date: "2024-06-01" },
+    ).rows;
+    expect(rows.map((row) => `${row.role}:${row.content}`)).toEqual([
+      "assistant:A",
+      "user:B",
+      "assistant:C",
+      "user:D",
+    ]);
+  });
+
   it("applies a time bar to the messages after it, one second apart", () => {
     const merged = mergeScreenshotPages(
       [

@@ -94,6 +94,8 @@ async function registerUploadedVideos(
   userId: number,
 ): Promise<VideoSource[]> {
   const files = await getFilesByPersonaId(personaId, userId);
+  const existing = await listMedia(personaId, userId, { kind: "video" }).catch(() => []);
+  const byHash = new Map(existing.map((row) => [row.hash, row]));
   const out: VideoSource[] = [];
   for (const file of files) {
     if (file.fileType !== "video") continue;
@@ -105,6 +107,18 @@ async function registerUploadedVideos(
       const info = await stat(abs);
       if (!info.isFile()) continue;
       const hash = await hashFile(abs);
+      /**
+       * A row that is already registered is not rewritten. The
+       * previous version upserted every upload with `at: new Date()`
+       * and no duration or frame size, which reset the probed
+       * metadata of every video on every distillation — and moved the
+       * skipped videos to "now", changing which four were read next.
+       */
+      const found = byHash.get(hash);
+      if (found) {
+        out.push({ id: found.id, fileKey });
+        continue;
+      }
       const row = await upsertMedia({
         userId,
         personaId,
@@ -118,6 +132,7 @@ async function registerUploadedVideos(
         fileId: file.id,
         fromThem: false,
       });
+      byHash.set(hash, row);
       out.push({ id: row.id, fileKey });
     } catch {
       // The upload is gone, or the database is not reachable: the run

@@ -160,6 +160,32 @@ describe("the portrait", () => {
     expect(screen.queryByText("安全型")).toBeNull();
   });
 
+  it("hides the call entry until the call layer is on", () => {
+    persona = {
+      id: 1,
+      userId: 1,
+      name: "小A",
+      analysisStatus: "ready",
+      emotionalState: "warm",
+      personaData: {},
+      settings: {},
+    };
+    const first = render(<PersonaProfile />);
+    expect(
+      screen.queryByText(translate("zh", "profile.callEntry", { name: "小A" })),
+    ).toBeNull();
+    first.unmount();
+
+    persona = {
+      ...persona,
+      settings: { layers: { callMode: true } },
+    };
+    render(<PersonaProfile />);
+    expect(
+      screen.getByText(translate("zh", "profile.callEntry", { name: "小A" })),
+    ).toBeInTheDocument();
+  });
+
   it("does not spin for ever when the persona cannot be read", () => {
     // The sign-in request failed, so the persona query stayed disabled:
     // no persona, no error, and the loader the page showed for ever.

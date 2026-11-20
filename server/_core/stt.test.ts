@@ -28,7 +28,13 @@ function ffmpegReply(stdout: string, stderr = "") {
   };
 }
 
-import { cleanWhisperOutput, sttEngine, sttIsLocal, transcribeAudio } from "./stt";
+import {
+  cleanWhisperOutput,
+  sttConfigured,
+  sttEngine,
+  sttIsLocal,
+  transcribeAudio,
+} from "./stt";
 
 describe("the transcription engines", () => {
   beforeEach(() => {
@@ -229,6 +235,22 @@ describe("the transcription engines", () => {
     ).toBeNull();
     expect(execFileMock).not.toHaveBeenCalled();
     expect(transcribeWithProvider).not.toHaveBeenCalled();
+  });
+
+  it("knows whether the configured engine can actually run", () => {
+    vi.stubEnv("STT_ENGINE", "provider");
+    expect(sttConfigured()).toBe(true);
+    vi.stubEnv("STT_ENGINE", "whisper-cpp");
+    expect(sttConfigured()).toBe(false);
+    vi.stubEnv("WHISPER_CPP_BIN", "/opt/whisper/whisper-cli");
+    vi.stubEnv("WHISPER_CPP_MODEL", "/models/ggml-base.bin");
+    expect(sttConfigured()).toBe(true);
+    vi.stubEnv("STT_ENGINE", "http");
+    expect(sttConfigured()).toBe(false);
+    vi.stubEnv("STT_HTTP_URL", "http://127.0.0.1:9000/v1/audio/transcriptions");
+    expect(sttConfigured()).toBe(true);
+    vi.stubEnv("STT_ENGINE", "off");
+    expect(sttConfigured()).toBe(false);
   });
 
   it("strips the markers whisper prints when it hears no speech", () => {

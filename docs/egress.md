@@ -6,7 +6,7 @@
 
 | id | 连到哪 | 发什么 | 何时 | 默认 | 在哪关 | 侧 |
 |---|---|---|---|---|---|---|
-| llm-openai-compatible | 用户配置的 OpenAI 兼容地址（默认 api.openai.com，也可填自建或第三方） | 对话的系统提示词、历史和当前一句；密钥在 Authorization 头里 | 分身回复、蒸馏、评测，以及任何走这个 provider 的模型调用 | 关 | 设置里不配这个 provider，或删掉密钥 | server |
+| llm-openai-compatible | 用户配置的 OpenAI 兼容地址（默认 api.openai.com，也可填自建或第三方） | 对话的系统提示词、历史和当前一句；导入截图时，截图图片本身也走这里；密钥在 Authorization 头里 | 分身回复、蒸馏、评测、截图识别，以及任何走这个 provider 的模型调用 | 关 | 设置里不配这个 provider，或删掉密钥 | server |
 | stt-openai-compatible | 同一套 OpenAI 兼容地址的 /audio/transcriptions | 语音文件的字节，以及转写模型名 | 用户转写一条语音消息时 | 关 | 不配 OpenAI 兼容 provider，或不去转写语音 | server |
 | stt-local-http | 你自己起的语音识别服务（STT_HTTP_URL，默认必须是本机或局域网地址） | 语音文件的字节。导入记录里的录音只走本机引擎，不会发到别处 | STT_ENGINE=http 时转写一条语音，或转写导入记录里的语音条 | 关 | 不设 STT_ENGINE=http，或把它设成 off；也可以停掉那个服务 | server |
 | llm-claude | 用户配置的 Anthropic 地址（默认 api.anthropic.com） | 对话内容；密钥在 x-api-key 头里 | 这个分身被设成走 Claude 时 | 关 | 设置里不配 Claude，或改用别的 provider | server |
@@ -14,7 +14,7 @@
 | llm-ollama | 用户配置的 Ollama 地址（通常是本机 http://127.0.0.1:11434） | 对话内容。连本机时数据不出这台机器 | 这个分身被设成走 Ollama 时 | 关 | 设置里不配 Ollama | server |
 | llm-dify | 用户配置的 Dify 地址 | 当前一句用户消息；密钥在请求里 | 这个分身被设成走 Dify 时 | 关 | 设置里不配 Dify | server |
 | llm-xunfei | 讯飞星火 wss://spark-api.xf-yun.com | 对话内容；鉴权写在 WebSocket URL 里 | 这个分身被设成走讯飞时 | 关 | 设置里不配讯飞密钥 | server |
-| tts-edge | 微软 Edge 在线朗读（edge-tts 包连到 Microsoft 的语音服务） | 要读出来的那段文字，以及所选的声音名 | 用户点朗读，且 TTS_ENABLED 未关时 | 开 | 环境变量 TTS_ENABLED=false | server |
+| tts-edge | 微软 Edge 在线朗读（edge-tts 包连到 Microsoft 的语音服务） | 要读出来的那段文字，以及所选的声音名 | 用户点朗读，TTS_ENABLED 未关，且 TTS_ENGINE 是 edge 时（其他引擎在本机合成） | 开 | 环境变量 TTS_ENABLED=false | server |
 | channel-wechat-ilink | 微信 iLink https://ilinkai.weixin.qq.com（会话里也可能被重定向到别的微信主机） | 登录、收发消息所需的协议字段；不含分身的系统提示词 | 用户在通道里启用微信并完成登录之后 | 关 | 设置 → 通道里停掉微信 | server |
 | channel-feishu | 飞书开放平台（@larksuiteoapi/node-sdk，含 WebSocket 长连接） | 应用凭证，以及这个通道上收发的消息正文 | 用户在通道里启用飞书并填入应用凭证之后 | 关 | 设置 → 通道里停掉飞书 | server |
 | collector-feishu | 飞书开放平台（子进程 feishu_auto_collector.py） | 应用凭证，以及要采集的会话范围 | 用户主动跑飞书采集器时 | 关 | 不要跑采集器；凭证留空它也不会发请求 | server |

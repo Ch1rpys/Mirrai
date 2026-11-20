@@ -29,6 +29,7 @@ function voiceRows(count: number, charsPerSecond = 5) {
     fileKey: `personas/1/5/voice-${index}.ogg`,
     transcript: "一".repeat(charsPerSecond * 10),
     durationSec: 10,
+    fromThem: true,
   }));
 }
 
@@ -51,6 +52,19 @@ describe("measuring how the person speaks", () => {
       },
     });
     setPersonaStyleProfile.mockResolvedValue(true);
+  });
+
+  it("does not measure the user's own recordings as the persona's pace", async () => {
+    const mixed = [
+      ...voiceRows(4),
+      ...voiceRows(4).map((row, index) => ({ ...row, id: 100 + index, fromThem: false })),
+    ];
+    listMedia.mockImplementation(
+      async (_persona: number, _user: number, options: { fromThem?: boolean } = {}) =>
+        options.fromThem ? mixed.filter((row) => row.fromThem) : mixed,
+    );
+    expect(await measureProsody({ personaId: 5, userId: 1 })).toBeNull();
+    expect(listMedia).toHaveBeenCalledWith(5, 1, { kind: "voice", fromThem: true });
   });
 
   it("has no measurement with fewer than eight transcribed recordings", async () => {

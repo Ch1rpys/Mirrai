@@ -5,8 +5,10 @@ import {
   createPersonaFile,
   deletePersona,
   deletePersonaFile,
+  getPersonaSettings,
   listMedia,
   setMediaTranscript,
+  setPersonaBackground,
   upsertMedia,
 } from "./db";
 
@@ -61,6 +63,43 @@ describe.skipIf(!DATABASE_URL)("the media table", () => {
     }
   });
 
+  it("does not clear metadata that a later upsert omits", async () => {
+    const userId = 9_955_000 + Math.floor(Math.random() * 10_000);
+    const personaId = await createPersona({ userId, name: "media-metadata" });
+    try {
+      const at = new Date("2022-03-01T12:00:00Z");
+      await upsertMedia({
+        userId,
+        personaId,
+        kind: "video",
+        fileKey: `personas/${userId}/${personaId}/v.mp4`,
+        mime: "video/mp4",
+        bytes: 100,
+        hash: "d".repeat(64),
+        at,
+        durationSec: 5,
+        width: 640,
+        height: 360,
+      });
+      const second = await upsertMedia({
+        userId,
+        personaId,
+        kind: "video",
+        fileKey: `personas/${userId}/${personaId}/v.mp4`,
+        bytes: 101,
+        hash: "d".repeat(64),
+      });
+      expect(second.bytes).toBe(101);
+      expect(second.at?.toISOString()).toBe(at.toISOString());
+      expect(second.durationSec).toBe(5);
+      expect(second.width).toBe(640);
+      expect(second.height).toBe(360);
+      expect(second.mime).toBe("video/mp4");
+    } finally {
+      await deletePersona(personaId, userId);
+    }
+  });
+
   it("removes the media rows when the source file is deleted", async () => {
     const userId = 9_960_000 + Math.floor(Math.random() * 10_000);
     const personaId = await createPersona({ userId, name: "media-source" });
@@ -90,6 +129,53 @@ describe.skipIf(!DATABASE_URL)("the media table", () => {
       await deletePersonaFile(fileId, userId);
 
       expect(await countMedia(personaId, userId)).toBe(0);
+    } finally {
+      await deletePersona(personaId, userId);
+    }
+  });
+
+  it("removes a standalone uploaded photo by its file key", async () => {
+    const userId = 9_965_000 + Math.floor(Math.random() * 10_000);
+    const personaId = await createPersona({ userId, name: "standalone-photo" });
+    try {
+      const fileId = await createPersonaFile({
+        personaId,
+        userId,
+        fileType: "image",
+        originalName: "a.jpg",
+        fileKey: `personas/${userId}/${personaId}/a.jpg`,
+        fileUrl: `/uploads/personas/${userId}/${personaId}/a.jpg`,
+        fileSize: 10,
+      });
+      await upsertMedia({
+        userId,
+        personaId,
+        kind: "photo",
+        fileKey: `personas/${userId}/${personaId}/a.jpg`,
+        hash: "7".repeat(64),
+        // The row was registered before its fileId was stored.
+        fileId: null,
+      });
+      expect(await countMedia(personaId, userId, "photo")).toBe(1);
+
+      await deletePersonaFile(fileId, userId);
+
+      expect(await countMedia(personaId, userId, "photo")).toBe(0);
+    } finally {
+      await deletePersona(personaId, userId);
+    }
+  });
+
+  it("creates a skin with a default theme when only a background is written", async () => {
+    const userId = 9_968_000 + Math.floor(Math.random() * 10_000);
+    const personaId = await createPersona({ userId, name: "background" });
+    try {
+      await setPersonaBackground(personaId, userId, "/uploads/personas/bg.png");
+      const settings = await getPersonaSettings(personaId, userId);
+      expect(settings?.skin).toEqual({
+        theme: "classic",
+        background: "/uploads/personas/bg.png",
+      });
     } finally {
       await deletePersona(personaId, userId);
     }

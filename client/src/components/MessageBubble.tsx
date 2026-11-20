@@ -687,6 +687,11 @@ export function MessageBubble({
                       />
                     </a>
                   )}
+                  {memory.photo?.at && (
+                    <span className="block text-[10px] text-muted-subtle">
+                      {formatInstantInZone(memory.photo.at, locale)}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>

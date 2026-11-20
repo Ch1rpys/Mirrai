@@ -3,6 +3,7 @@ import {
   clusterFaceDescriptors,
   cropSquareForFace,
   euclideanDistance,
+  largestFace,
   type DescribedFace,
 } from "./face-clusters";
 
@@ -16,6 +17,19 @@ function face(photoId: number, descriptor: number[], box = { x: 10, y: 10, width
     imageHeight: 100,
   };
 }
+
+describe("choosing the face to crop", () => {
+  it("takes the biggest face in the cluster, not the first one", () => {
+    const biggest = face(3, [0, 0, 0], { x: 0, y: 0, width: 30, height: 20 });
+    const chosen = largestFace([
+      face(1, [0, 0, 0], { x: 0, y: 0, width: 10, height: 10 }),
+      biggest,
+      face(2, [0, 0, 0], { x: 0, y: 0, width: 20, height: 20 }),
+    ]);
+    expect(chosen).toBe(biggest);
+    expect(largestFace([])).toBeUndefined();
+  });
+});
 
 describe("grouping faces", () => {
   it("measures the distance between two descriptors", () => {

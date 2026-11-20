@@ -1,5 +1,5 @@
 import { listUntranscribedMedia, setMediaTranscript, updateRecordMeta } from "../db";
-import { sttEngine, sttIsLocal, transcribeAudio } from "../_core/stt";
+import { sttConfigured, sttEngine, sttIsLocal, transcribeAudio } from "../_core/stt";
 import { mediaAbsPath, mediaFileName } from "../importers/media";
 
 /**
@@ -39,7 +39,10 @@ export function transcriptionStatus(personaId: number): {
   return {
     run: runs.get(personaId) ?? idle(),
     engine: sttEngine(),
-    local: sttIsLocal(),
+    // "Local" means the task can run here, not merely that the engine
+    // claims to keep the audio here. A whisper.cpp engine without its
+    // binary is local and unusable.
+    local: sttIsLocal() && sttConfigured(),
   };
 }
 
@@ -47,7 +50,7 @@ export async function startMediaTranscription(params: {
   personaId: number;
   userId: number;
 }): Promise<{ started: boolean; reason?: "no-local-engine" | "running"; total?: number }> {
-  if (!sttIsLocal()) return { started: false, reason: "no-local-engine" };
+  if (!sttIsLocal() || !sttConfigured()) return { started: false, reason: "no-local-engine" };
   if (runs.get(params.personaId)?.running) return { started: false, reason: "running" };
 
   const rows = await listUntranscribedMedia(params.personaId, params.userId);

@@ -284,6 +284,12 @@ export interface ExtractFactsInput {
   timeZone?: string | null;
   themName?: string;
   mode?: DistillationMode | null;
+  /**
+   * Where these blocks came from. Private records are `records`; the
+   * public register (moments) is labelled `moments` so a fact is not
+   * presented as something said in a one-to-one conversation.
+   */
+  source?: "records" | "moments";
   invoke: (messages: LLMMessage[]) => Promise<string>;
   onProgress?: (message: string) => void;
 }
@@ -393,7 +399,7 @@ export async function extractFactsFromRecords(
           date: fact.date,
           importance: importanceFor(fact.category),
           recordId: fact.quote,
-          source: "records",
+          source: input.source ?? "records",
           mentionCount: mentionCountFor(fact.title, input.rows),
           factKey,
           status: "active",

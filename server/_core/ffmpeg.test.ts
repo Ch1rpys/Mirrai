@@ -195,5 +195,7 @@ describe("the ffmpeg helper", () => {
     expect(report).toEqual({ ratio: 0.4, tailSec: 2.5, totalSec: 10 });
     const [, args] = lastCall();
     expect(args).toContain("silencedetect=noise=-35dB:d=0.35");
+    expect(args[args.indexOf("-i") + 1]).toBe("/tmp/a.ogg");
+    expect(args).toContain("/tmp/a.ogg");
   });
 });

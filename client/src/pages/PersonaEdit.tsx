@@ -615,7 +615,7 @@ export default function PersonaEdit() {
 
         {/* The chat's appearance (B7.15). */}
         <section className="surface p-5 sm:p-6 animate-fade-in-up">
-          <SkinPicker personaId={personaId} />
+          <SkinPicker personaId={personaId} name={persona?.name ?? ""} />
         </section>
 
         {/* The letters. A letter that is kept and never answered, and a

@@ -41,6 +41,9 @@ describe("prosody to read-aloud", () => {
     expect(prepareForSpeech("等一下...", { lengthenEllipsis: true })).toBe("等一下……");
     expect(prepareForSpeech("等一下...", { lengthenEllipsis: false })).toBe("等一下...");
     expect(prepareForSpeech("等一下…", { lengthenEllipsis: true })).toBe("等一下……");
+    expect(prepareForSpeech("等一下……", { lengthenEllipsis: true })).toBe("等一下……");
+    const once = prepareForSpeech("等一下...", { lengthenEllipsis: true });
+    expect(prepareForSpeech(once, { lengthenEllipsis: true })).toBe(once);
   });
 
   it("does not change a single character", () => {

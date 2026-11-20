@@ -95,3 +95,46 @@
   border-top: 1px solid rgb(0 0 0 / 0.06);
   backdrop-filter: blur(6px);
 }
+
+/* The three thumbnails in the picker. They are small pictures of the
+   bubble shapes, not screenshots and not another product's artwork. */
+.skin-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 2.5rem;
+  height: 1.6rem;
+  padding: 3px;
+  border-radius: 0.25rem;
+  background: #ececec;
+}
+
+.skin-preview-classic {
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.skin-preview-bubble {
+  display: block;
+  height: 0.35rem;
+  width: 1.2rem;
+  border-radius: 0.2rem;
+  background: #ffffff;
+}
+
+.skin-preview-bubble-me {
+  align-self: flex-end;
+  background: #d8d8d8;
+}
+
+.skin-preview-im-green .skin-preview-bubble-me {
+  background: #a9e97a;
+}
+
+.skin-preview-im-blue {
+  background: #edf1f7;
+}
+
+.skin-preview-im-blue .skin-preview-bubble-me {
+  background: #5b8def;
+}

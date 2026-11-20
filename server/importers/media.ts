@@ -86,6 +86,8 @@ export async function registerUploadedImage(params: {
   personaId: number;
   userId: number;
   fileKey: string;
+  /** The `persona_files` row this image came from, when there is one. */
+  fileId?: number | null;
   buffer: Buffer;
   mime: string;
   timeZone?: string | null;
@@ -103,7 +105,7 @@ export async function registerUploadedImage(params: {
       hash,
       at: exif.at ?? new Date(),
       recordId: null,
-      fileId: null,
+      fileId: params.fileId ?? null,
       fromThem: false,
       width: exif.width,
       height: exif.height,

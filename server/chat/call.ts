@@ -23,9 +23,10 @@ import { normalizeStyleProfile } from "@shared/style-profile";
 import { zonedHour, zonedWeekday } from "@shared/timezone";
 import { getPersonaById, setMessageContent } from "../db";
 import { getMessagesByPersonaId } from "../db";
-import { transcribeAudio } from "../_core/stt";
-import { generateTTS, DEFAULT_VOICE, ttsEngine } from "../_core/tts";
-import { sttEngine } from "../_core/stt";
+import { sttConfigured, sttEngine, transcribeAudio } from "../_core/stt";
+import { generateTTS, DEFAULT_VOICE, ttsConfigured } from "../_core/tts";
+import { resolveProviderForUser } from "../llm/user-provider";
+import type { LLMProvider } from "../llm/types";
 import { resolveStoredPath } from "../storage";
 import { runConversation } from "./service";
 
@@ -48,15 +49,23 @@ export interface CallPersona {
   settings?: unknown;
   styleProfile?: unknown;
   timezone?: string | null;
+  /** The provider the persona's chat uses, for the provider STT engine. */
+  llmProvider?: string | null;
 }
 
 export interface CallDeps {
   authenticate: (request: unknown) => Promise<CallUser>;
   getPersona: (personaId: number, userId: number) => Promise<CallPersona | null | undefined>;
+  /** The provider used by the provider STT engine. Tests replace it. */
+  resolveProvider: (input: {
+    userId: number;
+    providerName?: string;
+  }) => Promise<LLMProvider | null>;
   transcribe: (input: {
     buffer: Buffer;
     fileName: string;
     purpose: "chat";
+    provider?: LLMProvider;
   }) => Promise<{ text: string } | null>;
   synthesize: (text: string, userId: number) => Promise<Buffer | null>;
   converse: (options: {
@@ -67,6 +76,7 @@ export interface CallDeps {
     channel: "web";
     now: Date;
     locale: "zh" | "en";
+    signal?: AbortSignal;
   }) => AsyncGenerator<Record<string, unknown>>;
   trimReply: (personaId: number, userId: number, since: Date, content: string) => Promise<void>;
   now: () => Date;
@@ -89,6 +99,7 @@ const REAL_DEPS: CallDeps = {
   },
   getPersona: async (personaId, userId) =>
     ((await getPersonaById(personaId, userId)) as unknown as CallPersona | undefined) ?? null,
+  resolveProvider: async (input) => (await resolveProviderForUser(input)) ?? null,
   transcribe: (input) => transcribeAudio({ ...input, fileName: input.fileName }),
   synthesize: async (text, userId) => {
     const url = await generateTTS(text, DEFAULT_VOICE, userId);
@@ -190,16 +201,39 @@ export function attachCallServer(server: Server, overrides: Partial<CallDeps> = 
         await reject(socket, "403 Forbidden");
         return;
       }
-      if (sttEngine() === "off" || ttsEngine() === "off") {
+      /**
+       * Both engines have to be able to run, not merely be configured
+       * to a value other than `off`. A whisper.cpp engine without its
+       * binary would accept the call and then say "not heard" to every
+       * utterance; a piper engine without its model would answer only
+       * in text. The upgrade is the place to say so.
+       */
+      if (!sttConfigured() || !ttsConfigured()) {
         await reject(socket, "503 Service Unavailable");
         return;
+      }
+      /**
+       * The provider engine is the user's own provider. Without one
+       * there is nothing to transcribe with; the default environment
+       * says `provider`, which is not the same as a configured one.
+       */
+      let provider: LLMProvider | null = null;
+      if (sttEngine() === "provider") {
+        provider = await deps.resolveProvider({
+          userId: user.id,
+          providerName: persona.llmProvider ?? undefined,
+        }).catch(() => null);
+        if (!provider) {
+          await reject(socket, "503 Service Unavailable");
+          return;
+        }
       }
       if (active.has(user.id)) {
         await reject(socket, "409 Conflict");
         return;
       }
       wss.handleUpgrade(request, socket, head, (ws) => {
-        wss.emit("connection", ws, request, { user, persona });
+        wss.emit("connection", ws, request, { user, persona, provider });
       });
     })().catch(() => {
       if (!socket.destroyed) socket.destroy();
@@ -209,13 +243,27 @@ export function attachCallServer(server: Server, overrides: Partial<CallDeps> = 
   server.on("upgrade", onUpgrade);
 
   wss.on("connection", (ws: WebSocket, _request: unknown, extra: unknown) => {
-    const { user, persona } = extra as { user: CallUser; persona: CallPersona };
+    const { user, persona, provider } = extra as {
+      user: CallUser;
+      persona: CallPersona;
+      provider: LLMProvider | null;
+    };
     active.set(user.id, ws);
     const startedAt = deps.now();
     let started = false;
     let ended = false;
-    /** The turn currently speaking; an interrupt sets its flag. */
+    /** The turn currently speaking; an interrupt aborts it. */
     let currentTurn: { interrupt: () => void } | null = null;
+    /**
+     * One turn at a time.
+     *
+     * The microphone stays live while the answer plays, so a second
+     * utterance can arrive before the first turn has finished. Starting
+     * both would interleave two replies and restart `seq` at zero; the
+     * next one waits its turn instead.
+     */
+    let turnRunning = false;
+    const pendingAudio: Buffer[] = [];
     const locale = user.locale === "en" ? "en" : "zh";
     const maxTimer = setTimeout(() => {
       send(ws, { type: "error", message: copy(locale, "call.tooLong") });
@@ -258,6 +306,7 @@ export function attachCallServer(server: Server, overrides: Partial<CallDeps> = 
         buffer: bytes,
         fileName: "call.webm",
         purpose: "chat",
+        ...(provider ? { provider } : {}),
       }).catch(() => null);
       const text = heard?.text?.trim();
       if (!text) {
@@ -270,9 +319,11 @@ export function attachCallServer(server: Server, overrides: Partial<CallDeps> = 
       let crisis = false;
       let interrupted = false;
       let sentText = "";
+      const controller = new AbortController();
       currentTurn = {
         interrupt: () => {
           interrupted = true;
+          controller.abort();
         },
       };
       try {
@@ -293,6 +344,10 @@ export function attachCallServer(server: Server, overrides: Partial<CallDeps> = 
               photos: false,
               abPairs: false,
             },
+            // A recall is a web-chat gesture. Recalling a line and
+            // writing it back as a small notice has no audio form, and
+            // the call protocol has no event for it.
+            timing: { recall: false },
           }),
         };
         for await (const event of deps.converse({
@@ -303,6 +358,7 @@ export function attachCallServer(server: Server, overrides: Partial<CallDeps> = 
           channel: "web",
           now: turnStart,
           locale,
+          signal: controller.signal,
         })) {
           if (event.type === "delta" && typeof event.text === "string") reply += event.text;
           if (event.type === "done") {
@@ -311,7 +367,9 @@ export function attachCallServer(server: Server, overrides: Partial<CallDeps> = 
           if (event.type === "interrupted") interrupted = true;
         }
       } catch {
-        send(ws, { type: "error", message: copy(locale, "call.replyFailed") });
+        if (!controller.signal.aborted) {
+          send(ws, { type: "error", message: copy(locale, "call.replyFailed") });
+        }
         return;
       }
       if (crisis) send(ws, { type: "crisis" });
@@ -330,11 +388,26 @@ export function attachCallServer(server: Server, overrides: Partial<CallDeps> = 
       if (!interrupted) send(ws, { type: "turn-end" });
     }
 
+    async function runQueued(bytes: Buffer) {
+      if (turnRunning) {
+        pendingAudio.push(bytes);
+        return;
+      }
+      turnRunning = true;
+      try {
+        await turn(bytes);
+      } finally {
+        turnRunning = false;
+        const next = pendingAudio.shift();
+        if (next) void runQueued(next);
+      }
+    }
+
     ws.on("message", (data, isBinary) => {
       if (ended) return;
       if (isBinary) {
         if (!started) return;
-        void turn(Buffer.from(data as Buffer));
+        void runQueued(Buffer.from(data as Buffer));
         return;
       }
       let message: Record<string, unknown>;

@@ -28,7 +28,14 @@ function readAsDataUrl(file: File): Promise<string> {
  * A neutral layout, a note the user may put on the persona's name, and a
  * background picture. Nothing here changes what the persona says.
  */
-export default function SkinPicker({ personaId }: { personaId: number }) {
+export default function SkinPicker({
+  personaId,
+  name = "",
+}: {
+  personaId: number;
+  /** The persona's name, for the note field's label. */
+  name?: string;
+}) {
   const { t } = useLocale();
   const settings = trpc.persona.getSettings.useQuery({ id: personaId });
   const update = trpc.persona.updateSettings.useMutation({
@@ -104,18 +111,26 @@ export default function SkinPicker({ personaId }: { personaId: number }) {
                 : "border-border text-muted-foreground hover:bg-muted/40"
             }`}
           >
-            {t(option.labelKey)}
+            <span
+              data-testid={`skin-preview-${option.id}`}
+              aria-hidden="true"
+              className={`skin-preview skin-preview-${option.id}`}
+            >
+              <span className="skin-preview-bubble skin-preview-bubble-them" />
+              <span className="skin-preview-bubble skin-preview-bubble-me" />
+            </span>
+            <span>{t(option.labelKey)}</span>
           </button>
         ))}
       </div>
       <div className="flex flex-wrap items-end gap-2">
         <label className="text-xs text-muted-foreground space-y-1">
-          <span className="block">{t("skin.aliasLabel")}</span>
+          <span className="block">{t("skin.aliasLabel", { name })}</span>
           <input
             value={alias}
             onChange={(event) => setAlias(event.target.value)}
             placeholder={t("skin.aliasPlaceholder")}
-            aria-label={t("skin.aliasLabel")}
+            aria-label={t("skin.aliasLabel", { name })}
             maxLength={40}
             className="h-8 w-48 rounded-md border border-input bg-card px-2 text-xs text-foreground"
           />

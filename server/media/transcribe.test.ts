@@ -23,6 +23,7 @@ vi.mock("../db", () => ({
 
 vi.mock("../_core/stt", () => ({
   sttIsLocal: () => sttIsLocal(),
+  sttConfigured: () => true,
   sttEngine: () => sttEngine(),
   transcribeAudio: (...a: unknown[]) => transcribeAudio(...a),
 }));

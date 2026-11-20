@@ -96,6 +96,17 @@ describe("describing the uploaded photos", () => {
     expect(sentImageUrls()).toEqual(frames.slice(0, 12));
   });
 
+  it("shows the model the three frames of one video", async () => {
+    storageToDataUrl.mockImplementation(async (url: string) =>
+      url.startsWith("data:") ? url : null,
+    );
+    const frames = ["FRAME0", "FRAME1", "FRAME2"].map(
+      (frame) => `data:image/jpeg;base64,${frame}`,
+    );
+    await describeImages("小A", frames, "openai", 12, "zh", 1);
+    expect(sentImageUrls()).toEqual(frames);
+  });
+
   it("does not ask the model about a picture it cannot read", async () => {
     /**
      * A picture that cannot be read is a picture that cannot be

@@ -185,6 +185,7 @@ export default function ScreenshotImport({
             {rows.map((row, index) => (
               <div
                 key={index}
+                data-unclear={row.unclear ? "true" : undefined}
                 className={`flex items-start gap-2 rounded-md border p-2 ${
                   row.unclear ? "border-amber-500/60 bg-amber-500/5" : "border-border/70"
                 }`}

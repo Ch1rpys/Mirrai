@@ -589,12 +589,64 @@ describe("runConversation", () => {
     });
     expect(generateTTS).toHaveBeenCalledTimes(1);
     // The words are not streamed first and turned into audio later.
-    expect(events.filter((event) => event.type === "delta")).toHaveLength(1);
+    expect(events.filter((event) => event.type === "delta")).toHaveLength(0);
     const done = events.find((event) => event.type === "done") as any;
     expect(done.voice).toEqual({
       url: "/uploads/tts/1/voice.mp3",
       durationSec: 1,
+      content: "在的。",
     });
+  });
+
+  it("does not send a text delta for a voice note when timing is on", async () => {
+    invokeWithProvider.mockResolvedValue("在的。");
+    const events = [];
+    for await (const event of runConversation({
+      persona: timedPersona({
+        styleProfile: VOICE_PROFILE,
+        settings: { layers: { voiceNotes: true } },
+      }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      events.push(event);
+    }
+    expect(events.filter((event) => event.type === "delta")).toHaveLength(0);
+    expect(events.filter((event) => event.type === "burst")).toHaveLength(0);
+    const done = events.find((event) => event.type === "done") as any;
+    expect(done.voice.content).toBe("在的。");
+  });
+
+  it("falls back to a text delta when the voice note cannot be synthesized", async () => {
+    invokeWithProvider.mockResolvedValue("在的。");
+    generateTTS.mockRejectedValueOnce(new Error("the speech engine is offline"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona({
+        emotionalState: "warm",
+        styleProfile: VOICE_PROFILE,
+        settings: { layers: { voiceNotes: true } },
+      }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      now: new Date("2026-01-15T12:00:00.000Z"),
+    })) {
+      events.push(event);
+    }
+    const done = events.find((event) => event.type === "done") as any;
+    expect(done.voice).toBeUndefined();
+    expect(events.filter((event) => event.type === "delta").map((event: any) => event.text).join(""))
+      .toBe("在的。");
+    const assistant = createMessage.mock.calls
+      .map((call: unknown[]) => call[0] as Record<string, any>)
+      .filter((data) => data?.role === "assistant");
+    expect(assistant[0]?.messageType).toBeUndefined();
+    expect(assistant[0]?.content).toBe("在的。");
+    warn.mockRestore();
   });
 
   it("keeps a long reply as text, and does not synthesise it", async () => {
@@ -675,6 +727,12 @@ describe("runConversation", () => {
       emotionalState: "happy",
       metadata: { kind: "sticker", stickerId: 41 },
     });
+    // The sticker is a separate message after the reply, not a field on
+    // it: it has to be the last message written in this turn.
+    const lastWrite = createMessage.mock.calls[createMessage.mock.calls.length - 1]?.[0] as
+      | Record<string, any>
+      | undefined;
+    expect(lastWrite?.metadata?.kind).toBe("sticker");
     const done = events.find((event) => event.type === "done") as any;
     expect(done.extra).toEqual([
       { messageId: 99, kind: "sticker", content: "狗狗探头" },
@@ -817,7 +875,11 @@ describe("runConversation", () => {
     })) {
       // drained
     }
-    expect(listRecentlySentPhotoMediaIds).toHaveBeenCalled();
+    expect(listRecentlySentPhotoMediaIds).toHaveBeenCalledWith(
+      1,
+      1,
+      new Date("2025-12-16T12:00:00.000Z"),
+    );
     expect(
       createMessage.mock.calls
         .map((call: unknown[]) => call[0] as Record<string, any>)

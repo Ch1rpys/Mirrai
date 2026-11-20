@@ -2,6 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import { createCallOnlyServer, isAnswerSlot, splitCallSentences } from "./call";
 
+const createMessage = vi.fn();
+vi.mock("../db", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  createMessage: (...args: unknown[]) => createMessage(...args),
+}));
+
 function callProfile(slots: Array<{ weekday: number; hour: number; n: number }>) {
   return {
     calls: {
@@ -30,6 +36,7 @@ function deps(overrides: Record<string, unknown> = {}) {
   return {
     authenticate: vi.fn(async () => ({ id: 1, name: "阿树", timezone: "Asia/Shanghai" })),
     getPersona: vi.fn(async () => persona),
+    resolveProvider: vi.fn(async () => ({ name: "test" } as never)),
     transcribe: vi.fn(async () => ({ text: "在吗" })),
     synthesize: vi.fn(async () => Buffer.from("audio")),
     converse: vi.fn(async function* () {
@@ -45,9 +52,14 @@ function deps(overrides: Record<string, unknown> = {}) {
 
 let close: (() => void) | null = null;
 
-async function connect(port: number, origin = true): Promise<{ ws: WebSocket; messages: any[] }> {
+async function connect(
+  port: number,
+  origin: boolean | string = true,
+): Promise<{ ws: WebSocket; messages: any[] }> {
+  const originHeader =
+    typeof origin === "string" ? origin : origin ? `http://127.0.0.1:${port}` : null;
   const ws = new WebSocket(`ws://127.0.0.1:${port}/api/call?personaId=5`, {
-    headers: origin ? { Origin: `http://127.0.0.1:${port}` } : {},
+    headers: originHeader ? { Origin: originHeader } : {},
   });
   const messages: any[] = [];
   ws.on("message", (data, isBinary) => {
@@ -97,6 +109,30 @@ describe("the call protocol", () => {
     await expect(connect(port, false)).rejects.toThrow(/http 403/);
   });
 
+  it("refuses a connection without a session cookie", async () => {
+    const server = createCallOnlyServer(deps({
+      authenticate: vi.fn(async () => {
+        throw new Error("no cookie");
+      }),
+    }));
+    const port = await server.listen();
+    close = () => {
+      server.call.close();
+      server.server.close();
+    };
+    await expect(connect(port)).rejects.toThrow(/http 401/);
+  });
+
+  it("refuses an Origin that is not this app", async () => {
+    const server = createCallOnlyServer(deps());
+    const port = await server.listen();
+    close = () => {
+      server.call.close();
+      server.server.close();
+    };
+    await expect(connect(port, "http://evil.example")).rejects.toThrow(/http 403/);
+  });
+
   it("refuses a persona that is not the user's", async () => {
     const server = createCallOnlyServer(deps({
       getPersona: vi.fn(async () => ({ ...persona, userId: 2 })),
@@ -139,6 +175,15 @@ describe("the call protocol", () => {
       "在的。",
       "今天怎么样。",
     ]);
+    expect(messages.filter((m) => m.type === "reply").map((m) => m.seq)).toEqual([0, 1]);
+    const firstReply = messages.findIndex((m) => m.type === "reply");
+    const firstAudio = messages.findIndex((m) => m.binary);
+    const secondReply = messages.findIndex(
+      (m, index) => m.type === "reply" && index > firstReply,
+    );
+    expect(firstReply).toBeGreaterThan(messages.findIndex((m) => m.type === "transcript"));
+    expect(firstAudio).toBeGreaterThan(firstReply);
+    expect(secondReply).toBeGreaterThan(firstAudio);
     expect(messages.filter((m) => m.binary).length).toBe(2);
     expect(d.synthesize).toHaveBeenCalledTimes(2);
   });
@@ -152,7 +197,16 @@ describe("the call protocol", () => {
       return Buffer.from("audio");
     });
     const trimReply = vi.fn(async () => {});
-    const server = createCallOnlyServer(deps({ synthesize: synth, trimReply }));
+    const server = createCallOnlyServer(deps({
+      synthesize: synth,
+      trimReply,
+      converse: vi.fn(async function* () {
+        yield { type: "delta", text: "在的。" };
+        yield { type: "delta", text: "今天怎么样。" };
+        yield { type: "delta", text: "晚上吃什么。" };
+        yield { type: "done", messageId: 1, crisis: false };
+      }),
+    }));
     const port = await server.listen();
     close = () => {
       server.call.close();
@@ -212,6 +266,60 @@ describe("the call protocol", () => {
     ws.send(Buffer.from("audio"));
     await waitFor(messages, (m) => m.type === "crisis");
     expect(messages.some((m) => m.type === "crisis")).toBe(true);
+    // The crisis answer is still spoken, like any other answer.
+    expect(messages.some((m) => m.type === "reply" && m.text === "我先陪你。")).toBe(true);
+    expect(messages.some((m) => m.binary)).toBe(true);
+  });
+
+  it("runs two quick utterances one after the other", async () => {
+    let n = 0;
+    const server = createCallOnlyServer(deps({
+      converse: vi.fn(async function* () {
+        n += 1;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        yield { type: "delta", text: `第${n}句。` };
+        yield { type: "done", messageId: n, crisis: false };
+      }),
+    }));
+    const port = await server.listen();
+    close = () => {
+      server.call.close();
+      server.server.close();
+    };
+    const { ws, messages } = await connect(port);
+    ws.send(JSON.stringify({ type: "start" }));
+    await waitFor(messages, (m) => m.type === "ready");
+    ws.send(Buffer.from("first"));
+    ws.send(Buffer.from("second"));
+    await waitFor(messages, () => messages.filter((m) => m.type === "turn-end").length >= 2);
+    const order = messages
+      .map((m) => m.type)
+      .filter((type) => type === "transcript" || type === "turn-end");
+    expect(order).toEqual(["transcript", "turn-end", "transcript", "turn-end"]);
+    expect(messages.filter((m) => m.type === "reply")).toHaveLength(2);
+  });
+
+  it("writes a system notice with the call length on hang-up", async () => {
+    createMessage.mockReset();
+    createMessage.mockResolvedValue(1);
+    const server = createCallOnlyServer(deps());
+    const port = await server.listen();
+    close = () => {
+      server.call.close();
+      server.server.close();
+    };
+    const { ws } = await connect(port);
+    ws.send(JSON.stringify({ type: "start" }));
+    ws.send(JSON.stringify({ type: "hangup" }));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(createMessage).toHaveBeenCalledTimes(1);
+    expect(createMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: "assistant",
+        origin: "system-notice",
+        content: "通话 0 分 00 秒",
+      }),
+    );
   });
 
   it("refuses a second call from the same user", async () => {

@@ -43,9 +43,12 @@ vi.mock("./db", () => ({
 }));
 
 const runSkillPipeline = vi.fn();
+const videoMaterial = vi.hoisted(() => ({
+  value: { frameDataUrls: [] as string[], transcripts: [] as string[], skipped: 0 },
+}));
 
 vi.mock("./skill-engine/video", () => ({
-  prepareVideoMaterial: async () => ({ frameDataUrls: [], transcripts: [], skipped: 0 }),
+  prepareVideoMaterial: async () => videoMaterial.value,
 }));
 
 vi.mock("./skill-engine/pipeline", () => ({
@@ -104,6 +107,24 @@ describe("distilling a persona", () => {
     updatePersona.mockResolvedValue(undefined);
     getSkillJobById.mockResolvedValue(undefined);
     runSkillPipeline.mockResolvedValue({ persona: {} });
+    videoMaterial.value = { frameDataUrls: [], transcripts: [], skipped: 0 };
+  });
+
+  it("passes the video frames and words to the pipeline", async () => {
+    videoMaterial.value = {
+      frameDataUrls: ["data:image/jpeg;base64,FRAME0"],
+      transcripts: ["视频里说的话"],
+      skipped: 1,
+    };
+    await appRouter
+      .createCaller(ctxFor(1))
+      .skillEngine.startPipeline({ personaId: 5, characterFamily: "relationship" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(runSkillPipeline.mock.calls[0][0]).toMatchObject({
+      videoFrames: ["data:image/jpeg;base64,FRAME0"],
+      videoTranscripts: ["视频里说的话"],
+      videoSkipped: 1,
+    });
   });
 
   it("runs the pipeline on the provider the persona is pinned to", async () => {

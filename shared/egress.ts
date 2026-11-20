@@ -32,12 +32,12 @@ export const EGRESS_ITEMS: EgressItem[] = [
       en: "The OpenAI-compatible URL the user configured (api.openai.com by default, or a self-hosted / third-party host)",
     },
     payload: {
-      zh: "对话的系统提示词、历史和当前一句；密钥在 Authorization 头里",
-      en: "The system prompt, the history and the current turn; the API key in the Authorization header",
+      zh: "对话的系统提示词、历史和当前一句；导入截图时，截图图片本身也走这里；密钥在 Authorization 头里",
+      en: "The system prompt, the history and the current turn; screenshot imports also send the image itself; the API key in the Authorization header",
     },
     when: {
-      zh: "分身回复、蒸馏、评测，以及任何走这个 provider 的模型调用",
-      en: "A reply, a distillation, an evaluation, or any other call that uses this provider",
+      zh: "分身回复、蒸馏、评测、截图识别，以及任何走这个 provider 的模型调用",
+      en: "A reply, a distillation, an evaluation, a screenshot import, or any other call that uses this provider",
     },
     defaultOn: false,
     offHow: {
@@ -204,8 +204,8 @@ export const EGRESS_ITEMS: EgressItem[] = [
       en: "The text to be read, and the chosen voice id",
     },
     when: {
-      zh: "用户点朗读，且 TTS_ENABLED 未关时",
-      en: "When the user asks for speech and TTS_ENABLED is not off",
+      zh: "用户点朗读，TTS_ENABLED 未关，且 TTS_ENGINE 是 edge 时（其他引擎在本机合成）",
+      en: "When the user asks for speech, TTS_ENABLED is not off, and TTS_ENGINE is edge (the other engines synthesise on this machine)",
     },
     defaultOn: true,
     offHow: {

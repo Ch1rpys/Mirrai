@@ -11,6 +11,14 @@ describe("the video material in a distillation", () => {
     expect(out).toContain("MATERIAL>>>:");
     expect(out).toContain("我昨天去了海边。");
     expect(out).toContain("下次带你去吃那家面。");
+    for (const line of ["我昨天去了海边。", "下次带你去吃那家面。"]) {
+      const at = out.indexOf(line);
+      const open = out.lastIndexOf("MATERIAL>>>:", at);
+      const close = out.indexOf("<<<END MATERIAL", at);
+      expect(open).toBeGreaterThanOrEqual(0);
+      expect(at).toBeGreaterThan(open);
+      expect(close).toBeGreaterThan(at);
+    }
   });
 
   it("says how many videos were not read", () => {

@@ -71,7 +71,15 @@ class FakeSocket {
   }
 }
 
-import Call from "./Call";
+import Call, { BARGE_IN_RMS, shouldBargeIn } from "./Call";
+
+describe("barge-in", () => {
+  it("only stops the answer when the user is actually speaking", () => {
+    expect(shouldBargeIn(BARGE_IN_RMS - 0.01, true)).toBe(false);
+    expect(shouldBargeIn(BARGE_IN_RMS + 0.01, true)).toBe(true);
+    expect(shouldBargeIn(BARGE_IN_RMS + 0.01, false)).toBe(false);
+  });
+});
 
 describe("the call page", () => {
   beforeEach(() => {

@@ -8,6 +8,7 @@ import {
   deletePersona,
   deletePersonaFile,
   deleteRecordsByFile,
+  getCollectedMessagesForPersona,
   getPersonaStyleProfile,
   getRecordsAround,
   getRecordSourceSummary,
@@ -15,6 +16,7 @@ import {
 } from "./db";
 import { importRecords } from "./collectors/db-store";
 import { measureStyleProfile } from "./_core/style-profile";
+import { clearRerankModelCache, getRerankModel } from "./chat/rerank-model";
 import { buildXiaomanRecords } from "./test-fixtures/xiaoman";
 import { seedXiaoman } from "./test-fixtures/seed-db";
 
@@ -131,7 +133,56 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
       expect(await read()).toEqual(["private line"]);
       expect(await read("public")).toEqual(["public line"]);
       expect((await read("all")).sort()).toEqual(["private line", "public line"]);
+
+      const readCollected = async (register?: "private" | "public" | "all") =>
+        (await getCollectedMessagesForPersona(personaId, userId, { register, newest: true }))
+          .map((row) => row.content);
+      expect(await readCollected()).toEqual(["private line"]);
+      expect(await readCollected("public")).toEqual(["public line"]);
+      expect((await readCollected("all")).sort()).toEqual(["private line", "public line"]);
     } finally {
+      await deletePersona(personaId, userId);
+    }
+  });
+
+  it("does not build the rerank n-gram model from public posts", async () => {
+    const userId = 9_935_000 + Math.floor(Math.random() * 10_000);
+    const personaId = await createPersona({ userId, name: "rerank-register" });
+    clearRerankModelCache();
+    try {
+      const rows = [
+        ...Array.from({ length: 40 }, (_, i) => ({
+          userId,
+          personaId,
+          source: "generic",
+          role: "assistant" as const,
+          content: `private line ${i}`,
+          timestamp: new Date(2022, 0, 1, 12, 0, i),
+          kind: "text",
+          speaker: "小满",
+          idempotencyKey: hashKey(`generic|rerank-private|${userId}|${i}`),
+        })),
+        ...Array.from({ length: 60 }, (_, i) => ({
+          userId,
+          personaId,
+          source: "moments",
+          role: "assistant" as const,
+          content: `public post ${i}`,
+          timestamp: new Date(2022, 1, 1, 12, 0, i),
+          kind: "text",
+          speaker: "小满",
+          meta: { register: "public" },
+          idempotencyKey: hashKey(`generic|rerank-public|${userId}|${i}`),
+        })),
+      ];
+      expect(await createCollectedMessages(rows)).toBe(100);
+
+      const model = await getRerankModel(personaId, userId);
+      expect(model).not.toBeNull();
+      expect(model!.texts).toHaveLength(40);
+      expect(model!.texts.every((text) => text.startsWith("private line "))).toBe(true);
+    } finally {
+      clearRerankModelCache();
       await deletePersona(personaId, userId);
     }
   });

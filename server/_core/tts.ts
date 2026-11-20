@@ -158,8 +158,24 @@ export function ttsLeavesMachine(): boolean {
   return ttsEngine() === "edge";
 }
 
-function ttsAllowsRemote(): boolean {
-  return (process.env.TTS_HTTP_ALLOW_REMOTE ?? "").trim().toLowerCase() === "true";
+/**
+ * Whether the configured engine has what it needs to run.
+ *
+ * `ttsLeavesMachine()` says where the text goes; this says whether the
+ * engine can synthesise at all. A piper engine with no binary/model and
+ * an HTTP engine with no URL are both unusable, and the call mode
+ * should refuse to start rather than answering every sentence silently.
+ */
+export function ttsConfigured(): boolean {
+  const engine = ttsEngine();
+  if (engine === "off") return false;
+  if (engine === "piper") {
+    return Boolean(
+      (process.env.PIPER_BIN ?? "").trim() && (process.env.PIPER_MODEL ?? "").trim(),
+    );
+  }
+  if (engine === "http") return (process.env.TTS_HTTP_URL ?? "").trim().length > 0;
+  return true;
 }
 
 function getCacheKey(
@@ -223,7 +239,17 @@ async function synthesizeWithHttp(
   if (!raw) {
     throw new Error("The read-aloud is set to http, but TTS_HTTP_URL is not set.");
   }
-  const url = assertLocalEndpoint(raw, ttsAllowsRemote());
+  /**
+   * The read-aloud endpoint is local-only.
+   *
+   * The interface says "synthesised on this machine" whenever the
+   * engine is not Edge, and `ttsLeavesMachine()` is what it reads. A
+   * remote HTTP address would make that sentence false, so there is no
+   * switch that sends the text off the machine through this engine.
+   * Operators who need a remote voice service should use a provider,
+   * which is registered as egress and disclosed separately.
+   */
+  const url = assertLocalEndpoint(raw);
   const body: Record<string, unknown> = {
     model: (process.env.TTS_HTTP_MODEL ?? "").trim() || "tts-1",
     input: text,

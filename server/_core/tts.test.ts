@@ -30,10 +30,12 @@ vi.mock("edge-tts", () => ({
 }));
 vi.mock("./ffmpeg", () => ({ hasFfmpeg: () => mocks.ffmpegAvailable() }));
 
+import { prosodyToTts } from "@shared/prosody";
 import {
   DEFAULT_VOICE,
   TTS_VOICES,
   generateTTS,
+  ttsConfigured,
   ttsEngine,
   ttsLeavesMachine,
   voicesForLocale,
@@ -121,6 +123,22 @@ describe("the read-aloud engine", () => {
     expect(ttsLeavesMachine()).toBe(true);
   });
 
+  it("knows whether the configured engine can actually run", () => {
+    vi.stubEnv("TTS_ENGINE", "edge");
+    expect(ttsConfigured()).toBe(true);
+    vi.stubEnv("TTS_ENGINE", "piper");
+    expect(ttsConfigured()).toBe(false);
+    vi.stubEnv("PIPER_BIN", "/opt/piper/piper");
+    vi.stubEnv("PIPER_MODEL", "/models/zh_CN.onnx");
+    expect(ttsConfigured()).toBe(true);
+    vi.stubEnv("TTS_ENGINE", "http");
+    expect(ttsConfigured()).toBe(false);
+    vi.stubEnv("TTS_HTTP_URL", "http://127.0.0.1:8880/v1/audio/speech");
+    expect(ttsConfigured()).toBe(true);
+    vi.stubEnv("TTS_ENGINE", "off");
+    expect(ttsConfigured()).toBe(false);
+  });
+
   it("says nothing leaves the machine for the local engines", () => {
     vi.stubEnv("TTS_ENGINE", "piper");
     expect(ttsLeavesMachine()).toBe(false);
@@ -148,6 +166,17 @@ describe("the read-aloud engine", () => {
     });
     expect(url).toMatch(/^\/uploads\/tts\/7\/[0-9a-f]{16}\.mp3$/);
     expect(existsSync(path.join(cacheRoot, "tts", "7", url.split("/").pop()!))).toBe(true);
+  });
+
+  it("reads at the pace the prosody measurement computed", async () => {
+    vi.stubEnv("TTS_ENGINE", "edge");
+    const direction = prosodyToTts({ charsPerSec: 5.04, samples: 10 }, "zh");
+    expect(direction.ratePercent).toBe(20);
+    await generateTTS("测速一下", DEFAULT_VOICE, 9, { ratePercent: direction.ratePercent });
+    expect(mocks.edgeTts).toHaveBeenCalledWith("测速一下", {
+      voice: DEFAULT_VOICE,
+      rate: "+20%",
+    });
   });
 
   it("caches by engine and by rate, not by the words alone", async () => {
@@ -243,5 +272,17 @@ describe("the read-aloud engine", () => {
     vi.stubGlobal("fetch", vi.fn());
     await expect(generateTTS("在吗", DEFAULT_VOICE, 4)).rejects.toThrow(/not on this machine/);
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("has no switch that sends the text to a remote speech service", async () => {
+    vi.stubEnv("TTS_ENGINE", "http");
+    vi.stubEnv("TTS_HTTP_URL", "https://speech.example.com/v1/audio/speech");
+    // The variable existed in an earlier revision. It must not reopen the
+    // remote path now that the interface says the text stays here.
+    vi.stubEnv("TTS_HTTP_ALLOW_REMOTE", "true");
+    vi.stubGlobal("fetch", vi.fn());
+    await expect(generateTTS("在吗", DEFAULT_VOICE, 4)).rejects.toThrow(/not on this machine/);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(ttsLeavesMachine()).toBe(false);
   });
 });

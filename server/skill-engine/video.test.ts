@@ -1,4 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 const listMedia = vi.fn();
 const getFilesByPersonaId = vi.fn();
@@ -140,6 +143,20 @@ describe("reading the videos of a distillation", () => {
       recursive: true,
       force: true,
     });
+  });
+
+  it("deletes the temporary directory when a frame cannot be extracted", async () => {
+    const actual = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+    const dir = await actual.mkdtemp(path.join(tmpdir(), "mirrai-video-real-"));
+    mkdtemp.mockResolvedValue(dir);
+    rm.mockImplementation((target: string, options: unknown) =>
+      actual.rm(target, options as never),
+    );
+    extractKeyframes.mockRejectedValue(new Error("ffmpeg failed"));
+
+    await prepareVideoMaterial({ personaId: 5, userId: 1 });
+
+    expect(existsSync(dir)).toBe(false);
   });
 
   it("does nothing when ffmpeg is not installed", async () => {

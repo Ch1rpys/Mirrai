@@ -158,9 +158,18 @@ describe("Chat", () => {
     expect(screen.getByText("数字分身")).toBeInTheDocument();
   });
 
+  it("wears the blue layout and keeps the badge", () => {
+    chatPersona.value.settings = { skin: { theme: "im-blue" } };
+    const { container } = render(<Chat />);
+    expect(container.querySelector(".chat-root")?.getAttribute("data-skin")).toBe("im-blue");
+    expect(screen.getByText("数字分身")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("小A");
+  });
+
   it("is the classic layout by default", () => {
     const { container } = render(<Chat />);
     expect(container.querySelector(".chat-root")?.getAttribute("data-skin")).toBe("classic");
+    expect(screen.getByText("数字分身")).toBeInTheDocument();
   });
 
   it("lets the composer take another line while a reply is still arriving", async () => {

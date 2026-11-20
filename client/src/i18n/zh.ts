@@ -2350,7 +2350,7 @@ export const zh = {
     classic: "默认",
     green: "绿色气泡",
     blue: "蓝色气泡",
-    aliasLabel: "你给 TA 的备注",
+    aliasLabel: "你给 {{name}} 的备注",
     aliasPlaceholder: "显示在顶栏",
     saveAlias: "保存备注名",
     chooseBackground: "换聊天背景",

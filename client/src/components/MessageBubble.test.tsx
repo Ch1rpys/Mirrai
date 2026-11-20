@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
+import { formatInstantInZone } from "@/lib/dates";
 
 /**
  * The message bubble.
@@ -510,6 +511,9 @@ describe("the message bubble", () => {
       'img[src="/uploads/personas/1/5/imports/1/a.jpg"]',
     );
     expect(image).not.toBeNull();
+    expect(
+      screen.getByText(formatInstantInZone("2022-04-02T04:00:00.000Z", "zh")),
+    ).toBeInTheDocument();
   });
 
   it("says a photo is the real one the user uploaded, with its date", () => {

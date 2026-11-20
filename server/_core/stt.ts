@@ -68,6 +68,31 @@ export function sttIsLocal(): boolean {
   return false;
 }
 
+/**
+ * Whether the configured engine has what it needs to run.
+ *
+ * `sttIsLocal()` says where an engine keeps the audio; this says
+ * whether it can start at all. A whisper.cpp engine with no binary and
+ * an HTTP engine with no URL are both "local" and both unusable, and
+ * the call upgrade and the transcription task should say so before
+ * they start rather than failing every file one by one.
+ *
+ * The provider engine is usable only if the user has a provider; that
+ * is resolved by the caller, which knows the user and the persona.
+ */
+export function sttConfigured(): boolean {
+  const engine = sttEngine();
+  if (engine === "off") return false;
+  if (engine === "whisper-cpp") {
+    return Boolean(
+      (process.env.WHISPER_CPP_BIN ?? "").trim() &&
+        (process.env.WHISPER_CPP_MODEL ?? "").trim(),
+    );
+  }
+  if (engine === "http") return sttHttpUrl().length > 0;
+  return true;
+}
+
 export interface TranscribeInput {
   buffer?: Buffer;
   filePath?: string;

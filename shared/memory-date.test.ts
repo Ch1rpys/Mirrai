@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isMemoryDate } from "./memory-date";
+import {
+  isDayNearMemoryDate,
+  isMemoryDate,
+  isMonthDayNearMemoryDate,
+} from "./memory-date";
 
 describe("isMemoryDate", () => {
   it("accepts a real day and a month-day", () => {
@@ -16,5 +20,19 @@ describe("isMemoryDate", () => {
   it("rejects a phrase that is not a date", () => {
     expect(isMemoryDate("last summer")).toBe(false);
     expect(isMemoryDate("")).toBe(false);
+  });
+});
+
+describe("the photo window around a memory", () => {
+  it("matches a full date within three calendar days", () => {
+    expect(isDayNearMemoryDate("2022-04-02", "2022-04-05")).toBe(true);
+    expect(isDayNearMemoryDate("2022-04-02", "2022-04-06")).toBe(false);
+  });
+
+  it("matches a year-less month and day across New Year", () => {
+    expect(isMonthDayNearMemoryDate("2023-01-01", "12-31")).toBe(true);
+    expect(isMonthDayNearMemoryDate("2023-01-04", "12-31")).toBe(false);
+    expect(isMonthDayNearMemoryDate("2022-12-31", "01-01")).toBe(true);
+    expect(isMonthDayNearMemoryDate("2022-12-28", "01-01")).toBe(false);
   });
 });

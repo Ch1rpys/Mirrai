@@ -28,6 +28,8 @@ export interface CollectedReply {
   speaker?: string | null;
   act?: string | null;
   emotion?: string | null;
+  /** `meta.register`; missing means private. Public posts are not exemplars. */
+  meta?: Record<string, unknown> | null;
 }
 
 export interface Exemplar {
@@ -241,7 +243,17 @@ export function retrieveExemplars(params: {
   const excludedTexts = new Set(
     [...(params.excludeTexts ?? [])].map((text) => text.trim()).filter(Boolean),
   );
-  const kept = new Set(filterHarm(params.records, params.personaData).map((row) => row.id));
+  const kept = new Set(
+    filterHarm(params.records, params.personaData)
+      // The caller should already have asked for private rows. This is
+      // the second gate: a public post is not their one-to-one voice,
+      // even if a future caller passes every register.
+      .filter((row) => {
+        const register = row.meta?.register;
+        return register == null || register === "private";
+      })
+      .map((row) => row.id),
+  );
   const currentContext = recentContextText(params.history, query);
   const currentContextTokens = currentContext ? tokenize(currentContext) : new Set<string>();
   const currentDay = params.now ? dayPartOf(params.now, params.timeZone) : null;

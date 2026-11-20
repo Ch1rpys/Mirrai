@@ -97,6 +97,41 @@ describe.skipIf(!DATABASE_URL)("photos attached to memories", () => {
     }
   });
 
+  it("removes a standalone photo's link when its source file is deleted", async () => {
+    const userId = 9_992_000 + Math.floor(Math.random() * 10_000);
+    const personaId = await createPersona({ userId, name: "standalone-link" });
+    try {
+      const fileId = await createPersonaFile({
+        personaId,
+        userId,
+        fileType: "image",
+        originalName: "a.jpg",
+        fileKey: `personas/${userId}/${personaId}/a.jpg`,
+        fileUrl: `/uploads/personas/${userId}/${personaId}/a.jpg`,
+        fileSize: 10,
+      });
+      const memoryId = await createMemory({ personaId, userId, title: "那天" });
+      const mediaId = (
+        await upsertMedia({
+          userId,
+          personaId,
+          kind: "photo",
+          fileKey: `personas/${userId}/${personaId}/a.jpg`,
+          hash: "6".repeat(64),
+          fileId: null,
+        })
+      ).id;
+      await linkMemoryMedia({ userId, personaId, memoryId, mediaId });
+      expect(await listMemoryMedia(memoryId, userId)).toHaveLength(1);
+
+      await deletePersonaFile(fileId, userId);
+
+      expect(await listMemoryMedia(memoryId, userId)).toHaveLength(0);
+    } finally {
+      await deletePersona(personaId, userId);
+    }
+  });
+
   it("removes the links with the persona", async () => {
     const userId = 9_995_000 + Math.floor(Math.random() * 10_000);
     const personaId = await createPersona({ userId, name: "photo-persona" });

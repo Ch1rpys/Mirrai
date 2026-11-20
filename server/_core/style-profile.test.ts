@@ -298,8 +298,14 @@ describe("measureStyleProfile", () => {
   it("writes the call table from the fixture", async () => {
     getRecordsVersion.mockResolvedValue("3200:3200");
     getPersonaStyleProfile.mockResolvedValue(null);
-    getPersonaById.mockResolvedValue({ id: 5, userId: 1, name: "小满", personaData: {} });
-    getUserById.mockResolvedValue({ id: 1, name: "阿树" });
+    getPersonaById.mockResolvedValue({
+      id: 5,
+      userId: 1,
+      name: "小满",
+      timezone: "Asia/Shanghai",
+      personaData: {},
+    });
+    getUserById.mockResolvedValue({ id: 1, name: "阿树", timezone: "Asia/Shanghai" });
     const fixture = buildXiaomanRecords();
     iterateRecords.mockImplementation(async function* () {
       for (const row of fixture) {
