@@ -47,6 +47,10 @@ vi.mock("@/lib/trpc", () => ({
       exportManual: {
         useQuery: () => ({ refetch: async () => ({ data: { html: "<html></html>" } }) }),
       },
+      reunionSummary: {
+        useQuery: () => ({ data: null, isLoading: false, isError: false, refetch: vi.fn() }),
+      },
+      updateSettings: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       evidence: {
         useQuery: () => ({
           data: { dimensions: evidenceDimensions },
@@ -75,7 +79,10 @@ vi.mock("@/lib/trpc", () => ({
       persona: { get: { invalidate: vi.fn() } },
     }),
     memory: { list: { useQuery: () => ({ data: { items: memoryItems, total: memoryTotal } }) } },
-    relationship: { list: { useQuery: () => ({ data: { events: [] } }) } },
+    relationship: {
+      list: { useQuery: () => ({ data: { events: [] } }) },
+      add: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
   },
 }));
 
@@ -320,5 +327,13 @@ describe("the portrait", () => {
     };
     render(<PersonaProfile />);
     expect(screen.getAllByText(translate("zh", "evidence.inferred"))).toHaveLength(8);
+  });
+
+  it("keeps the coming-back entry while it has not been put away (C5.4)", () => {
+    persona.settings = {
+      lastReunion: { from: "2026-02-01T00:00:00.000Z", to: "2026-03-01T00:00:00.000Z" },
+    };
+    render(<PersonaProfile />);
+    expect(screen.getByText(translate("zh", "reunion.title"))).toBeInTheDocument();
   });
 });

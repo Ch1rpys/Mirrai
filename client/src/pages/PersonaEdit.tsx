@@ -30,6 +30,7 @@ import StickerLibrary from "@/components/v6/StickerLibrary";
 import AvatarPicker from "@/components/v6/AvatarPicker";
 import SkinPicker from "@/components/v6/SkinPicker";
 import LdrSettings from "@/components/v6/LdrSettings";
+import ReunionSummary from "@/components/v6/ReunionSummary";
 import PersonaSampling from "@/components/v6/PersonaSampling";
 import HarmNotice from "@/components/v6/HarmNotice";
 import VersionHistory from "@/components/v6/VersionHistory";
@@ -119,7 +120,13 @@ export default function PersonaEdit() {
   const hasRerankCorpus = theirsText >= RERANK_MIN_ASSISTANT_LINES;
 
   const updateMutation = trpc.persona.update.useMutation({
-    onSuccess: () => { toast.success(t("personaEdit.basicSaved")); refetch(); },
+    onSuccess: (data: any) => {
+      toast.success(t("personaEdit.basicSaved"));
+      refetch();
+      // Coming back from "cannot reach each other" opens the summary
+      // once (C5.4); the profile keeps an entry until it is put away.
+      if (data?.reunion) setShowReunion(true);
+    },
     onError: (e: any) => toast.error(e.message),
   });
   const updateDataMutation = trpc.persona.updatePersonaData.useMutation({
@@ -176,6 +183,7 @@ export default function PersonaEdit() {
   const effectiveGraduationMode: GraduationMode = graduation?.mode ?? "suggest";
 
   const [name, setName] = useState("");
+  const [showReunion, setShowReunion] = useState(false);
   const [relationshipDesc, setRelationshipDesc] = useState("");
   const [togetherFrom, setTogetherFrom] = useState("");
   const [togetherTo, setTogetherTo] = useState("");
@@ -946,6 +954,12 @@ export default function PersonaEdit() {
           </div>
         )}
       </main>
+      <ReunionSummary
+        personaId={personaId}
+        name={name}
+        open={showReunion}
+        onClose={() => setShowReunion(false)}
+      />
     </div>
   );
 }

@@ -66,6 +66,7 @@ import {
   createRelationshipEvent, getRelationshipEvents, countRelationshipEvents, deleteRelationshipEvent,
   saveEvalCases, getEvalCases, saveEvalRun, getLatestEvalRun,
   getOutboundLetters, setOutboundLetterStatus, restoreOutboundLetter, updateOutboundLetterText,
+  getUserMoodsBetween, getRecentCheckinAnswers,
   markOutboundLetterStaleNotified,
   getOutboundLetterById, setOutboundLetterOutcome,
   createOutboundLetter,
@@ -1662,6 +1663,35 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const { id, ...rest } = input;
+        const currentPersona = await getPersonaById(id, ctx.user.id);
+        if (!currentPersona) throw new TRPCError({ code: "NOT_FOUND" });
+        /**
+         * Coming back (C5.4).
+         *
+         * Losing touch and getting back in touch are two moments, and the
+         * user did not ask the app to remember them. So the first records
+         * when it started, and the second returns the stretch it covered
+         * and keeps it on the persona. The summary page reads it from
+         * there, later, when the user opens it.
+         */
+        let reunion: { from: string; to: string } | null = null;
+        if (rest.reachability !== undefined && rest.reachability !== currentPersona.reachability) {
+          const settings = normalizePersonaSettings(
+            await getPersonaSettings(id, ctx.user.id),
+          );
+          const now = new Date();
+          if (rest.reachability === "unreachable") {
+            settings.unreachableSince = now.toISOString();
+          } else if (currentPersona.reachability === "unreachable") {
+            const from =
+              settings.unreachableSince ??
+              new Date((currentPersona as { updatedAt?: Date }).updatedAt ?? now).toISOString();
+            reunion = { from, to: now.toISOString() };
+            settings.lastReunion = { from, to: now.toISOString() };
+            delete settings.unreachableSince;
+          }
+          await setPersonaSettings(id, ctx.user.id, settings);
+        }
         // A persona that points at a provider that does not exist would
         // silently talk to a different model.
         if (rest.llmProvider) assertKnownProvider(rest.llmProvider, ctx.locale);
@@ -1730,7 +1760,65 @@ export const appRouter = router({
         if (!written) {
           throw new TRPCError({ code: "NOT_FOUND" });
         }
-        return { success: true };
+        return reunion ? { success: true, reunion } : { success: true };
+      }),
+
+    /**
+     * What the user gathered while the two of them could not reach each
+     * other (C5.4).
+     *
+     * Only the stretch between losing touch and coming back: the notes
+     * kept for this moment, the things still unsaid, the letters
+     * written, the moods and the after-chat answers. Read-only.
+     */
+    reunionSummary: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const settings = normalizePersonaSettings(
+          await getPersonaSettings(input.personaId, ctx.user.id),
+        );
+        const last = settings.lastReunion;
+        if (!last) return null;
+        const from = new Date(last.from);
+        const to = new Date(last.to);
+        if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime())) return null;
+        const inRange = (value: Date | string | null | undefined): boolean => {
+          if (!value) return false;
+          const at = value instanceof Date ? value : new Date(value);
+          return Number.isFinite(at.getTime()) && at >= from && at <= to;
+        };
+        const zone = ctx.user.timezone;
+        const fromDay = zonedDateKey(from, zone);
+        const toDay = zonedDateKey(to, zone);
+
+        const [notes, outbound, allLetters, moods, answers] = await Promise.all([
+          getWaitingNotes(input.personaId, ctx.user.id).catch(() => []),
+          getOutboundLetters(input.personaId, ctx.user.id).catch(() => []),
+          getLetters(input.personaId, ctx.user.id, 200).catch(() => []),
+          getUserMoodsBetween(ctx.user.id, fromDay, toDay).catch(() => []),
+          getRecentCheckinAnswers(ctx.user.id, input.personaId, 100, from).catch(() => []),
+        ]);
+
+        return {
+          from: last.from,
+          to: last.to,
+          dismissed: Boolean(last.dismissed),
+          todos: notes
+            .filter((row) => !row.doneAt && inRange(row.createdAt))
+            .map((row) => ({ id: row.id, body: row.body, createdAt: row.createdAt })),
+          unsaid: outbound
+            .filter((row) => row.status !== "sent" && row.status !== "dropped" && inRange(row.createdAt))
+            .map((row) => ({ id: row.id, text: row.text, createdAt: row.createdAt })),
+          letters: allLetters
+            .filter((row) => inRange(row.createdAt))
+            .map((row) => ({ id: row.id, body: row.body, createdAt: row.createdAt })),
+          moods: moods.map((row) => ({ date: row.date, mood: row.mood })),
+          answers: answers
+            .filter((row) => inRange(row.createdAt))
+            .map((row) => ({ answer: row.answer, createdAt: row.createdAt })),
+        };
       }),
 
     updatePersonaData: protectedProcedure

@@ -43,6 +43,9 @@ vi.mock("@/lib/trpc", () => ({
       applyCorrection: { useMutation: () => ({ mutate: applyCorrection, isPending: false }) },
       correctionLog: { useQuery: () => ({ data: { entries: [] } }) },
       graduationMode: { useQuery: () => ({ data: { mode: "suggest" } }) },
+      reunionSummary: {
+        useQuery: () => ({ data: null, isLoading: false, isError: false, refetch: vi.fn() }),
+      },
       getSettings: {
         useQuery: () => ({
           data: { layers: { abPairs: false }, skin: { theme: "classic" } },
@@ -72,6 +75,9 @@ vi.mock("@/lib/trpc", () => ({
       import: { useMutation: () => ({ mutate: importCard, isPending: false }) },
     },
     llmConfig: { listProviders: { useQuery: () => ({ data: [] }) } },
+    relationship: {
+      add: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     ldr: {
       status: { useQuery: () => ({ data: { enabled: true } }) },
       searchCity: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },

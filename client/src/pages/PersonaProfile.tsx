@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
@@ -28,6 +29,7 @@ import FingerprintView from "@/components/v6/FingerprintView";
 import { Button } from "@/components/ui/button";
 import { resolveRelationshipPhase } from "@shared/user-side";
 import { normalizePersonaSettings } from "@shared/persona-settings";
+import ReunionSummary from "@/components/v6/ReunionSummary";
 
 /**
  * What the app has understood.
@@ -80,6 +82,8 @@ export default function PersonaProfile() {
    * only half the promise if the entry is always there.
    */
   const callEnabled = normalizePersonaSettings(persona?.settings).layers.callMode;
+  const reunion = normalizePersonaSettings(persona?.settings).lastReunion;
+  const [showReunion, setShowReunion] = useState(false);
   const manual = trpc.persona.exportManual.useQuery({ personaId }, { enabled: false });
   const openManual = async () => {
     const result = await manual.refetch();
@@ -528,6 +532,18 @@ export default function PersonaProfile() {
               </span>
             </button>
           )}
+          {reunion && !reunion.dismissed && (
+            <button
+              type="button"
+              onClick={() => setShowReunion(true)}
+              className="w-full rounded-lg border border-border/70 p-3 text-left transition-colors hover:bg-muted/30"
+            >
+              <span className="block text-sm text-foreground">{t("reunion.title")}</span>
+              <span className="block text-xs text-muted-foreground leading-relaxed">
+                {t("reunion.entryNote")}
+              </span>
+            </button>
+          )}
           <details className="rounded-lg border border-border/70 p-3">
             <summary className="cursor-pointer text-sm text-foreground">
               {t("report.dictionary.title")}
@@ -564,6 +580,12 @@ export default function PersonaProfile() {
           {t("profile.disclaimer")}
         </motion.p>
       </main>
+      <ReunionSummary
+        personaId={personaId}
+        name={persona?.name ?? ""}
+        open={showReunion}
+        onClose={() => setShowReunion(false)}
+      />
     </div>
   );
 }

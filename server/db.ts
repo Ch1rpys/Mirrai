@@ -881,6 +881,23 @@ export async function getUserMoods(
     .orderBy(asc(userMoods.date));
 }
 
+/** The user's moods filed on days between two day keys, oldest first. */
+export async function getUserMoodsBetween(
+  userId: number,
+  fromDay: string,
+  toDay: string,
+) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(userMoods)
+    .where(and(
+      eq(userMoods.userId, userId),
+      gte(userMoods.date, fromDay),
+      lte(userMoods.date, toDay),
+    ))
+    .orderBy(asc(userMoods.date));
+}
+
 /**
  * The user's most recent mood.
  *
