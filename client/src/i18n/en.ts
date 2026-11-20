@@ -1346,6 +1346,7 @@ export const en = {
     uploadFailed: "The picture was not saved.",
   },
   personaEdit: {
+    onThisDay: "Show “On this day” in the hall",
     title: "Edit persona",
     name: "Name",
     relationship: "Relationship",
@@ -2483,6 +2484,11 @@ export const en = {
     deleteBody: "Remove this line from the record? The next distillation will not read it. This cannot be undone.",
     deleteConfirm: "Remove",
     back: "Back to the profile",
+    onThisDayTitle: "On this day",
+    onThisDayYear: "On this day in {{year}}",
+    onThisDayCollapsed: "{{n}} stretches from this day in earlier years",
+    onThisDaySee: "Look",
+    onThisDayOpen: "See that day",
   },
   material: {
     title: "Whether the material is enough",

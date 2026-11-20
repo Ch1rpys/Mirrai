@@ -32,6 +32,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { useDialogFocus } from "@/lib/use-dialog-focus";
 import { normaliseLoveLanguage } from "@shared/love-language";
 import MoodCheckIn from "@/components/MoodCheckIn";
+import OnThisDay from "@/components/v6/OnThisDay";
 import Milestones from "@/components/v6/Milestones";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionDefinition } from "@/lib/emotions";
 import { localDateKey, zonedDateKey, zonedHour, daysSinceContact } from "@shared/timezone";
@@ -1924,6 +1925,8 @@ export default function Lobby() {
             <div className="grid md:grid-cols-2 gap-x-8 gap-y-2">
               <TodayRecommendation personas={personas as any[]} onChat={(id) => navigate(`/chat/${id}`)} />
             </div>
+
+            <OnThisDay personas={personas as any[]} />
 
             <RemindersPanel personas={personas as any[]} />
 

@@ -30,6 +30,11 @@ function sourceFiles(dir: string): string[] {
 }
 
 const LLM_IMPORT = /from\s+["'][^"']*(?:\/llm(?:\/|["'])|server\/llm)[^"']*["']/;
+/**
+ * Nothing in the record readers sends anything, either. "On this day"
+ * is shown when the user opens the hall; it does not notify anyone.
+ */
+const PUSH_IMPORT = /from\s+["'][^"']*_core\/push[^"']*["']/;
 
 describe("the record readers never import a model", () => {
   it("finds the reader files", () => {
@@ -41,7 +46,10 @@ describe("the record readers never import a model", () => {
 
   it("has no model import under server/records", () => {
     const offenders = sourceFiles(ROOT)
-      .filter((file) => LLM_IMPORT.test(readFileSync(file, "utf8")))
+      .filter((file) => {
+        const source = readFileSync(file, "utf8");
+        return LLM_IMPORT.test(source) || PUSH_IMPORT.test(source);
+      })
       .map((file) => path.relative(ROOT, file));
     expect(offenders).toEqual([]);
   });

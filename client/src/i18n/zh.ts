@@ -1347,6 +1347,7 @@ export const zh = {
     uploadFailed: "这张图没存上。",
   },
   personaEdit: {
+    onThisDay: "大厅里显示「那年今天」",
     title: "编辑人设",
     name: "名字",
     relationship: "关系描述",
@@ -2494,6 +2495,11 @@ export const zh = {
     deleteBody: "从记录里删掉这一行？下次蒸馏时它不会再被读到。这个操作不能撤销。",
     deleteConfirm: "删掉",
     back: "回到档案",
+    onThisDayTitle: "那年今天",
+    onThisDayYear: "{{year}} 年的今天",
+    onThisDayCollapsed: "那年今天有 {{n}} 段记录",
+    onThisDaySee: "看看",
+    onThisDayOpen: "看那天",
   },
   material: {
     title: "材料够不够",

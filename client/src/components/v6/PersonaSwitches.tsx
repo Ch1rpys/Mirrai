@@ -43,6 +43,7 @@ export default function PersonaSwitches(props: { personaId: number; name: string
   const asleep = Boolean(settings.data?.timing?.sleep);
   const followUp = Boolean(settings.data?.timing?.followUp);
   const recall = Boolean(settings.data?.timing?.recall);
+  const onThisDay = settings.data?.onThisDay !== false;
   const style = trpc.style.get.useQuery(
     { personaId: props.personaId },
     { enabled: props.personaId > 0 },
@@ -505,6 +506,21 @@ export default function PersonaSwitches(props: { personaId: number; name: string
             {t("personaEdit.recallNote", { name: props.name })}
           </span>
         </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={onThisDay}
+          disabled={busy}
+          onChange={(event) =>
+            update.mutate({
+              id: props.personaId,
+              patch: { onThisDay: event.target.checked },
+            })
+          }
+          className="mt-0.5"
+        />
+        <span>{t("personaEdit.onThisDay")}</span>
       </label>
     </div>
   );

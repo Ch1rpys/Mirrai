@@ -71,6 +71,9 @@ vi.mock("@/lib/trpc", () => ({
       dailyActivity: { useQuery: () => ({ data: dailyActivity }) },
       recentActivity: { useQuery: () => ({ data: [] }) },
     },
+    record: {
+      onThisDay: { useQuery: () => ({ data: [] }) },
+    },
     reminder: {
       list: { useQuery: () => ({ data: [] }) },
       dismiss: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
