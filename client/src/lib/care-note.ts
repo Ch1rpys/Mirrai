@@ -64,7 +64,10 @@ export function careBannerText(
  * sentence for the same thing.
  */
 function bannerKeyFor(textKey: string | undefined): string {
-  switch (textKey) {
+  // The memorial variants are the same note in another register, so they
+  // keep the same banner (C7.1).
+  const base = String(textKey ?? "").replace(/\.memorial$/, "");
+  switch (base) {
     case "safety.care.dependency":
       return "safety.banner.dependency";
     case "safety.care.longSession":

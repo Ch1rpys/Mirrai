@@ -2086,6 +2086,13 @@ export const zh = {
     placeholder: "想对 {{name}} 说的话。这封信只放在这里，不会发出去。",
     save: "保存这封信",
   },
+  memorial: {
+    title: "已经不在了的人",
+    note: "打开后，应用不会建议你告别，{{name}} 不会主动发消息，纪念日换成生日和忌日。",
+    birthday: "生日",
+    deathday: "离开的日子",
+    saved: "记下了。",
+  },
   book: {
     kicker: "纪念册",
     coverKicker: "我们一起走过",

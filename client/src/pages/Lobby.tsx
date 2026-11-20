@@ -1515,12 +1515,14 @@ function CreatePersonaDialog({ open, onOpenChange, onCreated }: {
   const [togetherSince, setTogetherSince] = useState("");
   const [showEndDate, setShowEndDate] = useState(false);
   const [endDate, setEndDate] = useState("");
+  const [memorial, setMemorial] = useState(false);
 
   const createMutation = trpc.persona.create.useMutation({
     onSuccess: (data: any) => {
       toast.success(t("lobby.createDialog.created", { name }));
       onCreated(data.id);
       setName(""); setRelationshipDesc(""); setTogetherSince(""); setShowEndDate(false); setEndDate("");
+      setMemorial(false);
       onOpenChange(false);
     },
     onError: (e: any) => toast.error(t("lobby.createDialog.failed", { message: e.message })),
@@ -1558,6 +1560,16 @@ function CreatePersonaDialog({ open, onOpenChange, onCreated }: {
               className="h-10 bg-muted/50 border-border rounded-xl" />
           </div>
           <div className="space-y-1.5">
+            <label htmlFor="create-persona-memorial" className="flex items-start gap-2 cursor-pointer select-none">
+              <input id="create-persona-memorial" type="checkbox" checked={memorial} onChange={e => setMemorial(e.target.checked)}
+                className="w-4 h-4 rounded border-border accent-primary mt-0.5" />
+              <span>
+                <span className="block text-sm text-muted-foreground">{t("memorial.title")}</span>
+                <span className="block text-xs text-muted-foreground leading-relaxed">{t("memorial.note", { name: name.trim() || "TA" })}</span>
+              </span>
+            </label>
+          </div>
+          <div className="space-y-1.5">
             <label htmlFor="create-persona-separated" className="flex items-center gap-2 cursor-pointer select-none">
               <input id="create-persona-separated" type="checkbox" checked={showEndDate} onChange={e => setShowEndDate(e.target.checked)}
                 className="w-4 h-4 rounded border-border accent-primary" />
@@ -1585,6 +1597,7 @@ function CreatePersonaDialog({ open, onOpenChange, onCreated }: {
             // the `as any` is what hid the mismatch from the compiler.
             togetherFrom: togetherSince || undefined,
             togetherTo: showEndDate && endDate ? endDate : undefined,
+            settings: memorial ? { mode: "memorial" } : undefined,
           }); }}
             disabled={!name.trim() || createMutation.isPending}
             className="rounded-md">

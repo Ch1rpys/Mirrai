@@ -2082,6 +2082,13 @@ export const en = {
     placeholder: "What you want to say to {{name}}. This letter stays here; it is not sent.",
     save: "Keep this letter",
   },
+  memorial: {
+    title: "Someone who has died",
+    note: "With this on, the app will not suggest a goodbye, {{name}} will not start a conversation, and the anniversaries become the birthday and the day they died.",
+    birthday: "Birthday",
+    deathday: "The day they died",
+    saved: "Noted.",
+  },
   book: {
     kicker: "Keepsake book",
     coverKicker: "The time we had",
