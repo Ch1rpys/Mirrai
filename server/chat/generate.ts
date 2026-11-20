@@ -110,6 +110,14 @@ export interface TurnInput {
   summarySection?: string;
   memories?: ScoredMemory[];
   layerOverrides?: Partial<Record<LayerId, boolean>>;
+  /**
+   * The act this turn must use, instead of sampling one (C3.2).
+   *
+   * The rehearsal room asks "how might this land" three times; each
+   * variant is one of the record's own acts, so the act is chosen by the
+   * caller and the sampling is skipped.
+   */
+  forcedAct?: SpeechAct;
   exclude?: { recordIds?: number[]; texts?: string[] };
   seed: string;
   /**
@@ -260,7 +268,9 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   const actProfile = layers.act
     ? normalizeActProfile(actProfileForTurn(input.persona, input.periodId ?? null))
     : null;
-  const sampled = actProfile
+  const sampled = input.forcedAct
+    ? null
+    : actProfile
     ? sampleAct(
         actProfile,
         {
@@ -275,7 +285,8 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
         { dropSilence, rng },
       )
     : null;
-  let sampledAct = sampled?.act === "silence" ? null : sampled?.act ?? null;
+  let sampledAct = input.forcedAct
+    ?? (sampled?.act === "silence" ? null : sampled?.act ?? null);
   const conflictTurn = conflictMaterialForTurn(input, layers.emotionInertia);
   if (conflictTurn.forceRepair) sampledAct = "repair";
   const closingTurn = await closingForTurn(input, layers.closing);
