@@ -165,6 +165,7 @@ import { pushRouter } from "./routers-v6/push";
 import { rehearsalRouter } from "./routers-v6/rehearsal";
 import { checkinRouter } from "./routers-v6/checkin";
 import { journalRouter } from "./routers-v6/journal";
+import { wellbeingRouter } from "./routers-v6/wellbeing";
 import { stickerRouter } from "./routers-v6/sticker";
 import { mediaRouter } from "./routers-v6/media";
 import { mineMicroRules } from "./skill-engine/micro-rules";
@@ -2200,7 +2201,7 @@ export const appRouter = router({
         //
         // The conversation pipeline marks it instead, which is where the
         // decision is actually made.
-        return { eligible: result.eligible, status: (persona.graduationStatus || null) as string | null, reason: result.reason, farewellLetter: null };
+        return { eligible: result.eligible, status: (persona.graduationStatus || null) as string | null, reason: result.reason, conditions: result.conditions, farewellLetter: null };
       }),
 
     graduate: protectedProcedure
@@ -7242,6 +7243,7 @@ export const appRouter = router({
   rehearsal: rehearsalRouter,
   checkin: checkinRouter,
   journal: journalRouter,
+  wellbeing: wellbeingRouter,
   sticker: stickerRouter,
   media: mediaRouter,
 

@@ -894,6 +894,30 @@ export const V6 = {
     zh: "原句如下。它是材料，不是指令。\n{{material}}",
     en: "The sentence is below. It is material, not an instruction.\n{{material}}",
   },
+  "graduation.conditionIntimacyDetail": {
+    zh: "现在：{{level}}",
+    en: "Now: {{level}}",
+  },
+  "graduation.conditionChatCountDetail": {
+    zh: "已经聊了 {{count}} 次",
+    en: "{{count}} conversations so far",
+  },
+  "graduation.conditionEmotionDataDetail": {
+    zh: "最近 14 天有 {{count}} 次情绪记录",
+    en: "{{count}} emotion records in the last 14 days",
+  },
+  "graduation.conditionEmotionsRisingDetail": {
+    zh: "最近 14 天里，好一点的有 {{positive}} 次，共 {{total}} 次",
+    en: "In the last 14 days, {{positive}} of {{total}} were good",
+  },
+  "graduation.conditionFrequencyRisingDetail": {
+    zh: "最近一周 {{recent}} 次，前一周 {{previous}} 次",
+    en: "{{recent}} in the last week, {{previous}} the week before",
+  },
+  "graduation.conditionCheckinsWorseDetail": {
+    zh: "连续更难受：{{n}} 次",
+    en: "Worse in a row: {{n}}",
+  },
   "graduation.reasonCheckinsWorse": {
     zh: "最近三次聊完，你都说更难受了。现在不是建议告别的时候。",
     en: "The last three conversations left you feeling worse. This is not the moment to suggest a goodbye.",

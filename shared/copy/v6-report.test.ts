@@ -34,6 +34,20 @@ describe("the look-back copy", () => {
     }
   });
 
+  it("keeps the wellbeing and graduation copy free of scores too", () => {
+    // The look-back test was built in WP11. The two new namespaces say
+    // facts about feelings — "how you have been" and why a goodbye is
+    // suggested — and they must not turn into a score either.
+    for (const [language, dictionary] of [["zh", zh], ["en", en]] as const) {
+      const offenders = leaves(dictionary as never).filter(
+        (entry) =>
+          (entry.key.startsWith("wellbeing.") || entry.key.startsWith("graduationReasons.")) &&
+          (BANNED.test(entry.text) || BANNED.test(entry.key)),
+      );
+      expect(offenders, `${language} copy uses a scoring word`).toEqual([]);
+    }
+  });
+
   it("keeps the server-side words of this package clean too", () => {
     const offenders = leaves(V6).filter(
       (entry) => BANNED.test(entry.text) || BANNED.test(entry.key),

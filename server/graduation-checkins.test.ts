@@ -23,6 +23,19 @@ describe("the graduation check and the after-chat answers", () => {
     expect(result.reason).toContain("更难受");
   });
 
+  it("lists every condition it uses, and all met iff eligible", () => {
+    const met = checkGraduationEligibility(eligible);
+    expect(met.conditions).toHaveLength(6);
+    expect(met.conditions.every((condition) => condition.met)).toBe(true);
+    expect(met.eligible).toBe(true);
+
+    const vetoed = checkGraduationEligibility({ ...eligible, worseStreak: 3 });
+    expect(vetoed.conditions).toHaveLength(6);
+    expect(vetoed.conditions.find((condition) => condition.key === "checkinsWorse")?.met).toBe(false);
+    expect(vetoed.conditions.filter((condition) => !condition.met)).toHaveLength(1);
+    expect(vetoed.eligible).toBe(false);
+  });
+
   it("leaves the ordinary decision alone when the answers are not three worse", () => {
     expect(checkGraduationEligibility({ ...eligible, worseStreak: 2 }).eligible).toBe(true);
     expect(checkGraduationEligibility(eligible).eligible).toBe(true);

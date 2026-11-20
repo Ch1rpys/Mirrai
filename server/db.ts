@@ -8429,6 +8429,31 @@ export async function deleteJournalEntry(id: number, userId: number): Promise<bo
   return rows.length > 0;
 }
 
+/**
+ * The answers after conversations since a moment, for the wellbeing
+ * trend (C4.3). Newest first.
+ */
+export async function listCheckinAnswersSince(userId: number, since: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    personaId: sessionCheckins.personaId,
+    answer: sessionCheckins.answer,
+    createdAt: sessionCheckins.createdAt,
+  }).from(sessionCheckins)
+    .where(and(eq(sessionCheckins.userId, userId), gte(sessionCheckins.createdAt, since)))
+    .orderBy(desc(sessionCheckins.createdAt));
+}
+
+/** The user's own message times since a moment (C4.3). */
+export async function listUserMessageTimesSince(userId: number, since: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ at: messages.createdAt }).from(messages)
+    .where(and(eq(messages.userId, userId), eq(messages.role, "user"), gte(messages.createdAt, since)))
+    .orderBy(asc(messages.createdAt));
+}
+
 // ─── Distillation blocks and cards ────────────────────────────────────────
 
 export async function createDistillationChunk(data: InsertDistillationChunk) {

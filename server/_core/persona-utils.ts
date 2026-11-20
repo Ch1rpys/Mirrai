@@ -984,6 +984,19 @@ function buildRelationshipPhase(phase: unknown, locale: "zh" | "en" = "zh"): str
  * while gratitude rises — can make the app *suggest* graduation earlier, but
  * it never forces the decision.
  */
+export interface GraduationCondition {
+  key:
+    | "intimacy"
+    | "chatCount"
+    | "emotionData"
+    | "emotionsRising"
+    | "frequencyRising"
+    | "checkinsWorse";
+  met: boolean;
+  /** What is true right now, in the reader's language. */
+  detail: string;
+}
+
 export function checkGraduationEligibility(params: {
   intimacyLevel: string;
   recentEmotions: Array<{ emotionalState: string }>;
@@ -1005,29 +1018,83 @@ export function checkGraduationEligibility(params: {
    * When the two disagree, the person wins.
    */
   worseStreak?: number;
-}): { eligible: boolean; reason: string } {
+}): { eligible: boolean; reason: string; conditions: GraduationCondition[] } {
   const locale = params.locale ?? "zh";
-  if ((params.worseStreak ?? 0) >= 3) {
-    return { eligible: false, reason: copy(locale, "graduation.reasonCheckinsWorse") };
-  }
-  if (normalizeIntimacyLevel(params.intimacyLevel) !== "soulmate") {
-    return { eligible: false, reason: copy(locale, "graduation.reasonIntimacy") };
-  }
-  if (params.chatCount < 50) {
-    return { eligible: false, reason: copy(locale, "graduation.reasonChatCount") };
-  }
+  const intimacyMet = normalizeIntimacyLevel(params.intimacyLevel) === "soulmate";
   const total = params.recentEmotions.length;
-  if (total < 7) {
-    return { eligible: false, reason: copy(locale, "graduation.reasonEmotionData") };
-  }
-  const positive = params.recentEmotions.filter(e =>
-    ["happy", "warm", "playful"].includes(e.emotionalState)
+  const positive = params.recentEmotions.filter((e) =>
+    ["happy", "warm", "playful"].includes(e.emotionalState),
   ).length;
-  if (positive / total < 0.6) {
-    return { eligible: false, reason: copy(locale, "graduation.reasonEmotionsRising") };
+  const frequencyRising =
+    params.recentChatFrequency > params.previousChatFrequency * 1.5 &&
+    params.previousChatFrequency > 0;
+
+  /**
+   * What the app is actually looking at (C4.3).
+   *
+   * The list is the same list the answer is computed from, so the page
+   * cannot show one reason to stay and use another to decide. No score,
+   * no percentage, no progress bar: each row is a fact and whether it
+   * is met.
+   */
+  const conditions: GraduationCondition[] = [
+    {
+      key: "intimacy",
+      met: intimacyMet,
+      detail: copy(locale, "graduation.conditionIntimacyDetail", {
+        level: params.intimacyLevel,
+      }),
+    },
+    {
+      key: "chatCount",
+      met: params.chatCount >= 50,
+      detail: copy(locale, "graduation.conditionChatCountDetail", { count: params.chatCount }),
+    },
+    {
+      key: "emotionData",
+      met: total >= 7,
+      detail: copy(locale, "graduation.conditionEmotionDataDetail", { count: total }),
+    },
+    {
+      key: "emotionsRising",
+      met: total >= 7 && positive / total >= 0.6,
+      detail: copy(locale, "graduation.conditionEmotionsRisingDetail", {
+        positive,
+        total,
+      }),
+    },
+    {
+      key: "frequencyRising",
+      met: !frequencyRising,
+      detail: copy(locale, "graduation.conditionFrequencyRisingDetail", {
+        recent: params.recentChatFrequency,
+        previous: params.previousChatFrequency,
+      }),
+    },
+    {
+      key: "checkinsWorse",
+      met: (params.worseStreak ?? 0) < 3,
+      detail: copy(locale, "graduation.conditionCheckinsWorseDetail", {
+        n: params.worseStreak ?? 0,
+      }),
+    },
+  ];
+
+  const reasonByKey: Record<GraduationCondition["key"], string> = {
+    intimacy: "graduation.reasonIntimacy",
+    chatCount: "graduation.reasonChatCount",
+    emotionData: "graduation.reasonEmotionData",
+    emotionsRising: "graduation.reasonEmotionsRising",
+    frequencyRising: "graduation.reasonFrequencyRising",
+    checkinsWorse: "graduation.reasonCheckinsWorse",
+  };
+  const firstUnmet = conditions.find((condition) => !condition.met);
+  if (!firstUnmet) {
+    return { eligible: true, reason: copy(locale, "graduation.reasonEligible"), conditions };
   }
-  if (params.recentChatFrequency > params.previousChatFrequency * 1.5 && params.previousChatFrequency > 0) {
-    return { eligible: false, reason: copy(locale, "graduation.reasonFrequencyRising") };
-  }
-  return { eligible: true, reason: copy(locale, "graduation.reasonEligible") };
+  return {
+    eligible: false,
+    reason: copy(locale, reasonByKey[firstUnmet.key] as never),
+    conditions,
+  };
 }
