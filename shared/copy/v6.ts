@@ -1034,4 +1034,8 @@ export const V6 = {
     zh: "这只能是记录里 TA 说的一句文字。",
     en: "That can only be a line of text they said in the record.",
   },
+  "book.turningPointTitle": {
+    zh: "关系里的一处变化",
+    en: "A change in the relationship",
+  },
 } as const satisfies CopyTable;
