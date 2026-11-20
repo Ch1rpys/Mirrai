@@ -29,6 +29,9 @@ vi.mock("@/lib/trpc", () => ({
     analytics: {
       overview: { useQuery: () => overview },
     },
+    persona: {
+      list: { useQuery: () => ({ data: [] }) },
+    },
   },
 }));
 

@@ -61,15 +61,27 @@ export default function Records() {
 
   const initialAnchor = useMemo(() => {
     if (typeof window === "undefined") return undefined;
-    const at = new URLSearchParams(window.location.search).get("at");
+    const params = new URLSearchParams(window.location.search);
+    const at = params.get("at");
     const id = at ? Number(at) : NaN;
-    return Number.isFinite(id) && id > 0 ? id : undefined;
+    if (Number.isFinite(id) && id > 0) return { recordId: id } as const;
+    /**
+     * A link from the timeline names a date, not a record: the week's
+     * first line is what the reader should land on.
+     */
+    const date = params.get("atDate");
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return { at: new Date(`${date}T00:00:00`).toISOString() } as const;
+    }
+    return undefined;
   }, []);
 
-  const [highlightId] = useState<number | undefined>(initialAnchor);
+  const [highlightId] = useState<number | undefined>(
+    initialAnchor && "recordId" in initialAnchor ? initialAnchor.recordId : undefined,
+  );
   const [request, setRequest] = useState<PageRequest>(() =>
     initialAnchor
-      ? { anchor: { recordId: initialAnchor }, direction: "around", limit: 200 }
+      ? { anchor: initialAnchor, direction: "around", limit: 200 }
       : { direction: "older", limit: 200 },
   );
   const modeRef = useRef<LoadMode>("replace");
@@ -165,6 +177,28 @@ export default function Records() {
     modeRef.current = "append";
     setRequest({ anchor: { recordId: rows[rows.length - 1].id }, direction: "newer", limit: 200 });
   };
+  useEffect(() => {
+    let lastAuto = 0;
+    const onScroll = () => {
+      if (pageQuery.isFetching) return;
+      const now = Date.now();
+      if (now - lastAuto < 600) return;
+      const atTop = window.scrollY < 120;
+      const atBottom =
+        window.innerHeight + window.scrollY >=
+        document.documentElement.scrollHeight - 200;
+      if (atTop && hasOlder) {
+        lastAuto = now;
+        loadOlder();
+      } else if (atBottom && hasNewer) {
+        lastAuto = now;
+        loadNewer();
+      }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [hasOlder, hasNewer, pageQuery.isFetching, rows]);
+
   const loadDate = () => {
     if (!jumpDate) return;
     // The date input is the user's own calendar day; the reader's

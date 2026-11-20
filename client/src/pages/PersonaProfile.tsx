@@ -22,6 +22,7 @@ import TriggersView from "@/components/v6/TriggersView";
 import ProsodyView from "@/components/v6/ProsodyView";
 import CallsView from "@/components/v6/CallsView";
 import PhotoTimeline from "@/components/v6/PhotoTimeline";
+import OurDictionary from "@/components/v6/OurDictionary";
 import FingerprintView from "@/components/v6/FingerprintView";
 import { Button } from "@/components/ui/button";
 import { resolveRelationshipPhase } from "@shared/user-side";
@@ -78,6 +79,15 @@ export default function PersonaProfile() {
    * only half the promise if the entry is always there.
    */
   const callEnabled = normalizePersonaSettings(persona?.settings).layers.callMode;
+  const manual = trpc.persona.exportManual.useQuery({ personaId }, { enabled: false });
+  const openManual = async () => {
+    const result = await manual.refetch();
+    const html = result.data?.html;
+    if (!html) return;
+    const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+    window.open(url, "_blank", "noopener,noreferrer");
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
 
   // The spinner used to spin for ever.
   //
@@ -466,6 +476,18 @@ export default function PersonaProfile() {
           </button>
           <button
             type="button"
+            onClick={() => void openManual()}
+            className="w-full rounded-lg border border-border/70 p-3 text-left transition-colors hover:bg-muted/30"
+          >
+            <span className="block text-sm text-foreground">
+              {t("profile.manualEntry", { name: persona.name })}
+            </span>
+            <span className="block text-xs text-muted-foreground leading-relaxed">
+              {t("profile.manualEntryNote")}
+            </span>
+          </button>
+          <button
+            type="button"
             onClick={() => navigate(`/persona/${personaId}/voices`)}
             className="w-full rounded-lg border border-border/70 p-3 text-left transition-colors hover:bg-muted/30"
           >
@@ -490,6 +512,14 @@ export default function PersonaProfile() {
               </span>
             </button>
           )}
+          <details className="rounded-lg border border-border/70 p-3">
+            <summary className="cursor-pointer text-sm text-foreground">
+              {t("report.dictionary.title")}
+            </summary>
+            <div className="pt-3">
+              <OurDictionary personaId={personaId} />
+            </div>
+          </details>
           <details className="rounded-lg border border-border/70 p-3">
             <summary className="cursor-pointer text-sm text-foreground">
               {t("profile.photosEntry", { name: persona.name })}

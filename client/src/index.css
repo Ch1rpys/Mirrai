@@ -782,3 +782,17 @@ html.dark .surface-interactive:hover {
     transform: none;
   }
 }
+
+/**
+ * The dictionary prints alone (C2.7).
+ *
+ * The words are the keepsake; the rest of the page — navigation, charts,
+ * buttons — is not. Everything else is hidden while printing, and the
+ * dictionary is moved to the top of the page.
+ */
+@media print {
+  body * { visibility: hidden; }
+  .our-dictionary,
+  .our-dictionary * { visibility: visible; }
+  .our-dictionary { position: absolute; left: 0; top: 0; width: 100%; }
+}

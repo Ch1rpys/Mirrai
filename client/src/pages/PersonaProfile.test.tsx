@@ -33,6 +33,7 @@ let evidenceDimensions: Record<string, unknown[]> = {
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    lexicon: { save: { useMutation: () => ({ mutate: vi.fn() }) } },
     persona: {
       get: {
         useQuery: () => ({
@@ -42,6 +43,9 @@ vi.mock("@/lib/trpc", () => ({
           error: null,
           refetch: () => {},
         }),
+      },
+      exportManual: {
+        useQuery: () => ({ refetch: async () => ({ data: { html: "<html></html>" } }) }),
       },
       evidence: {
         useQuery: () => ({

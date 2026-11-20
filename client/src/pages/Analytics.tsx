@@ -67,6 +67,7 @@ export default function Analytics() {
     { days },
     { enabled: isAuthenticated },
   );
+  const personaList = trpc.persona.list.useQuery();
 
   /**
    * Whether the numbers are known.
@@ -373,6 +374,34 @@ export default function Analytics() {
             </div>
           )}
         </ChartCard>
+
+        {(() => {
+          const withRecords = ((personaList.data ?? []) as Array<{
+            id: number;
+            name: string;
+            fileCount?: number;
+          }>).filter((persona) => (persona.fileCount ?? 0) > 0);
+          if (withRecords.length === 0) return null;
+          return (
+            <ChartCard title={t("analytics.recordsTitle")}>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {t("analytics.recordsNote")}
+              </p>
+              <div className="mt-3 space-y-1">
+                {withRecords.map((persona) => (
+                  <button
+                    key={persona.id}
+                    type="button"
+                    onClick={() => navigate(`/persona/${persona.id}/report`)}
+                    className="block w-full rounded border border-border/70 px-3 py-2 text-left text-sm hover:bg-muted/30"
+                  >
+                    {t("report.title", { name: persona.name })}
+                  </button>
+                ))}
+              </div>
+            </ChartCard>
+          );
+        })()}
       </main>
     </div>
   );
