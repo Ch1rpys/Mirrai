@@ -78,7 +78,23 @@ vi.mock("@/lib/trpc", () => ({
     useUtils: () => ({
       persona: { get: { invalidate: vi.fn() } },
     }),
-    memory: { list: { useQuery: () => ({ data: { items: memoryItems, total: memoryTotal } }) } },
+    memory: {
+      list: { useQuery: () => ({ data: { items: memoryItems, total: memoryTotal } }) },
+      adjudicate: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    oral: {
+      list: {
+        useQuery: () => ({
+          data: { isOwner: true, ownerName: "", accounts: [], conflicts: [] },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+      save: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      extract: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      transcribe: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     relationship: {
       list: { useQuery: () => ({ data: { events: [] } }) },
       add: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },

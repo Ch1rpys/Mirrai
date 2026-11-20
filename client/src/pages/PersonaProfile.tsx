@@ -31,6 +31,7 @@ import { resolveRelationshipPhase } from "@shared/user-side";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import VoicesEntry from "@/components/v6/VoicesEntry";
 import ReunionSummary from "@/components/v6/ReunionSummary";
+import OralAccounts from "@/components/v6/OralAccounts";
 
 /**
  * What the app has understood.
@@ -583,6 +584,13 @@ export default function PersonaProfile() {
               />
             </div>
           </details>
+        </motion.section>
+
+        <motion.section
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+          className="surface p-5 sm:p-6"
+        >
+          <OralAccounts personaId={personaId} name={persona.name} />
         </motion.section>
 
         <motion.section
