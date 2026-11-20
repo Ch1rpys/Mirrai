@@ -160,6 +160,7 @@ import { personaVersionRouter } from "./routers-v6/persona-version";
 import { blindRouter } from "./routers-v6/blind";
 import { materialRouter } from "./routers-v6/material";
 import { pushRouter } from "./routers-v6/push";
+import { rehearsalRouter } from "./routers-v6/rehearsal";
 import { stickerRouter } from "./routers-v6/sticker";
 import { mediaRouter } from "./routers-v6/media";
 import { mineMicroRules } from "./skill-engine/micro-rules";
@@ -7212,6 +7213,7 @@ export const appRouter = router({
   blind: blindRouter,
   material: materialRouter,
   push: pushRouter,
+  rehearsal: rehearsalRouter,
   sticker: stickerRouter,
   media: mediaRouter,
 

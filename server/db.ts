@@ -30,6 +30,7 @@ import {
   stickers, InsertSticker, Sticker,
   media, InsertMedia, Media,
   memoryMedia, InsertMemoryMedia, MemoryMedia,
+  rehearsals, InsertRehearsal,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
@@ -1190,6 +1191,7 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(memoryMedia).where(eq(memoryMedia.userId, id));
     await tx.delete(messages).where(eq(messages.userId, id));
     await tx.delete(outboundLetters).where(eq(outboundLetters.userId, id));
+    await tx.delete(rehearsals).where(eq(rehearsals.userId, id));
     await tx.delete(personaFiles).where(eq(personaFiles.userId, id));
     await tx.delete(personaQuestionnaireAnswers).where(eq(personaQuestionnaireAnswers.userId, id));
     await tx.delete(personaTemplates).where(eq(personaTemplates.userId, id));
@@ -1617,6 +1619,7 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(memoryMedia).where(and(eq(memoryMedia.personaId, id), eq(memoryMedia.userId, userId)));
     await tx.delete(messages).where(and(eq(messages.personaId, id), eq(messages.userId, userId)));
     await tx.delete(outboundLetters).where(and(eq(outboundLetters.personaId, id), eq(outboundLetters.userId, userId)));
+    await tx.delete(rehearsals).where(and(eq(rehearsals.personaId, id), eq(rehearsals.userId, userId)));
     await tx.delete(personaFiles).where(and(eq(personaFiles.personaId, id), eq(personaFiles.userId, userId)));
     await tx.delete(personaQuestionnaireAnswers).where(and(eq(personaQuestionnaireAnswers.personaId, id), eq(personaQuestionnaireAnswers.userId, userId)));
     await tx.delete(personaVersions).where(and(eq(personaVersions.personaId, id), eq(personaVersions.userId, userId)));
@@ -8123,6 +8126,82 @@ export async function setOutboundLetterOutcome(
     eq(outboundLetters.status, "sent"),
   )).returning({ id: outboundLetters.id });
   return rows.length > 0;
+}
+
+// ─── The rehearsal room ────────────────────────────────────────────────────
+
+/** One rehearsal, stored with its result so the page can list it again. */
+export async function createRehearsal(data: {
+  userId: number;
+  personaId: number;
+  line: string;
+  result: unknown;
+}): Promise<number | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db.insert(rehearsals).values({
+    userId: data.userId,
+    personaId: data.personaId,
+    line: data.line,
+    result: data.result as any,
+  }).returning({ id: rehearsals.id });
+  return row?.id;
+}
+
+/** The rehearsals of one persona, newest first. */
+export async function listRehearsals(personaId: number, userId: number, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(rehearsals).where(and(
+    eq(rehearsals.personaId, personaId),
+    eq(rehearsals.userId, userId),
+  )).orderBy(desc(rehearsals.id)).limit(Math.max(1, Math.min(200, limit)));
+}
+
+export async function getRehearsalById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(rehearsals).where(and(
+    eq(rehearsals.id, id),
+    eq(rehearsals.userId, userId),
+  )).limit(1);
+  return rows[0] ?? null;
+}
+
+/** Remembers which way-out letter a rehearsal's line was kept as. */
+export async function setRehearsalOutboundLetter(
+  id: number,
+  userId: number,
+  outboundLetterId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(rehearsals).set({ outboundLetterId }).where(and(
+    eq(rehearsals.id, id),
+    eq(rehearsals.userId, userId),
+  )).returning({ id: rehearsals.id });
+  return rows.length > 0;
+}
+
+export async function deleteRehearsal(id: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.delete(rehearsals).where(and(
+    eq(rehearsals.id, id),
+    eq(rehearsals.userId, userId),
+  )).returning({ id: rehearsals.id });
+  return rows.length > 0;
+}
+
+/** How many rehearsals the user has run since an instant (the daily cap). */
+export async function countRehearsalsSince(userId: number, since: Date): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [row] = await db.select({ n: count() }).from(rehearsals).where(and(
+    eq(rehearsals.userId, userId),
+    gte(rehearsals.createdAt, since),
+  ));
+  return Number(row?.n ?? 0);
 }
 
 // ─── Distillation blocks and cards ────────────────────────────────────────

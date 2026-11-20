@@ -1639,6 +1639,34 @@ export type OutboundLetter = typeof outboundLetters.$inferSelect;
 export type InsertOutboundLetter = typeof outboundLetters.$inferInsert;
 
 /**
+ * A turn in the rehearsal room (C3.2).
+ *
+ * The user says a sentence they are afraid to say, and the app shows a
+ * few of the ways the person might take it. The rehearsal is practice,
+ * not a conversation: it never becomes a message, a memory, a mood, or a
+ * chat count. Only the line and the result are kept, so the user can
+ * find the sentence again and take it to the way-out list.
+ */
+export const rehearsals = pgTable("rehearsals", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  /** The sentence the user was practising. Their own words. */
+  line: text("line").notNull(),
+  /** The variants that were generated: act, share, text, silent. */
+  result: jsonb("result").notNull(),
+  /** Set when the line was kept for the way-out list. */
+  outboundLetterId: integer("outboundLetterId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  personaTimeIdx: index("rehearsals_persona_time_idx").on(table.personaId, table.createdAt),
+  userTimeIdx: index("rehearsals_user_time_idx").on(table.userId, table.createdAt),
+}));
+
+export type Rehearsal = typeof rehearsals.$inferSelect;
+export type InsertRehearsal = typeof rehearsals.$inferInsert;
+
+/**
  * A reply the user marked as not sounding like them.
  *
  * The reason is a closed set: the action was wrong, it was too
