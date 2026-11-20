@@ -3034,6 +3034,8 @@ export const zh = {
     searchFailed: "没有搜到，再试一次。",
     empty: "还没有选。",
     loadFailed: "没有读到留话的设置。",
+    keptTitle: "留下的三句话",
+    keptNote: "这些是 {{name}} 真的说过的。",
   },
   reunion: {
     title: "联系上了",

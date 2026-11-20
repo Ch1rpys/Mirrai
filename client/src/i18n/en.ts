@@ -3024,6 +3024,8 @@ export const en = {
     searchFailed: "The search failed. Try again.",
     empty: "Nothing chosen yet.",
     loadFailed: "The kept lines could not be read.",
+    keptTitle: "The three lines you kept",
+    keptNote: "These are things {{name}} really said.",
   },
   reunion: {
     title: "Back in touch",

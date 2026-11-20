@@ -880,6 +880,46 @@ function MiniCalendar() {
 
 // ─── PERSONA CARD ────────────────────────────────────────────────────────────
 
+/**
+ * The three lines the user kept (C6.4).
+ *
+ * They live on `settings.keptQuotes`; the card shows them when it is
+ * opened, and only on a card that is closed to talking (sealed or
+ * asleep) — a persona you still chat with does not need its farewell on
+ * the lobby.
+ */
+function keptQuotesOf(persona: any): Array<{ recordId: number; text: string }> {
+  const stored = persona?.settings?.keptQuotes;
+  if (!Array.isArray(stored)) return [];
+  return stored
+    .filter((quote: any) => quote && typeof quote.text === "string" && quote.text.trim())
+    .slice(0, 3)
+    .map((quote: any) => ({ recordId: Number(quote.recordId) || 0, text: quote.text }));
+}
+
+function KeptQuotes({ persona }: { persona: any }) {
+  const { t } = useLocale();
+  const kept = keptQuotesOf(persona);
+  if (kept.length === 0) return null;
+  return (
+    <details className="mt-3">
+      <summary className="cursor-pointer text-xs text-muted-foreground">
+        {t("keepThree.keptTitle")}
+      </summary>
+      <p className="mt-2 text-[11px] text-muted-subtle">
+        {t("keepThree.keptNote", { name: persona.name })}
+      </p>
+      <ul className="mt-1 space-y-1">
+        {kept.map((quote, index) => (
+          <li key={quote.recordId || index} className="text-sm text-foreground">
+            {quote.text}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin, selectable, selected, onToggleSelect }: {
   persona: any; onChat: () => void; onUpload: () => void; onEdit: () => void; onDelete: () => void;
   onTogglePin?: () => void;
@@ -964,6 +1004,7 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
         <p className="text-sm text-foreground">
           {t("lobby.card.sealed", { name: persona.name, date: until })}
         </p>
+        <KeptQuotes persona={persona} />
       </div>
     );
   }
@@ -1184,6 +1225,8 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
           <p className="text-[10px] text-muted-subtle mt-0.5">{relativeTime(persona.lastMessage.createdAt, locale, t)}</p>
         </div>
       )}
+
+      {isGraduated && <KeptQuotes persona={persona} />}
 
       <div className="flex gap-2 mt-4 pt-3 border-t border-border/60">
         {isGraduated ? (

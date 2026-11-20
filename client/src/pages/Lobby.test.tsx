@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { useSyncExternalStore } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 import { previousDateKey, zonedDateKey } from "@shared/timezone";
@@ -185,6 +185,35 @@ describe("the lobby", () => {
     // No countdown, no days.
     expect(screen.queryByText(/还有 \d+ 天/)).toBeNull();
     expect(screen.queryByText(/封存到 2099-04-01。还有/)).toBeNull();
+  });
+
+  it("opens a closed card's three kept lines, and only on a closed card (C6.4)", () => {
+    const quotes = {
+      keptQuotes: [
+        { recordId: 1, text: "晚安呀", at: "2024-05-01T21:00:00.000Z" },
+        { recordId: 2, text: "树树 我在", at: "2024-05-02T21:00:00.000Z" },
+        { recordId: 3, text: "早呀", at: "2024-05-03T08:00:00.000Z" },
+      ],
+    };
+    personas = [
+      makePersona({ id: 5, name: "封存的", settings: { seal: { until: "2099-04-01", earlyOpen: "never" }, ...quotes } }),
+      makePersona({ id: 6, name: "毕业的", graduationStatus: "graduated", settings: quotes }),
+      makePersona({ id: 7, name: "还在的", settings: quotes }),
+    ];
+    render(<Lobby />);
+
+    // The graduated ones are folded away; the dormant card's lines are
+    // read after unfolding it.
+    fireEvent.click(screen.getByText(translate("zh", "lobby.directory.graduated", { count: 1 })));
+
+    // The sealed card and the dormant card open to the three lines; the
+    // card that is still open for talking does not carry a farewell.
+    const title = translate("zh", "keepThree.keptTitle");
+    expect(screen.getAllByText(title)).toHaveLength(2);
+    expect(screen.getAllByText("晚安呀")).toHaveLength(2);
+    expect(screen.getAllByText("早呀")).toHaveLength(2);
+    // The sealed card still does not count days.
+    expect(screen.queryByText(/还有 \d+ 天/)).toBeNull();
   });
 
   it("says the user has no personas when there are none", () => {
