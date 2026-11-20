@@ -1591,6 +1591,28 @@ export const zh = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  decode: {
+    title: "读懂这一句",
+    placeholder: "把 {{name}} 刚发来的那句话贴在这里",
+    submit: "看看记录",
+    rulesTitle: "你确认过的规则里，有这些对得上",
+    rulesEmpty: "你确认过的规则里没有对得上的。",
+    ruleRendering: "你当时写的：{{rendering}}",
+    precedentsTitle: "记录里 {{name}} 上几次这么说",
+    noPrecedents: "记录里 {{name}} 没有这么说过。",
+    afterTitle: "那几次之后",
+    gapLine: "这 {{n}} 次里，{{name}} 下一次说话平均隔了 {{gap}}。",
+    gapNone: "那几次之后，没有看到 {{name}} 再说话。",
+    gapSeconds: "{{n}} 秒",
+    gapMinutes: "{{n}} 分钟",
+    stateLine: "其中 {{k}} 次所在的那段对话，被标成了「{{state}}」。",
+    showContext: "看上下文",
+    hideContext: "收起上下文",
+    openReader: "在阅读器里看",
+    note: "给先例，不下结论。",
+    fixedNote: "这里只有以前发生过什么。这一次是不是一样，只有 {{name}} 知道。",
+  },
+
   waitGauge: {
     title: "{{name}} 一般多久回",
     summary: "按记录，这个钟点 {{name}} 回消息：一半在 {{median}} 之内，九成在 {{p90}} 之内。",

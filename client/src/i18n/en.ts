@@ -1590,6 +1590,28 @@ export const en = {
    * said here and never said to the person. These are those words, and
    * the app never sends them.
    */
+  decode: {
+    title: "Read this line",
+    placeholder: "Paste the line {{name}} just sent",
+    submit: "Look in the record",
+    rulesTitle: "These confirmed rules match it",
+    rulesEmpty: "None of your confirmed rules match it.",
+    ruleRendering: "What you wrote: {{rendering}}",
+    precedentsTitle: "The last few times {{name}} said this",
+    noPrecedents: "{{name}} never said this in the record.",
+    afterTitle: "What followed those times",
+    gapLine: "Across those {{n}} times, {{name}} next spoke after {{gap}} on average.",
+    gapNone: "After those times, {{name}} did not speak again.",
+    gapSeconds: "{{n}}s",
+    gapMinutes: "{{n}} min",
+    stateLine: "In {{k}} of them, the conversation was labeled “{{state}}”.",
+    showContext: "Show the context",
+    hideContext: "Hide the context",
+    openReader: "See it in the reader",
+    note: "Precedents, not conclusions.",
+    fixedNote: "There is only what happened before. Whether this time is the same, only {{name}} knows.",
+  },
+
   waitGauge: {
     title: "How long {{name}} usually takes to reply",
     summary: "From the records, at this hour {{name}} replies: half within {{median}}, nine in ten within {{p90}}.",

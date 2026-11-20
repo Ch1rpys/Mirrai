@@ -32,6 +32,7 @@ const Voices = lazy(() => import("./pages/Voices"));
 const Records = lazy(() => import("./pages/Records"));
 const Report = lazy(() => import("./pages/Report"));
 const Call = lazy(() => import("./pages/Call"));
+const Decode = lazy(() => import("./pages/Decode"));
 
 function Router() {
   const [location] = useLocation();
@@ -64,6 +65,7 @@ function Router() {
           <Route path="/persona/:id/records" component={Records} />
           <Route path="/persona/:id/report" component={Report} />
           <Route path="/persona/:id/call" component={Call} />
+          <Route path="/persona/:id/decode" component={Decode} />
           <Route path="/blind/:token" component={BlindGuest} />
           <Route path="/persona/:id/graduation" component={Graduation} />
           <Route path="/upload/:id" component={Upload} />

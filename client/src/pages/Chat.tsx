@@ -1929,6 +1929,11 @@ export default function Chat() {
                       <Clock className="w-4 h-4 text-muted-foreground" />
                       {t("waitGauge.title", { name: displayName || t("common.them") })}
                     </button>
+                    <button onClick={() => { navigate(`/persona/${personaId}/decode`); setShowMenu(false); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors text-left">
+                      <Search className="w-4 h-4 text-muted-foreground" />
+                      {t("decode.title")}
+                    </button>
                     <button onClick={() => { navigate(`/diary`); setShowMenu(false); }}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors">
                       <BookOpen className="w-4 h-4 text-muted-foreground" />{t("diary.title")}
