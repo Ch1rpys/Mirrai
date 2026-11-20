@@ -1,4 +1,4 @@
-import { eq, desc, and, or, sql, count, sum, gte, ilike, asc, lt, lte, max, min, inArray, notInArray, isNull, isNotNull } from "drizzle-orm";
+import { eq, ne, desc, and, or, sql, count, sum, gte, ilike, asc, lt, lte, max, min, inArray, notInArray, isNull, isNotNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import {
   InsertUser, users,
@@ -36,6 +36,7 @@ import {
   userJournal, InsertUserJournalEntry,
   roleplaySessions, InsertRoleplaySession,
   scheduledItems, InsertScheduledItem, ScheduledItem,
+  personaShares, InsertPersonaShare,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
@@ -1275,6 +1276,10 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(replyJobs).where(eq(replyJobs.userId, id));
     await tx.delete(stickers).where(eq(stickers.userId, id));
     await tx.delete(media).where(eq(media.userId, id));
+    await tx.delete(personaShares).where(or(
+      eq(personaShares.ownerUserId, id),
+      eq(personaShares.memberUserId, id),
+    ));
     await tx.delete(recordEmbeddings).where(eq(recordEmbeddings.userId, id));
     await tx.delete(recordMarks).where(eq(recordMarks.userId, id));
     await tx.delete(recordReports).where(eq(recordReports.userId, id));
@@ -1581,7 +1586,200 @@ export async function getPersonaById(id: number, userId: number) {
   if (!db) return undefined;
   const result = await db.select().from(personas)
     .where(and(eq(personas.id, id), eq(personas.userId, userId))).limit(1);
-  return result[0];
+  const row = result[0];
+  /**
+   * A shared persona reads its identity from the owner's row (C7.2).
+   *
+   * The member's own row keeps their conversations, mood and settings;
+   * everything about *who the persona is* — the name, the avatar, the
+   * persona data, the measured style and the records — comes from the
+   * owner. The owner changing a rule therefore reaches the member on
+   * their next read.
+   *
+   * The owner's user id is put on the returned row so the generation
+   * path can read the owner's records without guessing.
+   */
+  if (row?.sharedFromPersonaId) {
+    const [share] = await db.select({ id: personaShares.id })
+      .from(personaShares)
+      .where(and(
+        eq(personaShares.memberPersonaId, row.id),
+        eq(personaShares.memberUserId, userId),
+        eq(personaShares.status, "active"),
+      ))
+      .limit(1);
+    if (!share) return row;
+    const [owner] = await db.select().from(personas)
+      .where(eq(personas.id, row.sharedFromPersonaId)).limit(1);
+    if (!owner) return row;
+    return {
+      ...row,
+      name: owner.name,
+      avatarUrl: owner.avatarUrl,
+      relationshipDesc: owner.relationshipDesc,
+      togetherFrom: owner.togetherFrom,
+      togetherTo: owner.togetherTo,
+      personaData: owner.personaData,
+      styleProfile: owner.styleProfile,
+      timezone: owner.timezone,
+      sharedFromUserId: owner.userId,
+    };
+  }
+  return row;
+}
+
+// ─── Sharing a persona with family (C7.2) ─────────────────────────────────
+
+/** Creates an invitation. The token itself is never stored. */
+export async function createPersonaShare(data: InsertPersonaShare): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [row] = await db.insert(personaShares).values(data).returning({ id: personaShares.id });
+  return row.id;
+}
+
+export async function getPersonaShareByTokenHash(tokenHash: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db.select().from(personaShares)
+    .where(eq(personaShares.tokenHash, tokenHash)).limit(1);
+  return row;
+}
+
+export async function getPersonaShareById(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db.select().from(personaShares)
+    .where(and(eq(personaShares.id, id), eq(personaShares.ownerUserId, userId)))
+    .limit(1);
+  return row;
+}
+
+export async function listPersonaShares(personaId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(personaShares)
+    .where(and(
+      eq(personaShares.personaId, personaId),
+      eq(personaShares.ownerUserId, userId),
+    ))
+    .orderBy(desc(personaShares.createdAt));
+}
+
+export async function getActiveShareForMemberPersona(
+  memberPersonaId: number,
+  userId: number,
+) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db.select().from(personaShares)
+    .where(and(
+      eq(personaShares.memberPersonaId, memberPersonaId),
+      eq(personaShares.memberUserId, userId),
+      eq(personaShares.status, "active"),
+    ))
+    .limit(1);
+  return row;
+}
+
+/**
+ * Accepts an invitation: one member row for the accepting user.
+ *
+ * The transaction is what makes the token one-time under concurrency:
+ * the share row is only updated while it is still `invited`, and the
+ * member persona is created in the same transaction.
+ */
+export interface AcceptedPersonaShare {
+  personaId: number;
+  shareId: number;
+}
+
+export async function acceptPersonaShare(
+  tokenHash: string,
+  userId: number,
+): Promise<AcceptedPersonaShare | null> {
+  const db = await getDb();
+  if (!db) return null;
+  return withTransaction(async (tx) => {
+    const [share] = await tx.select().from(personaShares)
+      .where(and(
+        eq(personaShares.tokenHash, tokenHash),
+        eq(personaShares.status, "invited"),
+        gte(personaShares.expiresAt, new Date()),
+        ne(personaShares.ownerUserId, userId),
+      ))
+      .limit(1);
+    if (!share || share.ownerUserId === userId) return null;
+    const [owner] = await tx.select().from(personas)
+      .where(eq(personas.id, share.personaId)).limit(1);
+    if (!owner) return null;
+
+    const [member] = await tx.insert(personas).values({
+      userId,
+      name: owner.name,
+      avatarUrl: owner.avatarUrl,
+      relationshipDesc: owner.relationshipDesc,
+      togetherFrom: owner.togetherFrom,
+      togetherTo: owner.togetherTo,
+      personaData: owner.personaData,
+      styleProfile: owner.styleProfile,
+      timezone: owner.timezone,
+      analysisStatus: "ready",
+      source: "shared",
+      sharedFromPersonaId: share.personaId,
+      presence: "active",
+      settings: {},
+    }).returning({ id: personas.id });
+    const updated = await tx.update(personaShares)
+      .set({
+        status: "active",
+        memberUserId: userId,
+        memberPersonaId: member.id,
+        acceptedAt: new Date(),
+      })
+      .where(and(
+        eq(personaShares.id, share.id),
+        eq(personaShares.status, "invited"),
+      ))
+      .returning({ id: personaShares.id });
+    if (!updated.length) return null;
+    return { personaId: member.id, shareId: share.id };
+  });
+}
+
+/** Revokes one invitation or active share, by the owner. */
+export async function revokePersonaShare(
+  id: number,
+  userId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(personaShares)
+    .set({ status: "revoked" })
+    .where(and(
+      eq(personaShares.id, id),
+      eq(personaShares.ownerUserId, userId),
+    ))
+    .returning({ id: personaShares.id });
+  return rows.length > 0;
+}
+
+/** The member leaves a shared persona. */
+export async function leavePersonaShare(
+  memberPersonaId: number,
+  userId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(personaShares)
+    .set({ status: "revoked" })
+    .where(and(
+      eq(personaShares.memberPersonaId, memberPersonaId),
+      eq(personaShares.memberUserId, userId),
+      eq(personaShares.status, "active"),
+    ))
+    .returning({ id: personaShares.id });
+  return rows.length > 0;
 }
 
 /**
@@ -1713,6 +1911,18 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(stickers).where(and(eq(stickers.personaId, id), eq(stickers.userId, userId)));
     await tx.delete(media).where(and(eq(media.personaId, id), eq(media.userId, userId)));
     await tx.delete(wechatBindings).where(and(eq(wechatBindings.personaId, id), eq(wechatBindings.userId, userId)));
+    /**
+     * Sharing rows go with either side (C7.2).
+     *
+     * Deleting the owner's persona revokes every share of it; deleting
+     * a member's row forgets the share that created it. The other
+     * side's row stays — the member keeps their conversations, and a
+     * member row whose share is gone simply cannot chat.
+     */
+    await tx.delete(personaShares).where(or(
+      and(eq(personaShares.ownerUserId, userId), eq(personaShares.personaId, id)),
+      and(eq(personaShares.memberUserId, userId), eq(personaShares.memberPersonaId, id)),
+    ));
     await tx.delete(personas).where(and(eq(personas.id, id), eq(personas.userId, userId)));
   });
 

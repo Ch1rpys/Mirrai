@@ -296,6 +296,15 @@ export const personas = pgTable("personas", {
    * `personaData` (that column has a lock and a merge of confirmations).
    */
   styleProfile: jsonb("styleProfile"),
+  /**
+   * The owner's persona this row shares (C7.2).
+   *
+   * A member's row keeps their own conversations, mood and settings;
+   * the name, avatar, persona data, style profile and records come from
+   * the owner's row and are read through it. Null means an ordinary,
+   * fully owned persona.
+   */
+  sharedFromPersonaId: integer("sharedFromPersonaId"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 }, (table) => ({
@@ -310,6 +319,35 @@ export const personas = pgTable("personas", {
 
 export type Persona = typeof personas.$inferSelect;
 export type InsertPersona = typeof personas.$inferInsert;
+
+/**
+ * One invitation to use somebody's persona (C7.2).
+ *
+ * The token is stored hashed and is good for one acceptance within
+ * seven days. The member's own persona row is `memberPersonaId`; before
+ * acceptance it is null.
+ */
+export const personaShares = pgTable("persona_shares", {
+  id: serial("id").primaryKey(),
+  /** The owner's persona. */
+  personaId: integer("personaId").notNull(),
+  ownerUserId: integer("ownerUserId").notNull(),
+  memberUserId: integer("memberUserId"),
+  memberPersonaId: integer("memberPersonaId"),
+  /** `invited`, `active` or `revoked`. */
+  status: varchar("status", { length: 16 }).default("invited").notNull(),
+  tokenHash: varchar("tokenHash", { length: 64 }).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  acceptedAt: timestamp("acceptedAt"),
+}, (table) => ({
+  tokenUnique: uniqueIndex("persona_shares_token_idx").on(table.tokenHash),
+  personaIdx: index("persona_shares_persona_idx").on(table.personaId, table.ownerUserId),
+  memberIdx: index("persona_shares_member_idx").on(table.memberPersonaId, table.memberUserId),
+}));
+
+export type PersonaShare = typeof personaShares.$inferSelect;
+export type InsertPersonaShare = typeof personaShares.$inferInsert;
 
 export const personaFiles = pgTable("persona_files", {
   id: serial("id").primaryKey(),

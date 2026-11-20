@@ -251,6 +251,26 @@ function bindsOwnership(fn: DbFunction): boolean {
   return false;
 }
 
+/**
+ * The sharing table has two owners: the owner of the persona and the
+ * member it was shared with. Its helpers bind the caller to the column
+ * that is theirs, which the generic `userId` check cannot see.
+ */
+const TWO_PARTY_HELPERS = new Set([
+  "getPersonaShareById",
+  "listPersonaShares",
+  "getActiveShareForMemberPersona",
+  "acceptPersonaShare",
+  "revokePersonaShare",
+  "leavePersonaShare",
+]);
+
+function bindsTwoPartyOwnership(fn: DbFunction): boolean {
+  return /(?:eq|ne)\(\s*personaShares\.(ownerUserId|memberUserId)\s*,\s*(userId|params\.userId)\s*\)/.test(
+    fn.body,
+  );
+}
+
 describe("db helpers enforce ownership", () => {
   it("finds the exported functions", () => {
     expect(functions.length).toBeGreaterThan(50);
@@ -263,6 +283,7 @@ describe("db helpers enforce ownership", () => {
       .filter((fn) => fn.params.includes("userId"))
       .filter((fn) => !isUserScoped(fn))
       .filter((fn) => !bindsOwnership(fn))
+      .filter((fn) => !(TWO_PARTY_HELPERS.has(fn.name) && bindsTwoPartyOwnership(fn)))
       .map((fn) => `${fn.name}(${fn.params})`);
 
     expect(

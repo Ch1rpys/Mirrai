@@ -1030,6 +1030,50 @@ export const V6 = {
     zh: "记录里，这句话起了个头，然后就没了下文。用你自己的语气补一句，把这句话说完。只写这一句，不要解释。",
     en: "In the record this line starts a thought and then goes no further. Finish it in your own voice. Write only that one line, with no explanation.",
   },
+  "errors.shareInvalid": {
+    zh: "这个邀请已经失效了。",
+    en: "This invitation has expired.",
+  },
+  "errors.sharedReadOnly": {
+    zh: "这个分身是家人共用的，只能聊天、写信、看档案和原声带。",
+    en: "This persona is shared with you. You can chat, write letters, and read the profile and recordings.",
+  },
+  "chat.revoked": {
+    zh: "这个分身的主人已经停止共用了。你在这里的对话还在，可以导出或删除。",
+    en: "The owner has stopped sharing this persona. Your conversations here are still yours to export or delete.",
+  },
+  "share.entry": {
+    zh: "和家人一起用",
+    en: "Use it with family",
+  },
+  "share.dialogNote": {
+    zh: "对方会得到一个同样的 {{name}}。你们各聊各的，互相看不到对方的对话、记忆和信。对方看不到你导入的记录原文，但分身回答时会参考这些记录。你可以随时停止共用。",
+    en: "They will get the same {{name}}. You each have your own conversations, and neither of you can see the other's messages, memories or letters. They cannot read the record itself, but the persona's answers draw on it. You can stop sharing at any time.",
+  },
+  "share.acceptTitle": {
+    zh: "{{owner}} 邀请你一起用「{{name}}」这个分身。",
+    en: "{{owner}} has invited you to use the persona “{{name}}”.",
+  },
+  "share.accept": {
+    zh: "接受",
+    en: "Accept",
+  },
+  "share.inviteLink": {
+    zh: "把这个链接发给你想邀请的人，七天之内有效：",
+    en: "Send this link to the person you want to invite. It works for seven days:",
+  },
+  "share.memberJoined": {
+    zh: "已经加入",
+    en: "Joined",
+  },
+  "share.memberInvited": {
+    zh: "还没接受",
+    en: "Not accepted yet",
+  },
+  "share.stop": {
+    zh: "停止共用",
+    en: "Stop sharing",
+  },
   "errors.unsaidLine": {
     zh: "这只能是记录里 TA 说的一句文字。",
     en: "That can only be a line of text they said in the record.",
