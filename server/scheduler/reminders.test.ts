@@ -16,6 +16,12 @@ const recordReminder = vi.fn();
 const forgetReminder = vi.fn();
 const moveReminderToWeb = vi.fn();
 
+const pushToUser = vi.fn();
+
+vi.mock("../_core/push", () => ({
+  pushToUser: (...a: unknown[]) => pushToUser(...a),
+}));
+
 const getUserLocale = vi.fn();
 const getUserTimezone = vi.fn();
 getUserTimezone.mockResolvedValue(null);
@@ -297,6 +303,7 @@ describe("deliverReminder", () => {
       recordReminder,
       forgetReminder,
       moveReminderToWeb,
+      pushToUser,
       send,
       getChannelAdapter,
     ]) {
@@ -425,6 +432,91 @@ describe("deliverReminder", () => {
   });
 });
 
+describe("the revisit after graduation (C6.5)", () => {
+  const visit = (overrides: Record<string, unknown> = {}) =>
+    collectReminders({
+      persona: persona({
+        togetherFrom: null,
+        graduatedAt: new Date("2024-05-13T12:00:00Z"),
+        ...overrides,
+      }),
+      anniversaries: [],
+      locale: "zh",
+      timezone: "Asia/Shanghai",
+      now: new Date(2024, 4, 20, 10, 0),
+    });
+
+  it("waits on day 7, and does not arrive as a notification", () => {
+    const reminders = visit();
+    expect(reminders).toHaveLength(1);
+    expect(reminders[0]).toMatchObject({
+      kind: "graduation_revisit",
+      silent: true,
+      dedupeKey: "graduation_revisit:1:7",
+      personaId: 1,
+    });
+    expect(reminders[0].text).toContain("7 天");
+  });
+
+  it("waits again on day 30", () => {
+    const reminders = collectReminders({
+      persona: persona({
+        togetherFrom: null,
+        graduatedAt: new Date("2024-04-20T12:00:00Z"),
+      }),
+      anniversaries: [],
+      locale: "zh",
+      timezone: "Asia/Shanghai",
+      now: new Date(2024, 4, 20, 10, 0),
+    });
+    expect(reminders).toHaveLength(1);
+    expect(reminders[0].dedupeKey).toBe("graduation_revisit:1:30");
+  });
+
+  it("stays away when the user switched it off, or the persona is a memorial", () => {
+    expect(visit({ settings: { revisit: false } })).toEqual([]);
+    expect(visit({ settings: { mode: "memorial" } })).toEqual([]);
+  });
+
+  it("records the card on the web once, and never pushes", async () => {
+    hasReminderDelivery.mockResolvedValue(false);
+    recordReminder.mockResolvedValue(true);
+    const reminder = {
+      kind: "graduation_revisit" as const,
+      personaId: 1,
+      personaName: "小A",
+      dedupeKey: "graduation_revisit:1:7",
+      text: "和 小A 告别 7 天了。这里还需要留着吗？",
+      silent: true,
+    };
+    const first = await deliverReminder({
+      userId: 1,
+      reminder,
+      channel: "wechat",
+      targetId: "wx-1",
+      now: new Date(2024, 4, 20, 10, 0),
+    });
+    expect(first).toBe(true);
+    expect(pushToUser).not.toHaveBeenCalled();
+    expect(recordReminder).toHaveBeenCalledTimes(1);
+    expect(recordReminder).toHaveBeenCalledWith(
+      expect.objectContaining({ channel: "web", kind: "graduation_revisit" }),
+    );
+    expect(getChannelAdapter).not.toHaveBeenCalled();
+
+    // The next tick finds the row and does not record it again.
+    hasReminderDelivery.mockResolvedValue(true);
+    expect(
+      await deliverReminder({
+        userId: 1,
+        reminder,
+        now: new Date(2024, 4, 20, 10, 1),
+      }),
+    ).toBe(false);
+    expect(recordReminder).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("runReminderSweep", () => {
   beforeEach(() => {
     for (const fn of [
@@ -437,6 +529,7 @@ describe("runReminderSweep", () => {
       recordReminder,
       forgetReminder,
       moveReminderToWeb,
+      pushToUser,
       send,
       getChannelAdapter,
     ]) {

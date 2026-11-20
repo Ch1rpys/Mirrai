@@ -11,11 +11,16 @@ import * as db from "../db";
 import { getChannelAdapter } from "../channels";
 import { zonedDateKey, zonedHour, zonedMinute } from "@shared/timezone";
 import { resolvePresence, mayReachOut } from "@shared/graduation-mode";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 import { resolveRelationshipPhase } from "@shared/user-side";
 import { copy, type Locale } from "@shared/copy";
 import { pushToUser } from "../_core/push";
 
-export type ReminderKind = "anniversary" | "together_years" | "memory_trigger";
+export type ReminderKind =
+  | "anniversary"
+  | "together_years"
+  | "memory_trigger"
+  | "graduation_revisit";
 
 export interface Reminder {
   kind: ReminderKind;
@@ -25,6 +30,14 @@ export interface Reminder {
   dedupeKey: string;
   /** The text to deliver. */
   text: string;
+  /**
+   * Recorded for the web card only, with no push (C6.5).
+   *
+   * The post-graduation revisit is not a notification. It waits in the
+   * hall until the user opens the app, and it must not arrive on a
+   * phone at a moment the app chose.
+   */
+  silent?: boolean;
 }
 
 /**
@@ -39,6 +52,19 @@ export interface Reminder {
  */
 function todayKey(now: Date, timezone?: string | null): string {
   return zonedDateKey(now, timezone);
+}
+
+/** Whole days between two "YYYY-MM-DD" day keys. */
+function daysBetweenDayKeys(from: string, to: string): number | null {
+  const parse = (key: string) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+    if (!match) return null;
+    return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  };
+  const start = parse(from);
+  const end = parse(to);
+  if (start === null || end === null) return null;
+  return Math.round((end - start) / 86_400_000);
 }
 
 /**
@@ -93,6 +119,10 @@ export function collectReminders(params: {
      * does not.
      */
     reachability?: string | null;
+    /** When the persona said goodbye (C6.5). */
+    graduatedAt?: Date | string | null;
+    /** The persona's own settings, for the revisit switch and memorial mode. */
+    settings?: unknown;
   };
   anniversaries: Array<{ id: number; title: string; date: string | null }>;
   /** Photos the user shared, each with whatever was extracted from it. */
@@ -136,7 +166,7 @@ export function collectReminders(params: {
     params.persona.presence,
     params.persona.graduationStatus,
   );
-  if (!mayReachOut(presence)) return reminders;
+  const mayReach = mayReachOut(presence);
 
   // The relationship has ended: the shared anniversaries and the years
   // together are a memory, not something to be celebrated today.
@@ -154,7 +184,7 @@ export function collectReminders(params: {
   // The month and the day, in the user's calendar.
   const monthDay = dayKey.slice(5, 10); // MM-DD
 
-  if (!relationshipEnded && !unreachable) {
+  if (mayReach && !relationshipEnded && !unreachable) {
     for (const anniversary of params.anniversaries) {
       if (!anniversary.date) continue;
       const date = anniversary.date.trim();
@@ -235,7 +265,8 @@ export function collectReminders(params: {
 
   // A photo the user shared can carry its own date. When that date comes
   // round again, the persona has something to say about it.
-  for (const photo of params.photos ?? []) {
+  if (mayReach) {
+    for (const photo of params.photos ?? []) {
     const label = photo.originalName?.trim() || copy(locale, "reminders.photoFallbackLabel");
     const date = extractPhotoDate(photo.dateHint, photo.createdAt, timezone);
     if (!date) continue;
@@ -256,6 +287,44 @@ export function collectReminders(params: {
         label,
       }),
     });
+    }
+  }
+
+  /**
+   * The revisit after graduation (C6.5).
+   *
+   * It is not a notification and it does not go through a channel. The
+   * row waits for the web hall on day 7 and day 30, and is recorded with
+   * `silent` so the sweep cannot push it. The user can switch it off,
+   * and a memorial persona never asks at all.
+   */
+  const settings = normalizePersonaSettings(params.persona.settings);
+  const graduatedAt = params.persona.graduatedAt
+    ? new Date(params.persona.graduatedAt)
+    : null;
+  if (
+    graduatedAt &&
+    Number.isFinite(graduatedAt.getTime()) &&
+    settings.revisit !== false &&
+    settings.mode !== "memorial"
+  ) {
+    const days = daysBetweenDayKeys(
+      zonedDateKey(graduatedAt, timezone),
+      dayKey,
+    );
+    if (days === 7 || days === 30) {
+      reminders.push({
+        kind: "graduation_revisit",
+        personaId: params.persona.id,
+        personaName: params.persona.name,
+        dedupeKey: `graduation_revisit:${params.persona.id}:${days}`,
+        text: copy(locale, "reminders.graduationRevisit", {
+          name: params.persona.name,
+          days,
+        }),
+        silent: true,
+      });
+    }
   }
 
   return reminders;
@@ -314,6 +383,26 @@ export async function deliverReminder(params: {
   // The channel's own wording — what it says when it cannot deliver — has
   // to be in the language of the person it is delivering to.
   const locale = params.locale ?? (await db.getUserLocale(userId));
+
+  /**
+   * A silent reminder is a web card, not a notification.
+   *
+   * The post-graduation revisit waits for the user to open the hall. It
+   * is claimed in the same table so it cannot be delivered twice, but it
+   * never reaches a push subscription or a channel.
+   */
+  if (reminder.silent) {
+    if (await db.hasReminderDelivery(userId, reminder.dedupeKey)) return false;
+    return db.recordReminder({
+      userId,
+      personaId: reminder.personaId,
+      channel: "web",
+      kind: reminder.kind,
+      text: reminder.text,
+      dedupeKey: reminder.dedupeKey,
+      scheduledFor: now,
+    });
+  }
 
   if (isQuietHour(now, ENV.reminderQuietHours, params.timezone ?? null)) {
     return false;
@@ -491,6 +580,8 @@ export async function runReminderSweep(now: Date = new Date()): Promise<number> 
           presence: persona.presence,
           graduationStatus: persona.graduationStatus,
           reachability: persona.reachability,
+          graduatedAt: persona.graduatedAt,
+          settings: persona.settings,
           relationshipEnded: await isRelationshipOver(
             persona.id,
             persona.userId,
@@ -545,8 +636,8 @@ export async function runReminderSweep(now: Date = new Date()): Promise<number> 
           const sent = await deliverReminder({
             userId: persona.userId,
             reminder,
-            channel: binding?.channel ?? null,
-            targetId: binding?.targetId ?? null,
+            channel: reminder.silent ? null : binding?.channel ?? null,
+            targetId: reminder.silent ? null : binding?.targetId ?? null,
             locale,
             timezone,
             now,

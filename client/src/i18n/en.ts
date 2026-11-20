@@ -1999,6 +1999,9 @@ export const en = {
     dismiss: "Got it",
     anniversary: "Today is 「{{title}}」.",
     togetherYears: "Today is the {{years}}-year mark of you and {{name}}.",
+    revisitDontNeed: "It is not needed",
+    revisitKeep: "It can stay",
+    revisitTalk: "I want to talk again",
   },
 
   graduation: {
@@ -2066,6 +2069,11 @@ export const en = {
     afterward: "From here on, the app will not disturb you: no anniversary reminders, no messages it starts. The persona is asleep. But this page stays — you can come back and look whenever you like.",
     takeItWithYou: "Take it with you",
     backHome: "Back home",
+  },
+  revisit: {
+    title: "Ask me again after the goodbye",
+    note: "On day 7 and day 30 after the goodbye, the hall quietly asks once whether this still needs to stay. Switch it off and it will not ask.",
+    saved: "Noted.",
   },
   mutualLetters: {
     theirLabel: "{{name}}'s letter (written by the persona)",

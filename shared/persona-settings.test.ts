@@ -56,6 +56,11 @@ describe("persona settings", () => {
     expect(normalizePersonaSettings({ pendingRedistillRemoved: false }).pendingRedistillRemoved).toBeUndefined();
   });
 
+  it("asks about the reunion after graduation unless the user turned it off", () => {
+    expect(normalizePersonaSettings({}).revisit).toBe(true);
+    expect(normalizePersonaSettings({ revisit: false }).revisit).toBe(false);
+  });
+
   it("turns sleep and follow-up off when late replies are turned off", () => {
     const current = normalizePersonaSettings({
       timing: { asyncDelivery: true, sleep: true, followUp: true },

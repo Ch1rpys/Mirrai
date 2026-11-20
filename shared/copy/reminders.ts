@@ -25,4 +25,8 @@ export const REMINDERS = {
     zh: "那张照片",
     en: "that photo",
   },
+  "reminders.graduationRevisit": {
+    zh: "和 {{name}} 告别 {{days}} 天了。这里还需要留着吗？",
+    en: "It has been {{days}} days since you said goodbye to {{name}}. Does this still need to stay?",
+  },
 } satisfies CopyTable;

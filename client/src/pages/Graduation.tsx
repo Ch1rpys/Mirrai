@@ -16,6 +16,7 @@ import KeepThree from "@/components/v6/KeepThree";
 import GraduationKindPicker from "@/components/v6/GraduationKindPicker";
 import UnfinishedWords from "@/components/v6/UnfinishedWords";
 import MutualLetters from "@/components/v6/MutualLetters";
+import RevisitToggle from "@/components/v6/RevisitToggle";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -517,6 +518,14 @@ export default function Graduation() {
           className="surface p-6 sm:p-8"
         >
           <SealSettings personaId={personaId} />
+        </motion.section>
+
+        {/* The revisit can be switched off here (C6.5). */}
+        <motion.section
+          initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
+          className="surface p-6 sm:p-8"
+        >
+          <RevisitToggle personaId={personaId} />
         </motion.section>
       </main>
     </div>

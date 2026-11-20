@@ -2004,6 +2004,9 @@ export const zh = {
     dismiss: "知道了",
     anniversary: "今天是「{{title}}」的日子。",
     togetherYears: "今天是你和 {{name}} 认识的第 {{years}} 年。",
+    revisitDontNeed: "不需要了",
+    revisitKeep: "留着就好",
+    revisitTalk: "想回来说说话",
   },
 
   graduation: {
@@ -2072,8 +2075,12 @@ export const zh = {
     takeItWithYou: "把这些带走",
     backHome: "回到首页",
   },
-  mutualLetters: {
-    theirLabel: "{{name}} 的信（分身写的）",
+  revisit: {
+    title: "毕业后再问我一次",
+    note: "毕业后的第 7 天和第 30 天，大厅会安静地问一次这里还要不要留着。关掉就不再问。",
+    saved: "记住了。",
+  },
+  mutualLetters: {    theirLabel: "{{name}} 的信（分身写的）",
     yourLabel: "你的信",
     pick: "从写过的信里选一封",
     placeholder: "想对 {{name}} 说的话。这封信只放在这里，不会发出去。",

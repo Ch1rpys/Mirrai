@@ -7419,6 +7419,15 @@ export async function getAllPersonasForReminders() {
     presence: personas.presence,
     graduationStatus: personas.graduationStatus,
     reachability: personas.reachability,
+    /**
+     * The day the persona said goodbye (C6.5).
+     *
+     * The revisit on day 7 and day 30 is counted from it, in the user's
+     * calendar.
+     */
+    graduatedAt: personas.graduatedAt,
+    /** The revisit switch and the memorial mode live here. */
+    settings: personas.settings,
     // The time zone the reminders are timed in. Without it the scheduler
     // counted the days in the server's calendar, which is not the day the
     // anniversary is.

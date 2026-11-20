@@ -481,8 +481,13 @@ function TodayRecommendation({ personas, onChat }: { personas: any[]; onChat: (i
  */
 function RemindersPanel({ personas }: { personas: any[] }) {
   const { t } = useLocale();
+  const [, navigate] = useLocation();
   const { data: reminders } = trpc.reminder.list.useQuery();
   const dismiss = trpc.reminder.dismiss.useMutation();
+  const awaken = trpc.persona.awaken.useMutation({
+    onSuccess: () => window.location.reload(),
+    onError: (error: { message: string }) => toast.error(error.message),
+  });
 
   const pending = (reminders ?? []).filter((r: any) => !r.dismissedAt);
   if (pending.length === 0) return null;
@@ -494,34 +499,70 @@ function RemindersPanel({ personas }: { personas: any[] }) {
     <div className="mb-8 border-t border-border pt-5">
       <PanelTitle icon={Bookmark} title={t("reminders.title")} />
       <div className="space-y-2">
-        {pending.map((reminder: any) => (
-          <div
-            key={reminder.id}
-            className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/30 px-3 py-2"
-          >
-            <div className="min-w-0">
-              <p className="text-sm text-foreground">{reminder.text}</p>
-              {nameOf(reminder.personaId) && (
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {nameOf(reminder.personaId)}
-                </p>
+        {pending.map((reminder: any) => {
+          const revisit = String(reminder.kind ?? "").startsWith("graduation_revisit");
+          return (
+            <div
+              key={reminder.id}
+              className="flex items-start justify-between gap-3 rounded-md border border-border bg-muted/30 px-3 py-2"
+            >
+              <div className="min-w-0">
+                <p className="text-sm text-foreground">{reminder.text}</p>
+                {nameOf(reminder.personaId) && (
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {nameOf(reminder.personaId)}
+                  </p>
+                )}
+                {revisit && (
+                  <div className="flex flex-wrap gap-3 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        dismiss.mutate({ id: reminder.id });
+                        navigate(`/persona/${reminder.personaId}/edit`);
+                      }}
+                      className="text-[11px] text-muted-foreground hover:text-foreground"
+                    >
+                      {t("reminders.revisitDontNeed")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => dismiss.mutate({ id: reminder.id })}
+                      className="text-[11px] text-muted-foreground hover:text-foreground"
+                    >
+                      {t("reminders.revisitKeep")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        dismiss.mutate({ id: reminder.id });
+                        awaken.mutate({ id: reminder.personaId });
+                      }}
+                      className="text-[11px] text-foreground underline underline-offset-2"
+                    >
+                      {t("reminders.revisitTalk")}
+                    </button>
+                  </div>
+                )}
+              </div>
+              {!revisit && (
+                <button
+                  type="button"
+                  onClick={() => dismiss.mutate({ id: reminder.id })}
+                  /**
+                   * The button is put out of reach while the dismissal is
+                   * running — so a double click does not send two, and the
+                   * second does not fail after the first reported success.
+                   */
+                  disabled={dismiss.isPending}
+                  className="text-[11px] text-muted-foreground hover:text-foreground shrink-0 disabled:opacity-50"
+                >
+                  {t("reminders.dismiss")}
+                </button>
               )}
             </div>
-            <button
-              type="button"
-              onClick={() => dismiss.mutate({ id: reminder.id })}
-              /**
-               * The button is put out of reach while the dismissal is
-               * running — so a double click does not send two, and the
-               * second does not fail after the first reported success.
-               */
-              disabled={dismiss.isPending}
-              className="text-[11px] text-muted-foreground hover:text-foreground shrink-0 disabled:opacity-50"
-            >
-              {t("reminders.dismiss")}
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
