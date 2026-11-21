@@ -6,6 +6,7 @@ import { detectCrisis } from "./safety/crisis";
 import { worseStreakFor } from "./safety/checkins";
 import { withPersonaDataLock } from "./_core/lock";
 import { requestAbortSignal } from "./_core/context";
+import { QuotedRecordsError } from "./chat/quoted-records";
 import { extractMemories } from "./chat/memory-extract";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router, rateLimit } from "./_core/trpc";
@@ -2830,14 +2831,49 @@ export const appRouter = router({
             height: photo.height,
           });
         }
-        return rows.map((m: any) => ({
-          ...m,
-          recalled: parseRecalledIds(m.recalledMemoryIds).map((id: number) => ({
-            id,
-            title: titles.get(id) ?? fileTitles.get(Math.abs(id)) ?? "",
-            ...(photoByMemory.has(id) ? { photo: photoByMemory.get(id) } : {}),
-          })),
-        }));
+        /**
+         * The record lines a message quotes (C8.10).
+         *
+         * The bubble shows them under the words, so a turn that says
+         * "let's talk about this" still shows what "this" was after a
+         * reload.
+         */
+        const quotedIds = rows.flatMap((m: { metadata?: unknown }) => {
+          const metadata = m.metadata as { quotedRecordIds?: unknown } | null | undefined;
+          return Array.isArray(metadata?.quotedRecordIds)
+            ? metadata.quotedRecordIds.filter((id): id is number => typeof id === "number")
+            : [];
+        });
+        const quotedRows = quotedIds.length > 0
+          ? await getRecordsByIds([...new Set(quotedIds)], ctx.user.id)
+          : [];
+        const quotedById = new Map(quotedRows.map((row) => [row.id, row]));
+        return rows.map((m: any) => {
+          const metadata = m.metadata as { quotedRecordIds?: unknown } | null | undefined;
+          const quotedRecords = (Array.isArray(metadata?.quotedRecordIds) ? metadata.quotedRecordIds : [])
+            .map((id: number) => {
+              const row = quotedById.get(id);
+              return row
+                ? {
+                    id: row.id,
+                    role: row.role,
+                    content: row.content,
+                    speaker: row.speaker,
+                    timestamp: row.timestamp,
+                  }
+                : null;
+            })
+            .filter(Boolean);
+          return {
+            ...m,
+            quotedRecords,
+            recalled: parseRecalledIds(m.recalledMemoryIds).map((id: number) => ({
+              id,
+              title: titles.get(id) ?? fileTitles.get(Math.abs(id)) ?? "",
+              ...(photoByMemory.has(id) ? { photo: photoByMemory.get(id) } : {}),
+            })),
+          };
+        });
       }),
 
     /**
@@ -3054,6 +3090,11 @@ export const appRouter = router({
          * and a long conversation becomes impossible to follow.
          */
         replyToId: z.number().optional(),
+        /**
+         * A stretch of the record the user brought into this turn
+         * (C8.10). Eight lines at most; the service checks the rest.
+         */
+        quotedRecordIds: z.array(z.number().int().positive()).max(8).optional(),
         periodId: z.string().max(64).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -3098,6 +3139,7 @@ export const appRouter = router({
             providerName: (persona as any).llmProvider || undefined,
             mode: "once",
             locale: input.locale,
+            quotedRecordIds: input.quotedRecordIds,
             replyToId: input.replyToId,
             periodId: input.periodId,
             // Pressing "stop" has to stop the model too, not just the
@@ -3137,6 +3179,13 @@ export const appRouter = router({
           }
         } catch (e) {
           if (e instanceof PersonaAsleepError || e instanceof ChatClosedError) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: e.message });
+          }
+          /**
+           * A quotation that cannot be used is the user's to fix
+           * (C8.10) — a wrong id or too much text, not a server fault.
+           */
+          if (e instanceof QuotedRecordsError) {
             throw new TRPCError({ code: "BAD_REQUEST", message: e.message });
           }
           /**

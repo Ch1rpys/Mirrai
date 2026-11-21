@@ -25,6 +25,7 @@ import { authenticateRequest } from "../_core/auth";
 import { RATE_LIMITS, rateLimiter, resolveRateLimitKey } from "../_core/rate-limit";
 import * as db from "../db";
 import { runConversation, PersonaAsleepError, ChatClosedError } from "./service";
+import { QuotedRecordsError } from "./quoted-records";
 import { copy } from "@shared/copy";
 
 const inputSchema = z.object({
@@ -36,6 +37,8 @@ const inputSchema = z.object({
   // The message being replied to, so the persona answers the thing that
   // was actually said rather than whatever came last.
   replyToId: z.number().optional(),
+  /** A stretch of the record brought into this turn (C8.10). */
+  quotedRecordIds: z.array(z.number().int().positive()).max(8).optional(),
   periodId: z.string().max(64).optional(),
 });
 
@@ -188,6 +191,7 @@ async function handleChatStream(req: Request, res: Response): Promise<void> {
         mode: "stream",
         locale: parsed.data.locale,
         replyToId: parsed.data.replyToId,
+        quotedRecordIds: parsed.data.quotedRecordIds,
         periodId: parsed.data.periodId,
         signal: controller.signal,
       })) {
@@ -271,7 +275,10 @@ async function handleChatStream(req: Request, res: Response): Promise<void> {
            * Everything else — a Postgres error, a provider's raw
            * response — is kept on the server.
            */
-          message: e instanceof TRPCError || e instanceof PersonaAsleepError || e instanceof ChatClosedError
+          message: e instanceof TRPCError
+            || e instanceof PersonaAsleepError
+            || e instanceof ChatClosedError
+            || e instanceof QuotedRecordsError
             ? e.message
             : copy(parsed.data.locale, "errors.replyFailed"),
           partial: false,

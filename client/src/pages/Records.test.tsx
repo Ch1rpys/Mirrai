@@ -14,10 +14,11 @@ const addMark = vi.fn();
 const removeMark = vi.fn();
 const deleteRow = vi.fn();
 const confirm = vi.fn();
+const navigate = vi.fn();
 
 vi.mock("wouter", () => ({
   useParams: () => ({ id: "5" }),
-  useLocation: () => ["/persona/5/records", vi.fn()],
+  useLocation: () => ["/persona/5/records", navigate],
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
@@ -114,6 +115,61 @@ describe("the record reader", () => {
     const line = await screen.findByText("在的呀");
     expect(line.closest("[data-record-id]")?.getAttribute("data-record-id")).toBe("11");
     expect(line.closest("[data-record-id]")?.className).toContain("ring-2");
+  });
+
+  it("takes a stretch of the record into the chat", async () => {
+    pageState.value = {
+      data: {
+        rows: [
+          { ...row, id: 11, content: "第一句" },
+          { ...row, id: 12, content: "第二句" },
+          { ...row, id: 13, content: "第三句" },
+        ],
+        hasOlder: false,
+        hasNewer: false,
+      },
+      isLoading: false,
+      isError: false,
+      refetch,
+    };
+    sessionStorage.clear();
+    render(<Records />);
+    await screen.findByText("第一句");
+    await userEvent.click(screen.getByRole("button", { name: translate("zh", "records.quoteStart") }));
+    const selectButtons = screen.getAllByRole("button", { name: translate("zh", "records.quoteSelectRow") });
+    await userEvent.click(selectButtons[0]!);
+    await userEvent.click(selectButtons[1]!);
+    expect(screen.getByText(translate("zh", "records.quoteSelected", { n: 2 }))).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: translate("zh", "records.quoteGo") }));
+    expect(navigate).toHaveBeenCalledWith("/chat/5?quote=1");
+    const saved = JSON.parse(sessionStorage.getItem("mirrai:quote:5") ?? "[]");
+    expect(saved).toHaveLength(2);
+    expect(saved[0].content).toBe("第一句");
+  });
+
+  it("does not take lines that are not consecutive", async () => {
+    pageState.value = {
+      data: {
+        rows: [
+          { ...row, id: 11, content: "第一句" },
+          { ...row, id: 12, content: "第二句" },
+          { ...row, id: 13, content: "第三句" },
+        ],
+        hasOlder: false,
+        hasNewer: false,
+      },
+      isLoading: false,
+      isError: false,
+      refetch,
+    };
+    render(<Records />);
+    await screen.findByText("第一句");
+    await userEvent.click(screen.getByRole("button", { name: translate("zh", "records.quoteStart") }));
+    const selectButtons = screen.getAllByRole("button", { name: translate("zh", "records.quoteSelectRow") });
+    await userEvent.click(selectButtons[0]!);
+    await userEvent.click(selectButtons[2]!);
+    expect(screen.getByText(translate("zh", "records.quoteSelected", { n: 0 }))).toBeTruthy();
+    expect(screen.getByRole("button", { name: translate("zh", "records.quoteGo") })).toBeDisabled();
   });
 
   it("adds a bookmark and shows it in the sidebar", async () => {

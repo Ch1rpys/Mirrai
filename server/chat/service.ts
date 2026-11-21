@@ -17,6 +17,7 @@ import { resolveStageProviders } from "../llm/stage-providers";
 import { sanitizeRoles } from "../llm/roles";
 import { inspectExtraBody } from "../llm/extra-body";
 import { budgetExceeded } from "../llm/budget";
+import { loadQuotedRecordsSection } from "./quoted-records";
 import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { computeIntimacy, getEmotionalStateDesc } from "../_core/persona-utils";
@@ -311,6 +312,13 @@ export interface ConversationOptions {
   userId: number;
   /** The user's message. */
   message: string;
+  /**
+   * A stretch of the record the user brought into this turn (C8.10).
+   *
+   * Record ids, checked here: they have to be this persona's, at most
+   * eight lines, and at most 1,200 characters in all.
+   */
+  quotedRecordIds?: number[];
   /**
    * The message this turn is replying to.
    *
@@ -626,6 +634,8 @@ export async function composeMessages(params: {
   extraConfig?: Record<string, any>;
   /** The message this turn replies to. */
   replyToId?: number | null;
+  /** A stretch of the record the user brought into this turn (C8.10). */
+  quotedRecordIds?: number[];
   sampledAct?: import("@shared/speech-acts").SpeechAct | null;
   actClusterLines?: string[] | null;
   coldLines?: string[] | null;
@@ -670,7 +680,7 @@ export async function composeMessages(params: {
   });
   // The message being replied to. Without it, every reply is a reply to
   // "whatever came last".
-  let quotedSection = "";
+  let replyQuote = "";
   if (params.replyToId) {
     /**
      * The quoted message, from this conversation.
@@ -684,9 +694,27 @@ export async function composeMessages(params: {
       .catch(() => null);
     if (quoted) {
       const who = quoted.role === "user" ? copy(locale, "prompt.roleUser") : params.persona.name;
-      quotedSection = copy(locale, "prompt.quotedSection", { who, content: quoted.content });
+      replyQuote = copy(locale, "prompt.quotedSection", { who, content: quoted.content });
     }
   }
+  /**
+   * The lines the user brought in from the record (C8.10).
+   *
+   * They are added after the reply quote, and the whole thing is one
+   * material block: the prompt fences it, so neither the old lines nor
+   * a hostile line inside them can become an instruction.
+   */
+  let quotedRecordsSection = "";
+  if (params.quotedRecordIds?.length) {
+    quotedRecordsSection = await loadQuotedRecordsSection({
+      persona: params.persona,
+      userId: params.userId,
+      ids: params.quotedRecordIds,
+      locale,
+      timeZone: (params.persona as { timezone?: string | null }).timezone ?? null,
+    });
+  }
+  const quotedSection = [replyQuote, quotedRecordsSection].filter(Boolean).join("\n\n");
 
   const summarySection = await maybeCompactHistory({
     persona: params.persona,
@@ -1223,6 +1251,9 @@ async function* admitUserMessage(
       mediaUrl: options.media?.url ?? null,
       replyToId,
       ...(options.fromScheduledMessage ? { origin: "scheduled" } : {}),
+      ...(options.quotedRecordIds?.length
+        ? { metadata: { quotedRecordIds: options.quotedRecordIds } }
+        : {}),
     });
   }
 
@@ -1487,6 +1518,7 @@ async function* runConversationTurn(
     providerName: options.providerName,
     extraConfig,
     replyToId: options.replyToId,
+    quotedRecordIds: options.quotedRecordIds,
     mediaType: options.media?.type ?? null,
   };
   const inbox = options.inbox;

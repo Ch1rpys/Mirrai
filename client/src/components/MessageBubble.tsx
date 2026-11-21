@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import {
   ChevronDown, Trash2, Loader2, Play, Pause, Volume2,
   Copy, Pencil, RefreshCw, CornerUpLeft, Mail, Sparkles, X, Flag,
+  Star, Pin, Tag,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { toast } from "sonner";
@@ -43,6 +44,19 @@ export interface Message {
   replyToId?: number | null;
   /** The quoted text, for the bubble. */
   replyToContent?: string | null;
+  /**
+   * Lines taken from the record into this turn (C8.10).
+   *
+   * The turn is a reply to "this", so the bubble shows what "this" was
+   * — the original words, dated, not a summary.
+   */
+  quotedRecords?: Array<{
+    id: number;
+    role: string;
+    speaker?: string | null;
+    content: string;
+    timestamp?: string | null;
+  }>;
   /** The memories that were injected into this turn. */
   recalled?: Array<{
     id: number;
@@ -327,6 +341,11 @@ export function MessageBubble({
   deleting,
   onQuote,
   onCollectOutbound,
+  onStar,
+  onPin,
+  onTopic,
+  starred,
+  pinned,
 }: {
   msg: Message;
   personaName: string;
@@ -363,6 +382,15 @@ export function MessageBubble({
    * words going back to them, never the persona's.
    */
   onCollectOutbound?: (msg: Message) => void;
+  /** Keeps the message for finding it again (C8.10). */
+  onStar?: (msg: Message) => void;
+  /** Keeps the message in the narrow band above the conversation. */
+  onPin?: (msg: Message) => void;
+  /** Names a point in the conversation to return to. */
+  onTopic?: (msg: Message) => void;
+  /** Whether this message is already starred / pinned. */
+  starred?: boolean;
+  pinned?: boolean;
 }) {
   const { t, locale } = useLocale();
   const [unlikeOpen, setUnlikeOpen] = useState(false);
@@ -808,6 +836,27 @@ export function MessageBubble({
             {/* A message is the user's own. Being able to fix, repeat or
                 remove one is what makes it a conversation rather than a
                 transcript. */}
+            {msg.quotedRecords && msg.quotedRecords.length > 0 && (
+              <div className="mt-2 rounded-md border border-border/70 bg-muted/30 px-2.5 py-1.5 space-y-0.5" data-testid="quoted-records">
+                <p className="text-[11px] text-muted-foreground">
+                  {t("chat.quotedRecords", {
+                    date: formatInstantInZone(
+                      msg.quotedRecords[0]?.timestamp,
+                      locale,
+                      timezone,
+                    ),
+                    n: msg.quotedRecords.length,
+                  })}
+                </p>
+                <ul className="space-y-0.5">
+                  {msg.quotedRecords.map((row) => (
+                    <li key={row.id} className="text-[11px] text-muted-foreground truncate">
+                      {row.content}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {!editing && (
               <span className="inline-flex items-center gap-0.5">
                 {msg.content && (
@@ -833,6 +882,45 @@ export function MessageBubble({
                     className="text-muted-subtle hover:text-muted-foreground transition-colors p-0.5"
                   >
                     <Copy className="w-3 h-3" />
+                  </button>
+                )}
+                {/**
+                  * Finding a message again, keeping one in front, and
+                  * returning to a named point (C8.10).
+                  */}
+                {!isNotice && onStar && (
+                  <button
+                    type="button"
+                    onClick={() => onStar(msg)}
+                    title={starred ? t("chat.unstar") : t("chat.star")}
+                    aria-label={starred ? t("chat.unstar") : t("chat.star")}
+                    aria-pressed={Boolean(starred)}
+                    className={`transition-colors p-0.5 ${starred ? "text-mood-warm" : "text-muted-subtle hover:text-muted-foreground"}`}
+                  >
+                    <Star className={`w-3 h-3 ${starred ? "fill-current" : ""}`} />
+                  </button>
+                )}
+                {!isNotice && onPin && (
+                  <button
+                    type="button"
+                    onClick={() => onPin(msg)}
+                    title={pinned ? t("chat.unpin") : t("chat.pin")}
+                    aria-label={pinned ? t("chat.unpin") : t("chat.pin")}
+                    aria-pressed={Boolean(pinned)}
+                    className={`transition-colors p-0.5 ${pinned ? "text-foreground" : "text-muted-subtle hover:text-muted-foreground"}`}
+                  >
+                    <Pin className="w-3 h-3" />
+                  </button>
+                )}
+                {!isNotice && onTopic && (
+                  <button
+                    type="button"
+                    onClick={() => onTopic(msg)}
+                    title={t("chat.topic")}
+                    aria-label={t("chat.topic")}
+                    className="text-muted-subtle hover:text-muted-foreground transition-colors p-0.5"
+                  >
+                    <Tag className="w-3 h-3" />
                   </button>
                 )}
                 {!isUser && !isNotice && personaId && msg.messageType === "text" && msg.content && (

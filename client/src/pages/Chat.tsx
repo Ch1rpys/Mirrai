@@ -7,7 +7,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import {
   ArrowLeft, Send, ChevronDown, Trash2, MoreVertical,
   Plus, Image, Mic, X, Clock, BarChart3, Search, BookOpen, Theater,
-  Download, Check, HeartCrack, UserRound, Moon, CornerUpLeft, CalendarClock,
+  Download, Check, HeartCrack, UserRound, Moon, CornerUpLeft, CalendarClock, Star,
 } from "lucide-react";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
 import { MessageBubble, emotionOf, type Message } from "@/components/MessageBubble";
@@ -45,6 +45,10 @@ import ScheduledSend from "@/components/v6/ScheduledSend";
 import ClosedComposer from "@/components/v6/ClosedComposer";
 import ReadMarker from "@/components/v6/ReadMarker";
 import BudgetNotice from "@/components/v6/BudgetNotice";
+import PinnedBand from "@/components/v6/PinnedBand";
+import MarksPanel from "@/components/v6/MarksPanel";
+import { useDraft } from "@/components/v6/useDraft";
+import { clearQuoteDraft, readQuoteDraft, type QuoteLine } from "@/components/v6/quote-selection";
 import AfterChat from "@/components/v6/AfterChat";
 import { useTypingReveal, waitMs } from "@/components/v6/useTypingReveal";
 
@@ -261,8 +265,81 @@ export default function Chat() {
       }
     }
   }, [messages]);
-  const [input, setInput] = useState("");
+  /**
+   * The unsent words (C8.10). They are kept per conversation in the
+   * browser, so a reload or a switch to another persona does not throw
+   * them away.
+   */
+  const draft = useDraft(user?.id ?? null, personaId);
+  const input = draft.value;
+  const setInput = draft.setValue;
   const [isSending, setIsSending] = useState(false);
+  /**
+   * The stars, pins and topics of this conversation (C8.10).
+   */
+  const marksQuery = trpc.mark.list.useQuery(
+    { personaId },
+    { enabled: isAuthenticated && Number.isFinite(personaId) },
+  );
+  const markList = marksQuery.data?.marks ?? [];
+  const addMark = trpc.mark.add.useMutation({
+    onSuccess: () => { utils.mark.list.invalidate({ personaId }); },
+    onError: (error) => toast.error(error.message),
+  });
+  const removeMark = trpc.mark.remove.useMutation({
+    onSuccess: () => { utils.mark.list.invalidate({ personaId }); },
+    onError: (error) => toast.error(error.message),
+  });
+  const [showMarks, setShowMarks] = useState(false);
+  /**
+   * Lines taken from the record reader into this turn (C8.10).
+   *
+   * They arrive through sessionStorage and the URL says only that there
+   * is a quotation; the server reads and checks the records again when
+   * the turn is sent.
+   */
+  const [quotedRecords, setQuotedRecords] = useState<QuoteLine[]>([]);
+  const [topicTarget, setTopicTarget] = useState<{ messageId: number } | null>(null);
+  const [topicName, setTopicName] = useState("");
+  const markOf = (messageId: number, kind: "star" | "pin" | "topic") =>
+    markList.find((mark) => mark.messageId === messageId && mark.kind === kind);
+  const toggleMark = (msg: Message, kind: "star" | "pin") => {
+    const messageId = serverMessageId(msg.id);
+    if (!Number.isFinite(messageId)) return;
+    const existing = markOf(messageId!, kind);
+    if (existing) removeMark.mutate({ id: existing.id });
+    else addMark.mutate({ personaId, messageId: messageId!, kind });
+  };
+  const startTopic = (msg: Message) => {
+    const messageId = serverMessageId(msg.id);
+    if (!Number.isFinite(messageId)) return;
+    setTopicName("");
+    setTopicTarget({ messageId: messageId! });
+  };
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hasQuote = new URLSearchParams(window.location.search).get("quote") === "1";
+    if (!hasQuote) return;
+    // i18n:allow-identifier — the query flag is a URL marker, not copy.
+    setQuotedRecords(readQuoteDraft(personaId));
+  }, [personaId]);
+
+  const removeQuote = () => {
+    setQuotedRecords([]);
+    clearQuoteDraft(personaId);
+  };
+
+  const saveTopic = () => {
+    if (!topicTarget || !topicName.trim()) return;
+    addMark.mutate({
+      personaId,
+      messageId: topicTarget.messageId,
+      kind: "topic",
+      label: topicName.trim().slice(0, 60),
+    });
+    setTopicTarget(null);
+    setTopicName("");
+  };
   const [liveChoice, setLiveChoice] = useState<{
     options: [string, string];
     replyToMessageId: number;
@@ -722,6 +799,7 @@ export default function Chat() {
       routine: routineFromMetadata(m.metadata),
       claims: claimsFromMetadata(m.metadata),
       photoAt: photoAtFromMetadata(m.metadata),
+      quotedRecords: Array.isArray(m.quotedRecords) ? m.quotedRecords : [],
     }));
 
     // The history is polled, so it can arrive while a reply is still
@@ -819,7 +897,8 @@ export default function Chat() {
   });
   useEffect(() => {
     setMessages([]);
-    setInput("");
+    // The draft of the conversation being opened is loaded by the hook;
+    // blanking the input here would delete it (C8.10).
     setLiveChoice(null);
     setReplyTo(null);
     setShowCrisis(false);
@@ -845,11 +924,25 @@ export default function Chat() {
     const text = input.trim();
     if (!text) return;
     setInput("");
+    // The quotation has been spent by this turn (C8.10).
+    if (quotedRecords.length > 0) {
+      clearQuoteDraft(personaId);
+      setQuotedRecords([]);
+    }
     setLiveChoice(null);
     inFlightRef.current += 1;
     setIsSending(true);
 
-    const userMsg: Message = { id: `temp-${Date.now()}`, role: "user", content: text, createdAt: new Date() };
+    const quotedIds = quotedRecords.map((row) => row.id);
+    const userMsg: Message = {
+      id: `temp-${Date.now()}`,
+      role: "user",
+      content: text,
+      createdAt: new Date(),
+      ...(quotedRecords.length > 0
+        ? { quotedRecords: quotedRecords.map((row) => ({ ...row })) }
+        : {}),
+    };
     setMessages(prev => [...prev, userMsg]);
 
     // The message being replied to has been spent.
@@ -891,6 +984,7 @@ export default function Chat() {
           message: text,
           locale: locale === "en" ? "en" : "zh",
           replyToId: serverMessageId(replyTo?.id),
+          ...(quotedIds.length > 0 ? { quotedRecordIds: quotedIds } : {}),
           periodId: periodId || undefined,
           signal: controller.signal,
           callbacks: {
@@ -1957,6 +2051,10 @@ export default function Chat() {
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors">
                       <Search className="w-4 h-4 text-muted-foreground" />{t("chat.search")}
                     </button>
+                    <button onClick={() => { setShowMarks(true); setShowMenu(false); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors text-left">
+                      <Star className="w-4 h-4 text-muted-foreground" />{t("chat.marksEntry")}
+                    </button>
                     <button onClick={() => { setShowTimeline(true); setShowMenu(false); }}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors">
                       <Clock className="w-4 h-4 text-muted-foreground" />{t("chat.memoryTimeline")}
@@ -2032,6 +2130,49 @@ export default function Chat() {
             </div>
           </div>
         </div>
+
+        {/* The stars and topics of this conversation (C8.10). */}
+        <MarksPanel
+          open={showMarks}
+          marks={markList}
+          onClose={() => setShowMarks(false)}
+          onJump={(messageId) => { setShowMarks(false); jumpToMessage(messageId); }}
+          onRemove={(id) => removeMark.mutate({ id })}
+        />
+
+        {/* Naming a point in the conversation to return to (C8.10). */}
+        {topicTarget && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setTopicTarget(null)} />
+            <div
+              role="dialog"
+              aria-label={t("chat.topicPrompt")}
+              className="fixed left-1/2 top-1/3 z-50 w-[min(24rem,calc(100vw-2rem))] -translate-x-1/2 surface p-4 space-y-3"
+            >
+              <p className="text-sm font-medium text-foreground">{t("chat.topicPrompt")}</p>
+              <input
+                aria-label={t("chat.topicPrompt")}
+                className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm"
+                maxLength={60}
+                value={topicName}
+                autoFocus
+                onChange={(event) => setTopicName(event.target.value.slice(0, 60))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") saveTopic();
+                  if (event.key === "Escape") setTopicTarget(null);
+                }}
+              />
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="ghost" className="rounded-md" onClick={() => setTopicTarget(null)}>
+                  {t("chat.topicCancel")}
+                </Button>
+                <Button size="sm" className="rounded-md" onClick={saveTopic} disabled={!topicName.trim()}>
+                  {t("chat.topicSave")}
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* 场景模式面板 */}
         {showScenePanel && (
@@ -2282,6 +2423,12 @@ export default function Chat() {
        * who cannot see the screen had no way of knowing that their
        * person had answered.
        */}
+      {/* The few kept in front of the conversation (C8.10). */}
+      <PinnedBand
+        marks={markList.filter((mark) => mark.kind === "pin")}
+        onJump={jumpToMessage}
+        onUnpin={(id) => removeMark.mutate({ id })}
+      />
       <div
         ref={scrollRef}
         className="flex-1 min-h-0 overflow-y-auto"
@@ -2389,6 +2536,11 @@ export default function Chat() {
                 deleting={deleteMessageMutation.isPending}
                 onQuote={handleQuote}
                 onCollectOutbound={handleCollectOutbound}
+                onStar={(row) => toggleMark(row, "star")}
+                onPin={(row) => toggleMark(row, "pin")}
+                onTopic={startTopic}
+                starred={Boolean(markOf(numericId, "star"))}
+                pinned={Boolean(markOf(numericId, "pin"))}
               />
               {offer && Number.isInteger(offer.replyToMessageId) && (
                 <div className="mt-2">
@@ -2441,6 +2593,29 @@ export default function Chat() {
            * "show graduated" toggle. So the person was told to do
            * something they could not do from where they were.
            */}
+          {/* The lines brought in from the record (C8.10). */}
+          {quotedRecords.length > 0 && (
+            <div className="mb-2 rounded-md border-l-2 border-primary/40 bg-muted/40 px-2.5 py-1.5">
+              <div className="flex items-center gap-2">
+                <p className="flex-1 text-xs text-muted-foreground">
+                  {String(t("chat.quotedRecords", {
+                    date: quotedRecords[0]?.timestamp
+                      ? formatInstantInZone(quotedRecords[0].timestamp, locale, user?.timezone)
+                      : "",
+                    n: quotedRecords.length,
+                  }))}
+                </p>
+                <button
+                  type="button"
+                  onClick={removeQuote}
+                  aria-label={t("chat.removeQuote")}
+                  className="text-muted-subtle hover:text-foreground"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
           {/* The month's ceiling, said where the spending happens (C8.9). */}
           <BudgetNotice />
           {persona?.graduationStatus === "graduated" && (

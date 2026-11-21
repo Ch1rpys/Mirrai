@@ -136,6 +136,8 @@ export interface TurnInput {
   mediaType?: string | null;
   /** Memory retrieval query. Defaults to `userMessage`. */
   retrievalQuery?: string;
+  /** A stretch of the record the user brought into this turn (C8.10). */
+  quotedRecordIds?: number[];
   /**
    * The month's spending ceiling is used up (C8.9).
    *
@@ -535,6 +537,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     now: input.now,
     extraConfig: input.extraConfig,
     replyToId: input.replyToId,
+    quotedRecordIds: input.quotedRecordIds,
     sampledAct,
     periodId: input.periodId ?? null,
     excludeExemplarIds: seeds.excludeIds,

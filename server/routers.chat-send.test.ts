@@ -129,3 +129,43 @@ describe("sending a message when the model fails", () => {
     expect((result as any).failed).toBe(true);
   });
 });
+
+/**
+ * A stretch of the record brought into a turn (C8.10).
+ *
+ * The route checks what can be checked without the database — eight
+ * lines at most — and hands the ids to the turn, which checks that they
+ * are this persona's.
+ */
+describe("taking a stretch of the record into a turn", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getPersonaById.mockResolvedValue({ id: 5, userId: 1, name: "小满", analysisStatus: "ready" });
+    updatePersona.mockResolvedValue(undefined);
+    runConversation.mockImplementation(async function* () {
+      yield { type: "done", messageId: 1, emotionalState: "warm", graduationSuggested: false, careNote: null, crisis: false };
+    });
+  });
+
+  it("passes the ids to the turn", async () => {
+    await appRouter.createCaller(ctxFor(1)).chat.send({
+      personaId: 5,
+      message: "还记得这个吗",
+      locale: "zh",
+      quotedRecordIds: [101, 102],
+    });
+    expect(runConversation).toHaveBeenCalledWith(expect.objectContaining({
+      quotedRecordIds: [101, 102],
+    }));
+  });
+
+  it("refuses nine lines before anything is called", async () => {
+    await expect(appRouter.createCaller(ctxFor(1)).chat.send({
+      personaId: 5,
+      message: "还记得这个吗",
+      locale: "zh",
+      quotedRecordIds: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+    })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(runConversation).not.toHaveBeenCalled();
+  });
+});

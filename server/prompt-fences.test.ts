@@ -40,6 +40,19 @@ function unfenced(prompt: string): string {
   return prompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "");
 }
 
+describe("a stretch of the record quoted into a turn", () => {
+  it("is material, inside the fence", () => {
+    const prompt = buildSystemPrompt(persona(), {
+      userMessage: "还记得这个吗",
+      locale: "zh",
+      // i18n:allow-input — the hostile line is what is being tested.
+      quotedSection: HOSTILE_NOTE,
+    } as any);
+    expect(prompt).toContain(HOSTILE_NOTE);
+    expect(unfenced(prompt)).not.toContain(HOSTILE_NOTE);
+  });
+});
+
 describe("the sentence given to the wording assistant", () => {
   it("is material, fenced, and not an instruction", () => {
     const messages = buildWordingMessages(HOSTILE_NOTE, "zh");

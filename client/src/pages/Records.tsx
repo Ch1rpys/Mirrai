@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { ArrowLeft, Bookmark, Copy, NotebookPen, Trash2 } from "lucide-react";
+import { ArrowLeft, Bookmark, Copy, MessageCircle, NotebookPen, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { formatInstantInZone } from "@/lib/dates";
@@ -10,6 +10,7 @@ import RecordSearch from "@/components/v6/RecordSearch";
 import { useConfirm } from "@/components/ConfirmDialog";
 import PageLoader from "@/components/PageLoader";
 import NotFound from "@/pages/NotFound";
+import { writeQuoteDraft } from "@/components/v6/quote-selection";
 
 /**
  * The timeline reader (C2.10).
@@ -94,6 +95,15 @@ export default function Records() {
   const [noteText, setNoteText] = useState("");
   const [copied, setCopied] = useState(false);
   const [jumpDate, setJumpDate] = useState("");
+  /**
+   * A stretch of the record on its way to a conversation (C8.10).
+   *
+   * The reader picks consecutive lines; the chat page opens with the
+   * quotation above the composer, and the server checks the ids again
+   * when the turn is sent.
+   */
+  const [quoteMode, setQuoteMode] = useState(false);
+  const [quoteIds, setQuoteIds] = useState<number[]>([]);
 
   const persona = trpc.persona.get.useQuery({ id: personaId }, { enabled: personaId > 0 });
   const pageQuery = trpc.record.page.useQuery(
@@ -240,6 +250,40 @@ export default function Records() {
     }
   };
 
+  /**
+   * The selected lines, in the order they were said.
+   *
+   * Only a consecutive run can be taken: the quotation is one stretch
+   * of a conversation, not a set of unrelated lines.
+   */
+  const quoteLines = (() => {
+    if (quoteIds.length === 0) return [];
+    const indexOf = new Map(rows.map((row, index) => [row.id, index]));
+    const indices = quoteIds.map((id) => indexOf.get(id)).filter((index): index is number => index != null);
+    if (indices.length !== quoteIds.length) return [];
+    const sorted = [...indices].sort((a, b) => a - b);
+    const consecutive = sorted.every((value, index) => index === 0 || value === sorted[index - 1]! + 1);
+    return consecutive ? sorted.map((index) => rows[index]!) : [];
+  })();
+
+  const toggleQuote = (row: RecordRow) => {
+    setQuoteIds((current) =>
+      current.includes(row.id) ? current.filter((id) => id !== row.id) : [...current, row.id],
+    );
+  };
+
+  const takeQuoteToChat = () => {
+    if (quoteLines.length === 0) return;
+    writeQuoteDraft(personaId, quoteLines.map((row) => ({
+      id: row.id,
+      role: row.role,
+      speaker: row.speaker,
+      content: row.content,
+      timestamp: row.timestamp,
+    })));
+    navigate(`/chat/${personaId}?quote=1`);
+  };
+
   const askDelete = async (row: RecordRow) => {
     const ok = await confirm({
       title: t("records.deleteTitle"),
@@ -281,6 +325,25 @@ export default function Records() {
           <Button size="sm" variant="outline" onClick={loadDate} disabled={!jumpDate}>
             {t("records.jump")}
           </Button>
+          <Button
+            size="sm"
+            variant={quoteMode ? "default" : "outline"}
+            onClick={() => { setQuoteMode(!quoteMode); setQuoteIds([]); }}
+          >
+            <MessageCircle className="w-3.5 h-3.5 mr-1" />
+            {String(quoteMode ? t("records.quoteCancel") : t("records.quoteStart"))}
+          </Button>
+          {quoteMode && (
+            <>
+              <span className="text-xs text-muted-foreground">
+                {String(t("records.quoteSelected", { n: quoteLines.length }))}
+              </span>
+              <Button size="sm" onClick={takeQuoteToChat} disabled={quoteLines.length === 0}>
+                {String(t("records.quoteGo"))}
+              </Button>
+              <span className="text-[11px] text-muted-subtle w-full">{String(t("records.quoteHint"))}</span>
+            </>
+          )}
           {copied && <span className="text-xs text-muted-foreground">{t("records.copied")}</span>}
         </div>
         <div className="pt-1">
@@ -439,6 +502,17 @@ export default function Records() {
                         </p>
                       ))}
                     <div className="mt-1 flex flex-wrap items-center gap-1">
+                      {quoteMode && (
+                        <button
+                          type="button"
+                          aria-label={t("records.quoteSelectRow")}
+                          aria-pressed={quoteIds.includes(row.id)}
+                          className={`rounded p-1 hover:bg-muted ${quoteIds.includes(row.id) ? "text-cinnabar" : ""}`}
+                          onClick={() => toggleQuote(row)}
+                        >
+                          <MessageCircle className={`w-3.5 h-3.5 ${quoteIds.includes(row.id) ? "fill-current" : ""}`} />
+                        </button>
+                      )}
                       <button
                         type="button"
                         aria-label={bookmark ? t("records.unbookmark") : t("records.bookmark")}

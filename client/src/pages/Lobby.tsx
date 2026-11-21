@@ -36,6 +36,7 @@ import OnThisDay from "@/components/v6/OnThisDay";
 import Milestones from "@/components/v6/Milestones";
 import MailboxEntry from "@/components/v6/MailboxEntry";
 import PersonaUnreadNote from "@/components/v6/PersonaUnreadNote";
+import { clearAllDrafts } from "@/components/v6/useDraft";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionDefinition } from "@/lib/emotions";
 import { localDateKey, zonedDateKey, zonedHour, daysSinceContact } from "@shared/timezone";
 import { attachmentStyleLabel, loveLanguageLabel } from "@/lib/persona-options";
@@ -1970,7 +1971,13 @@ export default function Lobby() {
                 so a failure was an unhandled rejection in the console
                 and the user was still moved to the login page — signed
                 in, on a page they cannot use. */}
-            <button onClick={() => { void logout().finally(() => navigate(getLoginUrl())); }}
+            <button onClick={() => {
+              // The drafts of every conversation go with the session
+              // (C8.10): they were typed here, and the next person to
+              // use this browser should not find them.
+              clearAllDrafts();
+              void logout().finally(() => navigate(getLoginUrl()));
+            }}
               className="app-nav-icon" title={t("lobby.nav.logout")} aria-label={t("lobby.nav.logout")}>
               <LogOut className="w-4 h-4" />
             </button>

@@ -1126,6 +1126,22 @@ export const V6 = {
     zh: "话题要有个名字，之后才好找回来。",
     en: "A topic needs a name, or it cannot be found again.",
   },
+  "prompt.quotedRecordsHeading": {
+    zh: "【你们说过的几句】",
+    en: "[Lines the two of you said]",
+  },
+  "prompt.quotedRecordsLine": {
+    zh: "{{date}} {{who}} 说：{{content}}",
+    en: "{{date}} {{who}} said: {{content}}",
+  },
+  "errors.quotedRecordsNotYours": {
+    zh: "其中有几句不属于这个分身，或者已经不在记录里了。",
+    en: "Some of those lines do not belong to this persona, or are no longer in the record.",
+  },
+  "errors.quotedRecordsTooLong": {
+    zh: "最多带连续 8 句、合计 1200 字去聊。少选几句。",
+    en: "At most eight consecutive lines and 1,200 characters in total. Choose fewer.",
+  },
   "errors.budgetOver": {
     zh: "这个月的用量已经超过你定的预算。四选一、两步生成、事实重写、评测、试镜、排练和措辞助手先停用了；普通对话、安全回复和记忆抽取不受影响。",
     en: "This month's usage is past the budget you set. The four-way choice, two-stage generation, the fact rewrite, evaluation, audition, the rehearsal room and the wording assistant are switched off for now; ordinary replies, safety answers and memory extraction still work.",

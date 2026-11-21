@@ -763,3 +763,37 @@ describe("the message bubble", () => {
     expect(screen.queryByLabelText(translate("zh", "chat.regenerate"))).toBeNull();
   });
 });
+
+/**
+ * A stretch of the record quoted into a turn (C8.10).
+ *
+ * The turn says "let's talk about this", so the bubble has to show what
+ * "this" was — the original lines, with the day they were said.
+ */
+describe("a message that quotes the record", () => {
+  it("shows the quoted lines under the words", () => {
+    render(
+      <MessageBubble
+        msg={makeMessage({
+          role: "user",
+          content: "还记得这个吗",
+          quotedRecords: [
+            { id: 101, role: "user", speaker: "阿树", content: "说好的 周末看电影", timestamp: "2023-05-01T12:00:00.000Z" },
+            { id: 102, role: "assistant", speaker: "小满", content: "好啊", timestamp: "2023-05-01T12:01:00.000Z" },
+          ],
+        })}
+        personaName="小A"
+        showMood={false}
+      />,
+    );
+    expect(screen.getByTestId("quoted-records")).toBeInTheDocument();
+    expect(screen.getByText("说好的 周末看电影")).toBeInTheDocument();
+    expect(screen.getByText("好啊")).toBeInTheDocument();
+    expect(screen.getByText(/2 句记录/)).toBeInTheDocument();
+  });
+
+  it("draws nothing extra for an ordinary message", () => {
+    render(<MessageBubble msg={makeMessage()} personaName="小A" showMood={false} />);
+    expect(screen.queryByTestId("quoted-records")).toBeNull();
+  });
+});

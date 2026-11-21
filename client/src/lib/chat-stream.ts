@@ -99,6 +99,8 @@ export interface StreamChatOptions {
    * long conversation becomes impossible to follow.
    */
   replyToId?: number;
+  /** A stretch of the record brought into this turn (C8.10). */
+  quotedRecordIds?: number[];
   periodId?: string;
   signal?: AbortSignal;
   callbacks: StreamChatCallbacks;
@@ -178,7 +180,7 @@ async function readErrorMessage(response: Response): Promise<string> {
 }
 
 export async function streamChat(options: StreamChatOptions): Promise<void> {
-  const { personaId, message, replyToId, periodId, signal, callbacks } = options;
+  const { personaId, message, replyToId, periodId, quotedRecordIds, signal, callbacks } = options;
   /**
    * The interface's language.
    *
@@ -192,7 +194,7 @@ export async function streamChat(options: StreamChatOptions): Promise<void> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ personaId, message, locale, replyToId, periodId }),
+    body: JSON.stringify({ personaId, message, locale, replyToId, periodId, quotedRecordIds }),
     signal,
   });
 

@@ -12,6 +12,7 @@ const updatePersona = vi.fn();
 const incrementChatCount = vi.fn();
 const getPersonaById = vi.fn();
 const getMessagesByPersonaId = vi.fn();
+const getRecordsByIds = vi.fn();
 const getMemoriesByPersonaId = vi.fn();
 const getFilesByPersonaId = vi.fn();
 const getSceneById = vi.fn();
@@ -93,6 +94,7 @@ vi.mock("../db", () => ({
   getLastExtractionAttemptAt: (...a: unknown[]) => getLastExtractionAttemptAt(...a),
   getLastExtractionAt: (...a: unknown[]) => getLastExtractionAt(...a),
   getMessageById: (...a: unknown[]) => getMessageById(...a),
+  getRecordsByIds: (...a: unknown[]) => getRecordsByIds(...a),
   updateEmotionSnapshot: (...a: unknown[]) => updateEmotionSnapshot(...a),
   listFidelityRewritePairs: (...a: unknown[]) => listFidelityRewritePairs(...a),
   updateMessageMetadata: vi.fn().mockResolvedValue(true),
@@ -2584,6 +2586,56 @@ describe("the daily rhythm", () => {
  * two stages, the fact rewrite. An ordinary reply is not optional — it
  * is the reason the app exists — so it still happens, once.
  */
+/**
+ * A stretch of the record taken into a turn (C8.10).
+ *
+ * The lines are material: dated, marked as things the two of them said,
+ * and put inside the fence with everything else the model is given to
+ * read rather than obey.
+ */
+describe("a stretch of the record in the prompt", () => {
+  it("puts the dated lines inside the fence", async () => {
+    getRecordsByIds.mockResolvedValue([
+      {
+        id: 101,
+        personaId: 1,
+        userId: 1,
+        role: "user",
+        speaker: "阿树",
+        content: "说好的 周末看电影",
+        timestamp: new Date("2023-05-01T12:00:00.000Z"),
+        createdAt: new Date("2023-05-01T12:00:00.000Z"),
+      },
+      {
+        id: 102,
+        personaId: 1,
+        userId: 1,
+        role: "assistant",
+        speaker: "小满",
+        content: "好啊",
+        timestamp: new Date("2023-05-01T12:01:00.000Z"),
+        createdAt: new Date("2023-05-01T12:01:00.000Z"),
+      },
+    ]);
+    const plan = await planTurn({
+      persona: persona(),
+      userId: 1,
+      userMessage: "还记得这个吗",
+      quotedRecordIds: [101, 102],
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "quoted:records",
+    });
+    const prompt = systemText({ messages: plan.messages });
+    expect(prompt).toContain("说好的 周末看电影");
+    expect(prompt).toContain("2023-05-01");
+    // It is material, not an instruction: outside the fence it is gone.
+    expect(unfencedPrompt(prompt)).not.toContain("说好的 周末看电影");
+    expect(getRecordsByIds).toHaveBeenCalledWith([101, 102], 1);
+  });
+});
+
 describe("a month over its budget", () => {
   it("does not run two stages or the fact rewrite, and still answers", async () => {
     const input = {

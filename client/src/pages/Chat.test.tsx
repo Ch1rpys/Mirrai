@@ -24,6 +24,8 @@ const chatPersona = vi.hoisted(() => ({
   } as Record<string, unknown>,
 }));
 
+const markAdd = vi.fn();
+const markRemove = vi.fn();
 const streamChat = vi.fn();
 
 vi.mock("@/lib/chat-stream", () => ({
@@ -121,6 +123,12 @@ vi.mock("@/lib/trpc", () => ({
       list: { useQuery: () => ({ data: { items: [] }, isError: false }) },
       create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    mark: {
+      // Stars, pins and topics (C8.10).
+      list: { useQuery: () => ({ data: { marks: [], maxPins: 3 } }) },
+      add: { useMutation: () => ({ mutate: markAdd, isPending: false }) },
+      remove: { useMutation: () => ({ mutate: markRemove, isPending: false }) },
+    },
     useUtils: () => ({
       persona: {
         get: { invalidate: vi.fn() },
@@ -137,6 +145,7 @@ vi.mock("@/lib/trpc", () => ({
         unreadCount: { invalidate: vi.fn() },
         inbox: { invalidate: vi.fn() },
       },
+      mark: { list: { invalidate: vi.fn() } },
     }),
   },
 }));
@@ -180,6 +189,9 @@ describe("Chat", () => {
     history.length = 0;
     delete chatPersona.value.settings;
     Element.prototype.scrollIntoView = vi.fn();
+    localStorage.clear();
+    markAdd.mockReset();
+    markRemove.mockReset();
   });
 
   it("wears the skin and the note the user chose, and keeps the badge", () => {
@@ -286,5 +298,76 @@ describe("Chat", () => {
       expect(screen.queryByText("在")).toBeNull();
     });
     expect(screen.getByText("一")).toBeInTheDocument();
+  });
+});
+
+/**
+ * The unsent words (C8.10).
+ *
+ * The composer's text lived only in React state: a reload, or a switch
+ * to another persona, threw it away. It is kept per conversation now,
+ * and sending is what clears it.
+ */
+describe("the composer's draft", () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+    localStorage.clear();
+  });
+
+  it("survives a reload, and goes away once it is sent", async () => {
+    const user = userEvent.setup();
+    const first = render(<Chat />);
+    const composer = screen.getByRole("textbox", { name: "对 小A 说点什么..." });
+    await user.type(composer, "还没说完的话");
+    first.unmount();
+
+    streamChat.mockImplementation(async () => {});
+    render(<Chat />);
+    const again = screen.getByRole("textbox", { name: "对 小A 说点什么..." });
+    expect((again as HTMLTextAreaElement).value).toBe("还没说完的话");
+
+    await user.click(screen.getByLabelText(translate("zh", "chat.send")));
+    expect(localStorage.getItem("mirrai:draft:1:1")).toBeNull();
+  });
+});
+
+/**
+ * A stretch of the record quoted into a turn (C8.10).
+ *
+ * The reader leaves the quotation in sessionStorage and the URL says
+ * only that there is one. The chat shows what is quoted above the
+ * composer, sends the ids with the turn, and lets go of the quotation
+ * once it has been spent.
+ */
+describe("a quoted stretch of the record", () => {
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = vi.fn();
+    localStorage.clear();
+    sessionStorage.clear();
+    streamChat.mockReset();
+  });
+
+  it("shows the quotation, sends its ids, and clears it", async () => {
+    sessionStorage.setItem("mirrai:quote:1", JSON.stringify([
+      { id: 101, role: "user", speaker: "阿树", content: "说好的 周末看电影", timestamp: "2023-05-01T12:00:00.000Z" },
+      { id: 102, role: "assistant", speaker: "小满", content: "好啊", timestamp: "2023-05-01T12:01:00.000Z" },
+    ]));
+    window.history.replaceState({}, "", "/chat/1?quote=1");
+    streamChat.mockImplementation(async () => {});
+    const user = userEvent.setup();
+    render(<Chat />);
+
+    expect(screen.getByText(/2 句记录/)).toBeInTheDocument();
+    const composer = screen.getByRole("textbox", { name: "对 小A 说点什么..." });
+    await user.type(composer, "还记得这个吗");
+    await user.click(screen.getByLabelText(translate("zh", "chat.send")));
+
+    expect(streamChat).toHaveBeenCalledWith(expect.objectContaining({
+      quotedRecordIds: [101, 102],
+    }));
+    expect(sessionStorage.getItem("mirrai:quote:1")).toBeNull();
+    // The bar is gone; the quotation is now part of the sent message.
+    expect(screen.queryByLabelText(translate("zh", "chat.removeQuote"))).toBeNull();
+    expect(screen.getAllByText(/2 句记录/).length).toBeGreaterThan(0);
   });
 });
