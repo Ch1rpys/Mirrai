@@ -3270,6 +3270,42 @@ export const zh = {
     actionFailed: "操作没有完成：{{message}}",
     restoreFailed: "没有恢复：{{message}}",
   },
+  /**
+   * The one-click diagnosis (C8.12), in the settings' data tab.
+   *
+   * The button explains itself before it runs: it does send a real (if
+   * tiny) request to every configured model.
+   */
+  diagnostics: {
+    title: "一键诊断",
+    note: "会向你配置的每个模型各发一次极短的请求。",
+    run: "检查一遍",
+    running: "正在检查…",
+    empty: "还没检查过。点「检查一遍」看看现在的状态。",
+    failed: "检查没有完成：{{message}}",
+    retry: "再试一次",
+    copy: "复制报告",
+    copied: "报告已复制。",
+    copyFailed: "没有复制成功，可以手动选下面的报告原文。",
+    reportTitle: "一键诊断报告",
+    reportHint: "报告里不含密钥、消息内容、用户名和绝对路径。",
+    fixPrefix: "怎么修：",
+    status: {
+      ok: "正常",
+      warn: "有点问题",
+      fail: "不通",
+      skipped: "没检查",
+    },
+    browser: {
+      granted: "浏览器通知已允许。",
+      denied: "浏览器通知被拒绝了。",
+      pending: "浏览器通知还没有允许。",
+      unsupported: "这个浏览器不支持通知。",
+      deniedFix: "在浏览器的站点设置里重新允许通知，推送才收得到。",
+      pendingFix: "在浏览器里允许通知，推送才收得到。",
+      unsupportedFix: "换一个支持通知的浏览器。",
+    },
+  },
 } as const;
 
 export type ZhDictionary = typeof zh;

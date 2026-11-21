@@ -3260,6 +3260,42 @@ export const en = {
     actionFailed: "That did not go through: {{message}}",
     restoreFailed: "Could not restore: {{message}}",
   },
+  /**
+   * The one-click diagnosis (C8.12), in the settings' data tab.
+   *
+   * The button explains itself before it runs: it does send a real (if
+   * tiny) request to every configured model.
+   */
+  diagnostics: {
+    title: "One-click check",
+    note: "It sends one very short request to each model you configured.",
+    run: "Check everything",
+    running: "Checking…",
+    empty: "Nothing has been checked yet. Press “Check everything”.",
+    failed: "The check did not finish: {{message}}",
+    retry: "Try again",
+    copy: "Copy report",
+    copied: "The report was copied.",
+    copyFailed: "The copy did not go through. Select the report below instead.",
+    reportTitle: "Diagnosis report",
+    reportHint: "The report contains no keys, message content, usernames or absolute paths.",
+    fixPrefix: "How to fix: ",
+    status: {
+      ok: "OK",
+      warn: "Needs attention",
+      fail: "Not working",
+      skipped: "Not checked",
+    },
+    browser: {
+      granted: "Browser notifications are allowed.",
+      denied: "Browser notifications were refused.",
+      pending: "Browser notifications have not been allowed yet.",
+      unsupported: "This browser does not support notifications.",
+      deniedFix: "Allow notifications again in the browser's site settings so pushes can arrive.",
+      pendingFix: "Allow notifications in the browser so pushes can arrive.",
+      unsupportedFix: "Use a browser that supports notifications.",
+    },
+  },
 } as const;
 
 export type EnDictionary = typeof en;

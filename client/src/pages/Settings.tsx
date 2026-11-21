@@ -42,6 +42,7 @@ import ExtraBodyEditor from "@/components/v6/ExtraBodyEditor";
 import LlmRoles from "@/components/v6/LlmRoles";
 import UsagePanel from "@/components/v6/UsagePanel";
 import RecycleBin from "@/components/v6/RecycleBin";
+import Diagnostics from "@/components/v6/Diagnostics";
 import type { GraduationMode } from "@shared/graduation-mode";
 import {
   DEFAULT_DISTILLATION_MODE,
@@ -1478,6 +1479,8 @@ export function DataManagementTab() {
       <PushSettings />
 
       <EgressList />
+
+      <Diagnostics />
 
       {/* Export */}
       <section className="surface p-5 sm:p-6">

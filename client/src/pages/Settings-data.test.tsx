@@ -15,6 +15,13 @@ const accountStats: { data: any; isError: boolean } = { data: undefined, isError
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    system: {
+      // The one-click diagnosis panel is mounted in this tab (C8.12); the
+      // tests here are about the deletion dialog, not about it.
+      diagnose: {
+        useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+      },
+    },
     useUtils: () => ({
       persona: {
         listDeleted: { invalidate: vi.fn() },
