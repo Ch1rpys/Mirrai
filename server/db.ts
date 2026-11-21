@@ -263,11 +263,6 @@ export async function recordFullBackupAt(userId: number, at: Date = new Date()):
   await setUserBackupSettings(userId, { ...current, lastFullBackupAt: at.toISOString() });
 }
 
-/** The key an encrypted write needs; the error names the account. */
-function writeKey(userId: number): Buffer {
-  return requireDataKeyForWrite(userId);
-}
-
 /** Whether writes for this account are encrypted. */
 function encryptsWrites(userId: number): boolean {
   return encryptionEnabledFor(userId);
@@ -2125,7 +2120,7 @@ export async function getPersonaById(id: number, userId: number) {
     const [ownerRaw] = await db.select().from(personas)
       .where(and(isNull(personas.deletedAt), eq(personas.id, row.sharedFromPersonaId))).limit(1);
     if (!ownerRaw) return decryptRowOf("personas", row) ?? undefined;
-    let owner = decryptRowOf("personas", ownerRaw) ?? ownerRaw;
+    let owner = ownerRaw;
     try {
       owner = decryptRowOf("personas", ownerRaw) ?? ownerRaw;
     } catch (error) {
@@ -2134,9 +2129,16 @@ export async function getPersonaById(id: number, userId: number) {
        * the owner's key (C8.5). The member keeps the copy of the
        * identity that was taken when the share was accepted; the live
        * fields cannot be read until the owner signs in on this instance.
+       * The copy is decrypted with the member's own key, because it is
+       * the member's row.
        */
       if (error instanceof Error && error.name === "EncryptionKeyMissingError") {
-        owner = { ...ownerRaw, personaData: row.personaData, styleProfile: row.styleProfile };
+        const memberCopy = decryptRowOf("personas", row) ?? row;
+        owner = {
+          ...ownerRaw,
+          personaData: memberCopy.personaData,
+          styleProfile: memberCopy.styleProfile,
+        };
       } else {
         throw error;
       }

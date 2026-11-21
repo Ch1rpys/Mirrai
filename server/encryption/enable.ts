@@ -40,8 +40,6 @@ import {
   updateUserPassword,
 } from "../db";
 import {
-  MIGRATION_BATCH_SIZE as _MIGRATION_BATCH_SIZE,
-  beginMigration,
   countMigrationWork,
   recordMigrationError,
   runMigration,
@@ -325,6 +323,3 @@ export async function runPendingMigrationForTests(
     throw error;
   }
 }
-
-/** The batch size, re-exported for the settings page's wording and the tests. */
-export const ENCRYPTION_MIGRATION_BATCH_SIZE = _MIGRATION_BATCH_SIZE;

@@ -410,10 +410,3 @@ export function startMigrationInBackground(userId: number): void {
     }
   })();
 }
-
-/** Users whose encryption column says a migration is pending (scheduler input). */
-export async function pendingMigrationUserIds(): Promise<number[]> {
-  const { getUsersWithPendingEncryptionMigration } = await import("../db");
-  const rows = await getUsersWithPendingEncryptionMigration();
-  return rows.map((row) => row.id);
-}

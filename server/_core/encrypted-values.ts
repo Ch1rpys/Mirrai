@@ -36,7 +36,6 @@ import {
   decryptContent,
   encryptContent,
   isEncryptedContent,
-  tryDecryptContent,
 } from "./content-crypto";
 import { dataKeyFor } from "./data-keys";
 
@@ -111,11 +110,6 @@ export class EncryptionKeyMissingError extends Error {
     super(`The data key for user ${userId} is not unlocked in this process.`);
     this.name = "EncryptionKeyMissingError";
   }
-}
-
-/** Whether `table` has any encrypted column (used for structural tests). */
-export function isEncryptedTable(name: string): name is EncryptedTable {
-  return name in ENCRYPTED_TABLES;
 }
 
 // ─── The per-process state cache ──────────────────────────────────────────
@@ -428,16 +422,3 @@ export function queryTokensFor(userId: number, lexemes: string[]): string[] {
   return lexemes.map((token) => blindIndexToken(key, token));
 }
 
-/** If the value happens to be one of the app's ciphertexts, report it as such. */
-export function looksEncrypted(value: unknown): boolean {
-  return isEncryptedContent(value);
-}
-
-/** Reads a value for display, or null when it cannot be decrypted. */
-export function tryReadText(userId: number, value: string | null): string | null {
-  if (value === null) return null;
-  if (!isEncryptedContent(value)) return value;
-  const key = dataKeyFor(userId);
-  if (!key) return null;
-  return tryDecryptContent(key, value);
-}
