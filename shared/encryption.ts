@@ -18,6 +18,29 @@ export const ENCRYPTION_KDF = "scrypt";
 /** The size of the data key, in bytes. AES-256. */
 export const ENCRYPTION_KEY_BYTES = 32;
 
+/** The direction of a row migration (enable or disable). */
+export type EncryptionMigrationDirection = "encrypt" | "decrypt";
+
+/**
+ * The batch job that turns existing rows into the new form.
+ *
+ * Enabling encryption cannot rewrite a whole database in one request:
+ * it is a background job that processes five hundred rows at a time.
+ * The progress lives in `users.encryption` so it survives a restart and
+ * the settings page can show how far it has got.
+ */
+export interface EncryptionMigration {
+  direction: EncryptionMigrationDirection;
+  /** ISO time the job started. */
+  startedAt: string;
+  /** Rows that needed work when the job started. */
+  total: number;
+  /** Rows finished since. */
+  done: number;
+  /** The last failure, when the job stopped on one. */
+  error?: string;
+}
+
 export interface UserEncryption {
   /** Whether this account's content is encrypted. */
   enabled: boolean;
@@ -29,6 +52,19 @@ export interface UserEncryption {
   kdf: typeof ENCRYPTION_KDF;
   /** The data key, wrapped with a key derived from the recovery code. */
   recoveryWrappedKey?: string;
+  /**
+   * The salt the recovery wrap used.
+   *
+   * Separate from the login-password salt because a password change
+   * replaces that one, and the recovery wrap must not depend on a salt
+   * the app no longer has. Older rows (from before this field existed)
+   * fall back to `salt`.
+   */
+  recoverySalt?: string;
+  /** A row migration in progress, or absent when there is none. */
+  migration?: EncryptionMigration;
+  /** When the last enable/disable job finished. */
+  migratedAt?: string;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -53,11 +89,43 @@ export function normalizeUserEncryption(value: unknown): UserEncryption | null {
   const result: UserEncryption = { enabled: true, wrappedKey, salt, kdf };
   if (typeof value.recoveryWrappedKey === "string" && value.recoveryWrappedKey.trim()) {
     result.recoveryWrappedKey = value.recoveryWrappedKey.trim();
+    if (typeof value.recoverySalt === "string" && value.recoverySalt.trim()) {
+      result.recoverySalt = value.recoverySalt.trim();
+    }
+  }
+  const migration = normalizeMigration(value.migration);
+  if (migration) result.migration = migration;
+  if (typeof value.migratedAt === "string" && Number.isFinite(Date.parse(value.migratedAt))) {
+    result.migratedAt = value.migratedAt;
   }
   return result;
+}
+
+/** A migration record, or null when it is absent or malformed. */
+function normalizeMigration(value: unknown): EncryptionMigration | null {
+  if (!isPlainObject(value)) return null;
+  if (value.direction !== "encrypt" && value.direction !== "decrypt") return null;
+  const startedAt =
+    typeof value.startedAt === "string" && Number.isFinite(Date.parse(value.startedAt))
+      ? value.startedAt
+      : new Date(0).toISOString();
+  const total = Number(value.total);
+  const done = Number(value.done);
+  return {
+    direction: value.direction,
+    startedAt,
+    total: Number.isFinite(total) && total >= 0 ? Math.floor(total) : 0,
+    done: Number.isFinite(done) && done >= 0 ? Math.floor(done) : 0,
+    ...(typeof value.error === "string" && value.error ? { error: value.error.slice(0, 500) } : {}),
+  };
 }
 
 /** Whether an account's content is encrypted. */
 export function encryptionEnabled(value: unknown): boolean {
   return normalizeUserEncryption(value) !== null;
+}
+
+/** Whether a row migration is in progress. */
+export function encryptionMigrationOf(value: unknown): EncryptionMigration | null {
+  return normalizeUserEncryption(value)?.migration ?? null;
 }

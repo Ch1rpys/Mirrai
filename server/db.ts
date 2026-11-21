@@ -64,6 +64,24 @@ import { charBigrams } from "@shared/act-clusters";
 import { queryLexemes, searchTokens, toTsQuery } from "@shared/search-tokens";
 import { MAX_EMBEDDED_TURNS } from "@shared/records";
 import { normalizeLockSettings, type LockSettings } from "@shared/lock";
+import { normalizeUserEncryption } from "@shared/encryption";
+import {
+  decryptJsonForRead,
+  decryptRecordMetaForRead,
+  decryptRowForRead,
+  decryptRowsForRead,
+  decryptTextForRead,
+  encryptTextForWrite,
+  encryptWriteValues,
+  encryptRecordMetaForWrite,
+  encryptionEnabledFor,
+  indexTokensFor,
+  queryTokensFor,
+  rememberEncryptionState,
+  requireDataKeyForWrite,
+  usesBlindIndex,
+  type EncryptedTable,
+} from "./_core/encrypted-values";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -171,6 +189,90 @@ function searchTokensValue(content: string) {
   return sql`array_to_tsvector(${pgTextArrayLiteral(searchTokens(content))}::text[])`;
 }
 
+/**
+ * The token expression for one written row (C8.6, C8.5).
+ *
+ * A plaintext account stores character bigrams; an encrypted account
+ * stores an HMAC of every bigram, so the query can still match a word
+ * without the column saying what the word is. The value is computed
+ * synchronously because every write already knows its owner.
+ */
+function searchTokensValueFor(userId: number, content: string) {
+  if (!usesBlindIndex(userId)) return searchTokensValue(content);
+  return sql`array_to_tsvector(${pgTextArrayLiteral(indexTokensFor(userId, content))}::text[])`;
+}
+
+/**
+ * Decrypts a page of rows read from an encrypted-content table.
+ *
+ * Reads are state-free: a value that is not ciphertext passes through,
+ * so this is safe even for accounts that never turned encryption on.
+ */
+function decryptRows<T extends Record<string, unknown>>(table: EncryptedTable, rows: T[]): T[] {
+  return decryptRowsForRead(table, rows);
+}
+
+/** Decrypts one row read from an encrypted-content table. */
+function decryptRowOf<T extends Record<string, unknown>>(
+  table: EncryptedTable,
+  row: T | null | undefined,
+): T | null | undefined {
+  return decryptRowForRead(table, row);
+}
+
+/**
+ * Remembers whether an account's content is encrypted.
+ *
+ * Every user row the database layer reads is an opportunity to teach the
+ * process which accounts are encrypted — and every authenticated request
+ * reads the user row before it writes anything.
+ */
+function rememberUserEncryption(user: { id: number; encryption?: unknown } | null | undefined): void {
+  if (user) rememberEncryptionState(user.id, user.encryption);
+}
+
+
+/**
+ * Users whose encryption column says a row migration is pending (C8.5).
+ *
+ * The scheduler resumes those jobs after a restart; the settings page
+ * shows their progress. Only the two columns needed are read.
+ */
+export async function getUsersWithPendingEncryptionMigration(): Promise<
+  Array<{ id: number; encryption: unknown }>
+> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({ id: users.id, encryption: users.encryption })
+    .from(users)
+    .where(sql`${users.encryption}->'migration' IS NOT NULL`);
+  return rows;
+}
+
+/**
+ * Records that a full backup was made (C8.5).
+ *
+ * Enabling database encryption is gated on having a backup: if the
+ * password and the recovery code are both lost, the backup is the only
+ * way back. The marker lives in `users.backupSettings`.
+ */
+export async function recordFullBackupAt(userId: number, at: Date = new Date()): Promise<void> {
+  const { normalizeBackupSettings } = await import("@shared/backup");
+  const current = normalizeBackupSettings(await getUserBackupSettings(userId));
+  await setUserBackupSettings(userId, { ...current, lastFullBackupAt: at.toISOString() });
+}
+
+/** The key an encrypted write needs; the error names the account. */
+function writeKey(userId: number): Buffer {
+  return requireDataKeyForWrite(userId);
+}
+
+/** Whether writes for this account are encrypted. */
+function encryptsWrites(userId: number): boolean {
+  return encryptionEnabledFor(userId);
+}
+
 export async function withRetry<T>(operation: () => Promise<T>, maxRetries = 2): Promise<T> {  let lastError: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -243,6 +345,7 @@ export async function getUserByUsername(username: string) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+  rememberUserEncryption(result[0]);
   return result[0];
 }
 
@@ -250,6 +353,7 @@ export async function getUserById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  rememberUserEncryption(result[0]);
   return result[0];
 }
 
@@ -257,6 +361,7 @@ export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  rememberUserEncryption(result[0]);
   return result[0];
 }
 
@@ -356,13 +461,15 @@ export async function createLetterWithMessage(
     origin?: string;
   },
 ): Promise<typeof letters.$inferSelect> {
+  const letterValues = encryptWriteValues("letters", letter.userId, letter as unknown as Record<string, unknown>);
+  const messageContent = encryptTextForWrite(message.userId, message.content);
   return withTransaction(async (tx) => {
-    const [row] = await tx.insert(letters).values(letter).returning();
+    const [row] = await tx.insert(letters).values(letterValues as typeof letter).returning();
     await tx.insert(messages).values({
       personaId: message.personaId,
       userId: message.userId,
       role: "user",
-      content: message.content,
+      content: messageContent!,
       emotionalState: null,
       channel: message.channel ?? "web",
       origin: message.origin ?? "letter",
@@ -380,7 +487,7 @@ export async function createLetterWithMessage(
         eq(personas.id, message.personaId),
         eq(personas.userId, message.userId),
       ));
-    return row;
+    return decryptRowOf("letters", row) as typeof letters.$inferSelect;
   });
 }
 
@@ -397,7 +504,7 @@ export async function createLetter(params: {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
   const [row] = await db.insert(letters)
-    .values({
+    .values(encryptWriteValues("letters", params.userId, {
       userId: params.userId,
       personaId: params.personaId,
       body: params.body,
@@ -406,9 +513,9 @@ export async function createLetter(params: {
       status: params.status,
       replyAt: params.replyAt ?? null,
       createdAt: new Date(),
-    })
+    }))
     .returning();
-  return row ?? null;
+  return decryptRowOf("letters", row) as typeof letters.$inferSelect;
 }
 
 /** The letters to a persona, newest first. */
@@ -491,7 +598,7 @@ export async function getLetters(
       .limit(1);
     cursor = row ? { createdAt: row.createdAt, id: row.id } : undefined;
   }
-  return db.select().from(letters)
+  const rows = await db.select().from(letters)
     .where(and(
       eq(letters.personaId, personaId),
       eq(letters.userId, userId),
@@ -507,6 +614,7 @@ export async function getLetters(
     ))
     .orderBy(desc(letters.createdAt), desc(letters.id))
     .limit(limit);
+  return decryptRows("letters", rows);
 }
 
 /**
@@ -532,7 +640,7 @@ export async function getWaitingNotes(personaId: number, userId: number) {
    * notes first. With the limit below, twenty ticked notes pushed the
    * open ones off the page entirely.
    */
-  return db.select().from(letters)
+  const rows = await db.select().from(letters)
     .where(and(
       eq(letters.personaId, personaId),
       eq(letters.userId, userId),
@@ -540,6 +648,7 @@ export async function getWaitingNotes(personaId: number, userId: number) {
     ))
     .orderBy(sql`(${letters.doneAt} is null) desc`, desc(letters.createdAt), desc(letters.id))
     .limit(20);
+  return decryptRows("letters", rows);
 }
 
 /** One letter or note of the caller's own. */
@@ -550,7 +659,7 @@ export async function getLetterById(id: number, userId: number) {
     eq(letters.id, id),
     eq(letters.userId, userId),
   )).limit(1);
-  return rows[0] ?? null;
+  return decryptRowOf("letters", rows[0]) ?? null;
 }
 
 /**
@@ -604,7 +713,7 @@ export async function deferLetter(id: number, userId: number, replyAt: Date) {
     .set({ replyAt })
     .where(and(eq(letters.id, id), eq(letters.userId, userId)))
     .returning();
-  return row ?? null;
+  return decryptRowOf("letters", row) ?? null;
 }
 
 /** The letters whose reply is due, across every user. */
@@ -634,7 +743,7 @@ export async function getDueLetters(now: Date, limit = 20) {
    * gone stale, which means the process that took it is gone.
    */
   const staleBefore = new Date(now.getTime() - LETTER_CLAIM_STALE_MS);
-  return db.select().from(letters)
+  const rows = await db.select().from(letters)
     .where(and(
       eq(letters.status, "waiting"),
       lte(letters.replyAt, now),
@@ -645,6 +754,7 @@ export async function getDueLetters(now: Date, limit = 20) {
     ))
     .orderBy(asc(letters.replyAt))
     .limit(limit);
+  return decryptRows("letters", rows);
 }
 
 /** The last answer given to a persona, for the reply gap. */
@@ -703,7 +813,7 @@ export async function answerLetterWithMessage(
      * same letter in the thread, and only the second one in the box.
      */
     const [row] = await tx.update(letters)
-      .set({ status: "answered", replyText, repliedAt, claimedAt: null })
+      .set(encryptWriteValues("letters", userId, { status: "answered", replyText, repliedAt, claimedAt: null }))
       .where(and(
         eq(letters.id, id),
         eq(letters.userId, userId),
@@ -715,7 +825,7 @@ export async function answerLetterWithMessage(
       personaId: message.personaId,
       userId,
       role: "assistant",
-      content: message.content,
+      content: encryptTextForWrite(userId, message.content)!,
       emotionalState: message.emotionalState,
       channel: message.channel ?? "web",
       // It is the answer to a letter. Without the marker it was just
@@ -735,10 +845,10 @@ export async function answerLetter(
   const db = await getDb();
   if (!db) throw new Error("DB not available");
   const [row] = await db.update(letters)
-    .set({ status: "answered", replyText, repliedAt, claimedAt: null })
+    .set(encryptWriteValues("letters", userId, { status: "answered", replyText, repliedAt, claimedAt: null }))
     .where(and(eq(letters.id, id), eq(letters.userId, userId)))
     .returning();
-  return row ?? null;
+  return decryptRowOf("letters", row) ?? null;
 }
 
 /**
@@ -830,7 +940,7 @@ export async function markLetterUnanswered(id: number, userId: number) {
       eq(letters.status, "waiting"),
     ))
     .returning();
-  return row ?? null;
+  return decryptRowOf("letters", row) ?? null;
 }
 
 /**
@@ -907,7 +1017,7 @@ export async function markPersonaRead(
 export async function listInboxLetters(userId: number, personaIds: number[]) {
   const db = await getDb();
   if (!db || personaIds.length === 0) return [];
-  return db.select({
+  const rows = await db.select({
     id: letters.id,
     userId: letters.userId,
     personaId: letters.personaId,
@@ -931,6 +1041,7 @@ export async function listInboxLetters(userId: number, personaIds: number[]) {
     ))
     .orderBy(desc(letters.createdAt), desc(letters.id))
     .limit(500);
+  return decryptRows("letters", rows);
 }
 
 /** How many answered letters of theirs have not been read (C8.2). */
@@ -1383,7 +1494,9 @@ export async function getUserEncryption(userId: number): Promise<unknown> {
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
-  return rows[0]?.encryption ?? null;
+  const value = rows[0]?.encryption ?? null;
+  rememberEncryptionState(userId, value);
+  return value;
 }
 
 /** Writes the encryption column; null means "plaintext account". */
@@ -1719,7 +1832,10 @@ export async function exportUserData(userId: number) {
 export async function createPersona(data: InsertPersona) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  const [result] = await db.insert(personas).values(data).returning({ id: personas.id });
+  const [result] = await db
+    .insert(personas)
+    .values(encryptWriteValues("personas", data.userId, { ...data }))
+    .returning({ id: personas.id });
   return result.id;
 }
 
@@ -1727,7 +1843,7 @@ export async function getPersonasByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select().from(personas).where(and(isNull(personas.deletedAt), eq(personas.userId, userId))).orderBy(desc(personas.updatedAt));
-  return withInheritedPersonaState(rows);
+  return withInheritedPersonaState(decryptRows("personas", rows));
 }
 
 /**
@@ -1742,7 +1858,7 @@ export async function getPersonasWithStats(userId: number) {
   if (!db) return [];
   const rows = await db.select().from(personas).where(and(isNull(personas.deletedAt), eq(personas.userId, userId))).orderBy(desc(personas.updatedAt));
   if (rows.length === 0) return [];
-  const list = await withInheritedPersonaState(rows);
+  const list = await withInheritedPersonaState(decryptRows("personas", rows));
   const ids = list.map((p) => p.id);
 
   /**
@@ -1818,7 +1934,7 @@ export async function getPersonasWithStats(userId: number) {
   for (const row of lastMessages) {
     if (lastByPersona.has(row.personaId)) continue;
     lastByPersona.set(row.personaId, {
-      content: (row.content || "").slice(0, 60),
+      content: (decryptTextForRead(userId, row.content) || "").slice(0, 60),
       createdAt: row.createdAt,
     });
   }
@@ -1974,7 +2090,7 @@ export async function getRecentActivity(userId: number, limit = 8) {
     .limit(limit);
   return rows.map(r => ({
     ...r,
-    content: (r.content || "").slice(0, 80),
+    content: (decryptTextForRead(userId, r.content) || "").slice(0, 80),
   }));
 }
 
@@ -2005,10 +2121,26 @@ export async function getPersonaById(id: number, userId: number) {
         eq(personaShares.status, "active"),
       ))
       .limit(1);
-    if (!share) return row;
-    const [owner] = await db.select().from(personas)
+    if (!share) return decryptRowOf("personas", row) ?? undefined;
+    const [ownerRaw] = await db.select().from(personas)
       .where(and(isNull(personas.deletedAt), eq(personas.id, row.sharedFromPersonaId))).limit(1);
-    if (!owner) return row;
+    if (!ownerRaw) return decryptRowOf("personas", row) ?? undefined;
+    let owner = decryptRowOf("personas", ownerRaw) ?? ownerRaw;
+    try {
+      owner = decryptRowOf("personas", ownerRaw) ?? ownerRaw;
+    } catch (error) {
+      /**
+       * The owner's content is encrypted and this process does not have
+       * the owner's key (C8.5). The member keeps the copy of the
+       * identity that was taken when the share was accepted; the live
+       * fields cannot be read until the owner signs in on this instance.
+       */
+      if (error instanceof Error && error.name === "EncryptionKeyMissingError") {
+        owner = { ...ownerRaw, personaData: row.personaData, styleProfile: row.styleProfile };
+      } else {
+        throw error;
+      }
+    }
     return {
       ...row,
       name: owner.name,
@@ -2029,7 +2161,7 @@ export async function getPersonaById(id: number, userId: number) {
       sharedFromUserId: owner.userId,
     };
   }
-  return row;
+  return decryptRowOf("personas", row) ?? undefined;
 }
 
 // ─── Sharing a persona with family (C7.2) ─────────────────────────────────
@@ -2246,11 +2378,28 @@ export async function acceptPersonaShare(
       ))
       .limit(1);
     if (!share || share.ownerUserId === userId) return null;
-    const [owner] = await tx.select().from(personas)
+    const [ownerRaw] = await tx.select().from(personas)
       .where(and(isNull(personas.deletedAt), eq(personas.id, share.personaId))).limit(1);
-    if (!owner) return null;
+    if (!ownerRaw) return null;
+    /**
+     * The identity is copied into the member's own row.
+     *
+     * An encrypted owner's values are decrypted with the owner's key
+     * (if this instance has it) and re-encrypted with the member's, so
+     * the member can read their own copy. Without the owner's key the
+     * identity fields are left empty rather than written as ciphertext
+     * the member can never open; the live read falls back to the same
+     * copy, so nothing is shown that is not readable.
+     */
+    let owner = ownerRaw;
+    try {
+      owner = decryptRowOf("personas", ownerRaw) ?? ownerRaw;
+    } catch (error) {
+      if (!(error instanceof Error) || error.name !== "EncryptionKeyMissingError") throw error;
+      owner = { ...ownerRaw, personaData: null, styleProfile: null };
+    }
 
-    const [member] = await tx.insert(personas).values({
+    const [member] = await tx.insert(personas).values(encryptWriteValues("personas", userId, {
       userId,
       name: owner.name,
       avatarUrl: owner.avatarUrl,
@@ -2265,7 +2414,7 @@ export async function acceptPersonaShare(
       sharedFromPersonaId: share.personaId,
       presence: "active",
       settings: {},
-    }).returning({ id: personas.id });
+    })).returning({ id: personas.id });
     const updated = await tx.update(personaShares)
       .set({
         status: "active",
@@ -2333,7 +2482,10 @@ export const ORAL_ACCOUNT_MAX_CHARS = 20_000;
 export async function createOralAccount(data: InsertOralAccount): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  const [row] = await db.insert(oralAccounts).values(data).returning({ id: oralAccounts.id });
+  const [row] = await db
+    .insert(oralAccounts)
+    .values(encryptWriteValues("oral_accounts", data.userId, { ...data }))
+    .returning({ id: oralAccounts.id });
   return row.id;
 }
 
@@ -2353,14 +2505,14 @@ export async function updateOralAccount(
   const db = await getDb();
   if (!db) return null;
   const rows = await db.update(oralAccounts)
-    .set(patch)
+    .set(encryptWriteValues("oral_accounts", userId, patch as Record<string, unknown>))
     .where(and(
       eq(oralAccounts.id, id),
       eq(oralAccounts.userId, userId),
       eq(oralAccounts.personaId, personaId),
     ))
     .returning();
-  return rows[0] ?? null;
+  return decryptRowOf("oral_accounts", rows[0]) ?? null;
 }
 
 /**
@@ -2380,7 +2532,7 @@ export async function listOralAccounts(
   if (!db) return [];
   const ownedPersona = db.select({ id: personas.id }).from(personas)
     .where(and(isNull(personas.deletedAt), eq(personas.id, personaId), eq(personas.userId, userId)));
-  return db.select().from(oralAccounts)
+  const rows = await db.select().from(oralAccounts)
     .where(and(
       eq(oralAccounts.personaId, personaId),
       or(
@@ -2389,6 +2541,7 @@ export async function listOralAccounts(
       ),
     ))
     .orderBy(asc(oralAccounts.createdAt));
+  return decryptRows("oral_accounts", rows);
 }
 
 /**
@@ -2404,7 +2557,7 @@ export async function listSubmittedOralAccounts(
 ): Promise<Array<Pick<OralAccount, "id" | "userId" | "tellerName" | "body" | "submittedAt">>> {
   const db = await getDb();
   if (!db) return [];
-  return db.select({
+  const rows = await db.select({
     id: oralAccounts.id,
     userId: oralAccounts.userId,
     tellerName: oralAccounts.tellerName,
@@ -2425,6 +2578,7 @@ export async function listSubmittedOralAccounts(
       isNotNull(oralAccounts.submittedAt),
     ))
     .orderBy(asc(oralAccounts.id));
+  return decryptRows("oral_accounts", rows);
 }
 
 /**
@@ -2437,7 +2591,7 @@ export async function listSubmittedOralAccounts(
 export async function getOralMemories(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(memories)
+  const rows = await db.select().from(memories)
     .where(and(
       isNull(memories.deletedAt),
       eq(memories.personaId, personaId),
@@ -2445,6 +2599,7 @@ export async function getOralMemories(personaId: number, userId: number) {
       eq(memories.source, "oral"),
     ))
     .orderBy(asc(memories.id));
+  return decryptRows("memories", rows);
 }
 
 /**
@@ -2497,7 +2652,7 @@ export async function updatePersona(
   }
   const rows = await db
     .update(personas)
-    .set(patch)
+    .set(encryptWriteValues("personas", userId, patch as Record<string, unknown>))
     .where(and(eq(personas.id, id), eq(personas.userId, userId)))
     .returning({ id: personas.id });
   if (rows.length > 0 && patch.presence === "asleep") {
@@ -2650,7 +2805,7 @@ export async function getPersonaByIdIncludingDeleted(id: number, userId: number)
   const result = await db.select().from(personas)
     .where(and(eq(personas.id, id), eq(personas.userId, userId)))
     .limit(1);
-  return result[0];
+  return decryptRowOf("personas", result[0]) ?? undefined;
 }
 
 /**
@@ -2993,7 +3148,10 @@ export async function createMessage(data: InsertMessage) {
   if (!db) throw new Error("DB not available");
   const [result] = await db
     .insert(messages)
-    .values({ ...data, searchTokens: searchTokensValue(data.content) })
+    .values({
+      ...encryptWriteValues("messages", data.userId, { ...data }),
+      searchTokens: searchTokensValueFor(data.userId, data.content),
+    })
     .returning({ id: messages.id });
   return result.id;
 }
@@ -3084,7 +3242,9 @@ export async function listFidelityRewritePairs(
     )
     .orderBy(desc(fidelityFeedback.createdAt))
     .limit(cap);
-  return rows.filter((row): row is FidelityRewritePair => typeof row.rewrite === "string" && row.rewrite.trim().length > 0);
+  return rows
+    .map((row) => ({ ...row, unlike: decryptTextForRead(userId, row.unlike) ?? "" }))
+    .filter((row): row is FidelityRewritePair => typeof row.rewrite === "string" && row.rewrite.trim().length > 0);
 }
 
 /**
@@ -3520,7 +3680,10 @@ export async function setMessageContent(
   if (!db) return false;
   const rows = await db
     .update(messages)
-    .set({ content, searchTokens: searchTokensValue(content) })
+    .set({
+      content: encryptTextForWrite(userId, content)!,
+      searchTokens: searchTokensValueFor(userId, content),
+    })
     .where(and(eq(messages.id, id), eq(messages.userId, userId)))
     .returning({ id: messages.id });
   return rows.length > 0;
@@ -3598,7 +3761,7 @@ export async function getMessagesByPersonaId(personaId: number, userId: number, 
   const rows = await db.select().from(messages)
     .where(and(isNull(messages.deletedAt), eq(messages.personaId, personaId), eq(messages.userId, userId)))
     .orderBy(desc(messages.createdAt)).limit(limit);
-  return rows.reverse();
+  return decryptRows("messages", rows).reverse();
 }
 
 /**
@@ -3654,7 +3817,7 @@ export async function getMessagesByPersonaIdPaged(
       .orderBy(desc(messages.createdAt), desc(messages.id))
       .limit(Math.min(pageSize, max - collected.length));
     if (rows.length === 0) break;
-    collected.push(...rows);
+    collected.push(...decryptRows("messages", rows));
     const last = rows[rows.length - 1];
     before = { createdAt: last.createdAt, id: last.id };
     if (rows.length < pageSize) break;
@@ -3687,7 +3850,7 @@ export async function getMessageById(
       ...(personaId === undefined ? [] : [eq(messages.personaId, personaId)]),
     ))
     .limit(1);
-  return rows[0] ?? null;
+  return decryptRowOf("messages", rows[0]) ?? null;
 }
 
 /**
@@ -3713,7 +3876,7 @@ export async function getMessagesBefore(
       lt(messages.id, beforeId),
     ))
     .orderBy(desc(messages.id)).limit(limit);
-  return rows.reverse();
+  return decryptRows("messages", rows).reverse();
 }
 
 /** Whether there are older messages to load. */
@@ -3759,6 +3922,34 @@ export async function clearMessagesByPersonaId(personaId: number, userId: number
 export async function searchMessages(personaId: number, userId: number, query: string, limit = 50) {
   const db = await getDb();
   if (!db) return [];
+  /**
+   * An encrypted account's message text is ciphertext, so `ILIKE` can
+   * never match it. The search runs on the blind index instead: the
+   * query's bigrams are HMACed the same way the stored ones were, then
+   * the rows are decrypted here to confirm the substring — a bigram
+   * match only says the pairs exist somewhere, not that they are
+   * adjacent. A one-character query has no bigram to look up; there is
+   * nothing to search on, so it returns nothing rather than every row.
+   */
+  if (encryptsWrites(userId)) {
+    const lexemes = indexableLexemes(queryLexemes(query));
+    const tokens = lexemes.length > 0 ? queryTokensFor(userId, lexemes) : [];
+    if (tokens.length === 0) return [];
+    const tsQuery = toTsQuery(tokens, "&");
+    const rows = await db.select().from(messages)
+      .where(and(
+        isNull(messages.deletedAt),
+        eq(messages.personaId, personaId),
+        eq(messages.userId, userId),
+        sql`${messages.searchTokens} @@ to_tsquery('simple', ${tsQuery})`,
+      ))
+      .orderBy(desc(messages.createdAt))
+      .limit(limit * 3);
+    const needle = query.toLowerCase();
+    return decryptRows("messages", rows)
+      .filter((row) => String(row.content ?? "").toLowerCase().includes(needle))
+      .slice(0, limit);
+  }
   // The wildcards are escaped, so a search for "50%" does not match
   // everything that contains a digit.
   const escaped = query.replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -3771,7 +3962,7 @@ export async function searchMessages(personaId: number, userId: number, query: s
    * "我有一只猫" once the tokens were backfilled.
    */
   const tsQuery = toTsQuery(indexableLexemes(queryLexemes(query)), "&");
-  return db.select().from(messages)
+  const rows = await db.select().from(messages)
     .where(and(
       isNull(messages.deletedAt),
       eq(messages.personaId, personaId),
@@ -3786,6 +3977,7 @@ export async function searchMessages(personaId: number, userId: number, query: s
     ))
     .orderBy(desc(messages.createdAt))
     .limit(limit);
+  return decryptRows("messages", rows);
 }
 
 /**
@@ -3802,6 +3994,95 @@ export async function searchAllMessages(
 ) {
   const db = await getDb();
   if (!db) return [];
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+  /**
+   * An encrypted account cannot be searched with `ILIKE`: the message
+   * text, memory titles and diary bodies in the database are ciphertext.
+   * Messages use the blind index (C8.5 step 4) and are confirmed on the
+   * decrypted text here; memories and diary entries have no index
+   * column, so the (small) tables are read and filtered in memory. The
+   * answer keeps the same shape as the plaintext path.
+   */
+  if (encryptsWrites(userId)) {
+    const lexemes = indexableLexemes(queryLexemes(query));
+    const tokens = lexemes.length > 0 ? queryTokensFor(userId, lexemes) : [];
+    const messageTsQuery = tokens.length > 0 ? toTsQuery(tokens, "&") : null;
+
+    const [messageRaw, memoryRaw, diaryRaw] = await Promise.all([
+      messageTsQuery
+        ? db.select({
+            id: messages.id,
+            personaId: messages.personaId,
+            kind: sql<string>`'message'`,
+            role: messages.role,
+            title: sql<string>`NULL`,
+            content: messages.content,
+            createdAt: messages.createdAt,
+          }).from(messages)
+            .where(and(
+              isNull(messages.deletedAt),
+              eq(messages.userId, userId),
+              sql`${messages.searchTokens} @@ to_tsquery('simple', ${messageTsQuery})`,
+            ))
+            .orderBy(desc(messages.createdAt))
+            .limit(limit * 3)
+        : Promise.resolve([]),
+      db.select().from(memories)
+        .where(and(isNull(memories.deletedAt), eq(memories.userId, userId)))
+        .orderBy(desc(memories.createdAt))
+        .limit(500),
+      db.select().from(diaryEntries)
+        .where(eq(diaryEntries.userId, userId))
+        .orderBy(desc(diaryEntries.createdAt))
+        .limit(500),
+    ]);
+
+    const messageRows = messageRaw
+      .map((row) => ({ ...row, content: decryptTextForRead(userId, row.content) }))
+      .filter((row) => String(row.content ?? "").toLowerCase().includes(needle))
+      .slice(0, limit);
+
+    const memoryRows = memoryRaw
+      .map((row) => decryptRows("memories", [row])[0]!)
+      .filter((row) => {
+        const title = String(row.title ?? "").toLowerCase();
+        const description = String(row.description ?? "").toLowerCase();
+        return title.includes(needle) || description.includes(needle);
+      })
+      .slice(0, limit)
+      .map((row) => ({
+        id: row.id,
+        personaId: row.personaId,
+        kind: "memory" as const,
+        role: "assistant" as const,
+        title: row.title,
+        content: row.description ?? "",
+        createdAt: row.createdAt,
+      }));
+
+    const diaryRows = diaryRaw
+      .map((row) => decryptRows("diary_entries", [row])[0]!)
+      .filter((row) => {
+        const summary = String(row.summary ?? "").toLowerCase();
+        const reflection = String(row.reflection ?? "").toLowerCase();
+        return summary.includes(needle) || reflection.includes(needle);
+      })
+      .slice(0, limit)
+      .map((row) => ({
+        id: row.id,
+        personaId: row.personaId,
+        kind: "diary" as const,
+        role: "assistant" as const,
+        title: null,
+        content: row.summary,
+        createdAt: row.createdAt,
+      }));
+
+    return [...messageRows, ...memoryRows, ...diaryRows]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit);
+  }
   const escaped = query.replace(/[\\%_]/g, (c) => `\\${c}`);
   const pattern = `%${escaped}%`;
   const messageTsQuery = toTsQuery(indexableLexemes(queryLexemes(query)), "&");
@@ -4463,11 +4744,28 @@ export async function updateRecordMeta(
 ): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
+  /**
+   * The merge happens in this process rather than in SQL.
+   *
+   * An encrypted `meta` is `{ enc: "<ciphertext>", register? }`; the
+   * `||` operator would merge the patch into the wrapper instead of into
+   * the record's own metadata. So the current value is read, decrypted,
+   * merged, and written back in whatever form the account uses.
+   */
+  const [current] = await db
+    .select({ meta: collectedMessages.meta })
+    .from(collectedMessages)
+    .where(and(eq(collectedMessages.id, id), eq(collectedMessages.userId, userId)))
+    .limit(1);
+  if (!current) return false;
+  const existing = decryptRecordMetaForRead(userId, current.meta);
+  const merged = {
+    ...(existing && typeof existing === "object" && !Array.isArray(existing) ? existing : {}),
+    ...patch,
+  };
   const [row] = await db
     .update(collectedMessages)
-    .set({
-      meta: sql`COALESCE(${collectedMessages.meta}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
-    })
+    .set({ meta: encryptRecordMetaForWrite(userId, merged) as never })
     .where(and(eq(collectedMessages.id, id), eq(collectedMessages.userId, userId)))
     .returning({ id: collectedMessages.id });
   return Boolean(row);
@@ -5130,7 +5428,10 @@ export async function updateIntimacy(personaId: number, userId: number, score: n
 export async function createMemory(data: InsertMemory) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  const [result] = await db.insert(memories).values(data).returning({ id: memories.id });
+  const [result] = await db
+    .insert(memories)
+    .values(encryptWriteValues("memories", data.userId, { ...data }))
+    .returning({ id: memories.id });
   return result.id;
 }
 
@@ -5158,7 +5459,7 @@ export async function countMemories(personaId: number, userId: number) {
 export async function getAnniversaryMemories(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select({
+  const rows = await db.select({
     id: memories.id,
     title: memories.title,
     date: memories.date,
@@ -5171,6 +5472,7 @@ export async function getAnniversaryMemories(personaId: number, userId: number) 
       eq(memories.category, "anniversary"),
     ))
     .orderBy(asc(memories.date));
+  return rows.map((row) => ({ ...row, title: decryptTextForRead(userId, row.title) ?? "" }));
 }
 
 export async function getMemoriesByPersonaId(
@@ -5184,10 +5486,11 @@ export async function getMemoriesByPersonaId(
   // its own ranking, but a low-weight memory should not be invisible to it
   // just because it is old — the candidate list is capped, so the order
   // decides what gets scored at all.
-  return db.select().from(memories)
+  const rows = await db.select().from(memories)
     .where(and(isNull(memories.deletedAt), eq(memories.personaId, personaId), eq(memories.userId, userId)))
     .orderBy(desc(memories.isPinned), desc(memories.importance), desc(memories.createdAt))
     .limit(limit);
+  return decryptRows("memories", rows);
 }
 
 /**
@@ -5230,7 +5533,11 @@ export async function getMemoriesFromPersona(
       eq(messages.role, "assistant"),
     ))
     .orderBy(desc(memories.id));
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    title: decryptTextForRead(userId, row.title) ?? "",
+    description: decryptTextForRead(userId, row.description),
+  }));
 }
 
 /** How many memories the list returns at once. */
@@ -5243,7 +5550,7 @@ export async function getMemoriesByFactKey(
 ) {
   const db = await getDb();
   if (!db) return [];
-  return db
+  const rows = await db
     .select()
     .from(memories)
     .where(
@@ -5255,6 +5562,7 @@ export async function getMemoriesByFactKey(
       ),
     )
     .orderBy(desc(memories.createdAt));
+  return decryptRows("memories", rows);
 }
 
 export async function supersedeMemory(params: {
@@ -5476,7 +5784,7 @@ export async function getMemoryById(id: number, userId: number) {
   const rows = await db.select().from(memories)
     .where(and(isNull(memories.deletedAt), eq(memories.id, id), eq(memories.userId, userId)))
     .limit(1);
-  return rows[0];
+  return decryptRowOf("memories", rows[0]);
 }
 
 export async function getMemoryTitles(ids: number[], userId: number) {
@@ -5488,7 +5796,9 @@ export async function getMemoryTitles(ids: number[], userId: number) {
     title: memories.title,
     subject: memories.subject,
   }).from(memories).where(and(isNull(memories.deletedAt), inArray(memories.id, unique), eq(memories.userId, userId)));
-  return new Map(rows.map((r) => [r.id, r.title]));
+  return new Map(
+    rows.map((r) => [r.id, decryptTextForRead(userId, r.title) ?? ""]),
+  );
 }
 
 /**
@@ -5526,10 +5836,10 @@ export async function updateMemory(
   const db = await getDb();
   if (!db) throw new Error("DB not available");
   const [row] = await db.update(memories)
-    .set(data)
+    .set(encryptWriteValues("memories", userId, data as Record<string, unknown>))
     .where(and(eq(memories.id, id), eq(memories.userId, userId)))
     .returning();
-  return row ?? null;
+  return decryptRowOf("memories", row) ?? null;
 }
 
 /**
@@ -5934,7 +6244,10 @@ export async function getAnalyticsStats(
 export async function createDiaryEntry(data: InsertDiaryEntry) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  const [result] = await db.insert(diaryEntries).values(data).returning({ id: diaryEntries.id });
+  const [result] = await db
+    .insert(diaryEntries)
+    .values(encryptWriteValues("diary_entries", data.userId, { ...data }))
+    .returning({ id: diaryEntries.id });
   return result.id;
 }
 
@@ -5970,7 +6283,14 @@ export async function getDiaryEntries(userId: number, personaId?: number, limit 
     .where(and(...conditions))
     .orderBy(desc(diaryEntries.date))
     .limit(limit);
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    summary: decryptTextForRead(userId, row.summary) ?? "",
+    reflection: decryptTextForRead(userId, row.reflection),
+    highlights: decryptJsonForRead(userId, row.highlights),
+    emotionalArc: decryptJsonForRead(userId, row.emotionalArc),
+    quotes: decryptJsonForRead(userId, row.quotes),
+  }));
 }
 
 export async function getDiaryByDate(personaId: number, userId: number, date: string) {
@@ -5979,7 +6299,7 @@ export async function getDiaryByDate(personaId: number, userId: number, date: st
   const rows = await db.select().from(diaryEntries)
     .where(and(eq(diaryEntries.personaId, personaId), eq(diaryEntries.userId, userId), eq(diaryEntries.date, date)))
     .limit(1);
-  return rows[0];
+  return decryptRowOf("diary_entries", rows[0]) ?? undefined;
 }
 
 /**
@@ -6017,9 +6337,10 @@ export async function getMessagesByDate(
   // rounded shift put the user's day boundary out by up to forty-five
   // minutes.
   const day = userDayColumn(timezone);
-  return db.select().from(messages)
+  const rows = await db.select().from(messages)
     .where(and(isNull(messages.deletedAt), eq(messages.personaId, personaId), eq(messages.userId, userId), sql`${day} = ${date}`))
     .orderBy(asc(messages.createdAt));
+  return decryptRows("messages", rows);
 }
 
 export async function getDiaryDates(userId: number, personaId?: number) {
@@ -6242,12 +6563,12 @@ export async function getExportData(personaId: number, userId: number) {
     .orderBy(asc(letters.createdAt))
     .limit(MAX_PERSONA_EXPORT_LETTERS);
   return {
-    persona,
-    messages: allMessages,
-    memories: allMemories,
+    persona: decryptRowOf("personas", persona)!,
+    messages: decryptRows("messages", allMessages),
+    memories: decryptRows("memories", allMemories),
     emotionSnapshots: allSnapshots,
-    diaryEntries: allDiaries,
-    letters: allLetters,
+    diaryEntries: decryptRows("diary_entries", allDiaries),
+    letters: decryptRows("letters", allLetters),
   };
 }
 
@@ -6276,7 +6597,10 @@ export async function updateUserMessage(
    * and the conversation that changed were two different ones.
    */
   const updated = await db.update(messages)
-    .set({ content, searchTokens: searchTokensValue(content) })
+    .set({
+      content: encryptTextForWrite(userId, content)!,
+      searchTokens: searchTokensValueFor(userId, content),
+    })
     .where(and(
       eq(messages.id, messageId),
       eq(messages.userId, userId),
@@ -6421,7 +6745,7 @@ export async function listMessageMarks(
 ) {
   const db = await getDb();
   if (!db) return [];
-  return db.select({
+  const rows = await db.select({
     id: messageMarks.id,
     personaId: messageMarks.personaId,
     messageId: messageMarks.messageId,
@@ -6441,6 +6765,7 @@ export async function listMessageMarks(
       ...(kind ? [eq(messageMarks.kind, kind)] : []),
     ))
     .orderBy(asc(messageMarks.createdAt), asc(messageMarks.id));
+  return rows.map((row) => ({ ...row, content: decryptTextForRead(userId, row.content) ?? "" }));
 }
 
 /** How many of one kind a conversation carries. */
@@ -6527,7 +6852,7 @@ export async function getMessagesFrom(
 ): Promise<MessageSnapshot[]> {
   const db = await getDb();
   if (!db) return [];
-  return db.select({
+  const rows = await db.select({
     role: messages.role,
     content: messages.content,
     emotionalState: messages.emotionalState,
@@ -6546,6 +6871,7 @@ export async function getMessagesFrom(
       gte(messages.id, messageId),
     ))
     .orderBy(asc(messages.id));
+  return rows.map((row) => ({ ...row, content: decryptTextForRead(userId, row.content)! }));
 }
 
 /**
@@ -6575,7 +6901,8 @@ export async function restoreMessages(
         personaId,
         userId,
         role: row.role as "user" | "assistant",
-        content: row.content,
+        content: encryptTextForWrite(userId, row.content)!,
+        searchTokens: searchTokensValueFor(userId, row.content),
         emotionalState: row.emotionalState,
         messageType: row.messageType as any,
         mediaUrl: row.mediaUrl,
@@ -6665,7 +6992,7 @@ export async function getPreviousMessage(
     ))
     .orderBy(desc(messages.createdAt))
     .limit(1);
-  return rows[0] ?? null;
+  return decryptRowOf("messages", rows[0]) ?? null;
 }
 
 // ─── Graduation helpers ─────────────────────────────────────────────────────
@@ -7254,7 +7581,10 @@ export async function createCollectedMessage(data: InsertCollectedMessage) {
   if (!db) return undefined;
   const [result] = await db
     .insert(collectedMessages)
-    .values({ ...data, searchTokens: searchTokensValue(data.content) })
+    .values({
+      ...encryptWriteValues("collected_messages", data.userId, { ...data }),
+      searchTokens: searchTokensValueFor(data.userId, data.content),
+    })
     .returning({ id: collectedMessages.id });
   return result.id;
 }
@@ -7298,8 +7628,8 @@ export async function createCollectedMessages(
        * column did.
        */
       const values = chunk.map((row) => ({
-        ...row,
-        searchTokens: searchTokensValue(row.content),
+        ...encryptWriteValues("collected_messages", row.userId, { ...row }),
+        searchTokens: searchTokensValueFor(row.userId, row.content),
       }));
       /**
        * The second copy of a message is not written.
@@ -7358,7 +7688,7 @@ export async function getCollectedMessageKeys(
 ): Promise<CollectedMessageKey[]> {
   const db = await getDb();
   if (!db) return [];
-  return db.select({
+  const rows = await db.select({
     source: collectedMessages.source,
     timestamp: collectedMessages.timestamp,
     content: collectedMessages.content,
@@ -7385,6 +7715,7 @@ export async function getCollectedMessageKeys(
      * case.
      */
     .orderBy(collectedMessages.id);
+  return rows.map((row) => ({ ...row, content: decryptTextForRead(userId, row.content) ?? "" }));
 }
 
 /**
@@ -7479,11 +7810,12 @@ export async function getCollectedMessagesForPersona(
       .orderBy(desc(sql`COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt})`))
       .limit(options.limit ?? MAX_COLLECTED_MESSAGES);
     // And back into the order they were said in.
-    return newest.reverse();
+    return decryptRows("collected_messages", newest).reverse();
   }
-  return query
+  const rows = await query
     .orderBy(asc(sql`COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt})`))
     .limit(options.limit ?? MAX_COLLECTED_MESSAGES);
+  return decryptRows("collected_messages", rows);
 }
 
 /**
@@ -7569,10 +7901,70 @@ export async function searchRecordsLexical(
   if (!q) return [];
   const role = params.role && params.role !== "all" ? params.role : undefined;
   const lexemes = queryLexemes(q);
-  const tsQuery = toTsQuery(indexableLexemes(lexemes), "&");
-  const pattern = `%${escapeLike(q)}%`;
   const offset = Math.max(0, params.offset ?? 0);
   const limit = Math.max(1, params.limit ?? 20);
+  /**
+   * An encrypted account's record text is ciphertext, so `ILIKE` can
+   * never match it. The search runs on the blind index instead (C8.5
+   * step 4), and every candidate is decrypted here to confirm the
+   * substring — the bigram AND only says the pairs exist somewhere, not
+   * that they appear together. A query with no bigram (a single
+   * character) has nothing to look up; searching encrypted records needs
+   * at least two characters, which the interface says.
+   */
+  if (encryptsWrites(userId)) {
+    const indexable = indexableLexemes(lexemes);
+    const tokens = indexable.length > 0 ? queryTokensFor(userId, indexable) : [];
+    if (tokens.length === 0) return [];
+    const tsQuery = toTsQuery(tokens, "&");
+    const rank = sql<number>`ts_rank(${collectedMessages.searchTokens}, to_tsquery('simple', ${tsQuery}))`;
+    const candidates = await db
+      .select({
+        id: collectedMessages.id,
+        content: collectedMessages.content,
+        timestamp: collectedMessages.timestamp,
+        role: collectedMessages.role,
+        speaker: collectedMessages.speaker,
+        rank,
+      })
+      .from(collectedMessages)
+      .where(and(
+        eq(collectedMessages.personaId, personaId),
+        eq(collectedMessages.userId, userId),
+        privateRegisterCondition(),
+        ...(role ? [eq(collectedMessages.role, role)] : []),
+        ...(params.from ? [gte(collectedMessages.timestamp, params.from)] : []),
+        ...(params.to ? [lte(collectedMessages.timestamp, params.to)] : []),
+        sql`${collectedMessages.searchTokens} @@ to_tsquery('simple', ${tsQuery})`,
+      ))
+      .orderBy(
+        desc(sql`COALESCE(${rank}, -1)`),
+        desc(sql`COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt})`),
+        desc(collectedMessages.id),
+      )
+      .limit(limit * 4)
+      .offset(offset);
+    const needle = q.toLowerCase();
+    const hits: SearchRecordsLexicalHit[] = [];
+    for (const row of candidates) {
+      // The projection has no `userId`, so it is decrypted with the
+      // caller's id — every row here is the caller's.
+      const text = String(decryptTextForRead(userId, row.content as string | null) ?? "");
+      if (!text.toLowerCase().includes(needle)) continue;
+      hits.push({
+        id: row.id,
+        content: text,
+        timestamp: row.timestamp ?? null,
+        role: row.role,
+        speaker: row.speaker ?? null,
+        coverage: 1,
+      });
+      if (hits.length >= limit) break;
+    }
+    return hits;
+  }
+  const tsQuery = toTsQuery(indexableLexemes(lexemes), "&");
+  const pattern = `%${escapeLike(q)}%`;
   const rank = tsQuery
     ? sql<number>`ts_rank(${collectedMessages.searchTokens}, to_tsquery('simple', ${tsQuery}))`
     : sql<number>`0`;
@@ -7657,8 +8049,57 @@ export async function candidateRecordsByOverlap(
   if (!text) return [];
   const role = params.role && params.role !== "all" ? params.role : undefined;
   const lexemes = queryLexemes(text);
-  const tsQuery = toTsQuery(indexableLexemes(lexemes), "|");
   const limit = Math.max(1, Math.min(1000, params.limit ?? 200));
+  /**
+   * The same split as the lexical search: plaintext accounts match on
+   * `ILIKE` and bigrams, encrypted accounts match on blind tokens and
+   * are scored from the decrypted text. There is no substring fallback
+   * here because the ciphertext cannot answer one.
+   */
+  if (encryptsWrites(userId)) {
+    const indexable = indexableLexemes(lexemes);
+    const tokens = indexable.length > 0 ? queryTokensFor(userId, indexable) : [];
+    if (tokens.length === 0) return [];
+    const tsQuery = toTsQuery(tokens, "|");
+    const rank = sql<number>`ts_rank(${collectedMessages.searchTokens}, to_tsquery('simple', ${tsQuery}))`;
+    const rows = await db
+      .select({
+        id: collectedMessages.id,
+        content: collectedMessages.content,
+        timestamp: collectedMessages.timestamp,
+        role: collectedMessages.role,
+        speaker: collectedMessages.speaker,
+        rank,
+      })
+      .from(collectedMessages)
+      .where(and(
+        eq(collectedMessages.personaId, personaId),
+        eq(collectedMessages.userId, userId),
+        privateRegisterCondition(),
+        ...(role ? [eq(collectedMessages.role, role)] : []),
+        ...(params.from ? [gte(collectedMessages.timestamp, params.from)] : []),
+        ...(params.to ? [lte(collectedMessages.timestamp, params.to)] : []),
+        sql`${collectedMessages.searchTokens} @@ to_tsquery('simple', ${tsQuery})`,
+      ))
+      .orderBy(
+        desc(sql`COALESCE(${rank}, -1)`),
+        desc(sql`COALESCE(${collectedMessages.timestamp}, ${collectedMessages.createdAt})`),
+        desc(collectedMessages.id),
+      )
+      .limit(limit);
+    return rows.map((row) => {
+      const content = String(decryptTextForRead(userId, row.content as string | null) ?? "");
+      return {
+        id: row.id,
+        content,
+        timestamp: row.timestamp ?? null,
+        role: row.role,
+        speaker: row.speaker ?? null,
+        coverage: lexicalCoverage(text, content),
+      };
+    });
+  }
+  const tsQuery = toTsQuery(indexableLexemes(lexemes), "|");
   /**
    * Rows that predate the column are matched on their substring, one
    * pattern per lexeme. Only the first twenty lexemes are used: an OR
@@ -7956,7 +8397,7 @@ export async function* iterateRecords(
       .orderBy(asc(spokenAt), asc(collectedMessages.id))
       .limit(pageSize);
     if (page.length === 0) return;
-    for (const row of page) yield row;
+    for (const row of decryptRows("collected_messages", page)) yield row;
     if (page.length < pageSize) return;
     cursorId = page[page.length - 1].id;
   }
@@ -8011,20 +8452,38 @@ export async function backfillSearchTokenBatch(
   if (!db) return 0;
   const table = kind === "records" ? collectedMessages : messages;
   const rows = await db
-    .select({ id: table.id, content: table.content })
+    .select({ id: table.id, content: table.content, userId: table.userId })
     .from(table)
     .where(isNull(table.searchTokens))
     .limit(Math.max(1, Math.min(20_000, limit)));
   if (rows.length === 0) return 0;
+  /**
+   * An encrypted row's tokens are written by the enable migration, which
+   * has the key. A row that is still ciphertext and has no key here (the
+   * account is locked after a restart) is skipped: tokenising the
+   * ciphertext would fill the index with noise, and the migration will
+   * do it correctly later.
+   */
+  const writable = rows.filter((row) => {
+    if (!encryptsWrites(row.userId)) return true;
+    try {
+      requireDataKeyForWrite(row.userId);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  if (writable.length === 0) return 0;
   await db.transaction(async (tx) => {
-    for (const row of rows) {
+    for (const row of writable) {
+      const content = decryptTextForRead(row.userId, row.content) ?? "";
       await tx
         .update(table)
-        .set({ searchTokens: searchTokensValue(row.content) })
+        .set({ searchTokens: searchTokensValueFor(row.userId, content) })
         .where(eq(table.id, row.id));
     }
   });
-  return rows.length;
+  return writable.length;
 }
 
 /**
@@ -8062,7 +8521,7 @@ export async function getWindowsAroundUserRecords(
     .from(collectedMessages)
     .where(and(inArray(collectedMessages.id, [...new Set(ids)]), eq(collectedMessages.userId, userId)))
     .orderBy(asc(spokenAtColumn()), asc(collectedMessages.id));
-  for (const candidate of candidates) {
+  for (const candidate of decryptRows("collected_messages", candidates)) {
     if (candidate.role !== "user") continue;
     out.set(candidate.id, { candidate, before: [], after: [] });
   }
@@ -8118,11 +8577,13 @@ export async function getWindowsAroundUserRecords(
         `)
       : { rows: [] },
   ]);
-  for (const row of beforeRows.rows as Array<Record<string, unknown>>) {
+  const decryptRaw = (rows: Array<Record<string, unknown>>) =>
+    decryptRows("collected_messages", rows as unknown as Array<Record<string, unknown> & { userId: number }>);
+  for (const row of decryptRaw(beforeRows.rows as Array<Record<string, unknown>>)) {
     const window = out.get(Number(row.candidateId));
     if (window) window.before.push(row as unknown as CollectedMessage);
   }
-  for (const row of afterRows.rows as Array<Record<string, unknown>>) {
+  for (const row of decryptRaw(afterRows.rows as Array<Record<string, unknown>>)) {
     const window = out.get(Number(row.candidateId));
     if (window) window.after.push(row as unknown as CollectedMessage);
   }
@@ -8146,11 +8607,12 @@ export async function getRecordsByIds(
 ): Promise<CollectedMessage[]> {
   const db = await getDb();
   if (!db || ids.length === 0) return [];
-  return db
+  const rows = await db
     .select()
     .from(collectedMessages)
     .where(and(inArray(collectedMessages.id, ids), eq(collectedMessages.userId, userId)))
     .orderBy(asc(spokenAtColumn()), asc(collectedMessages.id));
+  return decryptRows("collected_messages", rows);
 }
 
 export interface RecordLabelPatch {
@@ -8246,7 +8708,11 @@ export async function getRecordsAround(
           .orderBy(asc(spokenAt), asc(collectedMessages.id))
           .limit(after)
       : [];
-  return { target, before: earlier.reverse(), after: later };
+  return {
+    target: decryptRowOf("collected_messages", target) as CollectedMessage | undefined,
+    before: decryptRows("collected_messages", earlier.reverse()),
+    after: decryptRows("collected_messages", later),
+  };
 }
 
 /** One page of the timeline reader (C2.10). */
@@ -8358,7 +8824,7 @@ export async function pageRecords(
     const rows = await newer(anchorKey, limit);
     const hasNewer = rows.length > limit;
     return {
-      rows: rows.slice(0, limit),
+      rows: decryptRows("collected_messages", rows.slice(0, limit)),
       hasOlder: anchorKey != null,
       hasNewer,
     };
@@ -8385,7 +8851,7 @@ export async function pageRecords(
       anchorRow,
       ...afterAsc.slice(0, afterCount),
     ];
-    return { rows, hasOlder, hasNewer };
+    return { rows: decryptRows("collected_messages", rows), hasOlder, hasNewer };
   }
 
   // "older", or "around" with no anchor: the newest page.
@@ -8393,7 +8859,7 @@ export async function pageRecords(
   const hasOlder = rowsDesc.length > limit;
   const rows = rowsDesc.slice(0, limit).reverse();
   return {
-    rows,
+    rows: decryptRows("collected_messages", rows),
     hasOlder,
     // With an anchor there are rows at or after it; without one this is
     // the newest page, so there is nothing newer to load.
@@ -8476,7 +8942,7 @@ export async function listRecordMarks(
     )
     .where(and(eq(recordMarks.personaId, personaId), eq(recordMarks.userId, userId)))
     .orderBy(desc(recordMarks.createdAt));
-  return rows;
+  return decryptRows("collected_messages", rows);
 }
 
 /**
@@ -9175,7 +9641,8 @@ export async function getMessagesSince(
     .orderBy(asc(messages.createdAt));
   // The newest messages are the ones that matter when the window is
   // larger than the ceiling.
-  return limit === undefined ? query : query.limit(limit);
+  const rows = await (limit === undefined ? query : query.limit(limit));
+  return decryptRows("messages", rows);
 }
 
 /**
@@ -9211,7 +9678,7 @@ export async function getRecentMessages(
     .orderBy(desc(messages.createdAt))
     .limit(limit);
   // The caller reads it as a conversation, so it is turned round.
-  return rows.reverse();
+  return decryptRows("messages", rows).reverse();
 }
 
 /** The timestamp of the most recent message, used for session-duration checks. */
@@ -9563,7 +10030,7 @@ export async function getPersonaStyleProfile(
     .limit(1);
   if (!rows[0]) return null;
   if (rows[0].styleProfile == null) return null;
-  return normalizeStyleProfile(rows[0].styleProfile);
+  return normalizeStyleProfile(decryptJsonForRead(userId, rows[0].styleProfile));
 }
 
 export async function setPersonaStyleProfile(
@@ -9575,7 +10042,7 @@ export async function setPersonaStyleProfile(
   if (!db) return false;
   const rows = await db
     .update(personas)
-    .set({ styleProfile: normalizeStyleProfile(profile) })
+    .set(encryptWriteValues("personas", userId, { styleProfile: normalizeStyleProfile(profile) }))
     .where(and(eq(personas.id, personaId), eq(personas.userId, userId)))
     .returning({ id: personas.id });
   return rows.length > 0;
@@ -9633,13 +10100,13 @@ export async function createOutboundLetter(data: {
    */
   const [result] = await db
     .insert(outboundLetters)
-    .values({
+    .values(encryptWriteValues("outbound_letters", data.userId, {
       userId: data.userId,
       personaId: data.personaId,
       text: data.text,
       sourceMessageId: data.sourceMessageId ?? null,
       status: data.status ?? "draft",
-    })
+    }))
     .onConflictDoNothing()
     .returning({ id: outboundLetters.id });
   return result?.id;
@@ -9649,10 +10116,11 @@ export async function createOutboundLetter(data: {
 export async function getOutboundLetters(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(outboundLetters).where(and(
+  const rows = await db.select().from(outboundLetters).where(and(
     eq(outboundLetters.personaId, personaId),
     eq(outboundLetters.userId, userId),
   )).orderBy(desc(outboundLetters.id));
+  return decryptRows("outbound_letters", rows);
 }
 
 /**
@@ -9754,13 +10222,13 @@ export async function updateOutboundLetterText(
 ): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
-  const rows = await db.update(outboundLetters).set({
+  const rows = await db.update(outboundLetters).set(encryptWriteValues("outbound_letters", userId, {
     text,
     updatedAt: new Date(),
     // Only an adopted suggestion marks the sentence as assisted. Saving
     // a letter the user wrote themselves leaves the flag alone.
     ...(assisted ? { wordingAssisted: true } : {}),
-  }).where(and(
+  })).where(and(
     eq(outboundLetters.id, id),
     eq(outboundLetters.userId, userId),
   )).returning({ id: outboundLetters.id });
@@ -9775,7 +10243,7 @@ export async function getOutboundLetterById(id: number, userId: number) {
     eq(outboundLetters.id, id),
     eq(outboundLetters.userId, userId),
   )).limit(1);
-  return rows[0] ?? null;
+  return decryptRowOf("outbound_letters", rows[0]) ?? null;
 }
 
 /**
@@ -9793,11 +10261,11 @@ export async function setOutboundLetterOutcome(
 ): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
-  const rows = await db.update(outboundLetters).set({
+  const rows = await db.update(outboundLetters).set(encryptWriteValues("outbound_letters", userId, {
     outcomeNote: note,
     outcomeAt: at,
     updatedAt: at,
-  }).where(and(
+  })).where(and(
     eq(outboundLetters.id, id),
     eq(outboundLetters.userId, userId),
     eq(outboundLetters.status, "sent"),
@@ -9816,12 +10284,12 @@ export async function createRehearsal(data: {
 }): Promise<number | undefined> {
   const db = await getDb();
   if (!db) return undefined;
-  const [row] = await db.insert(rehearsals).values({
+  const [row] = await db.insert(rehearsals).values(encryptWriteValues("rehearsals", data.userId, {
     userId: data.userId,
     personaId: data.personaId,
     line: data.line,
     result: data.result as any,
-  }).returning({ id: rehearsals.id });
+  })).returning({ id: rehearsals.id });
   return row?.id;
 }
 
@@ -9829,10 +10297,11 @@ export async function createRehearsal(data: {
 export async function listRehearsals(personaId: number, userId: number, limit = 50) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(rehearsals).where(and(
+  const rows = await db.select().from(rehearsals).where(and(
     eq(rehearsals.personaId, personaId),
     eq(rehearsals.userId, userId),
   )).orderBy(desc(rehearsals.id)).limit(Math.max(1, Math.min(200, limit)));
+  return decryptRows("rehearsals", rows);
 }
 
 export async function getRehearsalById(id: number, userId: number) {
@@ -9842,7 +10311,7 @@ export async function getRehearsalById(id: number, userId: number) {
     eq(rehearsals.id, id),
     eq(rehearsals.userId, userId),
   )).limit(1);
-  return rows[0] ?? null;
+  return decryptRowOf("rehearsals", rows[0]) ?? null;
 }
 
 /** Remembers which way-out letter a rehearsal's line was kept as. */
@@ -10045,7 +10514,7 @@ export async function createJournalEntry(data: {
   const db = await getDb();
   if (!db) return undefined;
   const now = new Date();
-  const [row] = await db.insert(userJournal).values({
+  const [row] = await db.insert(userJournal).values(encryptWriteValues("user_journal", data.userId, {
     userId: data.userId,
     personaId: data.personaId ?? null,
     body: data.body,
@@ -10053,7 +10522,7 @@ export async function createJournalEntry(data: {
     entryDate: data.entryDate,
     createdAt: now,
     updatedAt: now,
-  }).returning({ id: userJournal.id });
+  })).returning({ id: userJournal.id });
   return row?.id;
 }
 
@@ -10067,20 +10536,22 @@ export async function listJournalEntries(params: {
   const db = await getDb();
   if (!db) return [];
   const limit = Math.max(1, Math.min(100, params.limit ?? 30));
-  return db.select().from(userJournal).where(and(
+  const rows = await db.select().from(userJournal).where(and(
     eq(userJournal.userId, params.userId),
     ...(params.personaId != null ? [eq(userJournal.personaId, params.personaId)] : []),
     ...(params.cursor != null ? [lt(userJournal.id, params.cursor)] : []),
   )).orderBy(desc(userJournal.entryDate), desc(userJournal.id)).limit(limit);
+  return decryptRows("user_journal", rows);
 }
 
 /** All of them, for the export. */
 export async function getUserJournal(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(userJournal)
+  const rows = await db.select().from(userJournal)
     .where(eq(userJournal.userId, userId))
     .orderBy(desc(userJournal.entryDate), desc(userJournal.id));
+  return decryptRows("user_journal", rows);
 }
 
 export async function getJournalEntryById(id: number, userId: number) {
@@ -10090,7 +10561,7 @@ export async function getJournalEntryById(id: number, userId: number) {
     eq(userJournal.id, id),
     eq(userJournal.userId, userId),
   )).limit(1);
-  return rows[0] ?? null;
+  return decryptRowOf("user_journal", rows[0]) ?? null;
 }
 
 export async function updateJournalEntry(
@@ -10100,12 +10571,12 @@ export async function updateJournalEntry(
 ): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
-  const rows = await db.update(userJournal).set({
+  const rows = await db.update(userJournal).set(encryptWriteValues("user_journal", userId, {
     ...(patch.body !== undefined ? { body: patch.body } : {}),
     ...(patch.mood !== undefined ? { mood: patch.mood } : {}),
     ...(patch.entryDate !== undefined ? { entryDate: patch.entryDate } : {}),
     updatedAt: new Date(),
-  }).where(and(
+  })).where(and(
     eq(userJournal.id, id),
     eq(userJournal.userId, userId),
   )).returning({ id: userJournal.id });
@@ -10156,13 +10627,13 @@ export async function createRoleplaySession(data: {
 }) {
   const db = await getDb();
   if (!db) return undefined;
-  const [row] = await db.insert(roleplaySessions).values({
+  const [row] = await db.insert(roleplaySessions).values(encryptWriteValues("roleplay_sessions", data.userId, {
     userId: data.userId,
     personaId: data.personaId,
     startedAt: data.startedAt,
     turns: 0,
     transcript: [],
-  }).returning({ id: roleplaySessions.id });
+  })).returning({ id: roleplaySessions.id });
   return row?.id;
 }
 
@@ -10173,7 +10644,7 @@ export async function getRoleplaySession(id: number, userId: number) {
     eq(roleplaySessions.id, id),
     eq(roleplaySessions.userId, userId),
   )).limit(1);
-  return rows[0] ?? null;
+  return decryptRowOf("roleplay_sessions", rows[0]) ?? null;
 }
 
 /** How many practices the user has started since an instant. */
@@ -10199,11 +10670,11 @@ export async function updateRoleplaySession(
 ): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
-  const rows = await db.update(roleplaySessions).set({
+  const rows = await db.update(roleplaySessions).set(encryptWriteValues("roleplay_sessions", userId, {
     ...(patch.turns !== undefined ? { turns: patch.turns } : {}),
     ...(patch.transcript !== undefined ? { transcript: patch.transcript as any } : {}),
     ...(patch.endedAt !== undefined ? { endedAt: patch.endedAt } : {}),
-  }).where(and(
+  })).where(and(
     eq(roleplaySessions.id, id),
     eq(roleplaySessions.userId, userId),
   )).returning({ id: roleplaySessions.id });
@@ -10329,7 +10800,7 @@ export async function createPersonaVersion(
   if (!persona) return undefined;
   const [row] = await db
     .insert(personaVersions)
-    .values({
+    .values(encryptWriteValues("persona_versions", userId, {
       userId,
       personaId,
       reason,
@@ -10337,7 +10808,7 @@ export async function createPersonaVersion(
       styleProfile: persona.styleProfile,
       behaviorProfile: persona.behaviorProfile,
       settings: persona.settings,
-    })
+    }))
     .returning({ id: personaVersions.id });
   await prunePersonaVersions(personaId, userId);
   return row?.id;
@@ -10347,7 +10818,7 @@ export async function createPersonaVersion(
 export async function listPersonaVersions(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db
+  const rows = await db
     .select()
     .from(personaVersions)
     .where(
@@ -10357,6 +10828,7 @@ export async function listPersonaVersions(personaId: number, userId: number) {
       ),
     )
     .orderBy(desc(personaVersions.id));
+  return decryptRows("persona_versions", rows);
 }
 
 /** One snapshot, scoped to its owner. */
@@ -10368,7 +10840,7 @@ export async function getPersonaVersion(id: number, userId: number) {
     .from(personaVersions)
     .where(and(eq(personaVersions.id, id), eq(personaVersions.userId, userId)))
     .limit(1);
-  return rows[0];
+  return decryptRowOf("persona_versions", rows[0]) ?? undefined;
 }
 
 /** The newest snapshot of a persona. */
@@ -10386,7 +10858,7 @@ export async function getLatestPersonaVersion(personaId: number, userId: number)
     )
     .orderBy(desc(personaVersions.id))
     .limit(1);
-  return rows[0];
+  return decryptRowOf("persona_versions", rows[0]) ?? undefined;
 }
 
 /**
@@ -10803,9 +11275,12 @@ const SCHEDULED_ITEM_CLAIM_STALE_MS = 5 * 60 * 1000;
 export async function createScheduledItem(data: InsertScheduledItem): Promise<ScheduledItem> {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  const [row] = await db.insert(scheduledItems).values(data).returning();
+  const [row] = await db
+    .insert(scheduledItems)
+    .values(encryptWriteValues("scheduled_items", data.userId, { ...data }))
+    .returning();
   if (!row) throw new Error("DB not available");
-  return row;
+  return decryptRowOf("scheduled_items", row)!;
 }
 
 /** The scheduled items of one persona, oldest first. */
@@ -10816,12 +11291,13 @@ export async function listScheduledItems(
 ): Promise<ScheduledItem[]> {
   const db = await getDb();
   if (!db) return [];
-  return db
+  const rows = await db
     .select()
     .from(scheduledItems)
     .where(and(eq(scheduledItems.personaId, personaId), eq(scheduledItems.userId, userId)))
     .orderBy(asc(scheduledItems.dueAt), asc(scheduledItems.id))
     .limit(limit);
+  return decryptRows("scheduled_items", rows);
 }
 
 export async function getScheduledItem(
@@ -10835,7 +11311,7 @@ export async function getScheduledItem(
     .from(scheduledItems)
     .where(and(eq(scheduledItems.id, id), eq(scheduledItems.userId, userId)))
     .limit(1);
-  return row ?? null;
+  return decryptRowOf("scheduled_items", row) ?? null;
 }
 
 /** Cancels a still-scheduled item. Delivered items are left alone. */
@@ -10863,7 +11339,7 @@ export async function listDueScheduledItems(now: Date, limit = 20): Promise<Sche
   const db = await getDb();
   if (!db) return [];
   const staleBefore = new Date(now.getTime() - SCHEDULED_ITEM_CLAIM_STALE_MS);
-  return db
+  const rows = await db
     .select()
     .from(scheduledItems)
     .where(and(
@@ -10876,6 +11352,7 @@ export async function listDueScheduledItems(now: Date, limit = 20): Promise<Sche
     ))
     .orderBy(asc(scheduledItems.dueAt))
     .limit(limit);
+  return decryptRows("scheduled_items", rows);
 }
 
 export async function claimScheduledItem(id: number, userId: number): Promise<boolean> {

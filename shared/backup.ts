@@ -68,6 +68,15 @@ export interface BackupSettings {
   passphraseSecret?: string;
   /** When the last scheduled run finished, ISO. */
   lastRunAt?: string;
+  /**
+   * When the last *full* backup was made from this instance (C8.5).
+   *
+   * Enabling database encryption requires a backup to exist first: if
+   * the password or recovery code is lost afterwards, that file is the
+   * only way back. Recorded when the settings page's "download a full
+   * backup" finishes.
+   */
+  lastFullBackupAt?: string;
   /** The file name of the last backup that reached the target. */
   lastFileName?: string;
   /**
@@ -240,6 +249,10 @@ export function normalizeBackupSettings(value: unknown): BackupSettings {
 
   const lastRunAt = asString(source.lastRunAt, 64);
   if (lastRunAt && Number.isFinite(Date.parse(lastRunAt))) settings.lastRunAt = lastRunAt;
+  const lastFullBackupAt = asString(source.lastFullBackupAt, 64);
+  if (lastFullBackupAt && Number.isFinite(Date.parse(lastFullBackupAt))) {
+    settings.lastFullBackupAt = lastFullBackupAt;
+  }
   const lastFileName = asString(source.lastFileName, 255);
   if (lastFileName) {
     settings.lastFileName = lastFileName;
@@ -276,6 +289,7 @@ export interface PublicBackupSettings {
   hasTargetPassword: boolean;
   hasTargetSecretAccessKey: boolean;
   lastRunAt?: string;
+  lastFullBackupAt?: string;
   lastFileName?: string;
   lastError?: string;
 }
@@ -316,6 +330,7 @@ export function toPublicBackupSettings(settings: BackupSettings): PublicBackupSe
     }
   }
   if (settings.lastRunAt) out.lastRunAt = settings.lastRunAt;
+  if (settings.lastFullBackupAt) out.lastFullBackupAt = settings.lastFullBackupAt;
   if (settings.lastFileName) out.lastFileName = settings.lastFileName;
   if (settings.lastError) out.lastError = settings.lastError;
   return out;
