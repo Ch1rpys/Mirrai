@@ -68,6 +68,7 @@ import {
   shouldRecall,
 } from "@shared/quirks-profile";
 import { EMOTION_TRIGGER_PATTERNS } from "@shared/emotion-triggers";
+import { toSimplified } from "@shared/han-normalize";
 import { localDateKey, zonedDateKey, zonedDayStart } from "@shared/timezone";
 import { extractMemories, isExtractionDue } from "./memory-extract";
 import { storageToDataUrl } from "../storage";
@@ -95,6 +96,7 @@ import {
   maybeDeferReply,
   maybeScheduleFollowUp,
 } from "./reply-jobs";
+import type { Locale } from "@shared/copy";
 
 export type ChatMode = "stream" | "once";
 
@@ -373,7 +375,7 @@ export interface ConversationOptions {
   /** Media attached to the message. */
   media?: { url: string; type: "image" | "voice"; mimeType?: string };
   /** Locale for prompt language and trigger words. */
-  locale?: "zh" | "en";
+  locale?: Locale;
   /** Cancels the model call when the client goes away. */
   signal?: AbortSignal;
   now?: Date;
@@ -411,7 +413,7 @@ async function maybeCompactHistory(params: {
   history: Array<{ id: number; role: string; content: string; createdAt: Date }>;
   keepCount: number;
   providerName?: string;
-  locale?: "zh" | "en";
+  locale?: Locale;
   now: Date;
 }): Promise<string> {
   const locale = params.locale ?? "zh";
@@ -548,7 +550,7 @@ async function toLLMMessage(
     mediaUrl?: string | null;
     metadata?: unknown;
   },
-  locale: "zh" | "en",
+  locale: Locale,
 ): Promise<LLMMessage> {
   const role = message.role as "user" | "assistant";
   /**
@@ -656,7 +658,7 @@ export async function composeMessages(params: {
   retrievalQuery?: string;
   contextLimit: number;
   providerName?: string;
-  locale?: "zh" | "en";
+  locale?: Locale;
   now?: Date;
   extraConfig?: Record<string, any>;
   /** The message this turn replies to. */
@@ -1063,7 +1065,7 @@ export async function commitPendingChoice(params: {
   chosen: string;
   rejected: string;
   writePair: boolean;
-  locale?: "zh" | "en";
+  locale?: Locale;
   providerName?: string;
   now?: Date;
   channel?: "web" | "wechat" | "feishu";
@@ -1369,8 +1371,16 @@ function userBatchAfterLastReply(
 }
 
 function melancholyOf(text: string): boolean {
-  return EMOTION_TRIGGER_PATTERNS.zh.melancholy.test(text)
-    || EMOTION_TRIGGER_PATTERNS.en.melancholy.test(text);
+  /**
+   * Traditional Chinese reads the same as simplified here.
+   *
+   * The pattern is written in simplified characters; a person writing
+   * 「難過」 wrote the same word, and the gentle check-in was skipped
+   * because a substring could not see it.
+   */
+  const simplified = toSimplified(text);
+  return EMOTION_TRIGGER_PATTERNS.zh.melancholy.test(simplified)
+    || EMOTION_TRIGGER_PATTERNS.en.melancholy.test(simplified);
 }
 
 function typingForTurn(persona: Persona, channel?: string) {
@@ -2701,7 +2711,7 @@ const EXTRACTION_INTERVAL_MS = 24 * 3_600_000;
 async function maybeExtractMemories(
   persona: Persona,
   userId: number,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
   now = new Date(),
 ): Promise<void> {
   /**
@@ -2774,7 +2784,7 @@ async function maybeExtractMemories(
 async function maybeAssessTrajectory(params: {
   personaId: number;
   userId: number;
-  locale?: "zh" | "en";
+  locale?: Locale;
   now: Date;
 }): Promise<"improving" | "stable" | "worsening" | null> {
   try {
@@ -2857,7 +2867,7 @@ async function isTrajectoryAssessmentAllowed(userId: number): Promise<boolean> {
  * user is not being asked to change anything — they are being told that
  * the app noticed, which is the part that was missing.
  */
-function worseningTrajectoryNote(locale: "zh" | "en"): string {
+function worseningTrajectoryNote(locale: Locale): string {
   return copy(locale, "prompt.worseningTrajectoryNote");
 }
 
@@ -2881,7 +2891,7 @@ export async function evaluateGraduation(params: {
   intimacyLevel: string;
   chatCount: number;
   /** The language the reason is written in. */
-  locale?: "zh" | "en";
+  locale?: Locale;
   now?: Date;
 }): Promise<boolean> {
   const { persona, userId } = params;

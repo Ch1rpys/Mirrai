@@ -13,6 +13,15 @@ describe("fact cues", () => {
     expect(textHasFactCue("ok")).toBe(false);
   });
 
+  it("hears the same clues in traditional Chinese", () => {
+    // The cues are written in simplified characters; a record written in
+    // traditional Chinese carries the same clues.
+    expect(textHasFactCue("我生日是5月21號")).toBe(true);
+    expect(textHasFactCue("我們的紀念日")).toBe(true);
+    expect(textHasFactCue("第一次去公園")).toBe(true);
+    expect(textHasFactCue("我媽媽很喜歡那家店")).toBe(true);
+  });
+
   it("marks a block when any line matches", () => {
     expect(
       chunkHasFactCue({

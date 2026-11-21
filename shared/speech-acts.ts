@@ -11,6 +11,7 @@
  * the editors. The lists below are the contract.
  */
 import { copy, type Locale } from "./copy";
+import { toSimplified } from "./han-normalize";
 
 /** What this turn of theirs is doing. */
 export const SPEECH_ACTS = [
@@ -128,7 +129,14 @@ export function labelSpeechActByRule(
   previousUser?: string | null,
   options?: { precisionOnly?: boolean },
 ): SpeechAct | null {
-  const trimmed = String(text ?? "").trim();
+  /**
+   * The rules are written in simplified Chinese, and a line written in
+   * traditional Chinese is the same line: 「對不起」 is 「对不起」. A regex
+   * cannot know that, so the line was left unlabelled — and an unlabelled
+   * line in the prompt is a worse answer than a right one. The same
+   * normalisation is applied whatever the interface language is.
+   */
+  const trimmed = toSimplified(String(text ?? "").trim());
   if (!trimmed) return "silence";
 
   const compact = trimmed.replace(/\s+/g, "");
@@ -160,7 +168,9 @@ export function labelSpeechActByRule(
  * is left unlabelled so distillation can ask a model rather than guess.
  */
 export function labelUserActByRule(text: string): UserAct | null {
-  const trimmed = String(text ?? "").trim();
+  // Read traditional Chinese as simplified: the rules below are written in
+  // simplified characters, and 「對不起」 is the same word as 「对不起」.
+  const trimmed = toSimplified(String(text ?? "").trim());
   if (!trimmed) return null;
   if (isUserAsking(trimmed) || endsWithMa(trimmed)) return "ask";
   const compact = trimmed.replace(/\s+/g, "");
@@ -176,7 +186,8 @@ function endsWithMa(text: string): boolean {
 
 /** True when the other person asked a question this turn. */
 export function isUserAsking(text: string | null | undefined): boolean {
-  const trimmed = String(text ?? "").trim();
+  // A question in traditional characters is the same question.
+  const trimmed = toSimplified(String(text ?? "").trim());
   if (!trimmed) return false;
   if (/[?？]/.test(trimmed)) return true;
   return /^(怎么|为什么|哪|谁|几|吗|么|what|why|where|when|who|how|is |are |do |did |can )/i.test(

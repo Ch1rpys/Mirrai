@@ -22,6 +22,7 @@ import {
 import { loadBehaviorProfile, seededRandom } from "../_core/behavior-profile";
 import { detectCrisis } from "../safety/crisis";
 import { EMOTION_TRIGGER_PATTERNS } from "@shared/emotion-triggers";
+import { toSimplified } from "@shared/han-normalize";
 import { isQuietHour } from "../scheduler/reminders";
 import { ENV } from "../_core/env";
 import {
@@ -312,8 +313,11 @@ async function failDelivery(job: ReplyJob): Promise<void> {
 }
 
 function melancholyLine(text: string): boolean {
-  return EMOTION_TRIGGER_PATTERNS.zh.melancholy.test(text)
-    || EMOTION_TRIGGER_PATTERNS.en.melancholy.test(text);
+  // The same rule as the conversation pipeline: a traditional sentence
+  // is the same sentence, so it is read as simplified before matching.
+  const simplified = toSimplified(text);
+  return EMOTION_TRIGGER_PATTERNS.zh.melancholy.test(simplified)
+    || EMOTION_TRIGGER_PATTERNS.en.melancholy.test(simplified);
 }
 
 function createdAtMs(row: { createdAt?: Date | string | null }): number | null {

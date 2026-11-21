@@ -124,6 +124,91 @@ describe("detectCrisis", () => {
   });
 });
 
+/**
+ * Traditional Chinese, read as the same words.
+ *
+ * The vocabulary is written in simplified Chinese, and a person who writes
+ * traditional Chinese writes the same sentences in different characters.
+ * A substring match cannot know that — so every one of these used to reach
+ * the persona as an ordinary message and the support resources never
+ * appeared. The sentences below cover every category in the vocabulary:
+ * the direct words, not wanting to live, wanting to die, ending it, the
+ * methods, disappearing, not being able to go on, meaninglessness, and the
+ * quieter signals.
+ */
+describe("detectCrisis in traditional Chinese", () => {
+  it("detects the direct words", () => {
+    expect(detectCrisis("我想自殺").crisis).toBe(true);
+    expect(detectCrisis("他最近有輕生的念頭").crisis).toBe(true);
+    expect(detectCrisis("我開始自殘").crisis).toBe(true);
+    expect(detectCrisis("我想割腕").crisis).toBe(true);
+    expect(detectCrisis("我常常傷害自己").crisis).toBe(true);
+  });
+
+  it("detects not wanting to live", () => {
+    expect(detectCrisis("我不想活了").crisis).toBe(true);
+    expect(detectCrisis("我真的活不下去了").crisis).toBe(true);
+    expect(detectCrisis("我不想再活下去了").crisis).toBe(true);
+  });
+
+  it("detects wanting to die", () => {
+    expect(detectCrisis("我想死").crisis).toBe(true);
+    expect(detectCrisis("我要死").crisis).toBe(true);
+    expect(detectCrisis("讓我去死").crisis).toBe(true);
+  });
+
+  it("detects the wish to end it", () => {
+    expect(detectCrisis("我想結束生命").crisis).toBe(true);
+    expect(detectCrisis("我想結束自己的生命").crisis).toBe(true);
+    expect(detectCrisis("我想了結自己").crisis).toBe(true);
+    expect(detectCrisis("一了百了，解脫了算了").crisis).toBe(true);
+  });
+
+  it("detects a method", () => {
+    expect(detectCrisis("我想跳樓").crisis).toBe(true);
+    expect(detectCrisis("我想上吊").crisis).toBe(true);
+    expect(detectCrisis("我要跳河").crisis).toBe(true);
+    expect(detectCrisis("我想吃安眠藥").crisis).toBe(true);
+    expect(detectCrisis("我要燒炭").crisis).toBe(true);
+  });
+
+  it("detects the wish to disappear", () => {
+    expect(detectCrisis("我想消失").crisis).toBe(true);
+    expect(detectCrisis("我想離開這個世界").crisis).toBe(true);
+    expect(detectCrisis("我想離開人世").crisis).toBe(true);
+  });
+
+  it("detects not being able to go on", () => {
+    expect(detectCrisis("我真的撐不下去了").crisis).toBe(true);
+    expect(detectCrisis("我熬不住了").crisis).toBe(true);
+    expect(detectCrisis("我撐不住了").crisis).toBe(true);
+  });
+
+  it("detects the meaninglessness", () => {
+    expect(detectCrisis("活著沒意義").crisis).toBe(true);
+    expect(detectCrisis("活著沒意思").crisis).toBe(true);
+    expect(detectCrisis("我生無可戀").crisis).toBe(true);
+    expect(detectCrisis("我見不到明天的太陽").crisis).toBe(true);
+  });
+
+  it("detects the quieter signals as weak, not as a crisis", () => {
+    const result = detectCrisis("我覺得壓力好大，好難受，想哭");
+    expect(result.crisis).toBe(false);
+    expect(result.weakSignal).toBe(true);
+  });
+
+  it("still does not fire on an ordinary traditional sentence", () => {
+    expect(detectCrisis("他說要好好活下去").crisis).toBe(false);
+    expect(detectCrisis("今天過得還不錯").crisis).toBe(false);
+  });
+
+  it("reads a mixed sentence", () => {
+    expect(detectCrisis("I want to kill myself，真的撐不下去了").crisis).toBe(true);
+    // A typographic apostrophe and traditional characters together.
+    expect(detectCrisis("I don’t want to live，我想離開這個世界").crisis).toBe(true);
+  });
+});
+
 describe("buildCrisisResponse", () => {
   it("steps out of character and lists the resources", () => {
     const reply = buildCrisisResponse("小A");

@@ -3,6 +3,8 @@
  * stance. A deep distillation reads every block; the lighter presets
  * only send the blocks that match one of these.
  */
+import { toSimplified } from "./han-normalize";
+
 
 // i18n:allow-input — these match words in the user's records, not sentences the app writes.
 const CUES: RegExp[] = [
@@ -53,7 +55,14 @@ const CUES: RegExp[] = [
 
 export function textHasFactCue(text: string): boolean {
   if (!text) return false;
-  return CUES.some((cue) => cue.test(text));
+  /**
+   * The cues are written in simplified Chinese. A record written in
+   * traditional Chinese carries the same clues — 「生日」, 「紀念日」 — so it
+   * is read as simplified before the search. The English cues are not
+   * affected by the conversion.
+   */
+  const simplified = toSimplified(text);
+  return CUES.some((cue) => cue.test(simplified));
 }
 
 export function chunkHasFactCue(chunk: { rows: Array<{ content: string }> }): boolean {

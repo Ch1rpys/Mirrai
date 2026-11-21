@@ -76,6 +76,39 @@ describe("whether the other person asked", () => {
   });
 });
 
+/**
+ * Traditional Chinese, read as the same words.
+ *
+ * The rules are written in simplified characters. A person writing
+ * traditional Chinese writes the same words in different ones — 「對不起」
+ * is 「对不起」 — and a regex cannot know that, so the line was left
+ * unlabelled and the prompt lost the act.
+ */
+describe("labelling a traditional Chinese line", () => {
+  it("calls a traditional apology repair", () => {
+    expect(labelSpeechActByRule("對不起，是我不好")).toBe("repair");
+    expect(labelUserActByRule("對不起")).toBe("repair");
+  });
+
+  it("calls a traditional acknowledgement an acknowledgement", () => {
+    expect(labelUserActByRule("好的")).toBe("acknowledge");
+    expect(labelUserActByRule("收到")).toBe("acknowledge");
+  });
+
+  it("calls a traditional affection line affection", () => {
+    expect(labelUserActByRule("想你")).toBe("affection");
+  });
+
+  it("reads a traditional question as an ask", () => {
+    expect(labelUserActByRule("為什麼")).toBe("ask");
+    expect(isUserAsking("為什麼？")).toBe(true);
+  });
+
+  it("still leaves an ordinary traditional line unlabelled", () => {
+    expect(labelUserActByRule("今天去了圖書館")).toBeNull();
+  });
+});
+
 describe("the closed sets", () => {
   it("knows its own labels", () => {
     expect(isSpeechAct("tease")).toBe(true);

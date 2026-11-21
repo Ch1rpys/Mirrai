@@ -13,6 +13,8 @@
  */
 import { formatResources, getCrisisResources } from "./resources";
 import { copy } from "@shared/copy";
+import { toSimplified } from "@shared/han-normalize";
+import type { Locale } from "@shared/copy";
 
 /**
  * Unambiguous statements of self-harm or suicidal intent.
@@ -194,7 +196,21 @@ function normalise(text: string): string {
  * interrupt itself.
  */
 export function detectCrisis(text: string): CrisisDetection {
-  const haystack = normalise(text);
+  /**
+   * Read the text in the characters the word lists are written in.
+   *
+   * The lists are simplified Chinese, and a person who writes traditional
+   * Chinese writes the same words in different characters — 「我想自殺」 is
+   * the same sentence as 「我想自杀」. A substring match cannot know that,
+   * so a crisis sentence in traditional Chinese used to match nothing at
+   * all and the user got an in-character reply with no support resources.
+   *
+   * The conversion happens here, in front of every matching path below, so
+   * it holds for the crisis terms, the weak signals and the English terms
+   * alike. It is done whatever the interface language is: a traditional
+   * sentence is a traditional sentence in an English interface too.
+   */
+  const haystack = normalise(toSimplified(text));
   if (!haystack.trim()) return { crisis: false, weakSignal: false, matched: [] };
 
   /**
@@ -254,7 +270,7 @@ export function detectCrisis(text: string): CrisisDetection {
  */
 export function buildCrisisResponse(
   _personaName: string,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
   options: { memorial?: boolean } = {},
 ): string {
   const resources = formatResources(getCrisisResources(), locale);
@@ -297,7 +313,7 @@ export function buildCrisisResponse(
  */
 export function buildGentleCheckIn(
   _personaName: string,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
   options: { memorial?: boolean } = {},
 ): string {
   return copy(
