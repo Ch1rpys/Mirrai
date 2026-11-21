@@ -155,8 +155,23 @@ describe("the questionnaire", () => {
     await waitFor(() => {
       expect(nameField()).toBe("");
     });
+    /**
+     * The sign-in answer arrives after the first render, and from then
+     * on the page keeps its own draft under the per-user key. The test
+     * used to check that key while the effect had not run yet — so it
+     * asserted "nothing saved" on a race, and failed whenever the effect
+     * won. What it has to prove is the part that matters: the saved
+     * per-user answers are the page's own empty ones, not the
+     * browser-wide ones.
+     */
+    await waitFor(() => {
+      expect(localStorage.getItem(`${KEY}:7`)).not.toBeNull();
+    });
+    const ownDraft = JSON.parse(localStorage.getItem(`${KEY}:7`)!) as {
+      answers: { name: string };
+    };
+    expect(ownDraft.answers.name).toBe("");
     // And the browser-wide key is not written to either.
     expect(localStorage.getItem(KEY)).toContain("小A");
-    expect(localStorage.getItem(`${KEY}:7`)).toBeNull();
   });
 });
