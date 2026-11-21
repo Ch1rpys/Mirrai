@@ -11,6 +11,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import PageLoader from "@/components/PageLoader";
 import NotFound from "@/pages/NotFound";
 import { writeQuoteDraft } from "@/components/v6/quote-selection";
+import { toast } from "sonner";
 
 /**
  * The timeline reader (C2.10).
@@ -104,6 +105,17 @@ export default function Records() {
    */
   const [quoteMode, setQuoteMode] = useState(false);
   const [quoteIds, setQuoteIds] = useState<number[]>([]);
+  /**
+   * A stretch of the record made into a scene (C8.13).
+   *
+   * The scene is created on the server from the two ends, then
+   * activated on this persona, and the chat opens in its context. The
+   * lines are not sent: the scene remembers the stretch and the server
+   * reads the lines out of the record itself.
+   */
+  const createRangeScene = trpc.scene.createFromRecords.useMutation();
+  const activateRangeScene = trpc.scene.activate.useMutation();
+  const [rangeBusy, setRangeBusy] = useState(false);
 
   const persona = trpc.persona.get.useQuery({ id: personaId }, { enabled: personaId > 0 });
   const pageQuery = trpc.record.page.useQuery(
@@ -284,6 +296,39 @@ export default function Records() {
     navigate(`/chat/${personaId}?quote=1`);
   };
 
+  /**
+   * "按这段的语境聊": the selection is turned into a scene set in its
+   * days, the scene is activated, and the chat opens in it.
+   *
+   * At least six usable lines are needed on the server side; the button
+   * waits for six selected here so the obvious mistake is not a round
+   * trip. The server still checks — the selection can contain sticker
+   * rows or a filtered harm line.
+   */
+  const takeRangeToChat = async () => {
+    if (quoteLines.length < 6 || rangeBusy) return;
+    const first = quoteLines[0]!;
+    const last = quoteLines[quoteLines.length - 1]!;
+    setRangeBusy(true);
+    try {
+      const scene = await createRangeScene.mutateAsync({
+        personaId,
+        fromId: first.id,
+        toId: last.id,
+      });
+      await activateRangeScene.mutateAsync({ personaId, sceneId: scene.id });
+      // The chat reads the active scene from the persona; without this
+      // the newly activated scene would not show until a background
+      // refetch happened to come round.
+      void utils.persona.get.invalidate({ id: personaId });
+      navigate(`/chat/${personaId}`);
+    } catch (error) {
+      toast.error(t("records.quoteSceneFailed", { message: (error as Error).message }));
+    } finally {
+      setRangeBusy(false);
+    }
+  };
+
   const askDelete = async (row: RecordRow) => {
     const ok = await confirm({
       title: t("records.deleteTitle"),
@@ -341,6 +386,21 @@ export default function Records() {
               <Button size="sm" onClick={takeQuoteToChat} disabled={quoteLines.length === 0}>
                 {String(t("records.quoteGo"))}
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={takeRangeToChat}
+                disabled={quoteLines.length < 6 || rangeBusy}
+                title={quoteLines.length < 6 ? String(t("records.quoteSceneShort")) : undefined}
+                data-testid="range-scene-button"
+              >
+                {String(t("records.quoteSceneGo"))}
+              </Button>
+              {quoteLines.length > 0 && quoteLines.length < 6 && (
+                <span className="text-[11px] text-muted-subtle w-full">
+                  {String(t("records.quoteSceneShort"))}
+                </span>
+              )}
               <span className="text-[11px] text-muted-subtle w-full">{String(t("records.quoteHint"))}</span>
             </>
           )}

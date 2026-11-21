@@ -52,6 +52,8 @@ import { useDraft } from "@/components/v6/useDraft";
 import { clearQuoteDraft, readQuoteDraft, type QuoteLine } from "@/components/v6/quote-selection";
 import AfterChat from "@/components/v6/AfterChat";
 import { useTypingReveal, waitMs } from "@/components/v6/useTypingReveal";
+import ScenePanel from "@/components/v6/ScenePanel";
+import SceneRangeBanner from "@/components/v6/SceneRangeBanner";
 
 /** A message the reply carried besides its words (B7.1). */
 type ExtraMessage = {
@@ -357,14 +359,6 @@ export default function Chat() {
   const [showEmotionReport, setShowEmotionReport] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showScenePanel, setShowScenePanel] = useState(false);
-  /* The form for a scene of the user's own. */
-  const [showSceneForm, setShowSceneForm] = useState(false);
-  const [sceneName, setSceneName] = useState("");
-  const [sceneIcon, setSceneIcon] = useState("");
-  const [sceneDescription, setSceneDescription] = useState("");
-  const [sceneOverlay, setSceneOverlay] = useState("");
-  const [sceneStarters, setSceneStarters] = useState("");
-  const [sceneState, setSceneState] = useState<EmotionKey>("warm");
   const [periodId, setPeriodId] = useState("");
   const [showGraduation, setShowGraduation] = useState(false);
   /** The farewell the user starts themselves, rather than one the app offers. */
@@ -682,65 +676,14 @@ export default function Chat() {
     [utils.client],
   );
 
-  const { data: scenesList, refetch: refetchScenes } = trpc.scene.list.useQuery(undefined, { enabled: isAuthenticated });
-  const activateSceneMutation = trpc.scene.activate.useMutation({
-    onSuccess: () => {
-      toast.success(t("chat.sceneActivated"));
-      setShowScenePanel(false);
-      /**
-       * The persona is read again.
-       *
-       * The active scene is read from the persona — so the header's
-       * chip and the panel's tick kept showing the *previous* scene
-       * until a background refetch happened to come round.
-       */
-      refetchPersona();
-    },
-    // A failed activation used to be silent: no toast, nothing changed,
-    // and the panel closed as if it had worked.
-    onError: (e: any) => toast.error(e.message),
-  });
-  const deactivateSceneMutation = trpc.scene.deactivate.useMutation({
-    onSuccess: () => {
-      toast.success(t("chat.sceneDeactivated"));
-      setShowScenePanel(false);
-      refetchPersona();
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
-  /* A scene of the user's own. The server owns the rules — the name
-     length, the ownership check on delete — so the form only makes sure
-     the obvious mistakes do not reach it. */
-  const createSceneMutation = trpc.scene.create.useMutation({
-    onSuccess: () => {
-      toast.success(t("sceneForm.created"));
-      refetchScenes();
-      setShowSceneForm(false);
-      setSceneName(""); setSceneIcon(""); setSceneDescription("");
-      setSceneOverlay(""); setSceneStarters("");
-    },
-    onError: (e: any) => toast.error(t("sceneForm.createFailed", { message: e.message })),
-  });
-  const deleteSceneMutation = trpc.scene.delete.useMutation({
-    onSuccess: () => { toast.success(t("sceneForm.deleted")); refetchScenes(); },
-    onError: (e: any) => toast.error(t("sceneForm.deleteFailed", { message: e.message })),
-  });
+  /**
+   * The scene list is read here for two things that are not the panel:
+   * the header's active-scene chip and the scene's opening lines. The
+   * panel itself reads and writes its own copy of the list.
+   */
+  const { data: scenesList } = trpc.scene.list.useQuery(undefined, { enabled: isAuthenticated });
 
   const activeScene = scenesList?.find((s: any) => s.id === persona?.activeSceneId);
-
-  /** Creates a scene of the user's own from the form in the scene panel. */
-  const handleCreateScene = () => {
-    const name = sceneName.trim();
-    if (!name) return;
-    createSceneMutation.mutate({
-      name,
-      icon: sceneIcon.trim() || undefined,
-      description: sceneDescription.trim() || undefined,
-      systemPromptOverlay: sceneOverlay.trim() || undefined,
-      emotionalState: sceneState,
-      starters: sceneStarters.split("\n").map((line) => line.trim()).filter(Boolean),
-    });
-  };
 
   const changeStateMutation = trpc.persona.update.useMutation({
     onSuccess: () => toast.success(t("chat.stateChanged")),
@@ -2195,146 +2138,13 @@ export default function Chat() {
           </>
         )}
 
-        {/* 场景模式面板 */}
         {showScenePanel && (
-          <>
-            <div className="fixed inset-0 z-30" onClick={() => setShowScenePanel(false)} />
-            <motion.div
-              initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: "easeOut" as const }}
-              className="absolute inset-x-0 top-full z-40 px-4 pt-2">
-              <div className="container max-w-2xl mx-auto">
-                <div className="surface p-4 max-h-[70vh] overflow-y-auto">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="font-display text-sm font-semibold text-foreground">{t("chat.sceneMode")}</p>
-                    <button onClick={() => setShowScenePanel(false)} aria-label={t("common.close")}
-                      className="app-nav-icon !h-7 !min-w-7">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  {activeScene && (
-                    <div className="mb-3 flex items-center gap-2 px-1 flex-wrap">
-                      <span className="text-xs text-muted-foreground">{t("chat.currentScene", { scene: `${activeScene.icon} ${activeScene.name}` })}</span>
-                      {/* The scene overrides the persona's mood while it is
-                          active, so the override is made visible. */}
-                      {activeScene.emotionalState && EMOTIONS[activeScene.emotionalState as EmotionKey] && (
-                        <span className="text-xs text-muted-foreground">
-                          {t("sceneForm.state", {
-                            state: t(EMOTIONS[activeScene.emotionalState as EmotionKey].labelKey),
-                          })}
-                        </span>
-                      )}
-                      <button onClick={() => deactivateSceneMutation.mutate({ personaId })}
-                        className="text-xs text-destructive hover:underline">{t("chat.noScene")}</button>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {(scenesList || []).map((scene: any) => (
-                      <div key={scene.id}
-                        className={`relative text-left p-3 rounded-md border transition-colors ${scene.id === persona?.activeSceneId ? "border-cinnabar/40 bg-cinnabar/5" : "border-border hover:border-foreground/30 hover:bg-muted/40"}`}>
-                        <button onClick={() => activateSceneMutation.mutate({ personaId, sceneId: scene.id })}
-                          className="w-full text-left">
-                          <div className="flex items-center gap-2 mb-1">
-                            {scene.icon
-                              ? <span className="text-base leading-none">{scene.icon}</span>
-                              : <Theater className="w-4 h-4 text-muted-foreground" />}
-                            <span className="text-sm font-medium text-foreground flex-1 min-w-0 truncate">{scene.name}</span>
-                            {scene.id === persona?.activeSceneId && <Check className="w-3.5 h-3.5 text-cinnabar flex-shrink-0" />}
-                          </div>
-                          {scene.description && <p className="text-xs text-muted-foreground line-clamp-2">{scene.description}</p>}
-                        </button>
-                        {/* Built-in scenes belong to the installation, so they
-                            cannot be deleted; a user's own scene can. */}
-                        {scene.isBuiltin ? (
-                          <span className="absolute top-2 right-2 text-[10px] text-muted-foreground">
-                            {t("sceneForm.builtin")}
-                          </span>
-                        ) : (
-                          <button onClick={async () => {
-                            const yes = await confirm({ description: t("sceneForm.confirmDelete") });
-                            if (!yes) return;
-                            deleteSceneMutation.mutate({ id: scene.id });
-                          }}
-                            aria-label={t("sceneForm.delete")}
-                            className="absolute top-2 right-2 app-nav-icon !h-6 !min-w-6 text-destructive">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* A scene of your own. */}
-                  {!showSceneForm ? (
-                    <button onClick={() => setShowSceneForm(true)}
-                      className="mt-3 w-full flex items-center justify-center gap-2 text-xs text-muted-foreground hover:text-foreground border border-dashed border-border rounded-md py-2.5 transition-colors">
-                      <Plus className="w-3.5 h-3.5" />{t("sceneForm.title")}
-                    </button>
-                  ) : (
-                    <div className="mt-3 border-t border-border pt-3 space-y-3">
-                      <div>
-                        <p className="font-display text-sm font-semibold text-foreground">{t("sceneForm.title")}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{t("sceneForm.note")}</p>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                        <div className="space-y-1.5 sm:col-span-2">
-                          <label className="block text-xs text-muted-foreground">{t("sceneForm.name")}</label>
-                          <input value={sceneName} onChange={e => setSceneName(e.target.value)}
-                            maxLength={100}
-                            placeholder={t("sceneForm.namePlaceholder")}
-                            className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:border-ring" />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="block text-xs text-muted-foreground">{t("sceneForm.icon")}</label>
-                          <input value={sceneIcon} onChange={e => setSceneIcon(e.target.value)}
-                            maxLength={10}
-                            placeholder={t("sceneForm.iconPlaceholder")}
-                            className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:border-ring" />
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="block text-xs text-muted-foreground">{t("sceneForm.description")}</label>
-                        <input value={sceneDescription} onChange={e => setSceneDescription(e.target.value)}
-                          placeholder={t("sceneForm.descriptionPlaceholder")}
-                          className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:border-ring" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="block text-xs text-muted-foreground">{t("sceneForm.overlay")}</label>
-                        <textarea value={sceneOverlay} onChange={e => setSceneOverlay(e.target.value)}
-                          placeholder={t("sceneForm.overlayPlaceholder")} rows={2}
-                          className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring" />
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <div className="space-y-1.5">
-                          <label className="block text-xs text-muted-foreground">{t("sceneForm.emotionalState")}</label>
-                          <select value={sceneState} onChange={e => setSceneState(e.target.value as EmotionKey)}
-                            className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:border-ring">
-                            {EMOTION_KEYS.map((key) => (
-                              <option key={key} value={key}>{t(EMOTIONS[key].labelKey)}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="block text-xs text-muted-foreground">{t("sceneForm.starters")}</label>
-                          <textarea value={sceneStarters} onChange={e => setSceneStarters(e.target.value)}
-                            placeholder={t("sceneForm.startersHint")} rows={2}
-                            className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring" />
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" onClick={handleCreateScene}
-                          disabled={createSceneMutation.isPending || !sceneName.trim()}
-                          className="rounded-md px-5">
-                          {createSceneMutation.isPending ? t("sceneForm.creating") : t("sceneForm.create")}
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setShowSceneForm(false)}
-                          className="rounded-md">{t("common.cancel")}</Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          </>
+          <ScenePanel
+            personaId={personaId}
+            activeSceneId={persona?.activeSceneId ?? null}
+            onClose={() => setShowScenePanel(false)}
+            onPersonaChanged={refetchPersona}
+          />
         )}
       </header>
 
@@ -2351,6 +2161,13 @@ export default function Chat() {
         nextMeetAt={normalizePersonaSettings(persona?.settings).ldr?.nextMeetAt}
         timezone={user?.timezone ?? persona?.timezone}
         mode="banner"
+      />
+
+      {/* The days a record-range scene is set in (C8.13). */}
+      <SceneRangeBanner
+        scene={activeScene}
+        personaId={personaId}
+        personaName={displayName || t("common.them")}
       />
 
       {showSearch && (

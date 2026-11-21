@@ -12,6 +12,9 @@ const lastPageInput: { value: any } = { value: undefined };
 const refetch = vi.fn();
 const addMark = vi.fn();
 const removeMark = vi.fn();
+const createRangeScene = vi.fn();
+const activateRangeScene = vi.fn();
+const invalidatePersona = vi.fn();
 const deleteRow = vi.fn();
 const confirm = vi.fn();
 const navigate = vi.fn();
@@ -42,6 +45,7 @@ vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({
       record: { marks: { list: { invalidate: vi.fn() } } },
+      persona: { get: { invalidate: invalidatePersona } },
     }),
     persona: {
       get: { useQuery: () => ({ data: { id: 5, name: "小满" }, isLoading: false }) },
@@ -62,6 +66,10 @@ vi.mock("@/lib/trpc", () => ({
         remove: { useMutation: () => ({ mutate: removeMark }) },
       },
       delete: { useMutation: () => ({ mutate: deleteRow }) },
+    },
+    scene: {
+      createFromRecords: { useMutation: () => ({ mutateAsync: createRangeScene }) },
+      activate: { useMutation: () => ({ mutateAsync: activateRangeScene }) },
     },
   },
 }));
@@ -102,6 +110,8 @@ describe("the record reader", () => {
     marksState.value = { data: [] };
     searchState.value = { data: undefined, isLoading: false, isError: false };
     confirm.mockResolvedValue(true);
+    createRangeScene.mockResolvedValue({ id: 77 });
+    activateRangeScene.mockResolvedValue({ success: true });
   });
 
   it("opens at ?at= and marks that line", async () => {
@@ -170,6 +180,60 @@ describe("the record reader", () => {
     await userEvent.click(selectButtons[2]!);
     expect(screen.getByText(translate("zh", "records.quoteSelected", { n: 0 }))).toBeTruthy();
     expect(screen.getByRole("button", { name: translate("zh", "records.quoteGo") })).toBeDisabled();
+  });
+
+  it("makes a scene out of a six-line stretch and opens the chat in it", async () => {
+    const contents = ["一", "二", "三", "四", "五", "六"];
+    pageState.value = {
+      data: {
+        rows: contents.map((content, index) => ({
+          ...row,
+          id: 11 + index,
+          content: `第${content}句`,
+        })),
+        hasOlder: false,
+        hasNewer: false,
+      },
+      isLoading: false,
+      isError: false,
+      refetch,
+    };
+    render(<Records />);
+    await screen.findByText("第一句");
+    await userEvent.click(screen.getByRole("button", { name: translate("zh", "records.quoteStart") }));
+    const selectButtons = screen.getAllByRole("button", { name: translate("zh", "records.quoteSelectRow") });
+    for (const button of selectButtons) await userEvent.click(button);
+
+    await userEvent.click(screen.getByTestId("range-scene-button"));
+
+    await waitFor(() => expect(createRangeScene).toHaveBeenCalledWith({
+      personaId: 5,
+      fromId: 11,
+      toId: 16,
+    }));
+    expect(activateRangeScene).toHaveBeenCalledWith({ personaId: 5, sceneId: 77 });
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/chat/5"));
+  });
+
+  it("waits for six lines before making a scene out of a stretch", async () => {
+    pageState.value = {
+      data: {
+        rows: [11, 12, 13].map((id, index) => ({ ...row, id, content: `第${index + 1}句` })),
+        hasOlder: false,
+        hasNewer: false,
+      },
+      isLoading: false,
+      isError: false,
+      refetch,
+    };
+    render(<Records />);
+    await screen.findByText("第1句");
+    await userEvent.click(screen.getByRole("button", { name: translate("zh", "records.quoteStart") }));
+    const selectButtons = screen.getAllByRole("button", { name: translate("zh", "records.quoteSelectRow") });
+    for (const button of selectButtons) await userEvent.click(button);
+
+    expect(screen.getByTestId("range-scene-button")).toBeDisabled();
+    expect(createRangeScene).not.toHaveBeenCalled();
   });
 
   it("adds a bookmark and shows it in the sidebar", async () => {
