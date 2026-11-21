@@ -626,8 +626,7 @@ export const zh = {
     deleteDialog: {
       title: "确认删除",
       bodyLead: "确定要删除",
-      bodyTail: "的数字分身吗？所有对话记录和上传文件都将被删除，且无法恢复。",
-      deleted: "已删除",
+      bodyTail: "的数字分身吗？对话和记忆会一起移入回收站，30 天内可以恢复。",
       failed: "删除失败：{{message}}",
     },
   },
@@ -3243,6 +3242,33 @@ export const zh = {
     recording: "正在录…",
     micDenied: "打不开麦克风。",
     edit: "修改",
+  },
+  /**
+   * The ten-second undo after a deletion (C8.11).
+   */
+  undo: {
+    deleted: "已删除。",
+    undo: "撤销",
+    failed: "没有撤销成功：{{message}}",
+  },
+  /**
+   * The recycle bin in the settings' data tab (C8.11).
+   */
+  recycle: {
+    title: "回收站",
+    hint: "删掉的分身在这里留 30 天，之后彻底清除。",
+    loading: "正在读回收站…",
+    empty: "回收站是空的。",
+    loadFailed: "没有读到回收站。",
+    retry: "重试",
+    deletedAt: "删除于 {{date}}",
+    restore: "恢复",
+    restored: "已恢复。",
+    purge: "彻底删除",
+    purgeConfirm: "彻底删除 {{name}}？对话、记忆、记录和文件都会清除，无法恢复。",
+    purged: "已彻底删除。",
+    actionFailed: "操作没有完成：{{message}}",
+    restoreFailed: "没有恢复：{{message}}",
   },
 } as const;
 

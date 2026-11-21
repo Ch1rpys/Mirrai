@@ -15,6 +15,12 @@ const accountStats: { data: any; isError: boolean } = { data: undefined, isError
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    useUtils: () => ({
+      persona: {
+        listDeleted: { invalidate: vi.fn() },
+        list: { invalidate: vi.fn() },
+      },
+    }),
     user: {
       getAccountStats: { useQuery: () => accountStats },
       deleteAccount: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
@@ -22,6 +28,18 @@ vi.mock("@/lib/trpc", () => ({
     },
     chat: {
       exportAll: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    persona: {
+      listDeleted: {
+        useQuery: () => ({
+          data: { personas: [] },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+      restore: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      purge: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     email: {
       getConfig: {
@@ -89,6 +107,7 @@ vi.mock("@/contexts/LocaleContext", () => ({
 }));
 
 import { DataManagementTab } from "./Settings";
+import { ConfirmProvider } from "@/components/ConfirmDialog";
 
 describe("the data tab", () => {
   beforeEach(() => {
@@ -105,7 +124,11 @@ describe("the data tab", () => {
      */
     accountStats.isError = true;
 
-    render(<DataManagementTab />);
+    render(
+      <ConfirmProvider>
+        <DataManagementTab />
+      </ConfirmProvider>,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: translate("zh", "settings.data.deleteTitle") }));
 
@@ -119,7 +142,11 @@ describe("the data tab", () => {
   it("says what is about to be destroyed", () => {
     accountStats.data = { totalPersonas: 3, totalMessages: 120, totalFiles: 2 };
 
-    render(<DataManagementTab />);
+    render(
+      <ConfirmProvider>
+        <DataManagementTab />
+      </ConfirmProvider>,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: translate("zh", "settings.data.deleteTitle") }));
 

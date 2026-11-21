@@ -7,6 +7,7 @@ import { ConfirmProvider } from "@/components/ConfirmDialog";
 
 const update = vi.fn();
 const remove = vi.fn();
+const restore = vi.fn();
 const adjudicate = vi.fn();
 const linkMedia = vi.fn();
 const unlinkMedia = vi.fn();
@@ -19,7 +20,16 @@ vi.mock("@/lib/trpc", () => ({
         useMutation: () => ({ mutate: update, isPending: false }),
       },
       delete: {
-        useMutation: () => ({ mutate: remove, isPending: false }),
+        useMutation: (options?: { onSuccess?: (_data: unknown, variables: { id: number }) => void }) => ({
+          mutate: (variables: { id: number }) => {
+            remove(variables);
+            options?.onSuccess?.({}, variables);
+          },
+          isPending: false,
+        }),
+      },
+      restore: {
+        useMutation: () => ({ mutate: vi.fn(), mutateAsync: restore, isPending: false }),
       },
       adjudicate: {
         useMutation: () => ({ mutate: adjudicate, isPending: false }),
@@ -136,5 +146,25 @@ describe("the memory ledger", () => {
     await user.click(screen.getByRole("button", { name: "确定" }));
 
     await waitFor(() => expect(remove).toHaveBeenCalledWith({ id: 1 }));
+  });
+
+  it("offers the undo after a deletion, and puts the memory back", async () => {
+    const user = userEvent.setup();
+    const onChanged = vi.fn();
+    restore.mockResolvedValue(undefined);
+    render(
+      <ConfirmProvider>
+        <MemoryReview personaId={5} items={items} onChanged={onChanged} />
+      </ConfirmProvider>,
+    );
+
+    await user.click(screen.getAllByRole("button", { name: "删除记忆" })[0]!);
+    await user.click(screen.getByRole("button", { name: "确定" }));
+
+    const bar = await screen.findByTestId("undo-toast");
+    expect(bar.textContent).toContain(translate("zh", "undo.deleted"));
+
+    await user.click(screen.getByRole("button", { name: translate("zh", "undo.undo") }));
+    await waitFor(() => expect(restore).toHaveBeenCalledWith({ id: 1 }));
   });
 });

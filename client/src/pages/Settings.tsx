@@ -41,6 +41,7 @@ import EmbedStatus from "@/components/v6/EmbedStatus";
 import ExtraBodyEditor from "@/components/v6/ExtraBodyEditor";
 import LlmRoles from "@/components/v6/LlmRoles";
 import UsagePanel from "@/components/v6/UsagePanel";
+import RecycleBin from "@/components/v6/RecycleBin";
 import type { GraduationMode } from "@shared/graduation-mode";
 import {
   DEFAULT_DISTILLATION_MODE,
@@ -1499,6 +1500,8 @@ export function DataManagementTab() {
           </Button>
         </div>
       </section>
+
+      <RecycleBin />
 
       {/* Install */}
       <InstallAppSection />

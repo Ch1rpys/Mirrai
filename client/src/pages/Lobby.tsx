@@ -36,6 +36,7 @@ import OnThisDay from "@/components/v6/OnThisDay";
 import Milestones from "@/components/v6/Milestones";
 import MailboxEntry from "@/components/v6/MailboxEntry";
 import PersonaUnreadNote from "@/components/v6/PersonaUnreadNote";
+import { useUndoToast } from "@/components/v6/UndoToast";
 import { clearAllDrafts } from "@/components/v6/useDraft";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionDefinition } from "@/lib/emotions";
 import { localDateKey, zonedDateKey, zonedHour, daysSinceContact } from "@shared/timezone";
@@ -1844,8 +1845,26 @@ export default function Lobby() {
     updateMutation.mutate({ id: persona.id, isPinned: !persona.isPinned });
   };
 
+  /**
+   * The undo of a persona deletion (C8.11).
+   *
+   * The delete is soft: the persona goes to the recycle bin, and the bar
+   * at the bottom of the screen offers the way back for ten seconds.
+   */
+  const undo = useUndoToast();
+  const restoreMutation = trpc.persona.restore.useMutation();
+
   const deleteMutation = trpc.persona.delete.useMutation({
-    onSuccess: () => { toast.success(t("lobby.deleteDialog.deleted")); setDeleteTarget(null); refetch(); },
+    onSuccess: (_data, variables) => {
+      setDeleteTarget(null);
+      refetch();
+      undo.showUndo({
+        onUndo: async () => {
+          await restoreMutation.mutateAsync({ id: variables.id });
+          refetch();
+        },
+      });
+    },
     onError: (e: any) => toast.error(t("lobby.deleteDialog.failed", { message: e.message })),
   });
 
@@ -2382,6 +2401,8 @@ export default function Lobby() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {undo.node}
     </div>
   );
 }

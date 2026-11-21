@@ -627,8 +627,7 @@ export const en = {
     deleteDialog: {
       title: "Confirm deletion",
       bodyLead: "Delete",
-      bodyTail: "’s digital persona? All conversations and uploaded files go with it, and this cannot be undone.",
-      deleted: "Deleted",
+      bodyTail: "’s digital persona? Its conversations and memories move to the recycle bin, and can be restored for 30 days.",
       failed: "Could not delete: {{message}}",
     },
   },
@@ -3233,6 +3232,33 @@ export const en = {
     recording: "Recording…",
     micDenied: "The microphone could not be opened.",
     edit: "Edit",
+  },
+  /**
+   * The ten-second undo after a deletion (C8.11).
+   */
+  undo: {
+    deleted: "Deleted.",
+    undo: "Undo",
+    failed: "The undo did not go through: {{message}}",
+  },
+  /**
+   * The recycle bin in the settings' data tab (C8.11).
+   */
+  recycle: {
+    title: "Recycle bin",
+    hint: "Deleted personas stay here for 30 days, then they are cleared for good.",
+    loading: "Reading the recycle bin…",
+    empty: "The recycle bin is empty.",
+    loadFailed: "The recycle bin could not be read.",
+    retry: "Try again",
+    deletedAt: "Deleted {{date}}",
+    restore: "Restore",
+    restored: "Restored.",
+    purge: "Delete permanently",
+    purgeConfirm: "Permanently delete {{name}}? Every conversation, memory, record and file will be cleared, and it cannot be undone.",
+    purged: "Deleted permanently.",
+    actionFailed: "That did not go through: {{message}}",
+    restoreFailed: "Could not restore: {{message}}",
   },
 } as const;
 

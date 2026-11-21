@@ -70,6 +70,7 @@ vi.mock("@/lib/trpc", () => ({
       clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       updateMessage: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       deleteMessage: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      restoreMessage: { useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }) },
       export: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       tts: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
       voices: { useQuery: () => ({ data: { voices: [] } }) },

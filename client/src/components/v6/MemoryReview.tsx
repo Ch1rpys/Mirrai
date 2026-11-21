@@ -5,6 +5,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { formatDayKey } from "@/lib/dates";
 import { toast } from "sonner";
+import { useUndoToast } from "@/components/v6/UndoToast";
 
 type MemoryRow = {
   id: number;
@@ -62,8 +63,24 @@ export default function MemoryReview(props: {
     onSuccess: () => props.onChanged?.(),
     onError: (e: { message: string }) => toast.error(e.message),
   });
+  /**
+   * The undo of a memory deletion (C8.11).
+   *
+   * A memory goes to the bin, and the bar at the bottom offers the way
+   * back for ten seconds; the panel is told when it comes back.
+   */
+  const undo = useUndoToast();
+  const restoreMutation = trpc.memory.restore.useMutation();
   const deleteMutation = trpc.memory.delete.useMutation({
-    onSuccess: () => props.onChanged?.(),
+    onSuccess: (_data, variables) => {
+      props.onChanged?.();
+      undo.showUndo({
+        onUndo: async () => {
+          await restoreMutation.mutateAsync({ id: variables.id });
+          props.onChanged?.();
+        },
+      });
+    },
     onError: (e: { message: string }) => toast.error(e.message),
   });
   const adjudicateMutation = trpc.memory.adjudicate.useMutation({
@@ -185,6 +202,8 @@ export default function MemoryReview(props: {
           </section>
         );
       })}
+
+      {undo.node}
     </div>
   );
 }

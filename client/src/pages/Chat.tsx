@@ -44,6 +44,7 @@ import TheirSide from "@/components/v6/TheirSide";
 import ScheduledSend from "@/components/v6/ScheduledSend";
 import ClosedComposer from "@/components/v6/ClosedComposer";
 import ReadMarker from "@/components/v6/ReadMarker";
+import { useUndoToast } from "@/components/v6/UndoToast";
 import BudgetNotice from "@/components/v6/BudgetNotice";
 import PinnedBand from "@/components/v6/PinnedBand";
 import MarksPanel from "@/components/v6/MarksPanel";
@@ -656,6 +657,15 @@ export default function Chat() {
      transcript: nothing can be repeated, fixed or taken back. */
   const updateMessageMutation = trpc.chat.updateMessage.useMutation();
   const deleteMessageMutation = trpc.chat.deleteMessage.useMutation();
+  /**
+   * The undo of a message deletion (C8.11).
+   *
+   * The message goes to the bin; the bar at the bottom offers the way
+   * back for ten seconds, and putting it back reloads the conversation
+   * from the server rather than guessing where the row belonged.
+   */
+  const restoreMessageMutation = trpc.chat.restoreMessage.useMutation();
+  const undo = useUndoToast();
   const utils = trpc.useUtils();
 
   /**
@@ -1444,10 +1454,21 @@ export default function Chat() {
         messageId: msg.id,
       });
       setMessages(prev => prev.filter((m) => m.id !== msg.id));
+      undo.showUndo({
+        onUndo: async () => {
+          await restoreMessageMutation.mutateAsync({
+            personaId,
+            messageId: msg.id as number,
+          });
+          // The conversation is read again rather than patched by
+          // hand, so the restored row lands where the server put it.
+          await refetchHistory();
+        },
+      });
     } catch (e) {
       toast.error((e as Error)?.message || t("errors.unknown"));
     }
-  }, [personaId, deleteMessageMutation, t]);
+  }, [personaId, deleteMessageMutation, restoreMessageMutation, undo, refetchHistory, t]);
 
   /**
    * Loads the messages before the oldest one on screen.
@@ -2783,6 +2804,8 @@ export default function Chat() {
       <GraduationModal personaId={personaId} personaName={persona?.name || "?"} open={showGraduation} onClose={() => setShowGraduation(false)} />
       <GraduationModal personaId={personaId} personaName={persona?.name || "?"} open={showManualGraduation}
         variant="manual" onClose={() => setShowManualGraduation(false)} />
+
+      {undo.node}
     </div>
   );
 }

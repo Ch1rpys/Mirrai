@@ -65,6 +65,9 @@ vi.mock("@/lib/trpc", () => ({
       stats: { useQuery: () => ({ data: { totalPersonas: 2, totalChats: 10, todayChats: 1 } }) },
       update: { useMutation: () => ({ mutate: update, isPending: false }) },
       delete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      restore: {
+        useMutation: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
+      },
       create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       createSandbox: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       awaken: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
