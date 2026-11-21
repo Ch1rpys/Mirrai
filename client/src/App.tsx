@@ -14,6 +14,7 @@ import TimezoneSync from "./components/TimezoneSync";
 import CommandPalette from "./components/CommandPalette";
 import NotificationNavigator from "./components/v6/NotificationNavigator";
 import AppLock from "./components/v6/AppLock";
+import EncryptionUnlockGate from "./components/v6/EncryptionUnlockGate";
 
 const Login = lazy(() => import("./pages/Login"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -131,6 +132,7 @@ function App() {
               <Toaster />
               {/* The app lock's screen, over everything (C8.4). */}
               <AppLock />
+              <EncryptionUnlockGate />
               <TimezoneSync />
               <CommandPalette />
               {/* The app's own confirmation, in the app's own language. */}

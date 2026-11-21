@@ -37,6 +37,7 @@ import EgressList from "@/components/v6/EgressList";
 import TtsNote from "@/components/v6/TtsNote";
 import PushSettings from "@/components/v6/PushSettings";
 import AppLockSettings from "@/components/v6/AppLockSettings";
+import EncryptionSettings from "@/components/v6/EncryptionSettings";
 import EmailDelivery from "@/components/v6/EmailDelivery";
 import EmbedStatus from "@/components/v6/EmbedStatus";
 import ExtraBodyEditor from "@/components/v6/ExtraBodyEditor";
@@ -1483,6 +1484,7 @@ export function DataManagementTab() {
       <PushSettings />
 
       <AppLockSettings />
+      <EncryptionSettings />
 
       <EgressList />
 

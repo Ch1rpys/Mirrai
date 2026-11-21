@@ -3540,6 +3540,63 @@ export const en = {
     createPersona: "Create one first",
     leaveClears: "Files you do not import are deleted when you leave this page.",
   },
+  /**
+   * Encrypted storage (C8.5), in the settings' data tab.
+   */
+  encryption: {
+    title: "Encrypt what is stored in the database",
+    description:
+      "When this is on, conversations, memories, letters, diaries, and imported records are ciphertext in the database. Only after you sign in can they be read.",
+    filesNote:
+      "Uploaded photos, recordings, and exported files are not covered by this. Keep the data directory on an encrypted disk.",
+    loading: "Reading the encryption state…",
+    loadFailed: "The encryption state could not be read.",
+    failed: "That did not complete.",
+    retry: "Retry",
+    backupNeeded: "Download a full backup under “Complete backup” before turning encryption on.",
+    passwordLabel: "Account password",
+    understandLost: "I understand: if I forget the password and lose the recovery code, this content is gone for good.",
+    understandRestart: "I understand: after the server restarts, deferred replies and letter answers wait until I sign in.",
+    enable: "Turn encryption on",
+    enabling: "Turning it on…",
+    enabled: "Encryption is on.",
+    statusOn: "On. The content in the database is ciphertext.",
+    statusOff: "Off. The content in the database is plaintext.",
+    recoveryTitle: "This is the recovery code. It is shown once. Write it down and keep it somewhere else.",
+    recoveryCopy: "Copy the recovery code",
+    recoveryCopied: "Copied.",
+    recoveryDone: "I have written it down",
+    progress: "Encrypting: {{done}} / {{total}}",
+    progressDecrypt: "Writing plaintext back: {{done}} / {{total}}",
+    migrationError: "The background job stopped here: {{message}}",
+    migrationRunning: "The background job is still running. Wait for it to finish before turning this off.",
+    unlocked: "This session is unlocked.",
+    locked: "The server has restarted or the content was locked. Enter the account password to unlock it.",
+    unlock: "Unlock",
+    lockNow: "Lock now",
+    disableTitle: "Turn encryption off",
+    disableHint: "Turning it off writes the content back as plaintext.",
+    disable: "Turn encryption off",
+    disabling: "Turning it off…",
+    disabled: "Encryption is off.",
+    recoveryResetTitle: "Reset the password with the recovery code",
+    recoveryCodeLabel: "Recovery code",
+    newPasswordLabel: "New password (at least 8 characters)",
+    resetPassword: "Reset password",
+    resetDone: "The password was reset.",
+  },
+  /**
+   * The password prompt shown when the server has the account but not
+   * its data key (C8.5).
+   */
+  encryptionGate: {
+    title: "Encrypted content is locked",
+    prompt: "Enter the account password to unlock it.",
+    loading: "Reading the state…",
+    unlock: "Unlock",
+    unlockFailed: "That did not unlock it. Try again.",
+    note: "The content is ciphertext until it is unlocked.",
+  },
 } as const;
 
 export type EnDictionary = typeof en;

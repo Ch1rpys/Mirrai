@@ -32,6 +32,29 @@ vi.mock("@/lib/trpc", () => ({
         remove: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
       },
     },
+    encryption: {
+      // The encrypted storage panel is mounted in this tab (C8.5); the
+      // tests here are about the deletion dialog, not about it.
+      status: {
+        useQuery: () => ({
+          data: {
+            enabled: false,
+            unlocked: false,
+            hasRecoveryCode: false,
+            hasFullBackup: false,
+            migrating: false,
+            migration: null,
+            migratedAt: null,
+          },
+          isError: false,
+        }),
+      },
+      enable: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      disable: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      unlock: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      lock: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      recover: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+    },
     system: {
       // The one-click diagnosis panel is mounted in this tab (C8.12); the
       // tests here are about the deletion dialog, not about it.

@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { markAppLocked } from "@/lib/app-lock";
+import { markEncryptionLocked } from "@/lib/encryption-lock";
 import { registerServiceWorker } from "@/lib/pwa";
 import { QueryClient, QueryClientProvider, onlineManager } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
@@ -70,11 +71,23 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 const isLockedError = (error: unknown): boolean =>
   error instanceof TRPCClientError && error.data?.code === "LOCKED";
 
+/**
+ * The server's answer when an encrypted account's key is not in memory
+ * (C8.5). The content is ciphertext, so the screen asks for the account
+ * password instead of showing the lobby it already has.
+ */
+const isEncryptionLockedError = (error: unknown): boolean =>
+  error instanceof TRPCClientError && error.data?.code === "ENCRYPTION_LOCKED";
+
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.query.state.error;
     if (isLockedError(error)) {
       markAppLocked();
+      return;
+    }
+    if (isEncryptionLockedError(error)) {
+      markEncryptionLocked();
       return;
     }
     redirectToLoginIfUnauthorized(error);
@@ -87,6 +100,10 @@ queryClient.getMutationCache().subscribe(event => {
     const error = event.mutation.state.error;
     if (isLockedError(error)) {
       markAppLocked();
+      return;
+    }
+    if (isEncryptionLockedError(error)) {
+      markEncryptionLocked();
       return;
     }
     redirectToLoginIfUnauthorized(error);

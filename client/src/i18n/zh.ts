@@ -3557,6 +3557,66 @@ export const zh = {
     createPersona: "先新建一个分身",
     leaveClears: "离开这个页面时，没导入的文件会被删掉。",
   },
+  /**
+   * Encrypted storage (C8.5), in the settings' data tab.
+   *
+   * The panel is a state machine: off (with the two acknowledgements and
+   * the backup precondition), a background job in progress, on (with the
+   * recovery code, the password reset and turning it off again).
+   */
+  encryption: {
+    title: "加密存在数据库里的内容",
+    description:
+      "打开后，对话、记忆、信、日记和导入的记录在数据库里都是密文，只有你登录之后才读得出来。",
+    filesNote: "上传的照片、录音和导出文件不在加密范围内。建议把数据目录放在加密的磁盘上。",
+    loading: "正在读加密状态…",
+    loadFailed: "没有读到加密状态。",
+    failed: "操作没有完成。",
+    retry: "重试",
+    backupNeeded: "开加密之前，先在「完整备份」里下载一次备份。",
+    passwordLabel: "账号密码",
+    understandLost: "我知道：忘了密码又丢了恢复码，这些内容就永远读不出来了。",
+    understandRestart: "我知道：服务重启之后，要等我登录，晚点回的消息和回信才会继续。",
+    enable: "开启加密",
+    enabling: "正在开启…",
+    enabled: "加密已开启。",
+    statusOn: "开着。数据库里的内容是密文。",
+    statusOff: "没开。数据库里的内容是明文的。",
+    recoveryTitle: "这是恢复码，只显示这一次。抄下来，放在别处。",
+    recoveryCopy: "复制恢复码",
+    recoveryCopied: "已复制。",
+    recoveryDone: "已经抄好了",
+    progress: "正在加密：{{done}} / {{total}}",
+    progressDecrypt: "正在写回明文：{{done}} / {{total}}",
+    migrationError: "后台任务停在这里：{{message}}",
+    migrationRunning: "后台任务还在跑，完成之后再关。",
+    unlocked: "这个会话已经解锁。",
+    locked: "服务重启过或锁上了。输入账号密码解锁。",
+    unlock: "解锁",
+    lockNow: "现在锁上",
+    disableTitle: "关闭加密",
+    disableHint: "关闭会把数据库里的内容再写回明文。",
+    disable: "关闭加密",
+    disabling: "正在关闭…",
+    disabled: "加密已关闭。",
+    recoveryResetTitle: "用恢复码重设密码",
+    recoveryCodeLabel: "恢复码",
+    newPasswordLabel: "新密码（至少 8 个字符）",
+    resetPassword: "重设密码",
+    resetDone: "密码已重设。",
+  },
+  /**
+   * The password prompt shown when the server has the account but not
+   * its data key (C8.5).
+   */
+  encryptionGate: {
+    title: "加密内容锁着",
+    prompt: "输入账号密码解锁。",
+    loading: "正在读状态…",
+    unlock: "解锁",
+    unlockFailed: "没有解开。再试一次。",
+    note: "数据是密文，解锁之后才读得出来。",
+  },
 } as const;
 
 export type ZhDictionary = typeof zh;
