@@ -1,14 +1,21 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { translate } from "@/i18n";
 
 const updateSettings = vi.fn();
+const refetch = vi.fn();
+let settingsError = false;
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     persona: {
-      getSettings: { useQuery: () => ({ data: { revisit: true }, refetch: vi.fn() }) },
+      getSettings: {
+        useQuery: () =>
+          settingsError
+            ? { data: undefined, isLoading: false, isError: true, refetch }
+            : { data: { revisit: true }, isLoading: false, isError: false, refetch },
+      },
       updateSettings: {
         useMutation: (options?: any) => ({
           mutate: (input: any) => {
@@ -34,6 +41,19 @@ vi.mock("@/contexts/LocaleContext", () => ({
 import RevisitToggle from "./RevisitToggle";
 
 describe("the revisit switch (C6.5)", () => {
+  beforeEach(() => {
+    settingsError = false;
+    refetch.mockReset();
+  });
+
+  it("offers a retry when the switch could not be read", () => {
+    settingsError = true;
+    render(<RevisitToggle personaId={1} />);
+    expect(screen.getByText(translate("zh", "common.loadFailed"))).toBeInTheDocument();
+    fireEvent.click(screen.getByText(translate("zh", "common.retry")));
+    expect(refetch).toHaveBeenCalled();
+  });
+
   it("turns the question off", () => {
     render(<RevisitToggle personaId={1} />);
     const box = screen.getByRole("checkbox");

@@ -8,6 +8,8 @@ const searchCity = vi.fn();
 let stored: any = { ldr: { nextMeetAt: "2026-03-04", weather: false } };
 let searchResults: any[] = [];
 let weatherFeatureEnabled = true;
+let settingsError = false;
+const refetch = vi.fn();
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -25,7 +27,10 @@ vi.mock("@/lib/trpc", () => ({
     },
     persona: {
       getSettings: {
-        useQuery: () => ({ data: stored, isLoading: false, refetch: vi.fn() }),
+        useQuery: () =>
+          settingsError
+            ? { data: undefined, isLoading: false, isError: true, refetch }
+            : { data: stored, isLoading: false, isError: false, refetch },
       },
       updateSettings: {
         useMutation: (options?: { onSuccess?: () => void }) => ({

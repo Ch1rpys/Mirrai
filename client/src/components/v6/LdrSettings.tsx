@@ -116,6 +116,23 @@ export default function LdrSettings({
 
   const weatherAvailable = status.data?.enabled !== false;
 
+  if (settings.isLoading) {
+    return <p className="text-xs text-muted-foreground">{t("common.loading")}</p>;
+  }
+  if (settings.isError) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {t("common.loadFailed")}{" "}
+        <button
+          type="button"
+          onClick={() => settings.refetch()}
+          className="underline underline-offset-2"
+        >
+          {t("common.retry")}
+        </button>
+      </p>
+    );
+  }
   return (
     <div className="space-y-5">
       <div>

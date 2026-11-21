@@ -113,6 +113,7 @@ export const en = {
     loading: "Loading…",
     retry: "Try again",
     error: "Something went wrong.",
+    loadFailed: "Could not load this.",
     save: "Save",
     cancel: "Cancel",
     confirm: "Confirm",

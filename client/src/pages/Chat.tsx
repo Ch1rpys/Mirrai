@@ -23,13 +23,12 @@ import { normalizePeriods } from "@shared/periods";
 import { careBannerText } from "@/lib/care-note";
 import { resolveStarterQuestions } from "@/lib/scene-starters";
 import { useLocale } from "@/contexts/LocaleContext";
-import { formatZonedClock, zonedHour, zonedDateKey, daysSinceContact } from "@shared/timezone";
+import { formatZonedClock, zonedHour, daysSinceContact } from "@shared/timezone";
 import { formatDayKey, formatInstantInZone, formatTimeInZone } from "@/lib/dates";
 import DigitalPersonaBadge from "@/components/DigitalPersonaBadge";
 import TimeBar from "@/components/v6/TimeBar";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import { mayChatNow } from "@shared/persona-state";
-import { copy } from "@shared/copy";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionKey } from "@/lib/emotions";
 import { useConfirm } from "@/components/ConfirmDialog";
 import MemoryReview from "@/components/v6/MemoryReview";
@@ -43,6 +42,7 @@ import MeetDayNote from "@/components/v6/MeetDayNote";
 import MeetCountdown from "@/components/v6/MeetCountdown";
 import TheirSide from "@/components/v6/TheirSide";
 import ScheduledSend from "@/components/v6/ScheduledSend";
+import ClosedComposer from "@/components/v6/ClosedComposer";
 import AfterChat from "@/components/v6/AfterChat";
 import { useTypingReveal, waitMs } from "@/components/v6/useTypingReveal";
 
@@ -421,7 +421,6 @@ export default function Chat() {
   const [showOutbound, setShowOutbound] = useState(false);
   const [showWaitGauge, setShowWaitGauge] = useState(false);
   const [showScheduled, setShowScheduled] = useState(false);
-  const [showTaperHelp, setShowTaperHelp] = useState(false);
   const collectOutbound = trpc.outbound.addFromMessage.useMutation({
     onSuccess: () => toast.success(t("outbound.keep")),
     onError: (e: any) => toast.error(e.message),
@@ -534,10 +533,6 @@ export default function Chat() {
     new Date(nowTick),
     user?.timezone ?? null,
   );
-  const taperOverride = trpc.persona.updateSettings.useMutation({
-    onSuccess: () => refetchPersona(),
-    onError: (error: { message: string }) => toast.error(error.message),
-  });
 
   const { data: intimacy } = trpc.persona.getIntimacy.useQuery(
     { id: personaId },
@@ -1983,11 +1978,13 @@ export default function Chat() {
                       <Search className="w-4 h-4 text-muted-foreground" />
                       {t("decode.title")}
                     </button>
-                    <button onClick={() => { navigate(`/persona/${personaId}/rehearsal`); setShowMenu(false); }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors text-left">
-                      <Theater className="w-4 h-4 text-muted-foreground" />
-                      {t("rehearsal.title")}
-                    </button>
+                    {chatState.ok && (
+                      <button onClick={() => { navigate(`/persona/${personaId}/rehearsal`); setShowMenu(false); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors text-left">
+                        <Theater className="w-4 h-4 text-muted-foreground" />
+                        {t("rehearsal.title")}
+                      </button>
+                    )}
                     <button onClick={() => { navigate(`/persona/${personaId}/roleplay`); setShowMenu(false); }}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors text-left">
                       <UserRound className="w-4 h-4 text-muted-foreground" />
@@ -2235,7 +2232,6 @@ export default function Chat() {
       />
 
       {showCrisis && <CrisisCard onClose={() => setShowCrisis(false)} />}
-      {showTaperHelp && <CrisisCard onClose={() => setShowTaperHelp(false)} />}
 
       {/* The notes the user kept for later, surfaced when they come
           back. They were written for this moment, so they belong here
@@ -2471,51 +2467,13 @@ export default function Chat() {
               </Button>
             </div>
           ) : !chatState.ok ? (
-            /*
-             * The user closed the chat themselves (C6.1).
-             *
-             * The input is not there to be typed into and then refused;
-             * the reason is, and one way to make an exception today.
-             * The support entrance is always here, closed or not.
-             */
-            <div className="rounded-lg border border-border bg-muted/40 px-3.5 py-3 space-y-2">
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                {copy(
-                  locale === "en" ? "en" : "zh",
-                  chatState.reason === "weekend_only"
-                    ? "chat.closedWeekend"
-                    : chatState.reason === "letters_only"
-                      ? "chat.closedLettersOnly"
-                      : "chat.closedSealed",
-                  { name: displayName || t("common.them") },
-                )}
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                {chatState.reason === "weekend_only" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="bg-transparent"
-                    disabled={taperOverride.isPending}
-                    onClick={() =>
-                      taperOverride.mutate({
-                        id: personaId,
-                        patch: {
-                          taper: {
-                            overrideDay: zonedDateKey(new Date(), user?.timezone ?? null),
-                          },
-                        },
-                      })
-                    }
-                  >
-                    {t("chat.taperOverride")}
-                  </Button>
-                )}
-                <Button size="sm" variant="ghost" onClick={() => setShowTaperHelp(true)}>
-                  {t("chat.taperHelp")}
-                </Button>
-              </div>
-            </div>
+            // The user's own step-down, kept in one component (C6.1).
+            <ClosedComposer
+              personaId={personaId}
+              name={displayName || t("common.them")}
+              reason={chatState.reason}
+              onRefetch={() => refetchPersona()}
+            />
           ) : (
             /*
              * The notices are a row of their own.

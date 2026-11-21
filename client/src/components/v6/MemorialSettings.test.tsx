@@ -1,15 +1,22 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { translate } from "@/i18n";
 
 const update = vi.fn();
+const refetch = vi.fn();
 let settings: any;
+let settingsError = false;
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     persona: {
-      getSettings: { useQuery: () => ({ data: settings, refetch: vi.fn() }) },
+      getSettings: {
+        useQuery: () =>
+          settingsError
+            ? { data: undefined, isLoading: false, isError: true, refetch }
+            : { data: settings, isLoading: false, isError: false, refetch },
+      },
       updateSettings: {
         useMutation: (options?: any) => ({
           mutate: (input: any) => {
@@ -35,6 +42,19 @@ vi.mock("@/contexts/LocaleContext", () => ({
 import MemorialSettings from "./MemorialSettings";
 
 describe("the memorial switch (C7.1)", () => {
+  beforeEach(() => {
+    settingsError = false;
+    refetch.mockReset();
+  });
+
+  it("offers a retry when the switch could not be read", () => {
+    settingsError = true;
+    render(<MemorialSettings personaId={1} name="小满" />);
+    expect(screen.getByText(translate("zh", "common.loadFailed"))).toBeInTheDocument();
+    fireEvent.click(screen.getByText(translate("zh", "common.retry")));
+    expect(refetch).toHaveBeenCalled();
+  });
+
   it("turns memorial mode on", () => {
     settings = { mode: "default" };
     render(<MemorialSettings personaId={1} name="小满" />);

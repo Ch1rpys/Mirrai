@@ -34,6 +34,23 @@ export default function TaperPicker({
   });
   const stage = settings.data?.taper?.stage ?? 0;
 
+  if (settings.isLoading) {
+    return <p className="text-xs text-muted-foreground">{t("common.loading")}</p>;
+  }
+  if (settings.isError) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {t("common.loadFailed")}{" "}
+        <button
+          type="button"
+          onClick={() => settings.refetch()}
+          className="underline underline-offset-2"
+        >
+          {t("common.retry")}
+        </button>
+      </p>
+    );
+  }
   return (
     <div className="space-y-2">
       <p className="text-sm text-foreground">{t("taper.title")}</p>

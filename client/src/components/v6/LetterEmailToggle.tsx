@@ -26,6 +26,23 @@ export default function LetterEmailToggle({
   });
   const enabled = Boolean(settings.data?.letterEmail);
 
+  if (settings.isLoading) {
+    return <p className="text-xs text-muted-foreground">{t("common.loading")}</p>;
+  }
+  if (settings.isError) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {t("common.loadFailed")}{" "}
+        <button
+          type="button"
+          onClick={() => settings.refetch()}
+          className="underline underline-offset-2"
+        >
+          {t("common.retry")}
+        </button>
+      </p>
+    );
+  }
   return (
     <label className="flex items-start gap-2 text-sm">
       <input
