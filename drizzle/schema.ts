@@ -2305,3 +2305,41 @@ export const llmUsage = pgTable("llm_usage", {
 
 export type LlmUsageRow = typeof llmUsage.$inferSelect;
 export type InsertLlmUsage = typeof llmUsage.$inferInsert;
+
+// ─── Conversation management (C8.10) ──────────────────────────────────────
+
+/**
+ * A star, a pin, or a topic marker on one message.
+ *
+ * A conversation is long, and the three things a person wants from a
+ * long conversation were all missing: the message they want to find
+ * again ("star"), the few they keep in front of them ("pin"), and a
+ * named point they can return to ("topic"). All three point at one
+ * message — a topic is a signpost inside the same conversation, not a
+ * second conversation.
+ */
+export const messageMarks = pgTable("message_marks", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  messageId: integer("messageId").notNull(),
+  /** "star", "pin" or "topic". */
+  kind: varchar("kind", { length: 8 }).notNull(),
+  /** The name of a topic; empty for a star or a pin. */
+  label: varchar("label", { length: 60 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  onePerKind: uniqueIndex("message_marks_user_message_kind_idx").on(
+    table.userId,
+    table.messageId,
+    table.kind,
+  ),
+  personaIdx: index("message_marks_persona_idx").on(
+    table.personaId,
+    table.userId,
+    table.kind,
+  ),
+}));
+
+export type MessageMark = typeof messageMarks.$inferSelect;
+export type InsertMessageMark = typeof messageMarks.$inferInsert;

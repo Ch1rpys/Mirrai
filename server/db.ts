@@ -39,6 +39,7 @@ import {
   personaShares, InsertPersonaShare,
   oralAccounts, InsertOralAccount, OralAccount,
   llmUsage, InsertLlmUsage,
+  messageMarks, InsertMessageMark, MessageMark,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
@@ -1478,6 +1479,7 @@ export async function deleteUserAccount(id: number) {
      * gone there is nobody it belongs to.
      */
     await tx.delete(llmUsage).where(eq(llmUsage.userId, id));
+    await tx.delete(messageMarks).where(eq(messageMarks.userId, id));
     await tx.delete(letters).where(eq(letters.userId, id));
     await tx.delete(memories).where(eq(memories.userId, id));
     await tx.delete(memoryExtractions).where(eq(memoryExtractions.userId, id));
@@ -2407,6 +2409,7 @@ export async function deletePersona(id: number, userId: number) {
      * on. Once that persona is gone the row has nothing left to say.
      */
     await tx.delete(llmUsage).where(and(eq(llmUsage.personaId, id), eq(llmUsage.userId, userId)));
+    await tx.delete(messageMarks).where(and(eq(messageMarks.personaId, id), eq(messageMarks.userId, userId)));
     await tx.delete(memories).where(and(eq(memories.personaId, id), eq(memories.userId, userId)));
     /**
      * Every account of the persona, whoever told it.
@@ -5819,7 +5822,113 @@ export async function deleteMessage(
       ...(personaId === undefined ? [] : [eq(messages.personaId, personaId)]),
     ))
     .returning({ id: messages.id });
+  /**
+   * A star or a topic that points at a message that is gone would be a
+   * list entry that jumps nowhere (C8.10).
+   */
+  if (deleted.length > 0) {
+    try {
+      await db.delete(messageMarks)
+        .where(and(eq(messageMarks.messageId, messageId), eq(messageMarks.userId, userId)));
+    } catch (error) {
+      console.warn("[db] The message's marks could not be removed:", error);
+    }
+  }
   return deleted.length > 0;
+}
+
+// ─── Conversation management (C8.10) ───────────────────────────────────────
+
+/**
+ * One row: a star, a pin, or a topic marker.
+ *
+ * The three are one table because they are one idea — a message the user
+ * wants to keep hold of — and because the same message can be starred
+ * and pinned without becoming two different features.
+ */
+export async function addMessageMark(data: InsertMessageMark): Promise<MessageMark> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  /**
+   * A second star on the same message is the same star.
+   *
+   * A topic's label is the thing being changed, so a second marker on
+   * the same message renames it instead of failing.
+   */
+  const [row] = await db.insert(messageMarks)
+    .values(data)
+    .onConflictDoUpdate({
+      target: [messageMarks.userId, messageMarks.messageId, messageMarks.kind],
+      set: { label: data.label ?? null },
+    })
+    .returning();
+  return row!;
+}
+
+/** The marks of one conversation, newest last, with what they point at. */
+export async function listMessageMarks(
+  personaId: number,
+  userId: number,
+  kind?: "star" | "pin" | "topic",
+) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: messageMarks.id,
+    personaId: messageMarks.personaId,
+    messageId: messageMarks.messageId,
+    kind: messageMarks.kind,
+    label: messageMarks.label,
+    createdAt: messageMarks.createdAt,
+    content: messages.content,
+    role: messages.role,
+    messageCreatedAt: messages.createdAt,
+  })
+    .from(messageMarks)
+    .innerJoin(messages, eq(messages.id, messageMarks.messageId))
+    .where(and(
+      eq(messageMarks.personaId, personaId),
+      eq(messageMarks.userId, userId),
+      eq(messages.userId, userId),
+      ...(kind ? [eq(messageMarks.kind, kind)] : []),
+    ))
+    .orderBy(asc(messageMarks.createdAt), asc(messageMarks.id));
+}
+
+/** How many of one kind a conversation carries. */
+export async function countMessageMarks(
+  personaId: number,
+  userId: number,
+  kind: "star" | "pin" | "topic",
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [row] = await db.select({ c: count() }).from(messageMarks).where(and(
+    eq(messageMarks.personaId, personaId),
+    eq(messageMarks.userId, userId),
+    eq(messageMarks.kind, kind),
+  ));
+  return Number(row?.c ?? 0);
+}
+
+/** One mark of the caller's own. */
+export async function getMessageMark(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(messageMarks)
+    .where(and(eq(messageMarks.id, id), eq(messageMarks.userId, userId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Takes one mark away. Only its owner's. */
+export async function removeMessageMark(id: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.delete(messageMarks)
+    .where(and(eq(messageMarks.id, id), eq(messageMarks.userId, userId)))
+    .returning({ id: messageMarks.id });
+  return rows.length > 0;
 }
 
 /**

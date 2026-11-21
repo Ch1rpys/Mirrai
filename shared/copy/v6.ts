@@ -1118,6 +1118,14 @@ export const V6 = {
     zh: "先给这个供应商填一个 API Key，再填单价。没有配置的供应商不会写进价目表。",
     en: "Fill in an API key for this provider first, then the price. A provider that is not configured is not added to the price list.",
   },
+  "errors.pinLimit": {
+    zh: "每个分身最多置顶 3 条。先取消一条，再置顶这一条。",
+    en: "At most three messages can be pinned per persona. Unpin one first.",
+  },
+  "errors.topicNeedsLabel": {
+    zh: "话题要有个名字，之后才好找回来。",
+    en: "A topic needs a name, or it cannot be found again.",
+  },
   "errors.budgetOver": {
     zh: "这个月的用量已经超过你定的预算。四选一、两步生成、事实重写、评测、试镜、排练和措辞助手先停用了；普通对话、安全回复和记忆抽取不受影响。",
     en: "This month's usage is past the budget you set. The four-way choice, two-stage generation, the fact rewrite, evaluation, audition, the rehearsal room and the wording assistant are switched off for now; ordinary replies, safety answers and memory extraction still work.",

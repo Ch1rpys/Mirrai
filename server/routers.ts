@@ -185,6 +185,7 @@ import { bookRouter } from "./routers-v6/book";
 import { shareRouter } from "./routers-v6/share";
 import { oralRouter } from "./routers-v6/oral";
 import { usageRouter } from "./routers-v6/usage";
+import { markRouter } from "./routers-v6/mark";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { stateRulesFromTranscript } from "./skill-engine/state-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
@@ -7785,6 +7786,7 @@ export const appRouter = router({
   share: shareRouter,
   oral: oralRouter,
   usage: usageRouter,
+  mark: markRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {
