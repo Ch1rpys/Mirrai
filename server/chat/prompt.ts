@@ -495,9 +495,15 @@ async function exemplarSectionFor(
 ): Promise<string> {
   if (!context.userMessage) return "";
   const period = periodOf(context.persona, context.periodId);
+  /**
+   * The exemplars are records, so a shared persona reads the owner's
+   * (C7.2). This fallback runs when no caller passed a precomputed
+   * section; the preview route is one such caller.
+   */
+  const scope = resolveRecordScope(context.persona);
   const common = {
-    personaId: context.persona.id,
-    userId: context.userId,
+    personaId: scope.personaId,
+    userId: scope.userId,
     userMessage: context.userMessage,
     excludeIds: context.excludeExemplarIds,
     excludeTexts: context.excludeExemplarTexts,
