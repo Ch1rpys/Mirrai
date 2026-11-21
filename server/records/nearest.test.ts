@@ -5,7 +5,7 @@ import {
   normalizeForNearest,
   splitSentences,
 } from "./nearest";
-import { deletePersona } from "../db";
+import { purgePersona } from "../db";
 import { seedXiaoman } from "../test-fixtures/seed-db";
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -63,7 +63,7 @@ describe.skipIf(!DATABASE_URL)("findNearest on the Xiaoman fixture", () => {
       expect(none.verdict).toBe("none");
       expect(none.matches).toEqual([]);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -82,7 +82,7 @@ describe.skipIf(!DATABASE_URL)("findNearest on the Xiaoman fixture", () => {
         "none",
       ]);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -95,7 +95,7 @@ describe.skipIf(!DATABASE_URL)("findNearest on the Xiaoman fixture", () => {
       const [result] = await findNearest({ personaId, userId, text: "好" });
       expect(result.verdict).not.toBe("verbatim");
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 });

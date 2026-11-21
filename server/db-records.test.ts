@@ -8,7 +8,7 @@ import {
   createUser,
   deleteUserAccount,
   createPersonaFile,
-  deletePersona,
+  purgePersona,
   deletePersonaFile,
   deleteRecordsByFile,
   getCollectedMessagesForPersona,
@@ -53,7 +53,7 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
         expect(next).toBeGreaterThanOrEqual(previous);
       }
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -90,7 +90,7 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
       expect(around.target?.id).toBe(matches[0]);
       expect(around.after.map((row) => row.id)).toEqual([matches[1]]);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -146,7 +146,7 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
       expect(await readCollected("public")).toEqual(["public line"]);
       expect((await readCollected("all")).sort()).toEqual(["private line", "public line"]);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -188,7 +188,7 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
       expect(model!.texts.every((text) => text.startsWith("private line "))).toBe(true);
     } finally {
       clearRerankModelCache();
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -232,7 +232,7 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
       const after = await getRecordSourceSummary(personaId, userId);
       expect(after.some((row) => row.source === "wechat_export")).toBe(false);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -308,7 +308,7 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
       expect(summary.some((row) => row.fileId === fileA)).toBe(false);
       expect(summary.some((row) => row.fileId === fileB && row.count === 2)).toBe(true);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -336,7 +336,7 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
         }),
       ).toBe(0);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -404,7 +404,7 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
       expect(afterThird.measuredAt).toBe(afterSecond.measuredAt);
       expect(await getPersonaStyleProfile(personaId, userId)).toEqual(afterSecond);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   }, 60_000);
 
@@ -468,7 +468,7 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
         "2022-03-01T12:04:00.000Z sms 嗯",
       ]);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 

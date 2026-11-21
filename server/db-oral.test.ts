@@ -7,7 +7,7 @@ import {
   createPersona,
   createPersonaShare,
   createUser,
-  deletePersona,
+  purgePersona,
   deleteUserAccount,
   getOralMemories,
   listOralAccounts,
@@ -209,7 +209,7 @@ describe.skipIf(!DATABASE_URL)("what people remember, in the database (C7.4)", (
 
       // Deleting the persona takes the family member's words with it —
       // they are about somebody who no longer has a persona here.
-      await deletePersona(ownerPersonaId, ownerId);
+      await purgePersona(ownerPersonaId, ownerId);
       expect(await listOralAccounts(ownerPersonaId, ownerId)).toEqual([]);
       expect(await listSubmittedOralAccounts(ownerPersonaId, ownerId)).toEqual([]);
       expect(await getOralMemories(ownerPersonaId, ownerId)).toEqual([]);

@@ -9,7 +9,7 @@ import {
   createPersona,
   createPersonaShare,
   createUser,
-  deletePersona,
+  purgePersona,
   getActiveShareForMemberPersona,
   getMemoriesByPersonaId,
   getAllPersonasForReminders,
@@ -362,12 +362,12 @@ describe.skipIf(!DATABASE_URL)("sharing a persona with family (C7.2)", () => {
         .toBeGreaterThanOrEqual(2);
 
       // Deleting the owner's persona leaves the member's row.
-      await deletePersona(ownerPersonaId, ownerId);
+      await purgePersona(ownerPersonaId, ownerId);
       expect(await listPersonaShares(ownerPersonaId, ownerId)).toHaveLength(0);
       expect(await getPersonaById(memberPersonaId, memberId)).toBeTruthy();
     } finally {
-      if (memberPersonaId) await deletePersona(memberPersonaId, memberId).catch(() => undefined);
-      await deletePersona(ownerPersonaId, ownerId).catch(() => undefined);
+      if (memberPersonaId) await purgePersona(memberPersonaId, memberId).catch(() => undefined);
+      await purgePersona(ownerPersonaId, ownerId).catch(() => undefined);
     }
   });
 });

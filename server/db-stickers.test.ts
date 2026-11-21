@@ -4,7 +4,7 @@ import { rm } from "node:fs/promises";
 import {
   countStickers,
   createPersona,
-  deletePersona,
+  purgePersona,
   listEnabledStickers,
   listStickers,
   setStickerEnabled,
@@ -56,7 +56,7 @@ describe.skipIf(!process.env.DATABASE_URL)("the sticker table", () => {
       expect(await listEnabledStickers(personaId, userId)).toHaveLength(0);
       expect(await countStickers(personaId, userId)).toBe(1);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -78,12 +78,12 @@ describe.skipIf(!process.env.DATABASE_URL)("the sticker table", () => {
       });
       expect(existsSync(`${uploadRoot}/${fileKey}`)).toBe(true);
 
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
 
       expect(await countStickers(personaId, userId)).toBe(0);
       expect(existsSync(`${uploadRoot}/${fileKey}`)).toBe(false);
     } finally {
-      await deletePersona(personaId, userId).catch(() => undefined);
+      await purgePersona(personaId, userId).catch(() => undefined);
     }
   });
 });

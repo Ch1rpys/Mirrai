@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import type { TrpcContext } from "../_core/context";
-import { createCollectedMessages, createPersona, deletePersona, setPersonaStyleProfile } from "../db";
+import { createCollectedMessages, createPersona, purgePersona, setPersonaStyleProfile } from "../db";
 import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
 import { seedXiaoman } from "../test-fixtures/seed-db";
 import { MIN_FINGERPRINT_SAMPLES } from "@shared/style-fingerprint";
@@ -52,7 +52,7 @@ describe.skipIf(!DATABASE_URL)("the material report", () => {
       expect(periods?.ok).toBe(true);
       expect(periods?.need).toBeGreaterThan(0);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   }, 15_000);
 
@@ -94,7 +94,7 @@ describe.skipIf(!DATABASE_URL)("the material report", () => {
       expect(fingerprint?.need).toBe(MIN_FINGERPRINT_SAMPLES);
       expect(fingerprint!.need - fingerprint!.have).toBe(MIN_FINGERPRINT_SAMPLES - have);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -106,7 +106,7 @@ describe.skipIf(!DATABASE_URL)("the material report", () => {
         materialRouter.createCaller(ctxFor(userId + 1)).report({ personaId }),
       ).rejects.toMatchObject({ code: "NOT_FOUND" });
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 });

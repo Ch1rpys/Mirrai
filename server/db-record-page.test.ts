@@ -3,7 +3,7 @@ import {
   countRecords,
   countRecordsByMonth,
   createPersona,
-  deletePersona,
+  purgePersona,
   deleteRecordRow,
   listRecordMarks,
   pageRecords,
@@ -45,7 +45,7 @@ describe.skipIf(!DATABASE_URL)("the timeline reader's data", () => {
       expect(hasNewerFirst).toBe(false);
       expect(seen[0]).toBeGreaterThan(seen[seen.length - 1]);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -66,7 +66,7 @@ describe.skipIf(!DATABASE_URL)("the timeline reader's data", () => {
       expect(page.hasOlder).toBe(true);
       expect(page.hasNewer).toBe(true);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -84,7 +84,7 @@ describe.skipIf(!DATABASE_URL)("the timeline reader's data", () => {
       expect(page.rows.length).toBeLessThanOrEqual(200);
       expect(page.rows.map((row) => row.id)).toContain(anchor.id);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -98,7 +98,7 @@ describe.skipIf(!DATABASE_URL)("the timeline reader's data", () => {
       expect(months.reduce((sum, row) => sum + row.count, 0)).toBe(total);
       expect(months.every((row) => /^\d{4}-\d{2}$/.test(row.month))).toBe(true);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -152,7 +152,7 @@ describe.skipIf(!DATABASE_URL)("the timeline reader's data", () => {
       expect(await listRecordMarks(personaId, userId)).toHaveLength(0);
       expect(await removeRecordMark(bookmark!.id, userId, personaId)).toBe(false);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 });

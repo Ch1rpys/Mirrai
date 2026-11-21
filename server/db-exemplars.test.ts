@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  deletePersona,
+  purgePersona,
   getCollectedMessagesForPersona,
 } from "./db";
 import { buildXiaomanRecords } from "./test-fixtures/xiaoman";
@@ -70,7 +70,7 @@ describe.skipIf(!DATABASE_URL)("exemplars from the index against the old path", 
       expect(sameFirst).toBeGreaterThanOrEqual(18);
       expect(averageJaccard).toBeGreaterThanOrEqual(0.75);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   }, 60_000);
 });

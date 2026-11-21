@@ -324,6 +324,14 @@ export const personas = pgTable("personas", {
    * fully owned persona.
    */
   sharedFromPersonaId: integer("sharedFromPersonaId"),
+  /**
+   * When the persona was put in the recycle bin (C8.11).
+   *
+   * Null means it is not deleted. A deleted persona is invisible to
+   * every ordinary read, cannot be talked to, and is hard-deleted with
+   * its files thirty days later.
+   */
+  deletedAt: timestamp("deletedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 }, (table) => ({
@@ -334,6 +342,10 @@ export const personas = pgTable("personas", {
    * their owner, and the table had no index for it.
    */
   userIdx: index("personas_user_idx").on(table.userId),
+  /** The recycle bin: one user's deleted personas, newest first. */
+  userDeletedIdx: index("personas_user_deleted_idx").on(table.userId, table.deletedAt),
+  /** The thirty-day sweep reads the oldest deleted personas. */
+  deletedIdx: index("personas_deleted_idx").on(table.deletedAt),
 }));
 
 export type Persona = typeof personas.$inferSelect;
@@ -489,6 +501,8 @@ export const messages = pgTable("messages", {
    */
   metadata: jsonb("metadata"),
   channel: channelEnum().default("web").notNull(),
+  /** When the message was put in the bin (C8.11); null means it is not. */
+  deletedAt: timestamp("deletedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => ({
   /**
@@ -529,6 +543,8 @@ export const messages = pgTable("messages", {
   missingTokensIdx: index("messages_missing_tokens_idx")
     .on(table.personaId, table.userId)
     .where(sql`${table.searchTokens} IS NULL`),
+  /** The thirty-day sweep of deleted messages. */
+  deletedIdx: index("messages_deleted_idx").on(table.deletedAt),
 }));
 
 export type Message = typeof messages.$inferSelect;
@@ -701,6 +717,8 @@ export const memories = pgTable("memories", {
    * retrieval can hop to a related memory without inventing a link.
    */
   entities: jsonb("entities"),
+  /** When the memory was put in the bin (C8.11); null means it is not. */
+  deletedAt: timestamp("deletedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => ({
   /**
@@ -710,6 +728,8 @@ export const memories = pgTable("memories", {
    * the memory panel and the anchors.
    */
   personaUserIdx: index("memories_persona_user_idx").on(table.personaId, table.userId),
+  /** The thirty-day sweep of deleted memories. */
+  deletedIdx: index("memories_deleted_idx").on(table.deletedAt),
 }));
 
 /**

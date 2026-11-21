@@ -42,7 +42,16 @@ const deleteScene = vi.fn(async (id: number, userId: number) => {
 const getPersonaById = vi.fn(async (id: number, userId: number) =>
   store.personas.find((row) => row.id === id && row.userId === userId),
 );
-const deletePersona = vi.fn(async (id: number, userId: number) => {
+const softDeletePersona = vi.fn(async (id: number, userId: number) => {
+  const index = store.personas.findIndex(
+    (row) => row.id === id && row.userId === userId,
+  );
+  if (index === -1) return false;
+  // The row is hidden, not gone — which is what every ordinary read sees.
+  store.personas.splice(index, 1);
+  return true;
+});
+const purgePersona = vi.fn(async (id: number, userId: number) => {
   const index = store.personas.findIndex(
     (row) => row.id === id && row.userId === userId,
   );
@@ -56,7 +65,15 @@ vi.mock("./db", () => ({
   getSceneById: (id: number, userId: number) => getSceneById(id, userId),
   deleteScene: (id: number, userId: number) => deleteScene(id, userId),
   getPersonaById: (id: number, userId: number) => getPersonaById(id, userId),
-  deletePersona: (id: number, userId: number) => deletePersona(id, userId),
+  softDeletePersona: (id: number, userId: number) => softDeletePersona(id, userId),
+  purgePersona: (id: number, userId: number) => purgePersona(id, userId),
+  restorePersona: vi.fn().mockResolvedValue(true),
+  listDeletedPersonas: vi.fn().mockResolvedValue([]),
+  getPersonaByIdIncludingDeleted: vi.fn().mockResolvedValue(undefined),
+  softDeleteMessage: vi.fn().mockResolvedValue(true),
+  restoreMessage: vi.fn().mockResolvedValue(true),
+  softDeleteMemory: vi.fn().mockResolvedValue(true),
+  restoreMemory: vi.fn().mockResolvedValue(true),
   // Everything else the routers import has to exist, even if the tests here
   // never call it.
   createPersona: vi.fn().mockResolvedValue(1),
@@ -373,17 +390,17 @@ describe("db helpers enforce ownership", () => {
   });
 
   it("checks ownership before deleting a persona's rows", () => {
-    const fn = functions.find((f) => f.name === "deletePersona");
+    const fn = functions.find((f) => f.name === "purgePersona");
     expect(fn).toBeDefined();
     // The ownership lookup has to come before the first delete.
     const checkIndex = fn!.body.indexOf("getPersonaById");
     const firstDelete = fn!.body.indexOf("tx.delete");
-    expect(checkIndex, "deletePersona must check ownership").toBeGreaterThan(-1);
+    expect(checkIndex, "purgePersona must check ownership").toBeGreaterThan(-1);
     expect(checkIndex, "the ownership check must come first").toBeLessThan(firstDelete);
   });
 
-  it("scopes every row delete in deletePersona to the owner", () => {
-    const fn = functions.find((f) => f.name === "deletePersona");
+  it("scopes every row delete in purgePersona to the owner", () => {
+    const fn = functions.find((f) => f.name === "purgePersona");
     const deletes = Array.from(fn!.body.matchAll(/tx\.delete\((\w+)\)\.where\(([^;]+)\)/g));
     expect(deletes.length).toBeGreaterThan(10);
 

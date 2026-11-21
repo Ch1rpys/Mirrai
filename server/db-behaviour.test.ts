@@ -475,10 +475,10 @@ describe("a single message", () => {
 
   it("says whether a message was deleted", async () => {
     registry.returning.messages = [{ id: 4 }];
-    expect(await db.deleteMessage(4, 3)).toBe(true);
+    expect(await db.purgeMessage(4, 3)).toBe(true);
 
     registry.returning.messages = [];
-    expect(await db.deleteMessage(4, 3)).toBe(false);
+    expect(await db.purgeMessage(4, 3)).toBe(false);
   });
 
   it("deletes a message and everything after it", async () => {

@@ -3,7 +3,7 @@ import {
   createMemory,
   createPersona,
   createPersonaFile,
-  deletePersona,
+  purgePersona,
   deletePersonaFile,
   linkMemoryMedia,
   listMemoryMedia,
@@ -58,7 +58,7 @@ describe.skipIf(!DATABASE_URL)("photos attached to memories", () => {
       expect(await unlinkMemoryMedia(memoryId, mediaId, userId + 1)).toBe(false);
       expect(await listMemoryMedia(memoryId, userId)).toHaveLength(1);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -93,7 +93,7 @@ describe.skipIf(!DATABASE_URL)("photos attached to memories", () => {
 
       expect(await listMemoryMedia(memoryId, userId)).toHaveLength(0);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -128,7 +128,7 @@ describe.skipIf(!DATABASE_URL)("photos attached to memories", () => {
 
       expect(await listMemoryMedia(memoryId, userId)).toHaveLength(0);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -146,7 +146,7 @@ describe.skipIf(!DATABASE_URL)("photos attached to memories", () => {
       })
     ).id;
     await linkMemoryMedia({ userId, personaId, memoryId, mediaId });
-    await deletePersona(personaId, userId);
+    await purgePersona(personaId, userId);
     expect(await listMemoryMedia(memoryId, userId)).toHaveLength(0);
   });
 });

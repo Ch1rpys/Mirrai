@@ -1753,7 +1753,7 @@ async function* runConversationTurn(
       if (options.signal?.aborted) {
         if (storedUserMessageId) {
           await db
-            .deleteMessage(storedUserMessageId, userId, persona.id)
+            .purgeMessage(storedUserMessageId, userId, persona.id)
             .catch(() => false);
         }
         yield {
@@ -1864,7 +1864,7 @@ async function* runConversationTurn(
       }
       if (storedUserMessageId) {
         await db
-          .deleteMessage(storedUserMessageId, userId, persona.id)
+          .purgeMessage(storedUserMessageId, userId, persona.id)
           .catch(() => false);
       }
       yield {

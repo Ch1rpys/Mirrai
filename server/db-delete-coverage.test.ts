@@ -89,8 +89,18 @@ describe("deleting a user cleans up after them", () => {
   });
 });
 
+/**
+ * The hard delete of a persona.
+ *
+ * C8.11 made the "delete" button a soft delete, so the function this
+ * test has always inspected is now `purgePersona` — the thirty-day purge
+ * and the recycle bin's "delete now" call it, and it is still the only
+ * place a persona's rows and files are removed for good. The checks are
+ * unchanged: every persona-scoped table is listed, the work runs in one
+ * transaction, and the files are read before the rows go.
+ */
 describe("deleting a persona cleans up after it", () => {
-  const deleted = tablesDeletedIn("deletePersona");
+  const deleted = tablesDeletedIn("purgePersona");
 
   it("deletes from every persona-scoped table", () => {
     const missing = tables
@@ -111,12 +121,14 @@ describe("deleting a persona cleans up after it", () => {
   });
 
   it("runs in a transaction", () => {
-    const match = /export async function deletePersona\([\s\S]*?\}\n/.exec(db);
+    const match = /export async function purgePersona\([\s\S]*?\}\n/.exec(db);
     expect(match?.[0]).toContain("withTransaction");
   });
 });
 
 describe("deleting a user removes their files from the disk", () => {
+  // A persona's files are removed by the hard delete (`purgePersona`),
+  // which is what runs after thirty days in the bin (C8.11).
   /**
    * The rows were deleted and the bytes were not.
    *
@@ -130,7 +142,7 @@ describe("deleting a user removes their files from the disk", () => {
   });
 
   it("removes the uploaded files of the persona", () => {
-    const match = /export async function deletePersona\([\s\S]*?\}\n/.exec(db);
+    const match = /export async function purgePersona\([\s\S]*?\}\n/.exec(db);
     expect(match?.[0]).toContain("removeStoredFiles");
   });
 

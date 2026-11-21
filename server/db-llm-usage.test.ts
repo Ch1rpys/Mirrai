@@ -3,7 +3,7 @@ import { and, count, eq } from "drizzle-orm";
 import {
   createPersona,
   createUser,
-  deletePersona,
+  purgePersona,
   deleteUserAccount,
   getDb,
   insertLlmUsage,
@@ -91,7 +91,7 @@ describe.skipIf(!DATABASE_URL)("the usage ledger, in the database (C8.9)", () =>
         costMicros: null,
         jobId: null,
       });
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
 
       const db = (await getDb())!;
       const [left] = await db.select({ c: count() }).from(llmUsage)

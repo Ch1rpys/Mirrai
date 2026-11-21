@@ -42,7 +42,7 @@ const createFidelityPair = vi.fn();
 const clearMessagePendingChoice = vi.fn();
 const getMessageById = vi.fn();
 const updateEmotionSnapshot = vi.fn();
-const deleteMessage = vi.fn();
+const purgeMessage = vi.fn();
 const iterateRecords = vi.fn();
 const listEnabledStickers = vi.fn();
 const listMemoryMediaForMemories = vi.fn();
@@ -107,7 +107,7 @@ vi.mock("../db", () => ({
   clearMessagePendingChoice: (...a: unknown[]) => clearMessagePendingChoice(...a),
   getMessageById: (...a: unknown[]) => getMessageById(...a),
   updateEmotionSnapshot: (...a: unknown[]) => updateEmotionSnapshot(...a),
-  deleteMessage: (...a: unknown[]) => deleteMessage(...a),
+  purgeMessage: (...a: unknown[]) => purgeMessage(...a),
   iterateRecords: (...a: unknown[]) => iterateRecords(...a),
   listEnabledStickers: (...a: unknown[]) => listEnabledStickers(...a),
   listMemoryMediaForMemories: (...a: unknown[]) => listMemoryMediaForMemories(...a),
@@ -214,7 +214,7 @@ describe("runConversation", () => {
       getLastMessageAt, getMessageCountSince, getDailyChatCounts,
       getSessionStartAt, getUserMessageCountSince, getDailyUserChatCounts, hasSafetyEventSince,
       incrementChatCount, updateMessageMetadata, createFidelityPair, clearMessagePendingChoice,
-      getMessageById, updateEmotionSnapshot, searchRecordsLexical, deleteMessage,
+      getMessageById, updateEmotionSnapshot, searchRecordsLexical, purgeMessage,
       iterateRecords, getRecordsVersion, getCollectedMessagesForPersona, listEnabledStickers,
       countRecords, candidateRecordsByOverlap, getWindowsAroundUserRecords,
       listMemoryMediaForMemories, listRecentlySentPhotoMediaIds,
@@ -287,7 +287,7 @@ describe("runConversation", () => {
     incrementChatCount.mockResolvedValue(11);
     getMessageById.mockResolvedValue(null);
     updateEmotionSnapshot.mockResolvedValue(undefined);
-    deleteMessage.mockResolvedValue(true);
+    purgeMessage.mockResolvedValue(true);
     iterateRecords.mockImplementation(async function* (): AsyncGenerator<unknown> {});
     getRecordsVersion.mockResolvedValue("0:0");
     getCollectedMessagesForPersona.mockResolvedValue([]);

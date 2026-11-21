@@ -3,7 +3,7 @@ import {
   countMedia,
   createPersona,
   createPersonaFile,
-  deletePersona,
+  purgePersona,
   deletePersonaFile,
   getPersonaSettings,
   listMedia,
@@ -59,7 +59,7 @@ describe.skipIf(!DATABASE_URL)("the media table", () => {
       const other = await listMedia(personaId, userId + 1);
       expect(other).toHaveLength(0);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -96,7 +96,7 @@ describe.skipIf(!DATABASE_URL)("the media table", () => {
       expect(second.height).toBe(360);
       expect(second.mime).toBe("video/mp4");
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -130,7 +130,7 @@ describe.skipIf(!DATABASE_URL)("the media table", () => {
 
       expect(await countMedia(personaId, userId)).toBe(0);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -162,7 +162,7 @@ describe.skipIf(!DATABASE_URL)("the media table", () => {
 
       expect(await countMedia(personaId, userId, "photo")).toBe(0);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -177,7 +177,7 @@ describe.skipIf(!DATABASE_URL)("the media table", () => {
         background: "/uploads/personas/bg.png",
       });
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -190,7 +190,7 @@ describe.skipIf(!DATABASE_URL)("the media table", () => {
       const settings = await getPersonaSettings(personaId, userId);
       expect(settings?.skin).toEqual({ theme: "classic" });
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -205,7 +205,7 @@ describe.skipIf(!DATABASE_URL)("the media table", () => {
       hash: "d".repeat(64),
       fileId: 1,
     });
-    await deletePersona(personaId, userId);
+    await purgePersona(personaId, userId);
     expect(await countMedia(personaId, userId)).toBe(0);
   });
 });

@@ -266,7 +266,7 @@ export async function getProactivePersonas() {
     analysisStatus: personas.analysisStatus,
     behaviorProfile: personas.behaviorProfile,
   }).from(personas)
-    .where(sql`${personas.proactiveFrequencyHours} > 0`);
+    .where(and(isNull(personas.deletedAt), sql`${personas.proactiveFrequencyHours} > 0`));
 }
 
 // ─── Letters ────────────────────────────────────────────────────────────────
@@ -864,7 +864,7 @@ export async function listInboxLetters(userId: number, personaIds: number[]) {
     personaName: personas.name,
   })
     .from(letters)
-    .innerJoin(personas, eq(personas.id, letters.personaId))
+    .innerJoin(personas, and(eq(personas.id, letters.personaId), isNull(personas.deletedAt)))
     .where(and(
       eq(letters.userId, userId),
       inArray(letters.personaId, personaIds),
@@ -915,7 +915,7 @@ export async function listInboxScheduled(userId: number, personaIds: number[]) {
     personaName: personas.name,
   })
     .from(scheduledItems)
-    .innerJoin(personas, eq(personas.id, scheduledItems.personaId))
+    .innerJoin(personas, and(eq(personas.id, scheduledItems.personaId), isNull(personas.deletedAt)))
     .where(and(
       eq(scheduledItems.userId, userId),
       inArray(scheduledItems.personaId, personaIds),
@@ -983,6 +983,7 @@ export async function countUnreadAutoRepliesByPersona(
   })
     .from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.userId, userId),
       eq(messages.role, "assistant"),
       inArray(messages.personaId, ids),
@@ -1059,6 +1060,7 @@ export async function getUserMessageCountForPersonaSince(
   if (!db) return 0;
   const [result] = await db.select({ c: count() }).from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.personaId, personaId),
       eq(messages.userId, userId),
       eq(messages.role, "user"),
@@ -1313,6 +1315,11 @@ export async function bumpUserTokenVersion(id: number) {
 async function collectStoredFiles(userId: number, personaId?: number): Promise<string[]> {
   const db = await getDb();
   if (!db) return [];
+  /**
+   * soft-delete: include-deleted — the purge path has to collect the
+   * media of rows that are already in the bin, or their files stay on
+   * disk after the persona is gone.
+   */
   const keys = new Set<string>();
 
   const files = await db
@@ -1441,6 +1448,11 @@ async function removeStoredFiles(keys: string[]): Promise<void> {
 
 export async function deleteUserAccount(id: number) {
   /**
+   * soft-delete: include-deleted — deleting the account deletes every
+   * row of it, including the rows that are in the bin. That is the one
+   * deletion that is immediate and total (C8.11).
+   */
+  /**
    * The files on disk.
    *
    * The rows are deleted and the bytes are not: so the uploaded
@@ -1543,9 +1555,9 @@ export async function deleteUserAccount(id: number) {
 export async function getAccountStats(userId: number) {
   const db = await getDb();
   if (!db) return { totalPersonas: 0, totalChats: 0, totalMessages: 0, totalFiles: 0, storageUsed: 0 };
-  const [personaCount] = await db.select({ c: count() }).from(personas).where(eq(personas.userId, userId));
-  const [chatSum] = await db.select({ s: sum(personas.chatCount) }).from(personas).where(eq(personas.userId, userId));
-  const [msgCount] = await db.select({ c: count() }).from(messages).where(eq(messages.userId, userId));
+  const [personaCount] = await db.select({ c: count() }).from(personas).where(and(isNull(personas.deletedAt), eq(personas.userId, userId)));
+  const [chatSum] = await db.select({ s: sum(personas.chatCount) }).from(personas).where(and(isNull(personas.deletedAt), eq(personas.userId, userId)));
+  const [msgCount] = await db.select({ c: count() }).from(messages).where(and(isNull(messages.deletedAt), eq(messages.userId, userId)));
   const [fileCount] = await db.select({ c: count() }).from(personaFiles).where(eq(personaFiles.userId, userId));
   const [fileSize] = await db.select({ s: sum(personaFiles.fileSize) }).from(personaFiles).where(eq(personaFiles.userId, userId));
   return {
@@ -1562,10 +1574,11 @@ export async function exportUserData(userId: number) {
   if (!db) return null;
   const [user] = await db.select({ username: users.username, name: users.name, email: users.email, createdAt: users.createdAt })
     .from(users).where(eq(users.id, userId));
-  const personaList = await db.select().from(personas).where(eq(personas.userId, userId));
+  const personaList = await db.select().from(personas).where(and(isNull(personas.deletedAt), eq(personas.userId, userId)));
   // Bounded: the bundle is serialised into one string in memory, and an
   // unbounded query is an out-of-memory crash for the whole server.
-  const messageList = await db.select().from(messages).where(eq(messages.userId, userId))
+  const messageList = await db.select().from(messages)
+    .where(and(isNull(messages.deletedAt), eq(messages.userId, userId)))
     .orderBy(messages.createdAt).limit(50_000);
   return { user, personas: personaList, messages: messageList };
 }
@@ -1582,7 +1595,7 @@ export async function createPersona(data: InsertPersona) {
 export async function getPersonasByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  const rows = await db.select().from(personas).where(eq(personas.userId, userId)).orderBy(desc(personas.updatedAt));
+  const rows = await db.select().from(personas).where(and(isNull(personas.deletedAt), eq(personas.userId, userId))).orderBy(desc(personas.updatedAt));
   return withInheritedPersonaState(rows);
 }
 
@@ -1596,7 +1609,7 @@ export async function getPersonasByUserId(userId: number) {
 export async function getPersonasWithStats(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  const rows = await db.select().from(personas).where(eq(personas.userId, userId)).orderBy(desc(personas.updatedAt));
+  const rows = await db.select().from(personas).where(and(isNull(personas.deletedAt), eq(personas.userId, userId))).orderBy(desc(personas.updatedAt));
   if (rows.length === 0) return [];
   const list = await withInheritedPersonaState(rows);
   const ids = list.map((p) => p.id);
@@ -1625,6 +1638,7 @@ export async function getPersonasWithStats(userId: number) {
     })
     .from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.userId, userId),
       inArray(messages.personaId, ids),
     ))
@@ -1730,8 +1744,8 @@ export async function getPersonasWithStats(userId: number) {
 export async function getUserStats(userId: number, timezone?: string | null) {
   const db = await getDb();
   if (!db) return { totalPersonas: 0, totalChats: 0, todayChats: 0, memberSince: new Date() };
-  const [personaCount] = await db.select({ c: count() }).from(personas).where(eq(personas.userId, userId));
-  const [chatSum] = await db.select({ s: sum(personas.chatCount) }).from(personas).where(eq(personas.userId, userId));
+  const [personaCount] = await db.select({ c: count() }).from(personas).where(and(isNull(personas.deletedAt), eq(personas.userId, userId)));
+  const [chatSum] = await db.select({ s: sum(personas.chatCount) }).from(personas).where(and(isNull(personas.deletedAt), eq(personas.userId, userId)));
   /**
    * The user's midnight.
    *
@@ -1754,7 +1768,7 @@ export async function getUserStats(userId: number, timezone?: string | null) {
    */
   const today = zonedDayStart(new Date(), timezone);
   const [todayCount] = await db.select({ c: count() }).from(messages)
-    .where(and(eq(messages.userId, userId), gte(messages.createdAt, today)));
+    .where(and(isNull(messages.deletedAt), eq(messages.userId, userId), gte(messages.createdAt, today)));
   const [userRow] = await db.select({ createdAt: users.createdAt }).from(users).where(eq(users.id, userId));
   return {
     totalPersonas: personaCount?.c || 0,
@@ -1800,7 +1814,7 @@ export async function getUserMilestones(userId: number): Promise<UserMilestones>
       eq(outboundLetters.userId, userId),
     ).then((rows) => rows[0]),
     db.select({ at: min(personas.graduatedAt) }).from(personas).where(
-      eq(personas.userId, userId),
+      and(isNull(personas.deletedAt), eq(personas.userId, userId)),
     ).then((rows) => rows[0]),
   ]);
   return {
@@ -1823,8 +1837,8 @@ export async function getRecentActivity(userId: number, limit = 8) {
     emotionalState: personas.emotionalState,
   })
     .from(messages)
-    .innerJoin(personas, eq(messages.personaId, personas.id))
-    .where(eq(messages.userId, userId))
+    .innerJoin(personas, and(eq(messages.personaId, personas.id), isNull(personas.deletedAt)))
+    .where(and(isNull(messages.deletedAt), eq(messages.userId, userId)))
     .orderBy(desc(messages.createdAt))
     .limit(limit);
   return rows.map(r => ({
@@ -1837,7 +1851,7 @@ export async function getPersonaById(id: number, userId: number) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(personas)
-    .where(and(eq(personas.id, id), eq(personas.userId, userId))).limit(1);
+    .where(and(isNull(personas.deletedAt), eq(personas.id, id), eq(personas.userId, userId))).limit(1);
   const row = result[0];
   /**
    * A shared persona reads its identity from the owner's row (C7.2).
@@ -1862,7 +1876,7 @@ export async function getPersonaById(id: number, userId: number) {
       .limit(1);
     if (!share) return row;
     const [owner] = await db.select().from(personas)
-      .where(eq(personas.id, row.sharedFromPersonaId)).limit(1);
+      .where(and(isNull(personas.deletedAt), eq(personas.id, row.sharedFromPersonaId))).limit(1);
     if (!owner) return row;
     return {
       ...row,
@@ -1963,7 +1977,7 @@ export async function getPersonaStateSettings(
       sharedFromPersonaId: personas.sharedFromPersonaId,
     })
     .from(personas)
-    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)))
+    .where(and(isNull(personas.deletedAt), eq(personas.id, personaId), eq(personas.userId, userId)))
     .limit(1);
   if (!rows[0]) return null;
   const row = rows[0];
@@ -1981,7 +1995,7 @@ export async function getPersonaStateSettings(
   const [owner] = await db
     .select({ settings: personas.settings })
     .from(personas)
-    .where(eq(personas.id, row.sharedFromPersonaId))
+    .where(and(isNull(personas.deletedAt), eq(personas.id, row.sharedFromPersonaId)))
     .limit(1);
   return normalizePersonaSettings(
     mergeInheritedPersonaState(row.settings, owner?.settings),
@@ -2053,7 +2067,7 @@ async function withInheritedPersonaState<T extends SharedStateRow>(rows: T[]): P
     const owners = await db
       .select({ id: personas.id, settings: personas.settings })
       .from(personas)
-      .where(inArray(personas.id, ownerIds));
+      .where(and(isNull(personas.deletedAt), inArray(personas.id, ownerIds)));
     const ownerSettings = new Map(owners.map((owner) => [owner.id, owner.settings]));
     const ownerByMember = new Map(
       shares.map((share) => [`${share.memberPersonaId}:${share.memberUserId}`, share.ownerPersonaId]),
@@ -2102,7 +2116,7 @@ export async function acceptPersonaShare(
       .limit(1);
     if (!share || share.ownerUserId === userId) return null;
     const [owner] = await tx.select().from(personas)
-      .where(eq(personas.id, share.personaId)).limit(1);
+      .where(and(isNull(personas.deletedAt), eq(personas.id, share.personaId))).limit(1);
     if (!owner) return null;
 
     const [member] = await tx.insert(personas).values({
@@ -2234,7 +2248,7 @@ export async function listOralAccounts(
   const db = await getDb();
   if (!db) return [];
   const ownedPersona = db.select({ id: personas.id }).from(personas)
-    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)));
+    .where(and(isNull(personas.deletedAt), eq(personas.id, personaId), eq(personas.userId, userId)));
   return db.select().from(oralAccounts)
     .where(and(
       eq(oralAccounts.personaId, personaId),
@@ -2269,7 +2283,11 @@ export async function listSubmittedOralAccounts(
     .from(oralAccounts)
     .innerJoin(
       personas,
-      and(eq(personas.id, oralAccounts.personaId), eq(personas.userId, userId)),
+      and(
+        eq(personas.id, oralAccounts.personaId),
+        eq(personas.userId, userId),
+        isNull(personas.deletedAt),
+      ),
     )
     .where(and(
       eq(oralAccounts.personaId, personaId),
@@ -2290,6 +2308,7 @@ export async function getOralMemories(personaId: number, userId: number) {
   if (!db) return [];
   return db.select().from(memories)
     .where(and(
+      isNull(memories.deletedAt),
       eq(memories.personaId, personaId),
       eq(memories.userId, userId),
       eq(memories.source, "oral"),
@@ -2357,7 +2376,13 @@ export async function updatePersona(
 }
 
 /**
- * Deletes a persona and everything that hangs off it, in one transaction.
+ * Deletes a persona and everything that hangs off it, for good, in one
+ * transaction (C8.11).
+ *
+ * This is the old `deletePersona`: the thirty-day purge calls it, and so
+ * does the recycle bin's "delete now". The "delete" button on the lobby
+ * is `softDeletePersona`; this is what runs after the bin has had its
+ * thirty days.
  *
  * Ownership is checked *before* anything is deleted. The row deletes are
  * scoped to the persona's owner as well as the persona itself, so a caller
@@ -2366,12 +2391,16 @@ export async function updatePersona(
  *
  * Covers every table with a `personaId` — the same completeness rule as
  * `deleteUserAccount`, and checked by `server/db-delete-coverage.test.ts`.
+ * It also clears the rows the soft delete left behind, so a persona that
+ * was purged from the bin leaves nothing in any table.
  */
-export async function deletePersona(id: number, userId: number) {
+export async function purgePersona(id: number, userId: number) {
+  // soft-delete: include-deleted — the purge path has to find a persona
+  // that is already in the bin.
   // The ownership check comes first: without it, a caller who passed
   // somebody else's persona id would still delete that persona's messages
   // and memories.
-  const owned = await getPersonaById(id, userId);
+  const owned = await getPersonaByIdIncludingDeleted(id, userId);
   if (!owned) throw new Error("Persona not found");
 
   /**
@@ -2465,6 +2494,181 @@ export async function deletePersona(id: number, userId: number) {
   });
 
   await removeStoredFiles(storedFiles);
+}
+
+// ─── Undo and the recycle bin (C8.11) ───────────────────────────────────────
+
+/** How long a deleted persona stays in the recycle bin, in days. */
+export const SOFT_DELETE_RETENTION_DAYS = 30;
+
+/** The same stretch, in milliseconds. */
+const SOFT_DELETE_RETENTION_MS = SOFT_DELETE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * One persona row, deleted or not.
+ *
+ * A purge or a restore has to find a persona that is in the bin, so it
+ * cannot go through `getPersonaById` — that one, like every ordinary
+ * read, leaves a deleted row out. Soft-delete whitelist: purge/restore.
+ */
+export async function getPersonaByIdIncludingDeleted(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  // soft-delete: include-deleted — the purge and restore paths must find
+  // a persona that is already in the bin.
+  const result = await db.select().from(personas)
+    .where(and(eq(personas.id, id), eq(personas.userId, userId)))
+    .limit(1);
+  return result[0];
+}
+
+/**
+ * Puts a persona in the recycle bin (C8.11).
+ *
+ * Its conversations and memories are marked with the same moment, so the
+ * undo takes back exactly what this deletion took — a message the user
+ * had deleted earlier stays in the bin. Nothing is removed from the
+ * disk: the files stay until the purge, which is what makes the undo
+ * possible at all.
+ *
+ * The moment is a parameter so the thirty-day sweep can be tested
+ * without waiting thirty days.
+ */
+export async function softDeletePersona(
+  id: number,
+  userId: number,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  return withTransaction(async (tx) => {
+    const [persona] = await tx
+      .select({ id: personas.id })
+      .from(personas)
+      .where(and(
+        eq(personas.id, id),
+        eq(personas.userId, userId),
+        isNull(personas.deletedAt),
+      ))
+      .limit(1);
+    if (!persona) return false;
+    await tx.update(personas)
+      .set({ deletedAt: now })
+      .where(and(eq(personas.id, id), eq(personas.userId, userId)));
+    await tx.update(messages)
+      .set({ deletedAt: now })
+      .where(and(
+        eq(messages.personaId, id),
+        eq(messages.userId, userId),
+        isNull(messages.deletedAt),
+      ));
+    await tx.update(memories)
+      .set({ deletedAt: now })
+      .where(and(
+        eq(memories.personaId, id),
+        eq(memories.userId, userId),
+        isNull(memories.deletedAt),
+      ));
+    return true;
+  });
+}
+
+/**
+ * Takes a persona back out of the recycle bin (C8.11).
+ *
+ * Only the rows marked by the deletion being undone come back: a message
+ * deleted before the persona stays deleted.
+ */
+export async function restorePersona(id: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  return withTransaction(async (tx) => {
+    // soft-delete: include-deleted — the row being restored is the deleted one.
+    const [row] = await tx
+      .select({ deletedAt: personas.deletedAt })
+      .from(personas)
+      .where(and(
+        eq(personas.id, id),
+        eq(personas.userId, userId),
+        isNotNull(personas.deletedAt),
+      ))
+      .limit(1);
+    const at = row?.deletedAt;
+    if (!at) return false;
+    await tx.update(personas)
+      .set({ deletedAt: null })
+      .where(and(eq(personas.id, id), eq(personas.userId, userId)));
+    await tx.update(messages)
+      .set({ deletedAt: null })
+      .where(and(
+        eq(messages.personaId, id),
+        eq(messages.userId, userId),
+        eq(messages.deletedAt, at),
+      ));
+    await tx.update(memories)
+      .set({ deletedAt: null })
+      .where(and(
+        eq(memories.personaId, id),
+        eq(memories.userId, userId),
+        eq(memories.deletedAt, at),
+      ));
+    return true;
+  });
+}
+
+/**
+ * The personas in the user's recycle bin, newest first (C8.11).
+ *
+ * One of the two ordinary reads that are allowed to see deleted rows:
+ * listing them is the point.
+ */
+export async function listDeletedPersonas(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  // soft-delete: include-deleted — the recycle bin lists exactly those rows.
+  return db.select({
+    id: personas.id,
+    name: personas.name,
+    avatarUrl: personas.avatarUrl,
+    relationshipDesc: personas.relationshipDesc,
+    chatCount: personas.chatCount,
+    deletedAt: personas.deletedAt,
+    createdAt: personas.createdAt,
+  })
+    .from(personas)
+    .where(and(eq(personas.userId, userId), isNotNull(personas.deletedAt)))
+    .orderBy(desc(personas.deletedAt));
+}
+
+/**
+ * Hard-deletes the personas whose thirty days are up (C8.11).
+ *
+ * Called by the scheduler once a day with the current moment, so the age
+ * is a parameter and not the clock. A persona deleted exactly thirty days
+ * ago is not yet expired; one deleted a millisecond earlier is. The files
+ * go with it, through `purgePersona`.
+ */
+export async function purgeExpiredPersonas(now: Date = new Date()): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const cutoff = new Date(now.getTime() - SOFT_DELETE_RETENTION_MS);
+  // soft-delete: include-deleted — the purge task is the other read that
+  // is allowed to see deleted rows.
+  const expired = await db.select({ id: personas.id, userId: personas.userId })
+    .from(personas)
+    .where(and(isNotNull(personas.deletedAt), lt(personas.deletedAt, cutoff)))
+    .orderBy(asc(personas.deletedAt))
+    .limit(200);
+  let purged = 0;
+  for (const row of expired) {
+    try {
+      await purgePersona(row.id, row.userId);
+      purged += 1;
+    } catch (error) {
+      console.warn("[db] A persona in the bin could not be purged:", error);
+    }
+  }
+  return purged;
 }
 
 // ─── PersonaFile helpers ────────────────────────────────────────────────────
@@ -2576,7 +2780,7 @@ export async function userHasMessageWithMediaUrl(
   if (!db) return false;
   const rows = await db.select({ id: messages.id })
     .from(messages)
-    .where(and(eq(messages.userId, userId), eq(messages.mediaUrl, mediaUrl)))
+    .where(and(isNull(messages.deletedAt), eq(messages.userId, userId), eq(messages.mediaUrl, mediaUrl)))
     .limit(1);
   return rows.length > 0;
 }
@@ -2736,7 +2940,7 @@ export async function listFidelityRewritePairs(
       createdAt: fidelityFeedback.createdAt,
     })
     .from(fidelityFeedback)
-    .innerJoin(messages, eq(messages.id, fidelityFeedback.messageId))
+    .innerJoin(messages, and(eq(messages.id, fidelityFeedback.messageId), isNull(messages.deletedAt)))
     .where(
       and(
         eq(fidelityFeedback.personaId, personaId),
@@ -3226,7 +3430,7 @@ export async function getMessagesByPersonaId(personaId: number, userId: number, 
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select().from(messages)
-    .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId)))
+    .where(and(isNull(messages.deletedAt), eq(messages.personaId, personaId), eq(messages.userId, userId)))
     .orderBy(desc(messages.createdAt)).limit(limit);
   return rows.reverse();
 }
@@ -3266,6 +3470,7 @@ export async function getMessagesByPersonaIdPaged(
   while (collected.length < max) {
     const rows = await db.select().from(messages)
       .where(and(
+        isNull(messages.deletedAt),
         eq(messages.personaId, personaId),
         eq(messages.userId, userId),
         ...(before
@@ -3310,6 +3515,7 @@ export async function getMessageById(
   if (!db) return null;
   const rows = await db.select().from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.id, messageId),
       eq(messages.userId, userId),
       ...(personaId === undefined ? [] : [eq(messages.personaId, personaId)]),
@@ -3335,6 +3541,7 @@ export async function getMessagesBefore(
   if (!db) return [];
   const rows = await db.select().from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.personaId, personaId),
       eq(messages.userId, userId),
       lt(messages.id, beforeId),
@@ -3353,6 +3560,7 @@ export async function hasOlderMessages(
   if (!db) return false;
   const rows = await db.select({ id: messages.id }).from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.personaId, personaId),
       eq(messages.userId, userId),
       lt(messages.id, beforeId),
@@ -3399,6 +3607,7 @@ export async function searchMessages(personaId: number, userId: number, query: s
   const tsQuery = toTsQuery(indexableLexemes(queryLexemes(query)), "&");
   return db.select().from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.personaId, personaId),
       eq(messages.userId, userId),
       ilike(messages.content, `%${escaped}%`),
@@ -3442,6 +3651,7 @@ export async function searchAllMessages(
       createdAt: messages.createdAt,
     }).from(messages)
       .where(and(
+        isNull(messages.deletedAt),
         eq(messages.userId, userId),
         ilike(messages.content, pattern),
         messageTsQuery
@@ -3464,6 +3674,7 @@ export async function searchAllMessages(
       createdAt: memories.createdAt,
     }).from(memories)
       .where(and(
+        isNull(memories.deletedAt),
         eq(memories.userId, userId),
         or(
           ilike(memories.title, pattern),
@@ -4021,6 +4232,7 @@ export async function listRecentlySentPhotoMediaIds(
     .from(messages)
     .where(
       and(
+        isNull(messages.deletedAt),
         eq(messages.personaId, personaId),
         eq(messages.userId, userId),
         eq(messages.role, "assistant"),
@@ -4570,7 +4782,7 @@ export async function getDailyChatCounts(userId: number, days = 30, timezone?: s
     userCount: sql<number>`count(*) FILTER (WHERE ${messages.role} = 'user')`,
   })
     .from(messages)
-    .where(and(eq(messages.userId, userId), gte(messages.createdAt, since)))
+    .where(and(isNull(messages.deletedAt), eq(messages.userId, userId), gte(messages.createdAt, since)))
     .groupBy(day);
   return rows;
 }
@@ -4664,12 +4876,12 @@ export async function getIntimacyData(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) return { chatCount: 0, totalMessages: 0, memoryCount: 0, emotionVariety: 0, daysSinceCreation: 0, consecutiveDays: 0 };
   const persona = await db.select({ chatCount: personas.chatCount, createdAt: personas.createdAt }).from(personas)
-    .where(and(eq(personas.id, personaId), eq(personas.userId, userId))).limit(1);
+    .where(and(isNull(personas.deletedAt), eq(personas.id, personaId), eq(personas.userId, userId))).limit(1);
   if (!persona[0]) return { chatCount: 0, totalMessages: 0, memoryCount: 0, emotionVariety: 0, daysSinceCreation: 0, consecutiveDays: 0 };
   const [msgCount] = await db.select({ c: count() }).from(messages)
-    .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId)));
+    .where(and(isNull(messages.deletedAt), eq(messages.personaId, personaId), eq(messages.userId, userId)));
   const [memCount] = await db.select({ c: count() }).from(memories)
-    .where(and(eq(memories.personaId, personaId), eq(memories.userId, userId)));
+    .where(and(isNull(memories.deletedAt), eq(memories.personaId, personaId), eq(memories.userId, userId)));
   const emotionRows = await db.select({ s: emotionSnapshots.emotionalState }).from(emotionSnapshots)
     .where(and(eq(emotionSnapshots.personaId, personaId), eq(emotionSnapshots.userId, userId)))
     .groupBy(emotionSnapshots.emotionalState);
@@ -4692,7 +4904,7 @@ export async function getIntimacyData(personaId: number, userId: number) {
   // minutes.
   const day = userDayColumn(timezone);
   const recentDays = await db.select({ d: day }).from(messages)
-    .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId)))
+    .where(and(isNull(messages.deletedAt), eq(messages.personaId, personaId), eq(messages.userId, userId)))
     .groupBy(day).orderBy(desc(day)).limit(30);
   let consecutiveDays = 0;
   // Walk back from today, in the user's calendar.
@@ -4738,7 +4950,7 @@ export async function countMemories(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) return 0;
   const [result] = await db.select({ c: count() }).from(memories)
-    .where(and(eq(memories.personaId, personaId), eq(memories.userId, userId)));
+    .where(and(isNull(memories.deletedAt), eq(memories.personaId, personaId), eq(memories.userId, userId)));
   return result?.c || 0;
 }
 
@@ -4759,6 +4971,7 @@ export async function getAnniversaryMemories(personaId: number, userId: number) 
   })
     .from(memories)
     .where(and(
+      isNull(memories.deletedAt),
       eq(memories.personaId, personaId),
       eq(memories.userId, userId),
       eq(memories.category, "anniversary"),
@@ -4778,7 +4991,7 @@ export async function getMemoriesByPersonaId(
   // just because it is old — the candidate list is capped, so the order
   // decides what gets scored at all.
   return db.select().from(memories)
-    .where(and(eq(memories.personaId, personaId), eq(memories.userId, userId)))
+    .where(and(isNull(memories.deletedAt), eq(memories.personaId, personaId), eq(memories.userId, userId)))
     .orderBy(desc(memories.isPinned), desc(memories.importance), desc(memories.createdAt))
     .limit(limit);
 }
@@ -4812,8 +5025,9 @@ export async function getMemoriesFromPersona(
       messageId: memories.messageId,
     })
     .from(memories)
-    .innerJoin(messages, eq(memories.messageId, messages.id))
+    .innerJoin(messages, and(eq(memories.messageId, messages.id), isNull(messages.deletedAt)))
     .where(and(
+      isNull(memories.deletedAt),
       eq(memories.personaId, personaId),
       eq(memories.userId, userId),
       eq(memories.status, "active"),
@@ -4840,6 +5054,7 @@ export async function getMemoriesByFactKey(
     .from(memories)
     .where(
       and(
+        isNull(memories.deletedAt),
         eq(memories.personaId, personaId),
         eq(memories.userId, userId),
         eq(memories.factKey, factKey),
@@ -5065,7 +5280,7 @@ export async function getMemoryById(id: number, userId: number) {
   const db = await getDb();
   if (!db) return undefined;
   const rows = await db.select().from(memories)
-    .where(and(eq(memories.id, id), eq(memories.userId, userId)))
+    .where(and(isNull(memories.deletedAt), eq(memories.id, id), eq(memories.userId, userId)))
     .limit(1);
   return rows[0];
 }
@@ -5078,7 +5293,7 @@ export async function getMemoryTitles(ids: number[], userId: number) {
     id: memories.id,
     title: memories.title,
     subject: memories.subject,
-  }).from(memories).where(and(inArray(memories.id, unique), eq(memories.userId, userId)));
+  }).from(memories).where(and(isNull(memories.deletedAt), inArray(memories.id, unique), eq(memories.userId, userId)));
   return new Map(rows.map((r) => [r.id, r.title]));
 }
 
@@ -5124,11 +5339,48 @@ export async function updateMemory(
 }
 
 /**
- * Removes a memory.
+ * Puts a memory in the bin (C8.11).
  *
- * It says whether a row was actually removed — see `deleteWechatBinding`.
+ * It is invisible to every read, and the undo puts it back. The hard
+ * delete is `purgeMemory`.
+ *
+ * It says whether a row was actually put there — a deleted row is not
+ * deleted twice.
  */
-export async function deleteMemory(id: number, userId: number): Promise<boolean> {
+export async function softDeleteMemory(
+  id: number,
+  userId: number,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const rows = await db.update(memories)
+    .set({ deletedAt: now })
+    .where(and(eq(memories.id, id), eq(memories.userId, userId), isNull(memories.deletedAt)))
+    .returning({ id: memories.id });
+  return rows.length > 0;
+}
+
+/**
+ * Takes a deleted memory back out of the bin (C8.11).
+ */
+export async function restoreMemory(id: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const rows = await db.update(memories)
+    .set({ deletedAt: null })
+    .where(and(eq(memories.id, id), eq(memories.userId, userId), isNotNull(memories.deletedAt)))
+    .returning({ id: memories.id });
+  return rows.length > 0;
+}
+
+/**
+ * Removes a memory for good.
+ *
+ * The hard half of the old `deleteMemory`: the persona purge uses it.
+ * The user's delete is `softDeleteMemory`.
+ */
+export async function purgeMemory(id: number, userId: number): Promise<boolean> {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
   const rows = await db.delete(memories)
@@ -5293,6 +5545,7 @@ export async function getMessageVolume(userId: number, days: number, timezone?: 
   const rows = await db.select({ date: day, count: count() })
     .from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.userId, userId),
       // The user's own messages: the chart is about how much the *user*
       // talked, and the persona always answers within seconds.
@@ -5380,8 +5633,8 @@ export async function getPersonaEngagement(
     name: personas.name,
     messageCount: count(),
   }).from(messages)
-    .innerJoin(personas, eq(messages.personaId, personas.id))
-    .where(and(eq(messages.userId, userId), gte(messages.createdAt, since)))
+    .innerJoin(personas, and(eq(messages.personaId, personas.id), isNull(personas.deletedAt)))
+    .where(and(isNull(messages.deletedAt), eq(messages.userId, userId), gte(messages.createdAt, since)))
     .groupBy(messages.personaId, personas.name)
     .orderBy(desc(count()));
 }
@@ -5409,6 +5662,7 @@ export async function getHourlyDistribution(
     count: count(),
   }).from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.userId, userId),
       // The user's own messages: the chart is "when do *you* talk".
       // The persona answers within seconds, so counting its replies
@@ -5431,6 +5685,7 @@ export async function getAnalyticsStats(
   const since = startOfUserDay(new Date(), timezone, Math.max(0, days - 1));
   const [msgCount] = await db.select({ c: count() }).from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.userId, userId),
       // The user's own messages, like the charts beside it.
       eq(messages.role, "user"),
@@ -5446,6 +5701,7 @@ export async function getAnalyticsStats(
   const day = userDayColumn(timezone);
   const activeDaysRows = await db.select({ d: day }).from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.userId, userId),
       eq(messages.role, "user"),
       gte(messages.createdAt, since),
@@ -5516,7 +5772,7 @@ export async function getDiaryEntries(userId: number, personaId?: number, limit 
     reflection: diaryEntries.reflection, messageCount: diaryEntries.messageCount,
     createdAt: diaryEntries.createdAt, personaName: personas.name,
   }).from(diaryEntries)
-    .innerJoin(personas, eq(diaryEntries.personaId, personas.id))
+    .innerJoin(personas, and(eq(diaryEntries.personaId, personas.id), isNull(personas.deletedAt)))
     .where(and(...conditions))
     .orderBy(desc(diaryEntries.date))
     .limit(limit);
@@ -5568,7 +5824,7 @@ export async function getMessagesByDate(
   // minutes.
   const day = userDayColumn(timezone);
   return db.select().from(messages)
-    .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId), sql`${day} = ${date}`))
+    .where(and(isNull(messages.deletedAt), eq(messages.personaId, personaId), eq(messages.userId, userId), sql`${day} = ${date}`))
     .orderBy(asc(messages.createdAt));
 }
 
@@ -5725,10 +5981,10 @@ export async function getExportData(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) return null;
   const [persona] = await db.select().from(personas)
-    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)));
+    .where(and(isNull(personas.deletedAt), eq(personas.id, personaId), eq(personas.userId, userId)));
   if (!persona) return null;
   const allMessages = await db.select().from(messages)
-    .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId)))
+    .where(and(isNull(messages.deletedAt), eq(messages.personaId, personaId), eq(messages.userId, userId)))
     .orderBy(asc(messages.createdAt))
     .limit(MAX_PERSONA_EXPORT_MESSAGES);
   /**
@@ -5740,7 +5996,7 @@ export async function getExportData(personaId: number, userId: number) {
    * one a day each, and letters by as many as the user writes.
    */
   const allMemories = await db.select().from(memories)
-    .where(and(eq(memories.personaId, personaId), eq(memories.userId, userId)))
+    .where(and(isNull(memories.deletedAt), eq(memories.personaId, personaId), eq(memories.userId, userId)))
     .orderBy(asc(memories.createdAt))
     .limit(MAX_PERSONA_EXPORT_MEMORIES);
   const allSnapshots = await db.select().from(emotionSnapshots)
@@ -5802,12 +6058,74 @@ export async function updateUserMessage(
 }
 
 /**
- * Deletes a single message.
+ * Puts a single message in the bin (C8.11).
  *
  * The chat history is the user's, and a single message in the middle of it
- * can be something they would rather not have written down.
+ * can be something they would rather not have written down. It is hidden
+ * from every read, and the undo takes it back; the hard delete is
+ * `purgeMessage`, which the message's own deletion does not use.
+ *
+ * A message inside a deleted persona is already hidden by the persona's
+ * own deletion, so only the active rows are marked here.
  */
-export async function deleteMessage(
+export async function softDeleteMessage(
+  messageId: number,
+  userId: number,
+  personaId?: number,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  // The message has to be in the conversation the user is looking at.
+  const deleted = await db.update(messages)
+    .set({ deletedAt: now })
+    .where(and(
+      eq(messages.id, messageId),
+      eq(messages.userId, userId),
+      isNull(messages.deletedAt),
+      ...(personaId === undefined ? [] : [eq(messages.personaId, personaId)]),
+    ))
+    .returning({ id: messages.id });
+  /**
+   * The marks are left alone here: the undo brings them back with the
+   * message. `purgeMessage` is the one that forgets them.
+   */
+  return deleted.length > 0;
+}
+
+/**
+ * Takes a deleted message back out of the bin (C8.11).
+ *
+ * The undo writes the row back as it was; nothing about the message was
+ * changed by the deletion.
+ */
+export async function restoreMessage(
+  messageId: number,
+  userId: number,
+  personaId?: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const restored = await db.update(messages)
+    .set({ deletedAt: null })
+    .where(and(
+      eq(messages.id, messageId),
+      eq(messages.userId, userId),
+      isNotNull(messages.deletedAt),
+      ...(personaId === undefined ? [] : [eq(messages.personaId, personaId)]),
+    ))
+    .returning({ id: messages.id });
+  return restored.length > 0;
+}
+
+/**
+ * Deletes a single message for good.
+ *
+ * The hard half of the old `deleteMessage`. The purge of a persona and
+ * the internal rollback of a failed turn use it; the user's delete is
+ * `softDeleteMessage`.
+ */
+export async function purgeMessage(
   messageId: number,
   userId: number,
   personaId?: number,
@@ -5885,7 +6203,7 @@ export async function listMessageMarks(
     messageCreatedAt: messages.createdAt,
   })
     .from(messageMarks)
-    .innerJoin(messages, eq(messages.id, messageMarks.messageId))
+    .innerJoin(messages, and(eq(messages.id, messageMarks.messageId), isNull(messages.deletedAt)))
     .where(and(
       eq(messageMarks.personaId, personaId),
       eq(messageMarks.userId, userId),
@@ -5992,6 +6310,7 @@ export async function getMessagesFrom(
   })
     .from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.personaId, personaId),
       eq(messages.userId, userId),
       gte(messages.id, messageId),
@@ -6052,6 +6371,7 @@ export async function deleteMessagesFrom(
   const target = await db.select({ id: messages.id })
     .from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.id, messageId),
       eq(messages.personaId, personaId),
       eq(messages.userId, userId),
@@ -6107,10 +6427,11 @@ export async function getPreviousMessage(
   // older than the one asked for, newest first, one row.
   const rows = await db.select().from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.personaId, personaId),
       eq(messages.userId, userId),
       ...(role ? [eq(messages.role, role)] : []),
-      sql`"createdAt" < (SELECT "createdAt" FROM "messages" WHERE "id" = ${messageId} AND "personaId" = ${personaId} AND "userId" = ${userId})`,
+      sql`"createdAt" < (SELECT "createdAt" FROM "messages" WHERE "id" = ${messageId} AND "personaId" = ${personaId} AND "userId" = ${userId} AND "deletedAt" IS NULL)`,
     ))
     .orderBy(desc(messages.createdAt))
     .limit(1);
@@ -6191,6 +6512,7 @@ export async function getMessageCountInRange(
   const end = startOfUserDay(now, timezone, endDaysAgo);
   const [result] = await db.select({ c: count() }).from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.personaId, personaId),
       eq(messages.userId, userId),
       gte(messages.createdAt, start),
@@ -6637,7 +6959,7 @@ export async function appendPersonaCorrection(
   const db = await getDb();
   if (!db) throw new Error("DB not available");
   const [row] = await db.select({ log: personas.correctionLog }).from(personas)
-    .where(and(eq(personas.id, personaId), eq(personas.userId, userId))).limit(1);
+    .where(and(isNull(personas.deletedAt), eq(personas.id, personaId), eq(personas.userId, userId))).limit(1);
   const existing = Array.isArray(row?.log) ? (row.log as Record<string, unknown>[]) : [];
   const next = [...existing, entry];
   await db.update(personas).set({ correctionLog: next })
@@ -7242,7 +7564,7 @@ export async function searchRecordsSemantic(
   const [owned] = await db
     .select({ id: personas.id })
     .from(personas)
-    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)))
+    .where(and(isNull(personas.deletedAt), eq(personas.id, personaId), eq(personas.userId, userId)))
     .limit(1);
   if (!owned) return null;
   const model = embedModelName();
@@ -8107,7 +8429,7 @@ export async function deleteRecordsByFile(
  * Deletes one uploaded file's row and the records it brought in.
  *
  * The disk bytes are not touched here — they go after the transaction
- * commits, the same way `deletePersona` waits.
+ * commits, the same way `purgePersona` waits.
  */
 export type DeletedPersonaFile = {
   personaId: number;
@@ -8453,6 +8775,7 @@ export async function getAllPersonasForReminders() {
     // anniversary is.
     timezone: personas.timezone,
   }).from(personas).where(and(
+    isNull(personas.deletedAt),
     eq(personas.remindersEnabled, true),
     /**
      * A family member's shared row carries the owner's relationship
@@ -8608,6 +8931,7 @@ export async function getMessagesSince(
     origin: messages.origin,
   }).from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.personaId, personaId),
       eq(messages.userId, userId),
       gte(messages.createdAt, since),
@@ -8648,6 +8972,7 @@ export async function getRecentMessages(
     createdAt: messages.createdAt,
   }).from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.personaId, personaId),
       eq(messages.userId, userId),
       gte(messages.createdAt, since),
@@ -8664,7 +8989,7 @@ export async function getLastMessageAt(personaId: number, userId: number) {
   const db = await getDb();
   if (!db) return undefined;
   const rows = await db.select({ createdAt: messages.createdAt }).from(messages)
-    .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId)))
+    .where(and(isNull(messages.deletedAt), eq(messages.personaId, personaId), eq(messages.userId, userId)))
     .orderBy(desc(messages.createdAt)).limit(1);
   return rows[0]?.createdAt;
 }
@@ -8683,6 +9008,7 @@ export async function getLastUserMessageAt(personaId: number, userId: number) {
   if (!db) return undefined;
   const rows = await db.select({ createdAt: messages.createdAt }).from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.personaId, personaId),
       eq(messages.userId, userId),
       eq(messages.role, "user"),
@@ -8704,6 +9030,7 @@ export async function getUserMessageCountSince(userId: number, since: Date) {
   if (!db) return 0;
   const [result] = await db.select({ c: count() }).from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.userId, userId),
       eq(messages.role, "user"),
       gte(messages.createdAt, since),
@@ -8733,6 +9060,7 @@ export async function getDailyUserChatCounts(userId: number, days = 30, timezone
   })
     .from(messages)
     .where(and(
+      isNull(messages.deletedAt),
       eq(messages.userId, userId),
       eq(messages.role, "user"),
       gte(messages.createdAt, since),
@@ -8760,7 +9088,7 @@ export async function getSessionStartAt(
   if (!db) return null;
   const rows = await db.select({ createdAt: messages.createdAt })
     .from(messages)
-    .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId)))
+    .where(and(isNull(messages.deletedAt), eq(messages.personaId, personaId), eq(messages.userId, userId)))
     .orderBy(desc(messages.createdAt))
     .limit(lookback);
   if (rows.length === 0) return null;
@@ -8951,7 +9279,7 @@ export async function getPersonaBehaviorProfile(personaId: number, userId: numbe
   const db = await getDb();
   if (!db) return null;
   const rows = await db.select({ behaviorProfile: personas.behaviorProfile }).from(personas)
-    .where(and(eq(personas.id, personaId), eq(personas.userId, userId))).limit(1);
+    .where(and(isNull(personas.deletedAt), eq(personas.id, personaId), eq(personas.userId, userId))).limit(1);
   return rows[0]?.behaviorProfile ?? null;
 }
 
@@ -8970,7 +9298,7 @@ export async function getPersonaSettings(
   const rows = await db
     .select({ settings: personas.settings })
     .from(personas)
-    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)))
+    .where(and(isNull(personas.deletedAt), eq(personas.id, personaId), eq(personas.userId, userId)))
     .limit(1);
   if (!rows[0]) return null;
   return normalizePersonaSettings(rows[0].settings);
@@ -9001,7 +9329,7 @@ export async function getPersonaStyleProfile(
   const rows = await db
     .select({ styleProfile: personas.styleProfile })
     .from(personas)
-    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)))
+    .where(and(isNull(personas.deletedAt), eq(personas.id, personaId), eq(personas.userId, userId)))
     .limit(1);
   if (!rows[0]) return null;
   if (rows[0].styleProfile == null) return null;
@@ -9466,6 +9794,7 @@ export async function countUserMessagesSince(
   const db = await getDb();
   if (!db) return 0;
   const [row] = await db.select({ n: count() }).from(messages).where(and(
+    isNull(messages.deletedAt),
     eq(messages.personaId, personaId),
     eq(messages.userId, userId),
     eq(messages.role, "user"),
@@ -9584,7 +9913,7 @@ export async function listUserMessageTimesSince(userId: number, since: Date) {
   const db = await getDb();
   if (!db) return [];
   return db.select({ at: messages.createdAt }).from(messages)
-    .where(and(eq(messages.userId, userId), eq(messages.role, "user"), gte(messages.createdAt, since)))
+    .where(and(isNull(messages.deletedAt), eq(messages.userId, userId), eq(messages.role, "user"), gte(messages.createdAt, since)))
     .orderBy(asc(messages.createdAt));
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deletePersona, updatePersona } from "./db";
+import { purgePersona, updatePersona } from "./db";
 import { seedXiaoman } from "./test-fixtures/seed-db";
 import { buildTimeline, setTurningPointDecision } from "./records/timeline";
 
@@ -41,7 +41,7 @@ describe.skipIf(!DATABASE_URL)("the turning points of a persona", () => {
       // The change itself is still counted from the record.
       expect(confirmed?.changes.length).toBeGreaterThan(0);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   }, 30_000);
 });

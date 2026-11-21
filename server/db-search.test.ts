@@ -4,7 +4,7 @@ import {
   createCollectedMessages,
   createMessage,
   createPersona,
-  deletePersona,
+  purgePersona,
   getDb,
   searchAllMessages,
   searchMessages,
@@ -55,7 +55,7 @@ describe.skipIf(!DATABASE_URL)("search over the record table", () => {
       const loose = await searchRecordsLexical(personaId, userId, { q: "喜欢" });
       expect(loose).toHaveLength(2);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -73,7 +73,7 @@ describe.skipIf(!DATABASE_URL)("search over the record table", () => {
         searchRecordsLexical(personaId, userId, { q: "在吗" }),
       ).resolves.toHaveLength(1);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -111,7 +111,7 @@ describe.skipIf(!DATABASE_URL)("search over the record table", () => {
       const after = await searchRecordsLexical(personaId, userId, { q: "周末看电影" });
       expect(after.map((hit) => hit.id)).toEqual(before.map((hit) => hit.id));
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -150,7 +150,7 @@ describe.skipIf(!DATABASE_URL)("search over the record table", () => {
       const all = await searchAllMessages(userId, "猫");
       expect(all.some((row) => row.kind === "message" && row.content === "我有一只猫")).toBe(true);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 });
@@ -206,7 +206,7 @@ describe.skipIf(!DATABASE_URL)("search over the Xiaoman fixture", () => {
         phrase.slice(0, 2).map((hit) => hit.id),
       );
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 });
@@ -272,8 +272,8 @@ describe.skipIf(!DATABASE_URL)("searchAll across users", () => {
       expect(rows.map((row) => row.personaId)).toEqual([mine]);
       expect(rows.map((row) => row.content)).not.toContain("别人的海不该被搜到");
     } finally {
-      await deletePersona(mine, userId);
-      await deletePersona(theirs, otherUserId);
+      await purgePersona(mine, userId);
+      await purgePersona(theirs, otherUserId);
     }
   });
 });

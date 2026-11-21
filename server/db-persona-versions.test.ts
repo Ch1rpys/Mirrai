@@ -4,7 +4,7 @@ import {
   MAX_PERSONA_VERSIONS,
   createPersona,
   createPersonaVersion,
-  deletePersona,
+  purgePersona,
   getPersonaById,
   getPersonaVersion,
   listPersonaVersions,
@@ -35,7 +35,7 @@ describe.skipIf(!DATABASE_URL)("persona versions", () => {
           ?.speakingStyle,
       ).toBe("更短");
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -56,7 +56,7 @@ describe.skipIf(!DATABASE_URL)("persona versions", () => {
       expect(await getPersonaVersion(oldest, userId)).toBeUndefined();
       expect(versions[0]?.id).toBe(ids[ids.length - 1]);
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 });

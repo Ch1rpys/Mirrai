@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createPersona,
-  deletePersona,
+  purgePersona,
   getRecordReportCache,
   saveRecordReportCache,
 } from "./db";
@@ -34,7 +34,7 @@ describe.skipIf(!DATABASE_URL)("the report cache", () => {
       // Somebody else cannot read it.
       expect(await getRecordReportCache(personaId, userId + 1)).toBeNull();
     } finally {
-      await deletePersona(personaId, userId);
+      await purgePersona(personaId, userId);
     }
   });
 
@@ -47,7 +47,7 @@ describe.skipIf(!DATABASE_URL)("the report cache", () => {
       recordsVersion: "1:1",
       report: {},
     });
-    await deletePersona(personaId, userId);
+    await purgePersona(personaId, userId);
     expect(await getRecordReportCache(personaId, userId)).toBeNull();
   });
 });
