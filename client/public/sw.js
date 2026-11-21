@@ -21,6 +21,20 @@
  */
 const CACHE_VERSION = "mirrai-BUILD";
 
+/**
+ * Where a file shared from another app waits for the user to import it.
+ *
+ * A separate cache on purpose: it does not belong to the app shell, the
+ * shell's version name never has to change because of it, and the
+ * activate step below must not delete it along with last build's shell.
+ * The files here are the user's own exports — they leave with the tab
+ * that imports them.
+ */
+const SHARE_CACHE = "mirrai-share-inbox";
+
+/** The action the manifest declares for the OS share sheet. */
+const SHARE_TARGET = "/share-target";
+
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -121,15 +135,71 @@ self.addEventListener("activate", (event) => {
       .keys()
       .then((keys) =>
         Promise.all(
-          keys.filter((key) => key !== CACHE_VERSION).map((key) => caches.delete(key)),
+          keys
+            // The share inbox is not the app shell and outlives it: a
+            // file shared a moment ago must still be there after an
+            // update.
+            .filter((key) => key !== CACHE_VERSION && key !== SHARE_CACHE)
+            .map((key) => caches.delete(key)),
         ),
       )
       .then(() => self.clients.claim()),
   );
 });
 
+/**
+ * Takes the files the OS share sheet posted, and sends the browser to
+ * the page that imports them.
+ *
+ * The manifest's `share_target` makes the operating system POST a
+ * `multipart/form-data` body here. The worker cannot answer an app page
+ * on its own, so it stores the files where the page can read them and
+ * answers with a 303 to `/share-inbox` — the browser then opens that
+ * page as a normal navigation.
+ *
+ * The file's name goes into a header because a cache key is a URL and
+ * not every name is one; it is percent-encoded so a Chinese file name
+ * survives intact.
+ */
+async function receiveSharedFiles(request) {
+  let entries = [];
+  try {
+    const form = await request.formData();
+    entries = form.getAll("files").filter((entry) => entry && typeof entry === "object" && "arrayBuffer" in entry);
+  } catch {
+    entries = [];
+  }
+  const cache = await caches.open(SHARE_CACHE);
+  const stamp = Date.now();
+  for (let index = 0; index < entries.length; index += 1) {
+    const file = entries[index];
+    const name = typeof file.name === "string" && file.name ? file.name : "shared-" + index;
+    const key = SHARE_TARGET + "-inbox/" + stamp + "-" + index;
+    const headers = new Headers({
+      "content-type": file.type || "application/octet-stream",
+      "x-mirrai-filename": encodeURIComponent(name),
+    });
+    await cache.put(key, new Response(file, { headers }));
+  }
+  return Response.redirect(new URL("/share-inbox", self.location.origin).toString(), 303);
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
+
+  /**
+   * The share sheet's POST comes before the GET-only rule.
+   *
+   * It is the one non-GET request the worker answers; it writes into the
+   * share inbox and nothing else (see `receiveSharedFiles`).
+   */
+  if (request.method === "POST") {
+    const shared = new URL(request.url);
+    if (shared.origin === self.location.origin && shared.pathname === SHARE_TARGET) {
+      event.respondWith(receiveSharedFiles(request));
+    }
+    return;
+  }
 
   if (request.method !== "GET") return;
 

@@ -413,6 +413,8 @@ vi.mock("streamdown", () => ({
 }));
 
 import Lobby from "./pages/Lobby";
+import ShareInbox from "./pages/ShareInbox";
+import { SHARE_INBOX_CACHE } from "./lib/share-inbox";
 import Chat from "./pages/Chat";
 import Settings from "./pages/Settings";
 import PersonaProfile from "./pages/PersonaProfile";
@@ -509,6 +511,40 @@ describe("every control has a name", () => {
     nav.params = { id: "1" };
     renderPage(<PersonaProfile />);
     expect(drawnControls()).toBeGreaterThan(5);
+    expect(unnamedControls()).toEqual([]);
+  });
+
+  it("in the shared-files page", async () => {
+    // The page the OS share sheet opens (C8.8). The Cache API is faked
+    // with one waiting file, so the page draws its import control.
+    const store = new Map<string, Response>();
+    store.set(
+      "http://localhost:3000/share-target-inbox/1-0",
+      new Response("a,b", {
+        headers: { "content-type": "text/csv", "x-mirrai-filename": "chat.csv" },
+      }),
+    );
+    const cache = {
+      put: async () => undefined,
+      match: async (key: string | Request) =>
+        store.get(typeof key === "string" ? key : key.url),
+      keys: async () => Array.from(store.keys()).map((url) => new Request(url)),
+      delete: async () => true,
+      add: async () => undefined,
+    };
+    Object.defineProperty(globalThis, "caches", {
+      configurable: true,
+      value: {
+        open: async () => cache,
+        keys: async () => [SHARE_INBOX_CACHE],
+        delete: async () => true,
+        match: async () => undefined,
+      },
+    });
+    nav.location = "/share-inbox";
+    renderPage(<ShareInbox />);
+    expect(await screen.findByText("chat.csv")).toBeInTheDocument();
+    expect(drawnControls()).toBeGreaterThan(0);
     expect(unnamedControls()).toEqual([]);
   });
 });

@@ -1326,6 +1326,7 @@ export const zh = {
   importWizard: {
     monologueTitle: "单向文字",
     monologueNote: "这些是 {{name}} 写的东西，不是对话。能用来知道 {{name}} 在意什么、经历过什么；{{name}} 聊天时怎么说话，从这里看不出来。",
+    iosShareNote: "iPhone 上的浏览器收不到系统分享；先把文件存到「文件」，再在这里选它。",
     unknownFormat: "没认出这是哪种导出文件。可以从下面选一种，或者告诉我们每一列是什么。",
     rolesPrompt: "这份记录里有 {{count}} 个说话的人。哪个是你，哪个是 {{name}}？",
     previewTitle: "先看一眼认得对不对",
@@ -3537,6 +3538,24 @@ export const zh = {
     disable: "关闭应用锁",
     disableHint: "关闭会把 PIN 和通行密钥一起删掉。",
     disabled: "应用锁已关闭。",
+  },
+  /**
+   * The files shared into the app (C8.8).
+   */
+  shareInbox: {
+    title: "收到了文件",
+    description: "这些是从别的应用分享进来的文件。选一个分身导入；导入完成之后，文件从浏览器里删掉。",
+    unsupported: "这个浏览器没有可以接收分享的缓存，所以这里打不开分享进来的文件。",
+    failed: "没有读到分享进来的文件。",
+    empty: "没有等着导入的文件。",
+    emptyHint: "在别的应用里选「分享」→「Mirrai」，文件会出现在这里。",
+    pickPersona: "导入到哪个分身",
+    import: "导入",
+    importing: "正在导入…",
+    importFailed: "没有导入成功：{{message}}",
+    noPersonas: "还没有分身。",
+    createPersona: "先新建一个分身",
+    leaveClears: "离开这个页面时，没导入的文件会被删掉。",
   },
 } as const;
 

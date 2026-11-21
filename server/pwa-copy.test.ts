@@ -52,4 +52,42 @@ describe("the manifest", () => {
       expect(shortcut.description).toContain("/");
     }
   });
+
+  it("has a shortcut for the mailbox and for the last conversation", () => {
+    const manifest = JSON.parse(
+      readFileSync(path.join(ROOT, "client/public/manifest.webmanifest"), "utf-8"),
+    );
+    const byUrl = new Map(manifest.shortcuts.map((shortcut: any) => [shortcut.url, shortcut]));
+    const mailbox = byUrl.get("/letters") as any;
+    const last = byUrl.get("/chat/last") as any;
+    expect(mailbox, "a shortcut for /letters").toBeTruthy();
+    expect(last, "a shortcut for /chat/last").toBeTruthy();
+    // Both names carry both languages, like every other shortcut.
+    expect(mailbox.name).toContain("信箱");
+    expect(mailbox.name).toContain("Mailbox");
+    expect(last.name).toContain("最近聊的");
+    expect(last.name).toContain("Last chat");
+    expect(mailbox.description).toContain("/");
+    expect(last.description).toContain("/");
+  });
+
+  it("declares a share target that takes files", () => {
+    // The manifest shape is the one the Web Share Target API requires:
+    // POST + multipart/form-data + a named `files` parameter.
+    // https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest/Reference/share_target
+    const manifest = JSON.parse(
+      readFileSync(path.join(ROOT, "client/public/manifest.webmanifest"), "utf-8"),
+    );
+    expect(manifest.share_target).toMatchObject({
+      action: "/share-target",
+      method: "POST",
+      enctype: "multipart/form-data",
+    });
+    const files = manifest.share_target.params.files;
+    expect(files).toHaveLength(1);
+    expect(files[0].name).toBe("files");
+    expect(files[0].accept).toEqual(
+      expect.arrayContaining(["text/*", "application/zip", "application/json", ".csv", ".html"]),
+    );
+  });
 });

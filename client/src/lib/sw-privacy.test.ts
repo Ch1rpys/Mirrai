@@ -28,24 +28,43 @@ type FetchListener = (event: {
   respondWith: (value?: unknown) => void;
 }) => void;
 
-function loadServiceWorker() {
+function loadServiceWorker(
+  options: { cacheKeys?: string[] } = {},
+) {
   const source = readFileSync(SW_PATH, "utf-8");
 
   const listeners: Record<string, FetchListener[]> = {};
-  const cacheWrites: string[] = [];
+  /** Every cache write, with the cache it went into. */
+  const cacheWrites: Array<{ cache: string; url: string }> = [];
+  /** Every cache the worker deleted. */
+  const cacheDeletes: string[] = [];
+  const cacheKeys = options.cacheKeys ?? [];
+  /** What `caches.keys()` answers, until a test changes it. */
+  const keysState = { value: cacheKeys };
+
+  const cacheFor = (name: string) => ({
+    add: async () => undefined,
+    put: async (request: any) => {
+      const url =
+        typeof request === "string" ? request : request?.url ?? String(request);
+      cacheWrites.push({ cache: name, url });
+    },
+    match: async () => undefined,
+    keys: async () => keysState.value.map((key) => new Request(key)),
+    delete: async (request: any) => {
+      const url = typeof request === "string" ? request : request?.url ?? String(request);
+      cacheDeletes.push(url);
+      return true;
+    },
+  });
 
   const caches = {
-    open: async () => ({
-      add: async () => undefined,
-      put: async (request: any) => {
-        const url =
-          typeof request === "string" ? request : request?.url ?? String(request);
-        cacheWrites.push(url);
-      },
-      match: async () => undefined,
-    }),
-    keys: async () => [],
-    delete: async () => true,
+    open: async (name: string) => cacheFor(name),
+    keys: async () => keysState.value,
+    delete: async (name: string) => {
+      cacheDeletes.push(name);
+      return true;
+    },
     match: async () => undefined,
   };
 
@@ -61,6 +80,9 @@ function loadServiceWorker() {
   const context = vm.createContext({
     self,
     caches,
+    Headers,
+    FormData,
+    File,
     fetch: async () => ({ ok: true, type: "basic", clone: () => ({}) }),
     URL,
     Response,
@@ -71,7 +93,7 @@ function loadServiceWorker() {
 
   vm.runInContext(source, context, { filename: SW_PATH });
 
-  return { listeners, cacheWrites };
+  return { listeners, cacheWrites, cacheDeletes, keysState };
 }
 
 /**
@@ -100,6 +122,46 @@ function dispatchFetch(
 
   for (const fn of listeners.fetch ?? []) fn(event);
   return responded;
+}
+
+/**
+ * Posts a `multipart/form-data` body to the worker, the way the OS share
+ * sheet does, and returns the promise the worker answered with.
+ */
+function dispatchShare(
+  listeners: Record<string, FetchListener[]>,
+  url: string,
+  form: FormData,
+) {
+  let answered: Promise<unknown> | null = null;
+  const event = {
+    request: {
+      method: "POST",
+      url,
+      mode: "navigate",
+      formData: async () => form,
+    },
+    respondWith: (value?: unknown) => {
+      answered = Promise.resolve(value);
+    },
+  };
+
+  for (const fn of listeners.fetch ?? []) fn(event);
+  return answered;
+}
+
+/** Runs the worker's activate step and waits for its `waitUntil`. */
+async function dispatchActivate(listeners: Record<string, FetchListener[]>) {
+  let pending: Promise<unknown> | null = null;
+  const event = {
+    request: { method: "GET", url: `${ORIGIN}/`, mode: "navigate" },
+    respondWith: () => {},
+    waitUntil: (value: Promise<unknown>) => {
+      pending = value;
+    },
+  };
+  for (const fn of listeners.activate ?? []) fn(event as never);
+  if (pending) await pending;
 }
 
 describe("the service worker", () => {
@@ -247,5 +309,46 @@ describe("the service worker", () => {
     // was not awaited, so every 404 produced an unhandled rejection.
     const source = readFileSync(SW_PATH, "utf-8");
     expect(source).toContain("if (response.ok)");
+  });
+});
+
+describe("the share sheet's inbox", () => {
+  it("writes a shared file into its own cache, never the shell's", async () => {
+    const { listeners, cacheWrites } = loadServiceWorker();
+    const form = new FormData();
+    form.append("files", new File(["a,b\n1,2\n"], "聊天记录.csv", { type: "text/csv" }));
+    form.append("files", new File(["{}"], "export.json", { type: "application/json" }));
+
+    const answered = dispatchShare(listeners, `${ORIGIN}/share-target`, form);
+    expect(answered, "the worker must answer the share post").not.toBeNull();
+    const response = (await answered) as unknown as Response;
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(`${ORIGIN}/share-inbox`);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(cacheWrites).toHaveLength(2);
+    for (const write of cacheWrites) {
+      expect(write.cache).toBe("mirrai-share-inbox");
+      expect(write.url).toContain("/share-target-inbox/");
+    }
+    // Not the shell cache: an update must not be delayed by a file
+    // somebody shared.
+    expect(cacheWrites.some((write) => write.cache === "mirrai-BUILD")).toBe(false);
+  });
+
+  it("keeps the inbox when the shell cache is cleaned up", async () => {
+    const { listeners, cacheDeletes } = loadServiceWorker({
+      cacheKeys: ["mirrai-BUILD", "mirrai-share-inbox", "mirrai-old-build"],
+    });
+
+    await dispatchActivate(listeners);
+
+    expect(cacheDeletes).toEqual(["mirrai-old-build"]);
+  });
+
+  it("does not take over the share page or the API", () => {
+    const { listeners } = loadServiceWorker();
+    expect(dispatchFetch(listeners, `${ORIGIN}/share-inbox`, { mode: "navigate" })).toBe(true);
+    expect(dispatchFetch(listeners, `${ORIGIN}/api/import/upload`)).toBe(false);
   });
 });

@@ -9,7 +9,10 @@
   "background_color": "#2A1F4E",
   "theme_color": "#6E5AC8",
   "lang": "zh-CN",
-  "categories": ["lifestyle", "social"],
+  "categories": [
+    "lifestyle",
+    "social"
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.png",
@@ -42,6 +45,37 @@
       "short_name": "日记 / Diary",
       "url": "/diary",
       "description": "回看 AI 生成的对话日记 / Read the diary the app wrote"
+    },
+    {
+      "name": "信箱 / Mailbox",
+      "short_name": "信箱 / Mailbox",
+      "url": "/letters",
+      "description": "所有分身的信、回信和胶囊 / Letters, replies and capsules from every persona"
+    },
+    {
+      "name": "最近聊的 / Last chat",
+      "short_name": "最近聊的 / Last chat",
+      "url": "/chat/last",
+      "description": "回到最近聊过的那个分身 / Return to the persona you spoke to last"
     }
-  ]
+  ],
+  "share_target": {
+    "action": "/share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "files",
+          "accept": [
+            "text/*",
+            "application/zip",
+            "application/json",
+            ".csv",
+            ".html"
+          ]
+        }
+      ]
+    }
+  }
 }

@@ -1390,6 +1390,7 @@ export const zhHant = {
   "importWizard": {
     "monologueTitle": "單向文字",
     "monologueNote": "這些是 {{name}} 寫的東西，不是對話。能用來知道 {{name}} 在意什麼、經歷過什麼；{{name}} 聊天時怎麼說話，從這裡看不出來。",
+    "iosShareNote": "iPhone 上的瀏覽器收不到系統分享；先把文件存到「文件」，再在這裡選它。",
     "unknownFormat": "沒認出這是哪種導出文件。可以從下面選一種，或者告訴我們每一列是什麼。",
     "rolesPrompt": "這份記錄裡有 {{count}} 個說話的人。哪個是你，哪個是 {{name}}？",
     "previewTitle": "先看一眼認得對不對",
@@ -3436,5 +3437,20 @@ export const zhHant = {
     "disable": "關閉應用鎖",
     "disableHint": "關閉會把 PIN 和通行密鑰一起刪掉。",
     "disabled": "應用鎖已關閉。"
+  },
+  "shareInbox": {
+    "title": "收到了文件",
+    "description": "這些是從別的應用分享進來的文件。選一個分身導入；導入完成之後，文件從瀏覽器裡刪掉。",
+    "unsupported": "這個瀏覽器沒有可以接收分享的緩存，所以這裡打不開分享進來的文件。",
+    "failed": "沒有讀到分享進來的文件。",
+    "empty": "沒有等著導入的文件。",
+    "emptyHint": "在別的應用裡選「分享」→「Mirrai」，文件會出現在這裡。",
+    "pickPersona": "導入到哪個分身",
+    "import": "導入",
+    "importing": "正在導入…",
+    "importFailed": "沒有導入成功：{{message}}",
+    "noPersonas": "還沒有分身。",
+    "createPersona": "先新建一個分身",
+    "leaveClears": "離開這個頁面時，沒導入的文件會被刪掉。"
   }
 } as const;

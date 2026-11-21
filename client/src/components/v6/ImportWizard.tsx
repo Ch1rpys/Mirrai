@@ -246,6 +246,18 @@ export default function ImportWizard(props: {
 
   return (
     <div className="mt-3 space-y-3 text-sm">
+      {/**
+        * The iPhone's share sheet cannot hand a file to a web app.
+        *
+        * The workaround is the Files app: save there, then choose the
+        * file here. The sentence is always present on iOS, because the
+        * person looking at this page may be doing it right now.
+        */}
+      {typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent) && (
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          {t("importWizard.iosShareNote")}
+        </p>
+      )}
       {(parseStatus === "detecting" || parseStatus === "importing") && (
         <BusyPanel
           status={parseStatus}

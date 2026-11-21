@@ -41,6 +41,8 @@ const Roleplay = lazy(() => import("./pages/Roleplay"));
 const Book = lazy(() => import("./pages/Book"));
 const ShareAccept = lazy(() => import("./pages/ShareAccept"));
 const Letters = lazy(() => import("./pages/Letters"));
+const ShareInbox = lazy(() => import("./pages/ShareInbox"));
+const ChatLast = lazy(() => import("./pages/ChatLast"));
 
 function Router() {
   const [location] = useLocation();
@@ -81,6 +83,8 @@ function Router() {
           <Route path="/persona/:id/roleplay" component={Roleplay} />
           <Route path="/persona/:id/book" component={Book} />
           <Route path="/letters" component={Letters} />
+          <Route path="/share-inbox" component={ShareInbox} />
+          <Route path="/chat/last" component={ChatLast} />
           <Route path="/share/:token" component={ShareAccept} />
           <Route path="/blind/:token" component={BlindGuest} />
           <Route path="/persona/:id/graduation" component={Graduation} />

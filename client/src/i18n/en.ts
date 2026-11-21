@@ -1325,6 +1325,7 @@ export const en = {
   importWizard: {
     monologueTitle: "One-way writing",
     monologueNote: "These are things {{name}} wrote, not a conversation. They can tell you what {{name}} cared about and lived through; they cannot tell you how {{name}} talks in chat.",
+    iosShareNote: "The browser on an iPhone cannot receive the system share sheet. Save the file to Files first, then choose it here.",
     unknownFormat: "This export was not recognised. Pick a format below, or tell us what each column is.",
     rolesPrompt: "This log has {{count}} speakers. Which one is you, and which one is {{name}}?",
     previewTitle: "Look first, and see whether it was read right",
@@ -3520,6 +3521,24 @@ export const en = {
     disable: "Turn the app lock off",
     disableHint: "Turning it off removes the PIN and every passkey with it.",
     disabled: "The app lock is off.",
+  },
+  /**
+   * The files shared into the app (C8.8).
+   */
+  shareInbox: {
+    title: "Shared with Mirrai",
+    description: "These files were shared in from another app. Pick a persona to import them into; once imported, the file is deleted from the browser.",
+    unsupported: "This browser has no cache to receive shared files in, so the files shared in cannot be opened here.",
+    failed: "The shared files could not be read.",
+    empty: "There is nothing waiting to be imported.",
+    emptyHint: "In another app, choose Share → Mirrai and the file will appear here.",
+    pickPersona: "Import into which persona",
+    import: "Import",
+    importing: "Importing…",
+    importFailed: "It was not imported: {{message}}",
+    noPersonas: "There is no persona yet.",
+    createPersona: "Create one first",
+    leaveClears: "Files you do not import are deleted when you leave this page.",
   },
 } as const;
 
