@@ -106,6 +106,9 @@ describe("delivering what was scheduled (C5.3)", () => {
       userId: 1,
       mode: "once",
       now: NOW,
+      // The answer arrives while the user is away, so the mailbox has to
+      // be able to count it (C8.2).
+      fromScheduledMessage: true,
     }));
     expect(finishScheduledItem).toHaveBeenCalledWith(7, 1, "delivered", { at: NOW });
     expect(pushToUser).toHaveBeenCalledWith(1, expect.objectContaining({

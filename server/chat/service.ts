@@ -347,6 +347,15 @@ export interface ConversationOptions {
    * means; but nothing claims it is in use.
    */
   alreadyPersisted?: boolean;
+  /**
+   * The user scheduled this line earlier and it has just come due (C8.2).
+   *
+   * The reply to it arrives when the user is not looking, so the
+   * mailbox counts it as unread. Both rows are marked — the user line so
+   * the conversation shows where it came from, the answer so the
+   * mailbox can find it without guessing from timestamps.
+   */
+  fromScheduledMessage?: boolean;
   /** Media attached to the message. */
   media?: { url: string; type: "image" | "voice"; mimeType?: string };
   /** Locale for prompt language and trigger words. */
@@ -1209,6 +1218,7 @@ async function* admitUserMessage(
       messageType: options.media?.type ?? "text",
       mediaUrl: options.media?.url ?? null,
       replyToId,
+      ...(options.fromScheduledMessage ? { origin: "scheduled" } : {}),
     });
   }
 
@@ -2147,6 +2157,7 @@ async function* runConversationTurn(
     ...(options.fromReplyJob
       ? { deferred: { jobId: options.fromReplyJob.jobId, reason: options.fromReplyJob.reason } }
       : {}),
+    ...(options.fromScheduledMessage ? { scheduled: true } : {}),
   };
   const userAct: UserAct = plan.userAct ?? labelUserActByRule(message) ?? "other";
   const recallText = quirks && rerank && shouldRecall(quirks, seededRandom(`${turnInput.seed}:recall`))

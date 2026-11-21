@@ -21,6 +21,7 @@ import {
   getPersonaById,
   getScheduledItem,
   listScheduledItems,
+  markScheduledOpened,
 } from "../db";
 import { buildCrisisResponse, detectCrisis } from "../safety/crisis";
 
@@ -181,5 +182,23 @@ export const scheduledRouter = router({
       if (due.getTime() > Date.now()) return { body: null, dueAt: due.toISOString() };
       if (item.status === "cancelled") return { body: null, dueAt: due.toISOString() };
       return { body: item.body, dueAt: due.toISOString() };
+    }),
+
+  /**
+   * A due capsule was opened (C8.2).
+   *
+   * The mailbox counts the capsules whose day has come and that the
+   * user has not opened; the day alone cannot tell a capsule that was
+   * read on the morning of its day from one that was not. Opening is a
+   * write, so it is its own mutation and not a side effect of `open` —
+   * a query that writes is a query React Query is free to re-run.
+   */
+  markOpened: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const item = await getScheduledItem(input.id, ctx.user.id);
+      if (!item || item.kind !== "capsule") throw new TRPCError({ code: "NOT_FOUND" });
+      await markScheduledOpened(input.id, ctx.user.id);
+      return { success: true };
     }),
 });

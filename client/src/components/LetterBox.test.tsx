@@ -43,6 +43,8 @@ vi.mock("@/lib/trpc", () => ({
           fetch: async () => ({ letters: olderPage }),
         },
         todos: { invalidate },
+        inbox: { invalidate: vi.fn() },
+        unreadCount: { invalidate: vi.fn() },
       },
       scheduled: { list: { invalidate } },
     }),
@@ -73,6 +75,7 @@ vi.mock("@/lib/trpc", () => ({
       list: { useQuery: () => ({ data: { items: [] }, isLoading: false, isError: false }) },
       cancel: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       open: { useQuery: () => ({ data: null }) },
+      markOpened: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       create: {
         useMutation: (options: any) => ({
           mutate: (values: any) => {

@@ -34,6 +34,8 @@ import { normaliseLoveLanguage } from "@shared/love-language";
 import MoodCheckIn from "@/components/MoodCheckIn";
 import OnThisDay from "@/components/v6/OnThisDay";
 import Milestones from "@/components/v6/Milestones";
+import MailboxEntry from "@/components/v6/MailboxEntry";
+import PersonaUnreadNote from "@/components/v6/PersonaUnreadNote";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionDefinition } from "@/lib/emotions";
 import { localDateKey, zonedDateKey, zonedHour, daysSinceContact } from "@shared/timezone";
 import { attachmentStyleLabel, loveLanguageLabel } from "@/lib/persona-options";
@@ -1104,6 +1106,7 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
             )}
           </div>
           <p className="text-muted-foreground text-sm truncate">{persona.relationshipDesc || t("lobby.card.relationship")}</p>
+          <PersonaUnreadNote name={persona.name} count={persona.unreadReplies ?? 0} />
 
           <div className="flex items-center gap-2.5 mt-2 text-xs text-muted-foreground flex-wrap">
             <span className="flex items-center gap-1">
@@ -1940,6 +1943,7 @@ export default function Lobby() {
             </span>
           )}
           <div className="app-nav-actions">
+            <MailboxEntry />
             {user?.username && (
               <div className="app-nav-icon !bg-muted !cursor-default mr-0.5">
                 <span className="text-[0.6875rem] font-semibold text-foreground">{user.username.charAt(0).toUpperCase()}</span>

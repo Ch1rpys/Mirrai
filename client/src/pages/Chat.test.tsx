@@ -53,6 +53,7 @@ vi.mock("@/lib/trpc", () => ({
       declineGraduation: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     chat: {
+      markRead: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       getHistory: {
         useQuery: () => ({
           data: history,
@@ -124,9 +125,14 @@ vi.mock("@/lib/trpc", () => ({
       chat: {
         getHistory: { invalidate: vi.fn() },
         pendingReply: { invalidate: vi.fn() },
+        markRead: { invalidate: vi.fn() },
       },
       client: { mutation: vi.fn() },
       scheduled: { list: { invalidate: vi.fn() } },
+      letter: {
+        unreadCount: { invalidate: vi.fn() },
+        inbox: { invalidate: vi.fn() },
+      },
     }),
   },
 }));

@@ -38,6 +38,23 @@ export default function ScheduledList({
     { id: opened ?? 0 },
     { enabled: opened !== null },
   );
+  /**
+   * The mailbox counts a due capsule as waiting until it is opened
+   * (C8.2), so opening says so.
+   */
+  const markOpened = trpc.scheduled.markOpened.useMutation();
+  const toggleOpen = (id: number) => {
+    const next = opened === id ? null : id;
+    setOpened(next);
+    if (next !== null) {
+      markOpened.mutate({ id: next }, {
+        onSuccess: () => {
+          utils.letter.inbox.invalidate();
+          utils.letter.unreadCount.invalidate();
+        },
+      });
+    }
+  };
 
   if (query.isLoading) {
     return <p className="text-xs text-muted-foreground">{t("common.loading")}</p>;
@@ -103,7 +120,7 @@ export default function ScheduledList({
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => setOpened(opened === item.id ? null : item.id)}
+                    onClick={() => toggleOpen(item.id)}
                   >
                     {opened === item.id ? t("scheduled.close") : t("scheduled.open")}
                   </Button>

@@ -11,7 +11,13 @@ let openBody: string | null = null;
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    useUtils: () => ({ scheduled: { list: { invalidate: vi.fn() } } }),
+    useUtils: () => ({
+      scheduled: { list: { invalidate: vi.fn() } },
+      letter: {
+        inbox: { invalidate: vi.fn() },
+        unreadCount: { invalidate: vi.fn() },
+      },
+    }),
     scheduled: {
       list: {
         useQuery: () => ({
@@ -22,6 +28,7 @@ vi.mock("@/lib/trpc", () => ({
         }),
       },
       cancel: { useMutation: () => ({ mutate: cancel, isPending: false }) },
+      markOpened: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       open: {
         useQuery: () => ({
           data: openBody ? { body: openBody, dueAt: "2020-01-01T00:00:00.000Z" } : null,

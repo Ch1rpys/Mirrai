@@ -43,6 +43,7 @@ import MeetCountdown from "@/components/v6/MeetCountdown";
 import TheirSide from "@/components/v6/TheirSide";
 import ScheduledSend from "@/components/v6/ScheduledSend";
 import ClosedComposer from "@/components/v6/ClosedComposer";
+import ReadMarker from "@/components/v6/ReadMarker";
 import AfterChat from "@/components/v6/AfterChat";
 import { useTypingReveal, waitMs } from "@/components/v6/useTypingReveal";
 
@@ -1789,6 +1790,12 @@ export default function Chat() {
           : undefined
       }
     >
+      {/* The mailbox learns when this conversation is in front of the
+          user (C8.2) — on mount, on return, and on each new message. */}
+      <ReadMarker
+        personaId={personaId}
+        latestMessageId={messages.length > 0 ? messages[messages.length - 1]?.id : undefined}
+      />
       {/* Header */}
       <header className="sticky top-0 z-40 app-header flex-shrink-0">
         <div className="container app-nav">

@@ -797,3 +797,30 @@ html.dark .surface-interactive:hover {
   .our-dictionary * { visibility: visible; }
   .our-dictionary { position: absolute; left: 0; top: 0; width: 100%; }
 }
+
+/**
+ * The mailbox number (C8.2).
+ *
+ * A plain count beside the envelope — no animation, no movement. It is
+ * only rendered when there is something, so at zero there is no badge
+ * at all rather than an empty one.
+ */
+.mailbox-entry {
+  position: relative;
+}
+
+.mailbox-count {
+  position: absolute;
+  top: -0.125rem;
+  right: -0.125rem;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--color-foreground);
+  color: var(--color-background);
+  font-size: 0.625rem;
+  line-height: 1rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}

@@ -150,6 +150,16 @@ export const personas = pgTable("personas", {
    * quiet.
    */
   lastUserMessageAt: timestamp("lastUserMessageAt"),
+  /**
+   * When the user last had this persona's chat page in front of them
+   * (C8.2).
+   *
+   * A reply that arrived later — a deferred reply, or the answer to a
+   * message the user scheduled — is something they have not seen. The
+   * app had no way to tell "the user was looking" from "the user was
+   * away", so it could not count what was waiting for them.
+   */
+  lastReadAt: timestamp("lastReadAt"),
   skillJobId: integer("skillJobId"),
   llmProvider: varchar("llmProvider", { length: 64 }),
   intimacyScore: integer("intimacyScore").default(0).notNull(),
@@ -929,6 +939,14 @@ export const letters = pgTable(
     repliedAt: timestamp("repliedAt"),
     replyText: text("replyText"),
     /**
+     * When the user read this reply (C8.2).
+     *
+     * The answer is written a day after the letter, when the user is
+     * not looking — so an answered letter used to look exactly like one
+     * they had already read.
+     */
+    readAt: timestamp("readAt"),
+    /**
      * When a sweep claimed this letter for answering.
      *
      * The claim is a lock, not a state: the letter stays "waiting"
@@ -956,6 +974,8 @@ export const letters = pgTable(
      * and over, and the table was scanned in full every minute.
      */
     claimedIdx: index("letters_claimed_idx").on(table.status, table.claimedAt),
+    /** The mailbox's "answered but not read" count (C8.2). */
+    userReadIdx: index("letters_user_read_idx").on(table.userId, table.status, table.readAt),
   }),
 );
 
@@ -2213,11 +2233,26 @@ export const scheduledItems = pgTable("scheduled_items", {
   cancelReason: varchar("cancelReason", { length: 16 }),
   claimedAt: timestamp("claimedAt"),
   deliveredAt: timestamp("deliveredAt"),
+  /**
+   * When a capsule was opened, on or after its day (C8.2).
+   *
+   * The inbox counts the due capsules that were not opened; without
+   * this column it can only see that the day came, and a capsule that
+   * was read on the morning of the day kept counting as waiting.
+   */
+  openedAt: timestamp("openedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => ({
   userDueIdx: index("scheduled_items_user_due_idx").on(table.userId, table.status, table.dueAt),
   personaIdx: index("scheduled_items_persona_idx").on(table.personaId, table.userId),
   dueIdx: index("scheduled_items_due_idx").on(table.dueAt),
+  /** The mailbox's "due but not opened" count (C8.2). */
+  userOpenedIdx: index("scheduled_items_user_opened_idx").on(
+    table.userId,
+    table.kind,
+    table.status,
+    table.openedAt,
+  ),
 }));
 
 export type ScheduledItem = typeof scheduledItems.$inferSelect;

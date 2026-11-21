@@ -74,6 +74,10 @@ vi.mock("@/lib/trpc", () => ({
     record: {
       onThisDay: { useQuery: () => ({ data: [] }) },
     },
+    letter: {
+      // The mailbox entry is on the lobby's nav (C8.2).
+      unreadCount: { useQuery: () => ({ data: { total: 0 } }) },
+    },
     reminder: {
       list: { useQuery: () => ({ data: [] }) },
       dismiss: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },

@@ -144,6 +144,9 @@ export async function sweepScheduledItems(
         locale,
         now,
         periodId: null,
+        // The answer arrives when the user is not looking, so the
+        // mailbox has to be able to count it (C8.2).
+        fromScheduledMessage: true,
       })) {
         if (event.type === "delta") {
           text += event.text;

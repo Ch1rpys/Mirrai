@@ -789,6 +789,218 @@ export async function deleteLetter(id: number, userId: number) {
   return deleted.length > 0;
 }
 
+// ─── The mailbox (C8.2) ────────────────────────────────────────────────────
+
+/**
+ * Marks one answered letter as read.
+ *
+ * The answer is written a day after the letter, when the user is not
+ * looking — so without this, an answered letter looked exactly like one
+ * the user had already read.
+ */
+export async function markLetterRead(id: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(letters).set({ readAt: new Date() })
+    .where(and(eq(letters.id, id), eq(letters.userId, userId)))
+    .returning({ id: letters.id });
+  return rows.length > 0;
+}
+
+/**
+ * Records that the user had this persona's conversation in front of
+ * them.
+ *
+ * It is what tells "a reply arrived while they were away" from "a reply
+ * arrived while they were reading". Only the user's own row is touched:
+ * a shared persona's conversation is a separate row.
+ *
+ * The time is the database's `now()`, not a JavaScript date. The two are
+ * written differently — `messages.createdAt` comes from the database's
+ * own clock while a JavaScript `Date` is stored as UTC wall-clock time —
+ * so comparing a JavaScript date against a message's `createdAt` is off
+ * by the zone offset. Writing both the same way is what makes "after the
+ * last time they looked" mean what it says.
+ */
+export async function markPersonaRead(
+  personaId: number,
+  userId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(personas)
+    .set({ lastReadAt: sql`now()` })
+    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)))
+    .returning({ id: personas.id });
+  return rows.length > 0;
+}
+
+/**
+ * Every letter of the user's, across every persona, for the mailbox.
+ *
+ * The per-persona box reads one persona's letters; the mailbox has to
+ * put all of them in the same five groups, so it needs the persona name
+ * with each row. Sealed personas are filtered by the caller — that
+ * decision needs the settings and the clock, not the table.
+ */
+export async function listInboxLetters(userId: number, personaIds: number[]) {
+  const db = await getDb();
+  if (!db || personaIds.length === 0) return [];
+  return db.select({
+    id: letters.id,
+    userId: letters.userId,
+    personaId: letters.personaId,
+    body: letters.body,
+    kind: letters.kind,
+    status: letters.status,
+    mood: letters.mood,
+    replyAt: letters.replyAt,
+    repliedAt: letters.repliedAt,
+    replyText: letters.replyText,
+    readAt: letters.readAt,
+    createdAt: letters.createdAt,
+    personaName: personas.name,
+  })
+    .from(letters)
+    .innerJoin(personas, eq(personas.id, letters.personaId))
+    .where(and(
+      eq(letters.userId, userId),
+      inArray(letters.personaId, personaIds),
+      eq(letters.kind, "letter"),
+    ))
+    .orderBy(desc(letters.createdAt), desc(letters.id))
+    .limit(500);
+}
+
+/** How many answered letters of theirs have not been read (C8.2). */
+export async function countUnreadLetters(
+  userId: number,
+  personaIds: number[],
+): Promise<number> {
+  const db = await getDb();
+  if (!db || personaIds.length === 0) return 0;
+  const [row] = await db.select({ c: count() }).from(letters).where(and(
+    eq(letters.userId, userId),
+    inArray(letters.personaId, personaIds),
+    eq(letters.kind, "letter"),
+    eq(letters.status, "answered"),
+    isNull(letters.readAt),
+  ));
+  return Number(row?.c ?? 0);
+}
+
+/**
+ * The scheduled things that have not come due yet, and the capsules
+ * whose day has come.
+ *
+ * The mailbox shows both groups; the per-persona box could only show
+ * one persona's.
+ */
+export async function listInboxScheduled(userId: number, personaIds: number[]) {
+  const db = await getDb();
+  if (!db || personaIds.length === 0) return [];
+  return db.select({
+    id: scheduledItems.id,
+    userId: scheduledItems.userId,
+    personaId: scheduledItems.personaId,
+    kind: scheduledItems.kind,
+    body: scheduledItems.body,
+    dueAt: scheduledItems.dueAt,
+    status: scheduledItems.status,
+    cancelReason: scheduledItems.cancelReason,
+    openedAt: scheduledItems.openedAt,
+    createdAt: scheduledItems.createdAt,
+    personaName: personas.name,
+  })
+    .from(scheduledItems)
+    .innerJoin(personas, eq(personas.id, scheduledItems.personaId))
+    .where(and(
+      eq(scheduledItems.userId, userId),
+      inArray(scheduledItems.personaId, personaIds),
+      inArray(scheduledItems.status, ["scheduled", "delivered"]),
+    ))
+    .orderBy(asc(scheduledItems.dueAt))
+    .limit(500);
+}
+
+/** How many due capsules have not been opened (C8.2). */
+export async function countUnopenedCapsules(
+  userId: number,
+  personaIds: number[],
+  now: Date = new Date(),
+): Promise<number> {
+  const db = await getDb();
+  if (!db || personaIds.length === 0) return 0;
+  const [row] = await db.select({ c: count() }).from(scheduledItems).where(and(
+    eq(scheduledItems.userId, userId),
+    inArray(scheduledItems.personaId, personaIds),
+    eq(scheduledItems.kind, "capsule"),
+    eq(scheduledItems.status, "delivered"),
+    lte(scheduledItems.dueAt, now),
+    isNull(scheduledItems.openedAt),
+  ));
+  return Number(row?.c ?? 0);
+}
+
+/** Marks a capsule as opened, so it stops counting as waiting. */
+export async function markScheduledOpened(id: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(scheduledItems)
+    .set({ openedAt: new Date() })
+    .where(and(eq(scheduledItems.id, id), eq(scheduledItems.userId, userId)))
+    .returning({ id: scheduledItems.id });
+  return rows.length > 0;
+}
+
+/**
+ * The replies that arrived while the user was not looking (C8.2).
+ *
+ * Two kinds: a reply the app deferred and then delivered later
+ * (`metadata.deferred`), and the answer to a message the user scheduled
+ * (`metadata.scheduled`). Proactive messages and follow-ups are
+ * deliberately not here — they are waiting quietly in the conversation,
+ * not something the user owes an answer to.
+ *
+ * `personaReadAt` is the user's own `lastReadAt` per persona; a reply is
+ * unread when it arrived after the last time that conversation was in
+ * front of them.
+ */
+export async function countUnreadAutoRepliesByPersona(
+  userId: number,
+  personaReadAt: Array<{ id: number; lastReadAt: Date | null }>,
+): Promise<Record<number, number>> {
+  const out: Record<number, number> = {};
+  const ids = personaReadAt.map((p) => p.id);
+  if (ids.length === 0) return out;
+  const db = await getDb();
+  if (!db) return out;
+  const rows = await db.select({
+    personaId: messages.personaId,
+    createdAt: messages.createdAt,
+  })
+    .from(messages)
+    .where(and(
+      eq(messages.userId, userId),
+      eq(messages.role, "assistant"),
+      inArray(messages.personaId, ids),
+      or(
+        sql`${messages.metadata} -> 'deferred' IS NOT NULL`,
+        sql`${messages.metadata} ->> 'scheduled' = 'true'`,
+      )!,
+    ));
+  const lastRead = new Map<number, number | null>(
+    personaReadAt.map((p) => [p.id, p.lastReadAt ? p.lastReadAt.getTime() : null]),
+  );
+  for (const row of rows) {
+    const readAt = lastRead.get(row.personaId) ?? null;
+    if (readAt === null || row.createdAt.getTime() > readAt) {
+      out[row.personaId] = (out[row.personaId] ?? 0) + 1;
+    }
+  }
+  return out;
+}
+
 // ─── The user's own side ────────────────────────────────────────────────────
 
 /**
@@ -1481,6 +1693,14 @@ export async function getPersonasWithStats(userId: number) {
 
   const phaseByPersona = new Map(latestPhase.map((r) => [r.personaId, r.kind]));
 
+  /**
+   * The replies that arrived while the user was not looking (C8.2).
+   *
+   * One grouped query, not one per card: the lobby asks this on every
+   * visit, and the card only needs a boolean and a count.
+   */
+  const unreadReplies = await countUnreadAutoRepliesByPersona(userId, list);
+
   return list.map((p) => {
     const lastPhase = phaseByPersona.get(p.id);
     const togetherEnded = Boolean((p.togetherTo ?? "").trim());
@@ -1492,6 +1712,7 @@ export async function getPersonasWithStats(userId: number) {
       recordCount: recordsByPersona.get(p.id) ?? 0,
       wechatBound: (bindingsByPersona.get(p.id) ?? 0) > 0,
       relationshipEnded,
+      unreadReplies: unreadReplies[p.id] ?? 0,
     };
   });
 }

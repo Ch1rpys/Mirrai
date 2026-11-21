@@ -63,6 +63,8 @@ import {
   createLetter, getLetters, countLetters, getDueLetters, getLastLetterReplyAt,
   answerLetter, markLetterUnanswered, deleteLetter, getWaitingNotes, countWaitingNotes,
   getLetterById, setLetterDone,
+  listInboxLetters, countUnreadLetters, listInboxScheduled, countUnopenedCapsules,
+  countUnreadAutoRepliesByPersona, markLetterRead, markPersonaRead, markScheduledOpened,
   createRelationshipEvent, getRelationshipEvents, countRelationshipEvents, deleteRelationshipEvent,
   saveEvalCases, getEvalCases, saveEvalRun, getLatestEvalRun,
   getOutboundLetters, setOutboundLetterStatus, restoreOutboundLetter, updateOutboundLetterText,
@@ -154,7 +156,7 @@ import { collectOutboundCandidates } from "./chat/outbound";
 import { getRerankModel } from "./chat/rerank-model";
 import { loadBehaviorProfile, measureAndSaveBehaviorProfile } from "./_core/behavior-profile";
 import { mergePersonaSettings, normalizePersonaSettings } from "@shared/persona-settings";
-import { isMemorial } from "@shared/persona-state";
+import { isMemorial, sealState } from "@shared/persona-state";
 import { buildWordingMessages, selectWordingSuggestions } from "@shared/wording";
 import { personaSettingsPatchSchema } from "./routers-v6/persona-settings-patch";
 import { assertPersonaWritable } from "./_core/persona-access";
@@ -2832,6 +2834,23 @@ export const appRouter = router({
             ...(photoByMemory.has(id) ? { photo: photoByMemory.get(id) } : {}),
           })),
         }));
+      }),
+
+    /**
+     * The conversation is in front of the user (C8.2).
+     *
+     * The mailbox counts a reply as unseen when it arrived after the
+     * last time the user had this conversation open. The chat page says
+     * so when it is visible — on mount, when the window comes back, and
+     * when a new message lands while it is being looked at.
+     */
+    markRead: protectedProcedure
+      .input(z.object({ personaId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        await markPersonaRead(input.personaId, ctx.user.id);
+        return { success: true };
       }),
 
     /**
@@ -5891,6 +5910,109 @@ export const appRouter = router({
         const total = await countLetters(input.personaId, ctx.user.id);
         return { letters, total };
       }),
+
+    /**
+     * The mailbox (C8.2): everything that is waiting for the user,
+     * across every persona, in five groups.
+     *
+     * The letters lived on each persona's page and the capsules lived
+     * in that page's box; there was one place to look per person and no
+     * place to look at all of them. The groups are the same five things
+     * the user is actually waiting on — a reply that came, a reply that
+     * has not, a letter never sent, a capsule whose day came, and one
+     * that has not.
+     *
+     * Sealed personas are left out entirely: the user sealed them for a
+     * reason.
+     */
+    inbox: protectedProcedure.query(async ({ ctx }) => {
+      const now = new Date();
+      const zone = ctx.user.timezone ?? null;
+      const personas = (await getPersonasByUserId(ctx.user.id)).filter(
+        (persona) =>
+          sealState(persona, now, persona.timezone ?? zone) !== "sealed",
+      );
+      const ids = personas.map((persona) => persona.id);
+      const [allLetters, allScheduled] = await Promise.all([
+        listInboxLetters(ctx.user.id, ids),
+        listInboxScheduled(ctx.user.id, ids),
+      ]);
+      // The helpers already filter by the ids; the router filters once
+      // more so a sealed persona cannot slip in through either query.
+      const allowed = new Set(ids);
+      const letterRows = allLetters.filter((row) => allowed.has(row.personaId));
+      const scheduledRows = allScheduled.filter((row) => allowed.has(row.personaId));
+
+      const received = letterRows
+        .filter((row) => row.status === "answered")
+        // The unread ones first: they are why the user came here.
+        .sort((a, b) => {
+          const readA = a.readAt ? 1 : 0;
+          const readB = b.readAt ? 1 : 0;
+          if (readA !== readB) return readA - readB;
+          return (b.repliedAt?.getTime() ?? 0) - (a.repliedAt?.getTime() ?? 0);
+        });
+      const waiting = letterRows
+        .filter((row) => row.status === "waiting")
+        .sort((a, b) => (a.replyAt?.getTime() ?? 0) - (b.replyAt?.getTime() ?? 0));
+      const kept = letterRows.filter((row) => row.status === "private");
+
+      const capsules = scheduledRows
+        .filter((row) =>
+          row.kind === "capsule" &&
+          row.status === "delivered" &&
+          row.dueAt.getTime() <= now.getTime())
+        .sort((a, b) => b.dueAt.getTime() - a.dueAt.getTime());
+      const upcoming = scheduledRows
+        .filter((row) => row.status === "scheduled")
+        .sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
+
+      return { received, waiting, kept, capsules, upcoming };
+    }),
+
+    /** One answered letter has been read (C8.2). */
+    markRead: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const changed = await markLetterRead(input.id, ctx.user.id);
+        if (!changed) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true };
+      }),
+
+    /**
+     * What is waiting for the user, as one number (C8.2).
+     *
+     * Only the things the user is waiting on: unread replies, due
+     * capsules, and replies that arrived while they were away. A
+     * proactive message or a follow-up is not counted — it is there
+     * quietly when they open the conversation, it does not ask for
+     * anything.
+     */
+    unreadCount: protectedProcedure.query(async ({ ctx }) => {
+      const now = new Date();
+      const zone = ctx.user.timezone ?? null;
+      const personas = (await getPersonasByUserId(ctx.user.id)).filter(
+        (persona) =>
+          sealState(persona, now, persona.timezone ?? zone) !== "sealed",
+      );
+      const ids = personas.map((persona) => persona.id);
+      const [letters, capsules, repliesByPersona] = await Promise.all([
+        countUnreadLetters(ctx.user.id, ids),
+        countUnopenedCapsules(ctx.user.id, ids, now),
+        countUnreadAutoRepliesByPersona(
+          ctx.user.id,
+          personas.map((persona) => ({ id: persona.id, lastReadAt: persona.lastReadAt })),
+        ),
+      ]);
+      const replies = Object.values(repliesByPersona).reduce((sum, n) => sum + n, 0);
+      return {
+        total: letters + capsules + replies,
+        letters,
+        capsules,
+        replies,
+        byPersona: repliesByPersona,
+      };
+    }),
 
     write: protectedProcedure
       .input(z.object({
