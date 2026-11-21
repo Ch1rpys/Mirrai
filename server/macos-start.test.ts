@@ -224,7 +224,18 @@ describe.skipIf(!BASH)("the macOS start script", () => {
      */
     expect(() => readFileSync(path.join(res, "load-env.sh"), "utf-8")).not.toThrow();
     expect(() => readFileSync(path.join(res, "start.sh"), "utf-8")).not.toThrow();
-    expect(() => readFileSync(path.join(res, "..", "MacOS", "Mirrai"), "utf-8")).not.toThrow();
+    /**
+     * The executable is the compiled menu bar launcher (C8.8).
+     *
+     * It used to be `launcher.sh`, copied in as Contents/MacOS/Mirrai.
+     * Now the build compiles `MirraiMenu.swift` into that path — so the
+     * copy script no longer puts anything there, and this test checks
+     * the build step that does.
+     */
+    const build = readFileSync(path.join(ROOT, "scripts", "build-macos-app.sh"), "utf-8");
+    expect(build).toContain("MirraiMenu.swift");
+    expect(build).toContain('"$CONTENTS/MacOS/Mirrai"');
+    expect(build).toContain("swiftc");
   }, 30_000);
 });
 

@@ -150,12 +150,22 @@ DMG 内含 `Mirrai.app`、`Applications` 快捷方式、`README.txt`。
 
 ```
 用户双击 Mirrai.app
-  → Contents/MacOS/Mirrai（launcher.sh）
-    → AppleScript 打开 Terminal.app
-      → 执行 Contents/Resources/start.sh
+  → Contents/MacOS/Mirrai（MirraiMenu，编译自 MirraiMenu.swift）
+    → 菜单栏出现一个 M 图标，没有程序坞图标
+    → 以子进程运行 Contents/Resources/start.sh
+    → start.sh 的输出追加到 ~/Library/Application Support/Mirrai/logs/mirrai.log
+      → 服务器就绪后 start.sh 自己打开浏览器
+
+菜单栏：
+  打开 Mirrai   → 在默认浏览器里打开 http://localhost:3000
+  看日志        → 用默认程序打开上面那个日志文件
+  退出          → 结束 start.sh（它的 trap 会停掉 Node 和 PostgreSQL）
+
+快捷键：
+  ⌥⌘M          → 打开 / 切回浏览器里的 Mirrai
 ```
 
-**为什么需要 launcher + Terminal？** macOS 直接运行 .app 没有 TTY，shell 脚本的输出不可见，错误时会"闪退"。通过 AppleScript 打开 Terminal 可以让用户看到启动日志。
+**为什么不再开 Terminal？** 早期版本用 `launcher.sh` 通过 AppleScript 打开 Terminal，是为了让用户看到启动日志（.app 直接运行没有 TTY，脚本输出不可见）。C8.8 把它换成菜单栏代理：输出进日志文件、菜单里能看日志、退出时子进程跟着结束，并且应用不出现在程序坞。启动日志仍然完整可查。
 
 ### start.sh 启动顺序
 
@@ -190,7 +200,7 @@ PostgreSQL 通过 `dlopen` 加载 ICU 数据库，`otool -L` 不会列出这个�
 
 ### .app 闪退
 
-macOS 运行 .app 时没有 TTY，shell 脚本的 stdout/stderr 不可见，出错时用户只看到"闪退"。**拆分为 launcher.sh（AppleScript 打开 Terminal）+ start.sh（在 Terminal 中运行）。**
+macOS 运行 .app 时没有 TTY，shell 脚本的 stdout/stderr 不可见，出错时用户只看到"闪退"。**输出必须落盘：`start.sh` 的 stdout/stderr 由菜单栏启动器写入 `~/Library/Application Support/Mirrai/logs/mirrai.log`，菜单里的「看日志」直接打开它。**（C8.8 之前是 `launcher.sh` 用 AppleScript 打开 Terminal 显示。）
 
 ### PostgreSQL unix socket 路径含空格
 
@@ -270,7 +280,8 @@ bash build-macos/Mirrai.app/Contents/Resources/start.sh
 | 文件 | 说明 |
 |------|------|
 | `scripts/build-macos-app.sh` | 构建脚本（一键打包） |
-| `scripts/macos/launcher.sh` | 薄启动器（AppleScript → Terminal） |
+| `scripts/macos/MirraiMenu.swift` | 菜单栏启动器（编进 `Contents/MacOS/Mirrai`，跑 `start.sh`、日志、⌥⌘M） |
+| `scripts/macos/launcher.sh` | 早期版本用的 AppleScript 启动器；C8.8 起不再打进 app |
 | `scripts/macos/start.sh` | 启动脚本（PG + Node + 迁移） |
 | `scripts/macos/Info.plist` | macOS 应用元数据 |
 | `.gitignore` | 已包含 `build-macos/` |

@@ -381,6 +381,24 @@ log "Writing launcher and start scripts..."
 # copies files.
 bash "$SCRIPT_DIR/macos/copy-start-scripts.sh" "$SCRIPT_DIR/macos" "$RESOURCES"
 
+# ─── Step 6a: the menu bar launcher ─────────────────────────────────────────
+#
+# Since C8.8 the executable is not `launcher.sh` (which opened
+# Terminal.app). It is `MirraiMenu.swift`: a menu bar agent that runs
+# `start.sh` as a child, keeps its output in a log file, offers
+# open / logs / quit in the menu, and answers ⌥⌘M. It is not in the Dock.
+#
+# `swiftc` ships with the Xcode command line tools the build already
+# needs. The `-parse-as-library` flag is required by Swift 6: the
+# program's entry point is `@main`, and without the flag the compiler
+# treats the file as a script and refuses the attribute (the manual's
+# command from when this item was written predates that rule — see the
+# progress file's deviation).
+log "Compiling the menu bar launcher..."
+command -v swiftc >/dev/null 2>&1 || die "swiftc is required for the menu bar launcher. Install the Xcode command line tools: xcode-select --install"
+swiftc -parse-as-library "$SCRIPT_DIR/macos/MirraiMenu.swift" -o "$CONTENTS/MacOS/Mirrai" || die "The menu bar launcher failed to compile."
+chmod +x "$CONTENTS/MacOS/Mirrai"
+
 # ─── Step 6b: sign the bundle ───────────────────────────────────────────────
 #
 # The bundle itself was not signed — only the binaries inside it were.

@@ -1,7 +1,11 @@
 #!/bin/bash
 # ─── The start scripts, into the bundle ──────────────────────────────────────
 #
-# The launcher, the start script, and the .env reader.
+# The start script and the .env reader.
+#
+# The executable in Contents/MacOS is no longer a copied shell script:
+# since C8.8 it is `MirraiMenu.swift`, compiled by the build into a menu
+# bar agent that starts this script and keeps its output in a log file.
 #
 # They are copied here rather than inline in the build script, so that
 # the test can build the same bundle the build builds — and run it.
@@ -27,5 +31,5 @@ chmod +x "$RESOURCES/start.sh"
 cp "$SCRIPT_DIR/load-env.sh" "$RESOURCES/load-env.sh"
 chmod +x "$RESOURCES/load-env.sh"
 
-cp "$SCRIPT_DIR/launcher.sh" "$CONTENTS/MacOS/Mirrai"
-chmod +x "$CONTENTS/MacOS/Mirrai"
+# The executable is the compiled menu bar launcher; the build compiles
+# it (see the step after this one). Nothing to copy here.
