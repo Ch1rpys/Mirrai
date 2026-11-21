@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import { markAppLocked } from "@/lib/app-lock";
 import { registerServiceWorker } from "@/lib/pwa";
 import { QueryClient, QueryClientProvider, onlineManager } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
@@ -58,9 +59,24 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   window.location.href = getLoginUrl();
 };
 
+/**
+ * The server's answer when the app lock is closed (C8.4).
+ *
+ * The transport says `FORBIDDEN` because tRPC's codes are a closed set;
+ * the app's own name for it travels in `data.code`. Any answer that says
+ * the session is locked puts the lock screen up — the interface already
+ * holds the lobby in memory, so a screen is not optional.
+ */
+const isLockedError = (error: unknown): boolean =>
+  error instanceof TRPCClientError && error.data?.code === "LOCKED";
+
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.query.state.error;
+    if (isLockedError(error)) {
+      markAppLocked();
+      return;
+    }
     redirectToLoginIfUnauthorized(error);
     console.error("[API Query Error]", error);
   }
@@ -69,6 +85,10 @@ queryClient.getQueryCache().subscribe(event => {
 queryClient.getMutationCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.mutation.state.error;
+    if (isLockedError(error)) {
+      markAppLocked();
+      return;
+    }
     redirectToLoginIfUnauthorized(error);
     console.error("[API Mutation Error]", error);
   }

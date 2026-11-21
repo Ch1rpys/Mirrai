@@ -81,6 +81,13 @@ vi.mock("@/lib/trpc", () => ({
       // The mailbox entry is on the lobby's nav (C8.2).
       unreadCount: { useQuery: () => ({ data: { total: 0 } }) },
     },
+    lock: {
+      // The "lock now" button is on the lobby's nav (C8.4).
+      status: { useQuery: () => ({ data: { enabled: false } }) },
+      lockNow: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      verifyPin: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+    },
+    useUtils: () => ({ invalidate: vi.fn() }),
     reminder: {
       list: { useQuery: () => ({ data: [] }) },
       dismiss: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },

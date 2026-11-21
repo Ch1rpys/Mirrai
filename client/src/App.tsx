@@ -13,6 +13,7 @@ import HomePage from "./pages/HomePage";
 import TimezoneSync from "./components/TimezoneSync";
 import CommandPalette from "./components/CommandPalette";
 import NotificationNavigator from "./components/v6/NotificationNavigator";
+import AppLock from "./components/v6/AppLock";
 
 const Login = lazy(() => import("./pages/Login"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -124,6 +125,8 @@ function App() {
           <TooltipProvider>
             <MotionSettings>
               <Toaster />
+              {/* The app lock's screen, over everything (C8.4). */}
+              <AppLock />
               <TimezoneSync />
               <CommandPalette />
               {/* The app's own confirmation, in the app's own language. */}

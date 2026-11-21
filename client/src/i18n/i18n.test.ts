@@ -238,7 +238,7 @@ describe("the dictionaries", () => {
     // agent hosts a skill package can be installed into, and the platform
     // field names a user has to recognise when copying a value.
     const allowedLatin =
-      /landing\.tech|upload\.formats|settings\.channels\.appSecret|skillExport\.hosts|settings\.sources\.credentialLabels/;
+      /landing\.tech|lockScreen\.lockedTitle|upload\.formats|settings\.channels\.appSecret|skillExport\.hosts|settings\.sources\.credentialLabels/;
     expect(suspicious.filter((k) => !allowedLatin.test(k))).toEqual([]);
   });
 

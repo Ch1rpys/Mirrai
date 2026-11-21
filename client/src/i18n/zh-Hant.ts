@@ -635,6 +635,8 @@ export const zhHant = {
       ]
     },
     "card": {
+      "locked": "上鎖的分身",
+      "unlock": "解鎖",
       "sealed": "{{name}} · 封存到 {{date}}",
       "dormant": "休眠",
       "pinned": "置頂",
@@ -3387,5 +3389,52 @@ export const zhHant = {
     "contrastNote": "把文字和背景的顏色拉得更開，讀起來更清楚。",
     "reduceMotion": "減少動效",
     "reduceMotionNote": "關閉界面裡的過渡和動畫。系統設置裡的「減少動效」始終會被遵循。"
+  },
+  "lockScreen": {
+    "title": "已鎖定",
+    "lockedTitle": "Mirrai",
+    "prompt": "輸入 PIN 解鎖。",
+    "passwordPrompt": "用賬號密碼解鎖。",
+    "pinLabel": "PIN",
+    "passwordLabel": "賬號密碼",
+    "unlock": "解鎖",
+    "wrong": "沒有解開。再試一次。",
+    "passkeyFailed": "通行密鑰沒有通過驗證。",
+    "usePassword": "用賬號密碼解鎖",
+    "usePin": "改用 PIN",
+    "usePasskey": "用通行密鑰解鎖",
+    "lockNow": "立即鎖定"
+  },
+  "personaUnlock": {
+    "title": "這個分身鎖著",
+    "needed": "輸入 PIN 解鎖這個分身。",
+    "description": "輸入 PIN 解鎖。解鎖之後五分鐘內不用再輸。"
+  },
+  "appLock": {
+    "title": "應用鎖",
+    "description": "離開一會兒就自動鎖上，回來要輸 PIN。別人拿到沒鎖屏的電腦也看不了。",
+    "statusOn": "開著。鎖上之後，除了登錄和輸入 PIN 以外，別的都要先解鎖。",
+    "loading": "正在讀設置…",
+    "loadFailed": "沒有讀到應用鎖的設置。",
+    "failed": "沒有保存成功。",
+    "saved": "已保存。",
+    "enable": "離開後自動鎖上",
+    "idleLabel": "多久算離開（分鐘）",
+    "save": "保存",
+    "pinLabel": "PIN（4 到 8 位數字）",
+    "passwordLabel": "賬號密碼",
+    "setPinAndEnable": "設置 PIN 並開啟",
+    "changePin": "換一個 PIN",
+    "passkeys": "通行密鑰",
+    "passkey": "通行密鑰",
+    "addPasskey": "添加通行密鑰",
+    "removePasskey": "刪除",
+    "noPasskeys": "還沒有登記通行密鑰。",
+    "passkeyUnsupported": "這個瀏覽器不支持通行密鑰。",
+    "passkeyAdded": "通行密鑰已添加。",
+    "passkeyRemoved": "通行密鑰已刪除。",
+    "disable": "關閉應用鎖",
+    "disableHint": "關閉會把 PIN 和通行密鑰一起刪掉。",
+    "disabled": "應用鎖已關閉。"
   }
 } as const;

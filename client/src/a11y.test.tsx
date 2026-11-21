@@ -148,6 +148,12 @@ function utilsSpy(): any {
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     setup: { useQuery: () => ({ data: { hasLlmProvider: true, hasUserProvider: false } }) },
+    lock: {
+      // The lobby's nav has the "lock now" button (C8.4).
+      status: { useQuery: () => ({ data: { enabled: false } }) },
+      lockNow: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      verifyPin: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+    },
     persona: {
       list: {
         useQuery: () => ({

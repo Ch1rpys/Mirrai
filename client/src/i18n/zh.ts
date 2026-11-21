@@ -525,6 +525,8 @@ export const zh = {
       weekdays: ["日", "一", "二", "三", "四", "五", "六"],
     },
     card: {
+      locked: "上锁的分身",
+      unlock: "解锁",
     sealed: "{{name}} · 封存到 {{date}}",
       dormant: "休眠",
       pinned: "置顶",
@@ -3479,6 +3481,62 @@ export const zh = {
     contrastNote: "把文字和背景的颜色拉得更开，读起来更清楚。",
     reduceMotion: "减少动效",
     reduceMotionNote: "关闭界面里的过渡和动画。系统设置里的「减少动效」始终会被遵循。",
+  },
+  /**
+   * The app lock's screen (C8.4).
+   */
+  lockScreen: {
+    title: "已锁定",
+    lockedTitle: "Mirrai",
+    prompt: "输入 PIN 解锁。",
+    passwordPrompt: "用账号密码解锁。",
+    pinLabel: "PIN",
+    passwordLabel: "账号密码",
+    unlock: "解锁",
+    wrong: "没有解开。再试一次。",
+    passkeyFailed: "通行密钥没有通过验证。",
+    usePassword: "用账号密码解锁",
+    usePin: "改用 PIN",
+    usePasskey: "用通行密钥解锁",
+    lockNow: "立即锁定",
+  },
+  /**
+   * A locked persona's own gate (C8.4).
+   */
+  personaUnlock: {
+    title: "这个分身锁着",
+    needed: "输入 PIN 解锁这个分身。",
+    description: "输入 PIN 解锁。解锁之后五分钟内不用再输。",
+  },
+  /**
+   * The app lock's settings (C8.4).
+   */
+  appLock: {
+    title: "应用锁",
+    description: "离开一会儿就自动锁上，回来要输 PIN。别人拿到没锁屏的电脑也看不了。",
+    statusOn: "开着。锁上之后，除了登录和输入 PIN 以外，别的都要先解锁。",
+    loading: "正在读设置…",
+    loadFailed: "没有读到应用锁的设置。",
+    failed: "没有保存成功。",
+    saved: "已保存。",
+    enable: "离开后自动锁上",
+    idleLabel: "多久算离开（分钟）",
+    save: "保存",
+    pinLabel: "PIN（4 到 8 位数字）",
+    passwordLabel: "账号密码",
+    setPinAndEnable: "设置 PIN 并开启",
+    changePin: "换一个 PIN",
+    passkeys: "通行密钥",
+    passkey: "通行密钥",
+    addPasskey: "添加通行密钥",
+    removePasskey: "删除",
+    noPasskeys: "还没有登记通行密钥。",
+    passkeyUnsupported: "这个浏览器不支持通行密钥。",
+    passkeyAdded: "通行密钥已添加。",
+    passkeyRemoved: "通行密钥已删除。",
+    disable: "关闭应用锁",
+    disableHint: "关闭会把 PIN 和通行密钥一起删掉。",
+    disabled: "应用锁已关闭。",
   },
 } as const;
 

@@ -34,6 +34,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import MemoryReview from "@/components/v6/MemoryReview";
 import ChoiceBubble from "@/components/v6/ChoiceBubble";
 import PendingReply from "@/components/v6/PendingReply";
+import PersonaLockGate from "@/components/v6/PersonaLockGate";
 import OutboundEntry from "@/components/v6/OutboundEntry";
 import VoicesEntry from "@/components/v6/VoicesEntry";
 import OutboundDrawer from "@/components/v6/OutboundDrawer";
@@ -1823,6 +1824,15 @@ export default function Chat() {
   if (personaFailed) {
     const status = (personaError as { data?: { code?: string } })?.data?.code;
     if (status === "NOT_FOUND") return <NotFound />;
+    /**
+     * A locked persona (C8.4) is not an error to retry.
+     *
+     * The generic panel offered a button that could only fail again;
+     * the PIN is what opens it.
+     */
+    if (status === "PERSONA_LOCKED" || status === "LOCKED") {
+      return <PersonaLockGate onUnlocked={() => { void refetchPersona(); }} />;
+    }
     return (
       <div className="min-h-dvh w-full flex items-center justify-center bg-background px-4">
         <div className="max-w-md text-center space-y-4">

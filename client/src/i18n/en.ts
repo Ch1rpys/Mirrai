@@ -524,6 +524,8 @@ export const en = {
       weekdays: ["S", "M", "T", "W", "T", "F", "S"],
     },
     card: {
+      locked: "Locked",
+      unlock: "Unlock",
     sealed: "{{name}} · sealed until {{date}}",
       dormant: "Resting",
       pinned: "Pinned",
@@ -3462,6 +3464,62 @@ export const en = {
     contrastNote: "Pushes the text and the background further apart, so it is easier to read.",
     reduceMotion: "Reduce motion",
     reduceMotionNote: "Turns off transitions and animations in the interface. The system's own reduce-motion setting is always respected.",
+  },
+  /**
+   * The app lock's screen (C8.4).
+   */
+  lockScreen: {
+    title: "Locked",
+    lockedTitle: "Mirrai",
+    prompt: "Enter the PIN to unlock.",
+    passwordPrompt: "Unlock with your account password.",
+    pinLabel: "PIN",
+    passwordLabel: "Account password",
+    unlock: "Unlock",
+    wrong: "That did not open it. Try again.",
+    passkeyFailed: "That passkey did not verify.",
+    usePassword: "Unlock with the account password",
+    usePin: "Use the PIN instead",
+    usePasskey: "Unlock with a passkey",
+    lockNow: "Lock now",
+  },
+  /**
+   * A locked persona's own gate (C8.4).
+   */
+  personaUnlock: {
+    title: "This persona is locked",
+    needed: "Enter the PIN to unlock this persona.",
+    description: "Enter the PIN to unlock it. Once unlocked it stays open for five minutes.",
+  },
+  /**
+   * The app lock's settings (C8.4).
+   */
+  appLock: {
+    title: "App lock",
+    description: "After a while away the app locks itself and asks for the PIN. Someone who picks up an unlocked laptop still sees nothing.",
+    statusOn: "On. Once locked, everything except signing in and entering the PIN waits for the unlock.",
+    loading: "Reading the settings…",
+    loadFailed: "The app lock settings could not be read.",
+    failed: "That was not saved.",
+    saved: "Saved.",
+    enable: "Lock after a while away",
+    idleLabel: "How long counts as away (minutes)",
+    save: "Save",
+    pinLabel: "PIN (4 to 8 digits)",
+    passwordLabel: "Account password",
+    setPinAndEnable: "Set the PIN and turn it on",
+    changePin: "Change the PIN",
+    passkeys: "Passkeys",
+    passkey: "Passkey",
+    addPasskey: "Add a passkey",
+    removePasskey: "Remove",
+    noPasskeys: "No passkey has been registered yet.",
+    passkeyUnsupported: "This browser does not support passkeys.",
+    passkeyAdded: "Passkey added.",
+    passkeyRemoved: "Passkey removed.",
+    disable: "Turn the app lock off",
+    disableHint: "Turning it off removes the PIN and every passkey with it.",
+    disabled: "The app lock is off.",
   },
 } as const;
 

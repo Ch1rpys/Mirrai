@@ -35,6 +35,8 @@ import MoodCheckIn from "@/components/MoodCheckIn";
 import OnThisDay from "@/components/v6/OnThisDay";
 import Milestones from "@/components/v6/Milestones";
 import MailboxEntry from "@/components/v6/MailboxEntry";
+import { LockNowButton } from "@/components/v6/AppLock";
+import LockedPersonaCard from "@/components/v6/LockedPersonaCard";
 import PersonaUnreadNote from "@/components/v6/PersonaUnreadNote";
 import { useUndoToast } from "@/components/v6/UndoToast";
 import { clearAllDrafts } from "@/components/v6/useDraft";
@@ -994,6 +996,19 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
     onSuccess: () => { toast.success(t("lobby.card.awakened", { name: persona.name })); window.location.reload(); },
     onError: (e: any) => toast.error(e.message),
   });
+
+  /**
+   * A locked persona is a closed card (C8.4).
+   *
+   * The server sends no name and no face for it — the list is what
+   * somebody glancing at the screen sees, so hiding only the chat would
+   * hide nothing. Unlocking proves the PIN and refreshes the list. The
+   * lock comes before the seal: a locked persona shows nothing at all,
+   * not even the day it reopens.
+   */
+  if (persona.locked) {
+    return <LockedPersonaCard personaId={persona.id} />;
+  }
 
   /**
    * A sealed persona is a closed card (C6.2).
@@ -1977,6 +1992,7 @@ export default function Lobby() {
             </span>
           )}
           <div className="app-nav-actions">
+            <LockNowButton />
             <MailboxEntry />
             {user?.username && (
               <div className="app-nav-icon !bg-muted !cursor-default mr-0.5">

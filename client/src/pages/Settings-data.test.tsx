@@ -15,6 +15,23 @@ const accountStats: { data: any; isError: boolean } = { data: undefined, isError
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    lock: {
+      // The app lock's settings are mounted in this tab (C8.4).
+      status: {
+        useQuery: () => ({
+          data: { hasPin: false, enabled: false, idleMinutes: 5, passkeys: [] },
+          isError: false,
+        }),
+      },
+      setPin: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      updateSettings: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      disable: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      passkey: {
+        registerOptions: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+        registerVerify: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+        remove: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      },
+    },
     system: {
       // The one-click diagnosis panel is mounted in this tab (C8.12); the
       // tests here are about the deletion dialog, not about it.
