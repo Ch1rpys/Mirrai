@@ -14,6 +14,7 @@ import { protectedProcedure, router, rateLimit } from "../_core/trpc";
 import { assertPersonaWritable } from "../_core/persona-access";
 import { RATE_LIMITS } from "../_core/rate-limit";
 import { copy } from "@shared/copy";
+import { mayChatNow } from "@shared/persona-state";
 import { normalizeActProfile, countsForCondition } from "@shared/act-profile";
 import { labelUserActByRule } from "@shared/speech-acts";
 import { zonedDayStart } from "@shared/timezone";
@@ -65,6 +66,26 @@ export const rehearsalRouter = router({
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
       assertPersonaWritable(persona, ctx.locale);
+      /**
+       * The user's own step-down closes the rehearsal room too (C6.1).
+       *
+       * The room calls the generation path directly, so it never meets
+       * `runConversation` and its `ChatClosedError`; it has to ask the
+       * same question itself, or "I only write letters now" would still
+       * let the user put words in the persona's mouth here.
+       */
+      const chat = mayChatNow(persona, new Date(), ctx.user.timezone ?? null);
+      if (!chat.ok) {
+        const key = chat.reason === "weekend_only"
+          ? "chat.closedWeekend"
+          : chat.reason === "letters_only"
+            ? "chat.closedLettersOnly"
+            : "chat.closedSealed";
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: copy(ctx.locale, key, { name: persona.name }),
+        });
+      }
       const settings = normalizePersonaSettings(persona.settings);
       if (
         persona.graduationStatus === "graduated" ||

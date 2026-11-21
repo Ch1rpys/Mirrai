@@ -58,6 +58,7 @@ vi.mock("./llm/user-provider", async (importOriginal) => ({
   resolveProviderForUser: async () => ({ name: "test", isConfigured: () => true, invoke: async () => "" }),
 }));
 
+import { rateLimiter } from "./_core/rate-limit";
 import { appRouter } from "./routers";
 
 function ctxFor(userId: number): TrpcContext {
@@ -112,6 +113,7 @@ function finalPlan(texts: string[]) {
 describe("rehearsal.run", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    rateLimiter.reset?.();
     getPersonaById.mockResolvedValue(persona);
     countRehearsalsSince.mockResolvedValue(0);
     createRehearsal.mockResolvedValue(11);
@@ -173,6 +175,53 @@ describe("rehearsal.run", () => {
     expect(result.mode).toBe("my_side_only");
     expect(planTurn).not.toHaveBeenCalled();
     expect(retrieveMemories).not.toHaveBeenCalled();
+  });
+
+  it("refuses a persona the user stepped down to letters (C6.1)", async () => {
+    getPersonaById.mockResolvedValue({
+      ...persona,
+      settings: { taper: { stage: 3 } },
+    });
+    await expect(
+      appRouter.createCaller(ctxFor(1)).rehearsal.run({ personaId: 5, line: "那天我不该那样说" }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringContaining("只写信") });
+    expect(planTurn).not.toHaveBeenCalled();
+  });
+
+  it("refuses a weekday when the chat is kept to weekends (C6.1)", async () => {
+    vi.useFakeTimers();
+    try {
+      // A Wednesday in the user's zone.
+      vi.setSystemTime(new Date("2026-03-04T12:00:00Z"));
+      getPersonaById.mockResolvedValue({
+        ...persona,
+        settings: { taper: { stage: 2 } },
+      });
+      await expect(
+        appRouter.createCaller(ctxFor(1)).rehearsal.run({ personaId: 5, line: "那天我不该那样说" }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringContaining("只在周末") });
+      expect(planTurn).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("opens the room again on a weekend (C6.1)", async () => {
+    vi.useFakeTimers();
+    try {
+      // A Saturday in the user's zone.
+      vi.setSystemTime(new Date("2026-03-07T12:00:00Z"));
+      getPersonaById.mockResolvedValue({
+        ...persona,
+        settings: { taper: { stage: 2 } },
+      });
+      const result = await appRouter
+        .createCaller(ctxFor(1))
+        .rehearsal.run({ personaId: 5, line: "那天我不该那样说" });
+      expect(result.mode).toBe("variants");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("refuses a persona that is asleep or sealed", async () => {
