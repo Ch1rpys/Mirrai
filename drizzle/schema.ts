@@ -118,6 +118,18 @@ export const users = pgTable("users", {
    * Empty means no ceiling.
    */
   budget: jsonb("budget"),
+  /**
+   * Where the scheduled backups go (C8.3).
+   *
+   * `{ enabled, frequency, target, passphraseSecret, lastRunAt,
+   * lastFileName, history }`. The passphrase that encrypts a backup is
+   * wrapped by `encryptSecret`, so the unattended run can still encrypt
+   * and a copy of the database does not hand over the backups.
+   *
+   * Empty means scheduled backups are off, which is the default: an app
+   * that writes to somebody's disk every day should not decide to.
+   */
+  backupSettings: jsonb("backupSettings"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

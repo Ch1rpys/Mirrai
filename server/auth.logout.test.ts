@@ -26,6 +26,7 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
     graduationMode: "suggest",
     timezone: null,
     budget: null,
+    backupSettings: null,
     locale: "zh",
     addressStyle: null,
     boundaries: null,

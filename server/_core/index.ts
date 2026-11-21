@@ -19,6 +19,7 @@ import { resolveFaceModelFile } from "./face-models";
 import { registerChatStreamRoute } from "../chat/stream-route";
 import { attachCallServer } from "../chat/call";
 import { registerImportUploadRoute } from "../importers/upload-route";
+import { registerBackupRoutes } from "../backup/route";
 import { bootstrapAdminAccount } from "../bootstrap/bootstrap";
 import { migrateLegacyTTSFiles } from "./tts";
 
@@ -148,6 +149,8 @@ async function startServer() {
 
   registerAuthRoutes(app);
   registerImportUploadRoute(app);
+  // Full backup download and first-run restore (C8.3).
+  registerBackupRoutes(app);
 
   app.use(
     "/api/trpc",

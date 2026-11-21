@@ -52,6 +52,7 @@ const DATABASE_TEST_FILES = new Set([
   "server/db-stickers.test.ts",
   "server/db-soft-delete.test.ts",
   "server/db-unique-indexes.test.ts",
+  "server/backup-db.test.ts",
   "server/routers-v6/material.test.ts",
   "server/records/nearest.test.ts",
 ]);

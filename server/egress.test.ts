@@ -26,6 +26,7 @@ const CALL_SITES: Array<{ file: string; purpose: string }> = [
   { file: "server/wechat/ilink/client.ts", purpose: "WeChat iLink HTTP" },
   { file: "server/routers-v6/ldr.ts", purpose: "Open-Meteo geocoding and forecast (C5.2)" },
   { file: "server/_core/mail.ts", purpose: "The user's own SMTP server for letter replies (C5.5)" },
+  { file: "server/backup/targets.ts", purpose: "The user's own WebDAV or S3-compatible backup destination (C8.3)" },
 ];
 
 function walk(dir: string, files: string[] = []): string[] {

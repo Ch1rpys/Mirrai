@@ -445,6 +445,48 @@ export const EGRESS_ITEMS: EgressItem[] = [
     },
   },
   {
+    id: "backup-webdav",
+    side: "server",
+    destination: {
+      zh: "用户自己填的 WebDAV 服务器",
+      en: "The WebDAV server the user filled in",
+    },
+    payload: {
+      zh: "加密后的备份文件本身，以及它的文件名。Basic 认证的用户名和密码在请求头里",
+      en: "The encrypted backup file itself and its file name. The basic-auth username and password are in the request header",
+    },
+    when: {
+      zh: "用户打开了定时备份、目标是 WebDAV，并且到了那天",
+      en: "The user turned on scheduled backups with a WebDAV destination, and the day came",
+    },
+    defaultOn: false,
+    offHow: {
+      zh: "关掉定时备份，或把目标改成本机的一个文件夹",
+      en: "Turn the scheduled backup off, or point it at a folder on this machine",
+    },
+  },
+  {
+    id: "backup-s3",
+    side: "server",
+    destination: {
+      zh: "用户自己填的 S3 兼容存储端点",
+      en: "The S3-compatible storage endpoint the user filled in",
+    },
+    payload: {
+      zh: "加密后的备份文件本身，以及对象名。SigV4 签名的请求头和访问密钥标识在请求里，密钥本身不外发",
+      en: "The encrypted backup file itself and its object key. The SigV4 headers and the access-key id travel with the request; the secret key does not leave",
+    },
+    when: {
+      zh: "用户打开了定时备份、目标是 S3 兼容存储，并且到了那天",
+      en: "The user turned on scheduled backups with an S3-compatible destination, and the day came",
+    },
+    defaultOn: false,
+    offHow: {
+      zh: "关掉定时备份，或把目标改成本机的一个文件夹",
+      en: "Turn the scheduled backup off, or point it at a folder on this machine",
+    },
+  },
+  {
     id: "letter-email",
     side: "server",
     destination: {

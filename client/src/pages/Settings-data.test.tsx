@@ -36,6 +36,25 @@ vi.mock("@/lib/trpc", () => ({
     chat: {
       exportAll: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    // The complete backup panel is mounted in this tab (C8.3); the tests
+    // here are about the deletion dialog, not about it.
+    backup: {
+      getSettings: {
+        useQuery: () => ({
+          data: {
+            enabled: false,
+            frequency: "daily",
+            hasPassphrase: false,
+            hasTargetPassword: false,
+            hasTargetSecretAccessKey: false,
+          },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+      updateSettings: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     persona: {
       listDeleted: {
         useQuery: () => ({

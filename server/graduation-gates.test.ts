@@ -134,6 +134,7 @@ function makeCtx(userId = 1): TrpcContext {
       graduationMode: "suggest",
       timezone: null,
       budget: null,
+      backupSettings: null,
     locale: "zh",
       addressStyle: null,
       boundaries: null,

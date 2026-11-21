@@ -7,6 +7,7 @@ import { Wordmark } from "@/components/Wordmark";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft } from "lucide-react";
 import { useLocale } from "@/contexts/LocaleContext";
+import RestoreBackupPanel from "@/components/v6/RestoreBackupPanel";
 
 export default function Login() {
   const [, navigate] = useLocation();
@@ -164,6 +165,9 @@ export default function Login() {
           <p className="text-center text-xs text-muted-subtle mt-12">
             {t("auth.footer")}
           </p>
+
+          {/* Only renders while the instance has no account at all. */}
+          <RestoreBackupPanel />
         </div>
       </main>
     </div>

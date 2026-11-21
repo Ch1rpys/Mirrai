@@ -1760,6 +1760,87 @@ export const V6 = {
     en: "Give this person a name before starting.",
   },
 
+  "backup.errorTargetRequired": {
+    zh: "先选一个备份到哪儿，再打开定时备份。",
+    en: "Choose where the backup goes before turning the scheduled backup on.",
+  },
+  "backup.errorRemotePassphrase": {
+    zh: "备份到这台机器以外的地方必须设一个口令：文件在那边是加密的。",
+    en: "A backup that leaves this machine needs a passphrase: the file is encrypted there.",
+  },
+  "backup.errorFolderPath": {
+    zh: "填一个完整的文件夹路径，比如 /Users/你的名字/Mirrai 备份。",
+    en: "Give a full folder path, for example /Users/you/Mirrai backups.",
+  },
+  "backup.errorNotConfigured": {
+    zh: "还没有设过备份。",
+    en: "No backup has been set up yet.",
+  },
+  "backup.errorNotEmpty": {
+    zh: "这个 Mirrai 里已经有账号了，备份只能还原到一个全新的 Mirrai。",
+    en: "This Mirrai already has an account; a backup can only be restored into a fresh Mirrai.",
+  },
+  "backup.errorTooNew": {
+    zh: "这份备份来自更新的 Mirrai，先把应用升级再还原。",
+    en: "The backup comes from a newer Mirrai; update the app before restoring it.",
+  },
+  "backup.errorCorrupt": {
+    zh: "这份备份不完整，或者不是 Mirrai 的备份文件。",
+    en: "That backup is incomplete, or it is not a Mirrai backup file.",
+  },
+  "backup.errorPassphraseRequired": {
+    zh: "这份备份是加密的，需要口令才能打开。",
+    en: "That backup is encrypted; it needs its passphrase.",
+  },
+  "backup.errorWrongPassphrase": {
+    zh: "口令不对，或者文件被改过，打不开。",
+    en: "The passphrase is wrong, or the file was changed; it cannot be opened.",
+  },
+  "backup.errorMissingFile": {
+    zh: "没有收到备份文件。",
+    en: "No backup file was received.",
+  },
+  "backup.errorDelivery": {
+    zh: "备份写好了，但没能送到你选的地方（{{status}}）。",
+    en: "The backup was written, but it could not be delivered to the destination ({{status}}).",
+  },
+  "backup.errorS3TooLarge": {
+    zh: "备份超过 5 GiB，单个对象放不下。改成备份到本机的一个文件夹。",
+    en: "The backup is over 5 GiB, too large for one object. Use a folder on this machine instead.",
+  },
+  "backup.errorFolderMissing": {
+    zh: "那个文件夹不在，或者没有权限写进去。",
+    en: "That folder does not exist, or it cannot be written to.",
+  },
+  "backup.errorFolderWrite": {
+    zh: "往那个文件夹写文件失败了。",
+    en: "Writing the file into that folder failed.",
+  },
+  "backup.errorMissingCredentials": {
+    zh: "这个备份目标还缺密码或密钥。",
+    en: "This backup destination is missing its password or secret key.",
+  },
+  "backup.errorPassphraseMissing": {
+    zh: "存下的备份口令打不开了（应用的密钥变过），重新填一次口令。",
+    en: "The stored backup passphrase can no longer be opened (the app's key changed); enter it again.",
+  },
+  "backup.errorFailed": {
+    zh: "备份没有做完。",
+    en: "The backup did not finish.",
+  },
+  "backup.restored": {
+    zh: "备份还原完成。用原来的账号登录。",
+    en: "The backup was restored. Sign in with the account from the backup.",
+  },
+  "backup.created": {
+    zh: "备份已经写好。",
+    en: "The backup is ready.",
+  },
+  "backup.downloadFailed": {
+    zh: "备份没有下载成功。",
+    en: "The backup could not be downloaded.",
+  },
+
   "import.format.monologue": {
     zh: "TA 写的信、日记、文章",
     en: "Letters, diaries and articles they wrote",

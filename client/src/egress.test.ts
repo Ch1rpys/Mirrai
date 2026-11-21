@@ -16,6 +16,12 @@ const ALLOWED: Record<string, string> = {
     "a placeholder for the base URL the user types for their own provider",
   "client/src/pages/Onboarding.tsx":
     "a placeholder for the base URL the user types for their own provider",
+  "client/src/i18n/zh.ts":
+    "placeholders for the user's own WebDAV / S3 backup address (C8.3), typed by the user",
+  "client/src/i18n/en.ts":
+    "placeholders for the user's own WebDAV / S3 backup address (C8.3), typed by the user",
+  "client/src/i18n/zh-Hant.ts":
+    "the generated dictionary of the same placeholders (C8.3)",
 };
 
 const ROOT = path.resolve(__dirname, "..");

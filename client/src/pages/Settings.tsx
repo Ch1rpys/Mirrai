@@ -42,6 +42,7 @@ import ExtraBodyEditor from "@/components/v6/ExtraBodyEditor";
 import LlmRoles from "@/components/v6/LlmRoles";
 import UsagePanel from "@/components/v6/UsagePanel";
 import RecycleBin from "@/components/v6/RecycleBin";
+import BackupPanel from "@/components/v6/BackupPanel";
 import Diagnostics from "@/components/v6/Diagnostics";
 import AccessibilitySettings from "@/components/v6/AccessibilitySettings";
 import type { GraduationMode } from "@shared/graduation-mode";
@@ -1507,6 +1508,8 @@ export function DataManagementTab() {
       </section>
 
       <RecycleBin />
+
+      <BackupPanel />
 
       {/* Install */}
       <InstallAppSection />

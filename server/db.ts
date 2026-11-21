@@ -4786,6 +4786,34 @@ export async function setUserBudget(userId: number, budget: unknown): Promise<bo
   return rows.length > 0;
 }
 
+/** The scheduled-backup settings of one user, raw (C8.3). */
+export async function getUserBackupSettings(userId: number): Promise<unknown> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select({ backupSettings: users.backupSettings }).from(users)
+    .where(eq(users.id, userId)).limit(1);
+  return rows[0]?.backupSettings ?? null;
+}
+
+/** Writes the scheduled-backup settings; `null` removes them. */
+export async function setUserBackupSettings(userId: number, settings: unknown): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(users).set({ backupSettings: settings as never })
+    .where(eq(users.id, userId))
+    .returning({ id: users.id });
+  return rows.length > 0;
+}
+
+/** Every user who has any scheduled-backup settings at all. */
+export async function getUsersWithBackupSettings(): Promise<Array<{ id: number; backupSettings: unknown }>> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ id: users.id, backupSettings: users.backupSettings })
+    .from(users)
+    .where(isNotNull(users.backupSettings));
+}
+
 /** The newest call made for one purpose — what the last distillation cost. */
 export async function latestLlmUsageForPurpose(userId: number, purpose: string) {
   const db = await getDb();

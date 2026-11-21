@@ -191,6 +191,7 @@ import { shareRouter } from "./routers-v6/share";
 import { oralRouter } from "./routers-v6/oral";
 import { interviewRouter } from "./routers-v6/interview";
 import { usageRouter } from "./routers-v6/usage";
+import { backupRouter } from "./routers-v6/backup";
 import { markRouter } from "./routers-v6/mark";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { stateRulesFromTranscript } from "./skill-engine/state-rules";
@@ -8007,6 +8008,7 @@ export const appRouter = router({
   oral: oralRouter,
   interview: interviewRouter,
   usage: usageRouter,
+  backup: backupRouter,
   mark: markRouter,
 
   scene: router({

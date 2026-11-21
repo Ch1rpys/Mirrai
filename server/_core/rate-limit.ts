@@ -297,6 +297,33 @@ export const RATE_LIMITS = {
    * and that is what the manual asks for (C8.12).
    */
   diagnose: { name: "diagnose", limit: 1, windowMs: 60_000, scope: "user" } as RateLimitRule,
+  /**
+   * Full backups (C8.3).
+   *
+   * A download walks the whole database and the uploads directory, so
+   * it is expensive in a way an ordinary read is not: six an hour is
+   * enough for a person who wants a copy, and too slow to be a way to
+   * hammer the disk.
+   */
+  backupDownload: {
+    name: "backup-download",
+    limit: 6,
+    windowMs: 3_600_000,
+    scope: "user",
+  } as RateLimitRule,
+  /**
+   * Restoring a backup (C8.3).
+   *
+   * The route only works while the instance is empty — there is no
+   * account to key a limit by yet — so the limit is by IP, and it also
+   * keeps a script from retrying a corrupt file forever.
+   */
+  backupRestore: {
+    name: "backup-restore",
+    limit: 5,
+    windowMs: 15 * 60_000,
+    scope: "ip",
+  } as RateLimitRule,
 };
 
 /**
