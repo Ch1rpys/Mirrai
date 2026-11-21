@@ -172,7 +172,7 @@
 | C8.7 | 🟡 | d100c62 | `server/chat/exemplar-query.test.ts` 5 通过：走索引、把时期的 from/to 传给候选查询、缺 token 时返回 null 走旧路径、无记录返回 null、没有重叠候选返回空且不评分。`server/chat/service.test.ts` 84 通过，新增一条：回填完成的分身走一轮，`getCollectedMessagesForPersona` 与 `iterateRecords` 调用次数都是 0、`candidateRecordsByOverlap` 被调用。`server/db-exemplars.test.ts`（带临时库）1 通过：夹具 18 条不同用户消息，新旧两条路径第一名相同 18/18，前四名 Jaccard 平均 0.894（差异见批次日志）。`prompt-golden.test.ts` 10 通过、快照未改。效果量（是否更像 TA）见未验证清单。 |
 | C8.8 | ⬜ |  |  |
 | C8.9 | 🟡 | 1920587 (dep); 30561c4 (ledger); 5846be3 (budget); ba0b280 (routes/UI); 1a8daed (test) | 临时库 `mirrai_v6_scratch`（用完已 `dropdb`，`mirrai_live` 未连接）：`push --force` 后 `migrate` 应用 `0075_llm_usage`、`0076_user_budget`；`--replay` 重放 74 条；`--rollback 1` 后 `users.budget` 计数 0、再 `migrate` 回来 1；再 `--rollback 1` 后 `llm_usage` 为 `gone`、再 `migrate` 表与两个索引回来；两个迁移的升级路径（DROP 对象 + 删 `schema_migrations` 对应行 + `migrate`）对象都回来。`schema-parity` 5 通过（两个索引已声明）。带库 `server/db-llm-usage.test.ts` 3 通过：两个用户的账本互不可见、删分身只删该分身的行、删账号清空该用户的行。`server/llm/usage.test.ts` 10 通过：每次带归属的调用一行、purpose 正确、provider 报用量→`estimated: false`、没报→`true` 且 token 数大于 0、未带归属不记、写库抛错时调用照常返回、流式在结束时记一次；金额 `inputPerMTok: 2` + 100 万输入 token → `2_000_000` micros，没填价格→`costMicros: null`，填了按供应商匹配。`server/llm/budget.test.ts` 9 通过：预算解析、用户时区的月界（上海/纽约各一条）、token 与金额两种上限、数据库读不到时不抛错。`server/chat/generate.test.ts` 75 通过，新增 2 条：`budgetOver: true` 时 `twoStage`/`factRewrite`/`rerank` 不进 `layersUsed`、provider 只调 1 次且普通回复照常；未超预算时两层保留。`server/routers.budget-gate.test.ts` 6 通过：评测、试镜、排练、措辞助手四种贵功能在超预算时拒绝并带 `errors.budgetOver`，未超时不被预算拒。`server/routers-v6/usage.test.ts` 9 通过：汇总（合计、按用途/分身/天、货币只有一致时给出、rerank 与最近一次蒸馏）、空账本、`setBudget` 只写一个上限不丢另一个、清空即移除、`setPrice` 保留 `extraBody` 且拒绝未配置供应商、`usage.job`、`usage.budget`。`UsagePanel.test.tsx` 7 通过：金额与 token、没填价格时的说明、超预算提示、两个上限保存、单价保存、失败给重试、空账本；`BudgetNotice.test.tsx` 3 通过（未超不渲染、超了说、读失败不冒充）；`Upload.test.tsx` 10 通过（新增 2 条：填了单价时估价对话框显示金额、没填时不显示）。`server/llm/purpose.test.ts` 未改仍过。闸门：`corepack pnpm gate` 退出码 0，`589 passed \| 18 skipped (607)` 文件、`4799 passed \| 70 skipped (4869)` 用例、`all six steps passed`（相对 C8.2 收尾 583/17/600、4746/67/4813：通过文件 +6、跳过文件 +1 `server/db-llm-usage.test.ts` 已登记 `skip-audit`；通过用例 +53、跳过 +3）。效果（真实价格下的金额是否与账单一致）需要真实 provider 与真实账单，见未验证清单。 |
-| C8.10 | ⬜ |  |  |
+| C8.10 | ✅ | 774be7a (data/routes); a073df8 (UI/quotes) | 临时库 `mirrai_v6_scratch`（用完已 `dropdb`，`mirrai_live` 未连接）：`push --force` 后 `migrate` 应用 `0077_message_marks`；`--replay` 重放 75 条；`--rollback 1` 后 `message_marks` 为 `gone`，再 `migrate` 表与 `message_marks_user_message_kind_idx`/`message_marks_persona_idx` 回来；升级路径 DROP 表 + 删 `schema_migrations` 的 0077 + `migrate` 对象回来。`schema-parity`、`db-delete-coverage`（`message_marks` 已进 `deleteUserAccount`/`deletePersona`、删消息时清掉指向它的标记）、`db-isolation` 通过。`server/routers-v6/mark.test.ts` 10 通过：收藏/置顶/话题归属、别人的分身 `NOT_FOUND`、别的分身的消息 `NOT_FOUND`、第 4 条置顶被拒且带 `errors.pinLimit`、话题无名字被拒且带 `errors.topicNeedsLabel`（均断言到具体文案）、列表带每条指向的原话、按 id 删除且别人的 `NOT_FOUND`。`server/chat/quoted-records.test.ts` 7 通过：每行带日期与说话人、9 行被拒、别的分身的记录被拒、不在记录里的 id 被拒、超过 1200 字被拒、合法时返回该段、空引用返回空串。`server/chat/generate.test.ts` 新增 1 条：`quotedRecordIds` 时提示词里有那几行和日期、且去掉 `<persona_data>` 围栏后不再出现；`server/prompt-fences.test.ts` 新增 1 条：`quotedSection` 里的敌意文本只在围栏内。`server/routers.chat-send.test.ts` 5 通过（新增 2 条）：合法 ids 传给 `runConversation`；9 行在进任何逻辑前被 zod `BAD_REQUEST` 拒。客户端：`useDraft.test.ts` 4（重载后还在、发送后清掉、按分身分开、退出登录清空全部且不碰别的键）、`PinnedBand.test.tsx` 4（0 条不渲染、默认折起带计数、展开后跳转与取消置顶、再折起）、`MarksPanel.test.tsx` 5（关闭不渲染、星标与话题分组、跳转、删星标、空状态）、`quote-selection.test.ts` 5（往返、按分身、清掉、最多 8 行、丢弃坏条目）、`Records.test.tsx` 11（新增 2：勾两句 → 写入 sessionStorage 并跳 `/chat/5?quote=1`；不连续时按钮禁用）、`Chat.test.tsx` 10（新增 2：草稿重挂载后还在且发送后清空；引用条显示、发送带 `quotedRecordIds`、发完清掉）、`MessageBubble.test.tsx` 35（新增 2：引用记录显示在气泡下、普通消息没有）。闸门：`corepack pnpm gate` 退出码 0，`595 passed \| 18 skipped (613)` 文件、`4846 passed \| 70 skipped (4916)` 用例（相对 C8.9 收尾 589/18/607、4799/70/4869：通过文件 +6、跳过不变；通过用例 +47、跳过不变）、`all six steps passed`。 |
 | C8.11 | ⬜ |  |  |
 | C8.12 | ⬜ |  |  |
 | C8.13 | ⬜ |  |  |
@@ -571,6 +571,12 @@
 | 349 | C8.9 | 蒸馏估价对话框在填了价格时显示金额 | `estimateDistillation` 只有字符数与调用次数；金额按「输入 token ≈ 字符数、输出 ≈ 调用次数 × 400」估算并标「大约」 | 手册没给估价公式；真实 token 要读完全部材料才算，估价对话框本来就是估算。 |
 | 350 | C8.9 | 预算按用户时区的「本月」 | 月界用用户时区换算成瞬时；`llm_usage.createdAt` 用 `timestamptz` 存 | 账本要和月界比较；`timestamp` 的两种写法会差一个时区（与 C8.2 偏差 345 同一个坑）。 |
 | 351 | C8.9 | 用量按分身汇总、`usage.job({ jobId })` | 蒸馏的调用没有 `personaId`/`jobId`（管线没有把它们传到模型调用层），这几行的 `personaId` 为空、「最近一次蒸馏」取最新一条 `purpose=distill` 的记录，`usage.job` 在有调用方传 `jobId` 时才有数据 | 不去伪造归属；面板里按用途与按天仍成立。把 `personaId`/`jobId` 补到蒸馏管线是后续可以做的小改动。 |
+| 352 | C8.10 | 提交建议三个（收藏/置顶/话题、草稿、引用记录） | 两个：`774be7a` 数据与路由，界面与引用记录合并成第二个提交 | 三块改的是同一批文件（`Chat.tsx`、`MessageBubble.tsx`、i18n），硬拆会产生编译不过的中间提交。 |
+| 353 | C8.10 | 「消息菜单里」加收藏/置顶/话题三项 | 直接加在气泡下方的操作行（复制、引用、编辑同一行），各带 `aria-label` | 那一行本来就是「对这条消息能做什么」的操作集合；再加一个下拉菜单会多一层点击，也和现有的回复/删除不一致。 |
+| 354 | C8.10 | 「更多操作」里打开收藏列表、侧边一个话题列表 | 一个「收藏与话题」浮层，里面分「收藏的句子」与「话题」两块；点一条跳到原处 | 两者都是「回到某一句」的入口，同屏更短；聊天页没有常驻侧栏，沿用搜索/时间线的浮层样式。 |
+| 355 | C8.10 | 引用记录拼成 `TurnInput.quotedSection` | 与「回复这一条」的引用共用这一字段：两段存在时按「回复引用在前、记录引用在后」拼成一个 material 段；用户消息的 `metadata.quotedRecordIds` 记下 id，`chat.getHistory` 再把原话解析回气泡 | `quotedSection` 只有一处；加第二个字段要改提示词结构。两段都是材料，围栏同一处。 |
+| 356 | C8.10 | 阅读器里「选连续的 1–8 行」 | 勾选行；点「带着这段去聊」时才判定是否连续，不连续则显示「已选 0 句」并禁用按钮 | 勾选比拖选在手机上可用；连续性需要一个判定点，放在按钮上最简单。 |
+| 357 | C8.10 | 验收写 `service.test.ts` 里断言提示词 | 证据分三处：`server/chat/quoted-records.test.ts`（加载、校验、成段）、`server/chat/generate.test.ts`（提示词含那几行且在围栏内）、`server/prompt-fences.test.ts`（围栏） | `service.test.ts` 的 mock 太重，提示词断言在 `generate.test.ts` 里更直接；三处合起来覆盖同一条验收。 |
 
 ## 未验证清单
 
@@ -665,6 +671,18 @@
 | A7 | 亲密度 `computeIntimacy` 里含连续对话天数（`consecutiveDays * 10`，最高 100 分），是否拿掉 | 拿掉：毕业门槛少这一项输入，已有分身的亲密度分数会下降，可能改变毕业建议。留着：大厅已经没有打卡，分数里仍奖励连续聊。手册 A7 边界写明这一条不动它，等决定。 |
 
 ## 批次日志
+
+### WP14 · 实现会话 · 2026-11-21 · C8.10 对话管理
+
+- 开工核对：HEAD `f105bc5`（C8.9 收尾），工作区干净。
+- 数据与路由一个提交 `774be7a`：迁移 `0077_message_marks`、`server/db.ts` 的五个 helper 与两处删除覆盖、`server/routers-v6/mark.ts`（`list`/`add`/`remove`/`get`）、文案。
+- 界面、草稿与引用记录一个提交（a073df8）：`MessageBubble` 三条消息级操作（收藏/置顶/话题）、`PinnedBand`（可折起的置顶带）、`MarksPanel`（收藏与话题浮层）、`useDraft`（按用户与分身存 localStorage、退出登录清空）、阅读器的选段与「带着这段去聊」、聊天页的引用条与气泡里的原话、`chat.send`/`/api/chat/stream` 的 `quotedRecordIds` 与提示词段落。
+- 数据库四步与升级路径见进度表 C8.10 行；临时库用完 `dropdb`，`mirrai_live` 未连接。
+- 测试语义改动：无既有测试放宽；`server/routers.chat-send.test.ts` 补两条新用例。
+- 闸门：`corepack pnpm gate` 退出码 0，`595 passed \| 18 skipped (613)` 文件、`4846 passed \| 70 skipped (4916)` 用例（相对 C8.9 收尾 589/18/607、4799/70/4869：通过文件 +6、跳过不变；通过用例 +47、跳过不变）、`all six steps passed`。
+- 偏差 352–357；未验证清单没有新增（引用记录是原话，不涉及模型效果）；待用户决定没有新增。
+- 状态：C8.10 记 ✅——机器验收全部通过；引用记录/草稿/置顶都是确定性行为，不需要真实模型。
+- 下一个会话：C8.11 撤销与回收站。
 
 ### WP14 · 实现会话 · 2026-11-21 · C8.9 成本面板
 
