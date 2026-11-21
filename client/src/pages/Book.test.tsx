@@ -6,6 +6,7 @@ import path from "node:path";
 import { translate } from "@/i18n";
 
 const inputs: any[] = [];
+let bookOverrides: Record<string, unknown> = {};
 
 function bookData(share: boolean) {
   return {
@@ -37,6 +38,7 @@ function bookData(share: boolean) {
       { id: 11, url: "/uploads/a.jpg", at: "2024-01-01T12:00:00.000Z" },
     ],
     photos: [],
+    ...bookOverrides,
   };
 }
 
@@ -80,6 +82,7 @@ import Book from "./Book";
 describe("the keepsake book page (C6.3)", () => {
   beforeEach(() => {
     inputs.length = 0;
+    bookOverrides = {};
   });
 
   it("shows the chosen parts of the book", () => {
@@ -91,6 +94,13 @@ describe("the keepsake book page (C6.3)", () => {
     expect(screen.getByText("「晚安呀」")).toBeInTheDocument();
     expect(screen.getByText("那天海很蓝")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: translate("zh", "book.photoAlt", { name: "小满" }) })).toBeInTheDocument();
+  });
+
+  it("leaves out a section that has nothing in it (C6.3)", () => {
+    bookOverrides = { keptQuotes: [], bookmarks: [] };
+    render(<Book />);
+    expect(screen.queryByText(translate("zh", "book.keptQuotes"))).toBeNull();
+    expect(screen.queryByText(translate("zh", "book.bookmarks"))).toBeNull();
   });
 
   it("asks the server again for the share copy", () => {

@@ -195,6 +195,16 @@ describe("Chat", () => {
     expect(screen.getByText("数字分身")).toBeInTheDocument();
   });
 
+  it("puts the recordings entry in the header only for a memorial persona (C7.3)", () => {
+    const label = translate("zh", "media.voicesEntry", { name: "小A" });
+    const first = render(<Chat />);
+    expect(screen.queryByRole("button", { name: label })).toBeNull();
+    first.unmount();
+    chatPersona.value.settings = { mode: "memorial" };
+    render(<Chat />);
+    expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+  });
+
   it("keeps the way-out entry in the more menu, with its count", async () => {
     const user = userEvent.setup();
     render(<Chat />);

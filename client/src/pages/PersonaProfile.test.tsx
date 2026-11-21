@@ -345,6 +345,18 @@ describe("the portrait", () => {
     expect(screen.getAllByText(translate("zh", "evidence.inferred"))).toHaveLength(8);
   });
 
+  it("drops the coming-back entry once it has been put away (C5.4)", () => {
+    persona.settings = {
+      lastReunion: {
+        from: "2026-02-01T00:00:00.000Z",
+        to: "2026-03-01T00:00:00.000Z",
+        dismissed: true,
+      },
+    };
+    render(<PersonaProfile />);
+    expect(screen.queryByText(translate("zh", "reunion.title"))).toBeNull();
+  });
+
   it("keeps the coming-back entry while it has not been put away (C5.4)", () => {
     persona.settings = {
       lastReunion: { from: "2026-02-01T00:00:00.000Z", to: "2026-03-01T00:00:00.000Z" },
