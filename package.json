@@ -77,6 +77,8 @@
     "@radix-ui/react-toggle": "^1.2.1",
     "@radix-ui/react-toggle-group": "^1.2.1",
     "@radix-ui/react-tooltip": "^1.4.1",
+    "@simplewebauthn/browser": "^14.0.0",
+    "@simplewebauthn/server": "^14.1.0",
     "@tanstack/react-query": "^5.105.0",
     "@trpc/client": "^11.19.0",
     "@trpc/react-query": "^11.19.0",
