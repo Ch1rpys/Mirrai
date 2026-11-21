@@ -13,6 +13,7 @@
  */
 import type { Request, Response, NextFunction } from "express";
 import { authenticateRequest } from "./auth";
+import { isRequestLocked } from "./app-lock";
 import { isPersonaSharedWithMember, userHasMessageWithMediaUrl } from "../db";
 
 /** Prefixes whose second path segment is the owning user's id. */
@@ -116,6 +117,17 @@ export function uploadsAuthGuard(
 
   authenticateRequest(req)
     .then(async (user) => {
+      /**
+       * The app lock covers the files too (C8.4).
+       *
+       * A photo of the person, a recording of their voice: someone who
+       * picked up an unlocked browser must not get them by asking for
+       * the URL directly. The lock screen is only a screen.
+       */
+      if (await isRequestLocked(req, user)) {
+        res.status(403).json({ error: "LOCKED" });
+        return;
+      }
       const owned = isOwnedByUser(relKey, user.id) ||
         (await legacyFileBelongsToUser(relKey, user.id)) ||
         (await sharedPersonaFileBelongsToUser(relKey, user.id));

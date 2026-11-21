@@ -165,6 +165,18 @@ describe("the call protocol", () => {
     await expect(connect(port, `ftp://127.0.0.1:${port}`)).rejects.toThrow(/http 403/);
   });
 
+  it("refuses a session the app lock covers", async () => {
+    const server = createCallOnlyServer(deps({
+      locked: vi.fn(async () => true),
+    }));
+    const port = await server.listen();
+    close = () => {
+      server.call.close();
+      server.server.close();
+    };
+    await expect(connect(port)).rejects.toThrow(/http 403/);
+  });
+
   it("refuses a persona that is not the user's", async () => {
     const server = createCallOnlyServer(deps({
       getPersona: vi.fn(async () => ({ ...persona, userId: 2 })),

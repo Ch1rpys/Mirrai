@@ -130,6 +130,23 @@ export const users = pgTable("users", {
    * that writes to somebody's disk every day should not decide to.
    */
   backupSettings: jsonb("backupSettings"),
+  /**
+   * The app lock's PIN, hashed with the same scrypt the password uses
+   * (C8.4). Empty means no PIN has been set, which is also what the lock
+   * needs before a persona may be locked on its own.
+   *
+   * The PIN itself is never stored, never returned by any route and
+   * never put in a log.
+   */
+  lockPinHash: varchar("lockPinHash", { length: 255 }),
+  /**
+   * The app lock's settings (C8.4).
+   *
+   * `{ enabled, idleMinutes, passkeys: [{ id, publicKey, counter,
+   * transports, createdAt, label }] }`, normalized by
+   * `normalizeLockSettings`. Empty means the lock is off.
+   */
+  lockSettings: jsonb("lockSettings"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

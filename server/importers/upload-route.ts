@@ -16,6 +16,7 @@ import type { Express, Request, Response } from "express";
 import { nanoid } from "nanoid";
 import { copy, type Locale } from "@shared/copy";
 import { authenticateRequest } from "../_core/auth";
+import { isRequestLocked } from "../_core/app-lock";
 import { ENV } from "../_core/env";
 import {
   checkFileExtension,
@@ -101,6 +102,12 @@ async function handleImportUpload(req: Request, res: Response): Promise<void> {
     user = await authenticateRequest(req);
   } catch {
     res.status(401).json({ error: copy(locale, "errors.streamUnauthorized") });
+    return;
+  }
+
+  // The app lock covers the streaming import too (C8.4).
+  if (await isRequestLocked(req, user)) {
+    res.status(403).json({ error: copy(locale, "errors.locked") });
     return;
   }
 

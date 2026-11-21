@@ -15,6 +15,7 @@ import { csrfGuard } from "./csrf";
 import { securityHeaders } from "./security-headers";
 import { initRateLimiter } from "./rate-limit";
 import { uploadsAuthGuard } from "./uploads";
+import { initAppLockStore } from "./app-lock";
 import { resolveFaceModelFile } from "./face-models";
 import { registerChatStreamRoute } from "../chat/stream-route";
 import { attachCallServer } from "../chat/call";
@@ -212,6 +213,18 @@ async function startServer() {
   // limiter simply counts per process, as it always did.
   await initRateLimiter().catch((e) =>
     console.warn("[Rate-limit] Could not set up the shared store:", e),
+  );
+
+  /**
+   * The app lock's session state (C8.4).
+   *
+   * It shares the rate limiter's Redis when there is one — so two copies
+   * of the app agree about which sessions are unlocked — and falls back
+   * to this process's memory, which is right for the one-process install
+   * Mirrai mostly is.
+   */
+  await initAppLockStore().catch((e) =>
+    console.warn("[Lock] Could not set up the shared store:", e),
   );
 
   // Collection jobs: mirror every state change into the database, and mark

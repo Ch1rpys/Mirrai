@@ -188,6 +188,24 @@ describe("POST /api/chat/stream", () => {
     expect(runConversation).not.toHaveBeenCalled();
   });
 
+  it("rejects a session the app lock covers", async () => {
+    authenticateRequest.mockResolvedValue({
+      id: 1,
+      username: "tester",
+      lockSettings: { enabled: true, idleMinutes: 5, passkeys: [] },
+    });
+
+    const res = await fetch(`${baseUrl}/api/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personaId: 1, message: "在吗" }),
+    });
+
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error?: string }).error).toBe("应用已锁定。解锁之后才能继续。");
+    expect(runConversation).not.toHaveBeenCalled();
+  });
+
   it("rejects a request that trips the rate limit", async () => {
     (rateLimiter.check as any).mockReturnValue({
       allowed: false,

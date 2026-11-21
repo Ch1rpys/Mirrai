@@ -1,5 +1,49 @@
-import { describe, expect, it } from "vitest";
-import { isOwnedByUser } from "./uploads";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * The uploads directory guard.
+ *
+ * Two things are checked here: the path decides whose file it is, and —
+ * since C8.4 — a session the app lock covers cannot fetch the files
+ * either. The lock screen is a screen; a photograph of the person is
+ * one URL away.
+ */
+
+const authenticateRequest = vi.fn();
+const userHasMessageWithMediaUrl = vi.fn();
+const isPersonaSharedWithMember = vi.fn();
+
+vi.mock("./auth", () => ({
+  authenticateRequest: (...a: unknown[]) => authenticateRequest(...a),
+}));
+
+vi.mock("../db", () => ({
+  userHasMessageWithMediaUrl: (...a: unknown[]) => userHasMessageWithMediaUrl(...a),
+  isPersonaSharedWithMember: (...a: unknown[]) => isPersonaSharedWithMember(...a),
+}));
+
+import { isOwnedByUser, uploadsAuthGuard } from "./uploads";
+import { noteUnlock, resetAppLockStore, sessionKeyFromCookieHeader } from "./app-lock";
+
+/** Just enough of an express response for the guard. */
+function fakeResponse() {
+  return {
+    statusCode: 0,
+    body: null as unknown,
+    headers: {} as Record<string, string>,
+    setHeader(name: string, value: string) {
+      this.headers[name] = value;
+    },
+    status(code: number) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload: unknown) {
+      this.body = payload;
+      return this;
+    },
+  };
+}
 
 describe("isOwnedByUser", () => {
   it("allows a user their own uploaded persona file", () => {
@@ -39,5 +83,45 @@ describe("isOwnedByUser", () => {
 
   it("ignores a leading slash", () => {
     expect(isOwnedByUser("/personas/1/2/a.png", 1)).toBe(true);
+  });
+});
+
+describe("uploadsAuthGuard and the app lock", () => {
+  const lockedUser = {
+    id: 1,
+    lockSettings: { enabled: true, idleMinutes: 5, passkeys: [] },
+  };
+  const request = () => ({
+    path: "/personas/1/2/a.png",
+    headers: { cookie: "app_session_id=uploads-session" },
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetAppLockStore();
+    authenticateRequest.mockResolvedValue(lockedUser);
+    userHasMessageWithMediaUrl.mockResolvedValue(false);
+    isPersonaSharedWithMember.mockResolvedValue(false);
+  });
+
+  it("refuses a locked session before it ever looks at the file", async () => {
+    const response = fakeResponse();
+    const next = vi.fn();
+    uploadsAuthGuard(request() as never, response as never, next);
+    await vi.waitFor(() => expect(response.statusCode).toBe(403));
+    expect(response.body).toEqual({ error: "LOCKED" });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it("serves the file again once the session has unlocked", async () => {
+    await noteUnlock(
+      { enabled: true, idleMinutes: 5, passkeys: [] },
+      sessionKeyFromCookieHeader("app_session_id=uploads-session"),
+    );
+    const response = fakeResponse();
+    const next = vi.fn();
+    uploadsAuthGuard(request() as never, response as never, next);
+    await vi.waitFor(() => expect(next).toHaveBeenCalled());
+    expect(response.statusCode).toBe(0);
   });
 });

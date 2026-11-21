@@ -1845,4 +1845,54 @@ export const V6 = {
     zh: "TA 写的信、日记、文章",
     en: "Letters, diaries and articles they wrote",
   },
+
+  // ── The app lock (C8.4) ──────────────────────────────────────────
+  "errors.locked": {
+    zh: "应用已锁定。解锁之后才能继续。",
+    en: "The app is locked. Unlock it to continue.",
+  },
+  "errors.lockPinFormat": {
+    zh: "PIN 是 4 到 8 位数字。",
+    en: "A PIN is 4 to 8 digits.",
+  },
+  "errors.lockPasswordWrong": {
+    zh: "密码不对。",
+    en: "That password is not right.",
+  },
+  "errors.lockPinRequired": {
+    zh: "先在应用锁里设一个 PIN，再来锁这个分身。",
+    en: "Set a PIN for the app lock before locking a persona.",
+  },
+  "errors.lockNoPin": {
+    zh: "还没有设置 PIN。",
+    en: "No PIN has been set yet.",
+  },
+  "errors.lockPinWrong": {
+    zh: "PIN 不对。",
+    en: "That PIN is not right.",
+  },
+  "errors.lockTooManyAttempts": {
+    zh: "试错次数太多。请用账号密码解锁。",
+    en: "Too many tries. Unlock with your account password.",
+  },
+  "errors.lockChallengeExpired": {
+    zh: "这次验证已经过期，请再试一次。",
+    en: "That verification has expired. Try again.",
+  },
+  "errors.lockPasskeyFailed": {
+    zh: "这个通行密钥没有通过验证。",
+    en: "That passkey did not verify.",
+  },
+  "errors.lockNoPasskey": {
+    zh: "还没有登记通行密钥。",
+    en: "No passkey has been registered yet.",
+  },
+  "errors.lockTooManyPasskeys": {
+    zh: "最多只能保存 10 个通行密钥。",
+    en: "At most 10 passkeys can be kept.",
+  },
+  "lock.personaPinNeeded": {
+    zh: "这个分身锁着。输入 PIN 解锁。",
+    en: "This persona is locked. Enter the PIN to unlock it.",
+  },
 } as const satisfies CopyTable;

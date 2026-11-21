@@ -22,11 +22,13 @@ import type { Express, Request, Response } from "express";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { authenticateRequest } from "../_core/auth";
+import { isRequestLocked, personaLocked, sessionKeyFromRequest } from "../_core/app-lock";
 import { RATE_LIMITS, rateLimiter, resolveRateLimitKey } from "../_core/rate-limit";
 import * as db from "../db";
 import { runConversation, PersonaAsleepError, ChatClosedError } from "./service";
 import { QuotedRecordsError } from "./quoted-records";
 import { copy } from "@shared/copy";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 
 const inputSchema = z.object({
   personaId: z.number(),
@@ -113,6 +115,17 @@ async function handleChatStream(req: Request, res: Response): Promise<void> {
       return;
     }
 
+    /**
+     * The app lock governs the stream as well (C8.4).
+     *
+     * This route is not tRPC, so the guard in `protectedProcedure` never
+     * runs for it — and it is the route the chat page actually uses.
+     */
+    if (await isRequestLocked(req, user)) {
+      res.status(403).json({ error: copy(askedLocale, "errors.locked") });
+      return;
+    }
+
     const limit = await rateLimiter.check(
       resolveRateLimitKey(req, RATE_LIMITS.llm, user.id),
       RATE_LIMITS.llm,
@@ -155,6 +168,20 @@ async function handleChatStream(req: Request, res: Response): Promise<void> {
     }
     if (persona.analysisStatus !== "ready") {
       res.status(400).json({ error: copy(parsed.data.locale, "errors.personaNotReady") });
+      return;
+    }
+    /**
+     * A locked persona (C8.4) does not answer either.
+     *
+     * The chat page's `persona.get` already refused, but the page can
+     * post here directly; the PIN is checked against the session at both
+     * doors.
+     */
+    if (await personaLocked(
+      normalizePersonaSettings((persona as { settings?: unknown }).settings),
+      sessionKeyFromRequest(req),
+    )) {
+      res.status(403).json({ error: copy(askedLocale, "errors.locked") });
       return;
     }
 

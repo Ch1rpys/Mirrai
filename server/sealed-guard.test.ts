@@ -186,6 +186,11 @@ describe("a sealed persona (C6.2)", () => {
     }
     expect(offenders).toEqual([]);
     const trpc = readFileSync(join(server, "_core", "trpc.ts"), "utf8");
-    expect(trpc).toMatch(/protectedProcedure = t\.procedure\.use\(requireUser\)\.use\(sealedGuard\)/);
+    // The chain grew a guard in C8.4: the app lock runs before the seal
+    // guard, and the seal guard still has to be on the protected
+    // procedure itself.
+    expect(trpc).toMatch(
+      /protectedProcedure = t\.procedure\s*\.use\(requireUser\)\s*\.use\(appLockGuard\)\s*\.use\(sealedGuard\)/,
+    );
   });
 });

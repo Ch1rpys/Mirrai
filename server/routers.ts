@@ -5,6 +5,7 @@ import { isUniqueViolation } from "./_core/auth";
 import { detectCrisis } from "./safety/crisis";
 import { worseStreakFor } from "./safety/checkins";
 import { withPersonaDataLock } from "./_core/lock";
+import { hasRecentUnlock, sessionKeyFromRequest } from "./_core/app-lock";
 import { requestAbortSignal } from "./_core/context";
 import { QuotedRecordsError } from "./chat/quoted-records";
 import { countSceneRangeLines, loadSceneRangeMaterial, sceneRangeOf, sceneUsableForPersona } from "./chat/scene-range";
@@ -193,6 +194,7 @@ import { interviewRouter } from "./routers-v6/interview";
 import { usageRouter } from "./routers-v6/usage";
 import { backupRouter } from "./routers-v6/backup";
 import { markRouter } from "./routers-v6/mark";
+import { lockRouter } from "./routers-v6/lock";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { stateRulesFromTranscript } from "./skill-engine/state-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
@@ -1392,7 +1394,30 @@ export const appRouter = router({
   }),
 
   persona: router({
-    list: protectedProcedure.query(async ({ ctx }) => getPersonasWithStats(ctx.user.id)),
+    /**
+     * The lobby's cards.
+     *
+     * A locked persona (C8.4) is a card with no name and no face until
+     * the PIN is entered: the list is what somebody glancing at the
+     * screen sees, so hiding only the chat would hide nothing. The name
+     * comes back as soon as this session proved the PIN in the last
+     * five minutes — the same window the persona's own routes use.
+     */
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const rows = await getPersonasWithStats(ctx.user.id);
+      if (rows.length === 0) return rows;
+      if (await hasRecentUnlock(sessionKeyFromRequest(ctx.req))) return rows;
+      let anyLocked = false;
+      const redacted = rows.map((persona) => {
+        const settings = normalizePersonaSettings(
+          (persona as { settings?: unknown }).settings,
+        );
+        if (!settings.locked) return persona;
+        anyLocked = true;
+        return { ...persona, name: "", avatarUrl: null, locked: true as const };
+      });
+      return anyLocked ? redacted : rows;
+    }),
 
     stats: protectedProcedure.query(async ({ ctx }) => getUserStats(ctx.user.id, ctx.user.timezone)),
 
@@ -1460,6 +1485,20 @@ export const appRouter = router({
           assertPersonaWritable(persona, ctx.locale);
           const current = await getPersonaSettings(input.id, ctx.user.id);
           const next = mergePersonaSettings(current, input.patch);
+          /**
+           * A locked persona needs a PIN to unlock it (C8.4).
+           *
+           * The same PIN as the app lock: letting a persona be locked
+           * with no PIN would make it permanently unreadable, and
+           * asking for the account password every time is not what the
+           * switch says it does.
+           */
+          if (next.locked && !ctx.user.lockPinHash) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: copy(ctx.locale, "errors.lockPinRequired"),
+            });
+          }
           const written = await setPersonaSettings(input.id, ctx.user.id, next);
           if (!written) throw new TRPCError({ code: "NOT_FOUND" });
           return next;
@@ -8010,6 +8049,7 @@ export const appRouter = router({
   usage: usageRouter,
   backup: backupRouter,
   mark: markRouter,
+  lock: lockRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {

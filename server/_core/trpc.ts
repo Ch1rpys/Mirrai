@@ -4,6 +4,16 @@ import type { TrpcContext } from "./context";
 import { rateLimiter, resolveRateLimitKey, type RateLimitRule } from "./rate-limit";
 import { copy, type CopyKey, type Locale } from "@shared/copy";
 import { sealState } from "@shared/persona-state";
+import {
+  hasRecentUnlock,
+  isSessionLocked,
+  lockSettingsOf,
+  lockedError,
+  personaLocked,
+  personaLockedError,
+  sessionKeyFromRequest,
+  touchUnlock,
+} from "./app-lock";
 
 /**
  * What the client is told when something goes wrong.
@@ -60,6 +70,20 @@ export function formatErrorForClient({
 
   if (error instanceof TRPCError) {
     const code = error.code;
+    /**
+     * A code the app invented, like `LOCKED` (C8.4).
+     *
+     * tRPC's own codes are a closed set and its client validates the
+     * response against them — so the lock cannot be a new code on the
+     * wire. It travels as `FORBIDDEN` in the transport and in
+     * `data.code`, which is where the interface already looks for
+     * `UNAUTHORIZED`. The app's own message is passed through: it was
+     * written for the person reading it.
+     */
+    const appCode = (error as { mirraiCode?: unknown }).mirraiCode;
+    if (typeof appCode === "string" && appCode.length > 0) {
+      return withCode({ ...shape, message: error.message }, appCode);
+    }
     /**
      * An error from somewhere else.
      *
@@ -253,20 +277,67 @@ const SEAL_EXEMPT_PATHS = new Set([
 ]);
 
 /**
- * Refuses every read or write that names a sealed persona (C6.2).
+ * Paths that stay reachable while the app is locked (C8.4).
  *
- * The input is read raw — each procedure has its own shape, and the id
- * is sometimes `personaId` and sometimes `id` (the persona's own
- * routes). A procedure whose input has neither is left alone.
+ * Signing in and getting out of the lock have to work, or nobody could
+ * ever unlock; the capability probe is public and the first-run wizard
+ * reads it before there is a session. Everything else — every persona,
+ * message, memory, record, letter and setting — waits for the PIN.
+ */
+const APP_LOCK_EXEMPT_PREFIXES = ["auth.", "lock."] as const;
+const APP_LOCK_EXEMPT_PATHS = new Set(["system.capabilities"]);
+
+/**
+ * Refuses every request from a session the app lock covers (C8.4).
+ *
+ * The lock is per session, not per user: unlocking this browser must
+ * not unlock a session somebody else left open on the same account. A
+ * request that gets through slides the idle window forward, which is
+ * what makes the window mean "idle".
+ */
+export const appLockGuard = t.middleware(async (opts) => {
+  const user = opts.ctx.user;
+  if (!user) return opts.next();
+  if (APP_LOCK_EXEMPT_PATHS.has(opts.path)) return opts.next();
+  if (APP_LOCK_EXEMPT_PREFIXES.some((prefix) => opts.path.startsWith(prefix))) return opts.next();
+
+  const settings = lockSettingsOf(user);
+  if (!settings.enabled) return opts.next();
+  const sessionKey = sessionKeyFromRequest(opts.ctx.req);
+  try {
+    if (await isSessionLocked(settings, sessionKey)) throw lockedError(opts.ctx.locale);
+    await touchUnlock(settings, sessionKey);
+  } catch (error) {
+    if (error instanceof TRPCError) throw error;
+    /**
+     * The store could not answer. That is "locked", not "open": a lock
+     * that disappears when its own bookkeeping breaks is not a lock.
+     * The store itself falls back from Redis to this process, so this is
+     * the programming-error path, and it says so in the log.
+     */
+    console.warn("[lock] The unlock state could not be read:", error);
+    throw lockedError(opts.ctx.locale);
+  }
+  return opts.next();
+});
+
+/**
+ * Refuses every read or write that names a sealed or locked persona.
+ *
+ * The seal (C6.2) is a promise about time; the lock (C8.4) is a promise
+ * about who is at the keyboard. The input is read raw — each procedure
+ * has its own shape, and the id is sometimes `personaId` and sometimes
+ * `id` (the persona's own routes). A procedure whose input has neither
+ * is left alone.
  *
  * The database is imported lazily and a failure to read the settings is
  * treated as "not sealed": the guard must not take the whole app down
- * because one read failed.
+ * because one read failed. The same failure is "not locked" for the
+ * same reason — the app-level lock in `appLockGuard` has already run.
  */
 export const sealedGuard = t.middleware(async (opts) => {
   const user = opts.ctx.user;
   if (!user) return opts.next();
-  if (SEAL_EXEMPT_PATHS.has(opts.path)) return opts.next();
 
   let raw: unknown = null;
   try {
@@ -298,16 +369,30 @@ export const sealedGuard = t.middleware(async (opts) => {
   } catch {
     return opts.next();
   }
-  if (settings && sealState({ settings }, new Date(), user.timezone) === "sealed") {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: copy(opts.ctx.locale, "errors.sealed"),
-    });
+  if (settings) {
+    /**
+     * A locked persona asks for the PIN even when the app itself is not
+     * locked — and even for the seal-exempt routes: exporting or
+     * deleting a locked persona is exactly what the lock is there to
+     * stop.
+     */
+    if (await personaLocked(settings as { locked?: boolean }, sessionKeyFromRequest(opts.ctx.req))) {
+      throw personaLockedError(opts.ctx.locale);
+    }
+    if (!SEAL_EXEMPT_PATHS.has(opts.path) && sealState({ settings }, new Date(), user.timezone) === "sealed") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: copy(opts.ctx.locale, "errors.sealed"),
+      });
+    }
   }
   return opts.next();
 });
 
-export const protectedProcedure = t.procedure.use(requireUser).use(sealedGuard);
+export const protectedProcedure = t.procedure
+  .use(requireUser)
+  .use(appLockGuard)
+  .use(sealedGuard);
 
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {

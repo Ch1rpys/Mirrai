@@ -63,6 +63,7 @@ import { RITUAL_MAX_REPLY_CHARS, RITUAL_MAX_TRIGGER_CHARS } from "@shared/ritual
 import { charBigrams } from "@shared/act-clusters";
 import { queryLexemes, searchTokens, toTsQuery } from "@shared/search-tokens";
 import { MAX_EMBEDDED_TURNS } from "@shared/records";
+import { normalizeLockSettings, type LockSettings } from "@shared/lock";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -1340,6 +1341,54 @@ export async function updateUserPassword(id: number, passwordHash: string) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
   await db.update(users).set({ passwordHash }).where(eq(users.id, id));
+}
+
+/**
+ * The app lock's stored half (C8.4).
+ *
+ * The PIN hash and the settings are read together so a route can decide
+ * in one round trip, and written together so a half-enabled lock — a
+ * PIN without the switch, or the switch without a PIN — cannot happen.
+ *
+ * `lockSettings` goes through `normalizeLockSettings` on the way out as
+ * well as on the way in: the column is JSON, and a hand edit should not
+ * be able to hand the guard a shape it does not expect.
+ */
+export interface UserLockRow {
+  lockPinHash: string | null;
+  lockSettings: LockSettings;
+}
+
+export async function getUserLockRow(userId: number): Promise<UserLockRow | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select({ lockPinHash: users.lockPinHash, lockSettings: users.lockSettings })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (!rows[0]) return null;
+  return {
+    lockPinHash: rows[0].lockPinHash ?? null,
+    lockSettings: normalizeLockSettings(rows[0].lockSettings),
+  };
+}
+
+/** Writes the app lock's stored half. */
+export async function setUserLock(
+  userId: number,
+  patch: { lockPinHash?: string | null; lockSettings?: LockSettings | null },
+): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const update: { lockPinHash?: string | null; lockSettings?: LockSettings | null; updatedAt: Date } = {
+    updatedAt: new Date(),
+  };
+  if (patch.lockPinHash !== undefined) update.lockPinHash = patch.lockPinHash;
+  if (patch.lockSettings !== undefined) {
+    update.lockSettings = patch.lockSettings === null ? null : normalizeLockSettings(patch.lockSettings);
+  }
+  await db.update(users).set(update).where(eq(users.id, userId));
 }
 
 /**

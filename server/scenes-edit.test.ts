@@ -59,6 +59,8 @@ function makeCtx(userId = 1): TrpcContext {
       timezone: null,
       budget: null,
     backupSettings: null,
+    lockPinHash: null,
+    lockSettings: null,
       locale: "zh",
       addressStyle: null,
       boundaries: null,

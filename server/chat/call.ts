@@ -16,6 +16,7 @@ import { createServer, type Server } from "node:http";
 import { readFile } from "node:fs/promises";
 import { WebSocketServer, type WebSocket } from "ws";
 import { authenticateRequest } from "../_core/auth";
+import { isRequestLocked, personaLocked, sessionKeyFromRequest } from "../_core/app-lock";
 import { ENV } from "../_core/env";
 import { copy } from "@shared/copy";
 import { mergePersonaSettings, normalizePersonaSettings } from "@shared/persona-settings";
@@ -81,6 +82,14 @@ export interface CallDeps {
   }) => AsyncGenerator<Record<string, unknown>>;
   trimReply: (personaId: number, userId: number, since: Date, content: string) => Promise<void>;
   now: () => Date;
+  /**
+   * Whether the app lock (C8.4) covers this socket.
+   *
+   * The socket is not tRPC, so `protectedProcedure`'s guard never runs
+   * for it. The real one asks `isRequestLocked`; a test that does not
+   * care about the lock leaves the default.
+   */
+  locked: (request: unknown, user: CallUser) => Promise<boolean>;
 }
 
 function defaultTrimReply(): CallDeps["trimReply"] {
@@ -111,6 +120,7 @@ const REAL_DEPS: CallDeps = {
   converse: (options) => runConversation(options as never) as AsyncGenerator<Record<string, unknown>>,
   trimReply: defaultTrimReply(),
   now: () => new Date(),
+  locked: async (request, user) => isRequestLocked(request as never, user as never),
 };
 
 /** Splits a reply into spoken sentences. */
@@ -204,9 +214,29 @@ export function attachCallServer(server: Server, overrides: Partial<CallDeps> = 
         await reject(socket, "401 Unauthorized");
         return;
       }
+      /**
+       * The app lock covers the phone socket too (C8.4): a spoken
+       * conversation is the persona's voice, and it must not start from
+       * a session that has not been unlocked.
+       */
+      if (await deps.locked(request, user).catch(() => true)) {
+        await reject(socket, "403 Forbidden");
+        return;
+      }
       const persona = await deps.getPersona(personaId, user.id).catch(() => null);
       if (!persona || persona.userId !== user.id) {
         await reject(socket, "404 Not Found");
+        return;
+      }
+      /**
+       * A locked persona does not answer the phone either. The PIN was
+       * proved recently enough if the same session just unlocked.
+       */
+      if (await personaLocked(
+        normalizePersonaSettings(persona.settings),
+        sessionKeyFromRequest(request),
+      )) {
+        await reject(socket, "403 Forbidden");
         return;
       }
       const settings = normalizePersonaSettings(persona.settings);
