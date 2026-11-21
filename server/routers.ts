@@ -26,12 +26,14 @@ import {
 import { inspectExtraBody } from "./llm/extra-body";
 import { storagePut, storageDelete, storageDeleteTree } from "./storage";
 import {
-  createPersona, getPersonasByUserId, getPersonaById, updatePersona, deletePersona,
+  createPersona, getPersonasByUserId, getPersonaById, updatePersona,
+  softDeletePersona, restorePersona, listDeletedPersonas, purgePersona,
+  getPersonaByIdIncludingDeleted,
   getPersonasWithStats, getUserStats, getUserMilestones, getRecentActivity, getDailyChatCounts,
   createPersonaFile, getFilesByPersonaId, deletePersonaFile,
   createMessage,
   getPersonaFileById, getMessagesByPersonaId, getMessagesByPersonaIdPaged, clearMessagesByPersonaId, searchMessages,
-  updateUserMessage, deleteMessage, deleteMessagesFrom, getPreviousMessage,
+  updateUserMessage, softDeleteMessage, restoreMessage, deleteMessagesFrom, getPreviousMessage,
   getMessagesFrom, restoreMessages,
   getMessagesBefore, hasOlderMessages, searchAllMessages,
   createWechatBinding, getWechatBindingsByUserId, deleteWechatBinding, setWechatBindingPersona,
@@ -40,7 +42,7 @@ import {
   updateUserProfile, updateUserPassword, deleteUserAccount, getAccountStats, exportUserData,
   getUserById, bumpUserTokenVersion, updateUserGraduationMode, updateUserTrajectoryAssessment,
   getUserTimezone,
-  createMemory, getMemoriesByPersonaId, getMemoriesFromPersona, getMemoryById, countMemories, getMemoryTitles, deleteMemory, updateMemory,
+  createMemory, getMemoriesByPersonaId, getMemoriesFromPersona, getMemoryById, countMemories, getMemoryTitles, softDeleteMemory, restoreMemory, updateMemory,
   createFidelityFeedback, listFidelityFeedbackForMessage, listFidelityFeedbackForPersona,
   listFidelityRewritePairs, setFidelityFeedbackRewrite,
   getMemoriesByFactKey, supersedeMemory, getMessageById,
@@ -2183,6 +2185,15 @@ export const appRouter = router({
         return { prompt };
       }),
 
+    /**
+     * Deletes a persona — into the recycle bin, not out of the world
+     * (C8.11).
+     *
+     * The row and its conversation are only marked; the lobby shows the
+     * undo for ten seconds, and the settings' recycle bin is where it
+     * stays for thirty days. `purge` is the immediate hard delete from
+     * that bin.
+     */
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
@@ -2191,7 +2202,36 @@ export const appRouter = router({
         const persona = await getPersonaById(input.id, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         assertPersonaWritable(persona, ctx.locale);
-        await deletePersona(input.id, ctx.user.id);
+        const deleted = await softDeletePersona(input.id, ctx.user.id);
+        if (!deleted) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true };
+      }),
+
+    /** Takes a persona out of the recycle bin (C8.11). */
+    restore: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const restored = await restorePersona(input.id, ctx.user.id);
+        if (!restored) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true };
+      }),
+
+    /** The personas in the user's recycle bin (C8.11). */
+    listDeleted: protectedProcedure.query(async ({ ctx }) => {
+      return { personas: await listDeletedPersonas(ctx.user.id) };
+    }),
+
+    /**
+     * Deletes a persona from the recycle bin now, without waiting thirty
+     * days (C8.11).
+     */
+    purge: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaByIdIncludingDeleted(input.id, ctx.user.id);
+        if (!persona || !persona.deletedAt) throw new TRPCError({ code: "NOT_FOUND" });
+        assertPersonaWritable(persona, ctx.locale);
+        await purgePersona(input.id, ctx.user.id);
         return { success: true };
       }),
 
@@ -3062,7 +3102,13 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    /** Deletes a single message. */
+    /**
+     * Deletes a single message into the bin (C8.11).
+     *
+     * The client shows the undo for ten seconds; after that the row is
+     * only invisible, and it comes back if the persona is restored from
+     * the recycle bin.
+     */
     deleteMessage: protectedProcedure
       .input(z.object({
         personaId: z.number(),
@@ -3071,8 +3117,22 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        const deleted = await deleteMessage(input.messageId, ctx.user.id, input.personaId);
+        const deleted = await softDeleteMessage(input.messageId, ctx.user.id, input.personaId);
         if (!deleted) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true };
+      }),
+
+    /** Takes a deleted message back out of the bin, for the undo (C8.11). */
+    restoreMessage: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        messageId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const restored = await restoreMessage(input.messageId, ctx.user.id, input.personaId);
+        if (!restored) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true };
       }),
 
@@ -5399,12 +5459,27 @@ export const appRouter = router({
         return { success: true, memory: row };
       }),
 
+    /**
+     * Deletes a memory into the bin (C8.11).
+     *
+     * The panel shows the undo for ten seconds; the hard delete is not
+     * offered here.
+     */
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        // The memory was removed, or there was nothing there to remove.
-        const removed = await deleteMemory(input.id, ctx.user.id);
+        // The memory was put in the bin, or there was nothing there to put.
+        const removed = await softDeleteMemory(input.id, ctx.user.id);
         if (!removed) throw new TRPCError({ code: "NOT_FOUND" });
+        return { success: true };
+      }),
+
+    /** Takes a deleted memory back out of the bin, for the undo (C8.11). */
+    restore: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const restored = await restoreMemory(input.id, ctx.user.id);
+        if (!restored) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true };
       }),
 

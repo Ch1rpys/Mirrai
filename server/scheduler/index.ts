@@ -17,6 +17,7 @@ import { answerDueLetters } from "../chat/letters";
 import { runProactiveSweep } from "../chat/proactive-sweep";
 import { sweepReplyJobs } from "../chat/reply-jobs";
 import { sweepScheduledItems } from "./scheduled-items";
+import { runDailyPurge } from "./purge";
 import { connectRedis, withRedisLock, isRedisUsable } from "../_core/redis";
 
 const TICK_INTERVAL_MS = 60_000;
@@ -69,11 +70,14 @@ async function tick(): Promise<void> {
     runProactiveSweep(),
     sweepReplyJobs(),
     sweepScheduledItems(),
+    // Once a day: the personas that have been in the recycle bin for
+    // thirty days are deleted for good (C8.11).
+    runDailyPurge(),
   ]);
   results.forEach((result, index) => {
     if (result.status === "rejected") {
       console.warn(
-        `[Scheduler] The ${["reminder", "letter", "proactive", "reply", "scheduled"][index]} sweep failed:`,
+        `[Scheduler] The ${["reminder", "letter", "proactive", "reply", "scheduled", "purge"][index]} sweep failed:`,
         result.reason instanceof Error ? result.reason.message : String(result.reason),
       );
     }

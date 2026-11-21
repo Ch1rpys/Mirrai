@@ -9,7 +9,8 @@ const getPersonaStyleProfile = vi.fn();
 const setPersonaSettings = vi.fn();
 const getMemoryTitles = vi.fn();
 const getFileSummaryTitles = vi.fn();
-const deletePersona = vi.fn();
+const softDeletePersona = vi.fn();
+const purgePersona = vi.fn();
 const getMessagesByPersonaId = vi.fn();
 const getLetters = vi.fn();
 const countLetters = vi.fn();
@@ -24,7 +25,15 @@ vi.mock("./db", () => ({
   setPersonaSettings: (...args: unknown[]) => setPersonaSettings(...args),
   getMemoryTitles: (...args: unknown[]) => getMemoryTitles(...args),
   getFileSummaryTitles: (...args: unknown[]) => getFileSummaryTitles(...args),
-  deletePersona: (...args: unknown[]) => deletePersona(...args),
+  softDeletePersona: (...args: unknown[]) => softDeletePersona(...args),
+  purgePersona: (...args: unknown[]) => purgePersona(...args),
+  restorePersona: vi.fn(),
+  listDeletedPersonas: vi.fn().mockResolvedValue([]),
+  getPersonaByIdIncludingDeleted: vi.fn(),
+  softDeleteMessage: vi.fn(),
+  restoreMessage: vi.fn(),
+  softDeleteMemory: vi.fn(),
+  restoreMemory: vi.fn(),
   getMessagesByPersonaId: (...args: unknown[]) => getMessagesByPersonaId(...args),
   getLetters: (...args: unknown[]) => getLetters(...args),
   countLetters: (...args: unknown[]) => countLetters(...args),
@@ -78,7 +87,7 @@ describe("a sealed persona (C6.2)", () => {
     setPersonaSettings.mockResolvedValue(true);
     getMemoryTitles.mockResolvedValue([]);
     getFileSummaryTitles.mockResolvedValue([]);
-    deletePersona.mockResolvedValue(undefined);
+    softDeletePersona.mockResolvedValue(true);
     getMessagesByPersonaId.mockResolvedValue([]);
     getLetters.mockResolvedValue([]);
     countLetters.mockResolvedValue(0);
@@ -106,7 +115,7 @@ describe("a sealed persona (C6.2)", () => {
     const manual = await caller.persona.exportManual({ personaId: 1 });
     expect(typeof manual.html).toBe("string");
     await expect(caller.persona.delete({ id: 1 })).resolves.toEqual({ success: true });
-    expect(deletePersona).toHaveBeenCalledWith(1, 1);
+    expect(softDeletePersona).toHaveBeenCalledWith(1, 1);
   });
 
   it("still lets the user lift the seal", async () => {

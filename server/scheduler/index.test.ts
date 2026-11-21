@@ -28,6 +28,7 @@ const runReminderSweep = vi.fn();
 const answerDueLetters = vi.fn();
 const runProactiveSweep = vi.fn();
 const sweepReplyJobs = vi.fn();
+const runDailyPurge = vi.fn();
 
 vi.mock("./reminders", () => ({
   runReminderSweep: (...a: unknown[]) => runReminderSweep(...a),
@@ -41,6 +42,9 @@ vi.mock("../chat/proactive-sweep", () => ({
 vi.mock("../chat/reply-jobs", () => ({
   sweepReplyJobs: (...a: unknown[]) => sweepReplyJobs(...a),
 }));
+vi.mock("./purge", () => ({
+  runDailyPurge: (...a: unknown[]) => runDailyPurge(...a),
+}));
 
 import { runSchedulerTick } from "./index";
 
@@ -51,6 +55,7 @@ describe("the scheduler tick", () => {
     for (const fn of [
       connectRedis, withRedisLock, isRedisUsable,
       runReminderSweep, answerDueLetters, runProactiveSweep, sweepReplyJobs,
+      runDailyPurge,
     ]) {
       fn.mockReset();
     }
@@ -58,6 +63,7 @@ describe("the scheduler tick", () => {
     answerDueLetters.mockResolvedValue([]);
     runProactiveSweep.mockResolvedValue([]);
     sweepReplyJobs.mockResolvedValue(0);
+    runDailyPurge.mockResolvedValue(0);
   });
 
   it("sweeps when there is no shared store", async () => {
@@ -69,6 +75,7 @@ describe("the scheduler tick", () => {
     expect(answerDueLetters).toHaveBeenCalled();
     expect(runProactiveSweep).toHaveBeenCalled();
     expect(sweepReplyJobs).toHaveBeenCalled();
+    expect(runDailyPurge).toHaveBeenCalled();
   });
 
   it("sweeps when the shared store is there but dead", async () => {
@@ -82,6 +89,7 @@ describe("the scheduler tick", () => {
     expect(answerDueLetters).toHaveBeenCalled();
     expect(runProactiveSweep).toHaveBeenCalled();
     expect(sweepReplyJobs).toHaveBeenCalled();
+    expect(runDailyPurge).toHaveBeenCalled();
   });
 
   it("sweeps when the store dies between the check and the lock", async () => {
