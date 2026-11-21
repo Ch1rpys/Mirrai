@@ -286,10 +286,11 @@ export interface ExtractFactsInput {
   mode?: DistillationMode | null;
   /**
    * Where these blocks came from. Private records are `records`; the
-   * public register (moments) is labelled `moments` so a fact is not
-   * presented as something said in a one-to-one conversation.
+   * public register (moments) is labelled `moments`, and the written
+   * register (letters, diaries) is labelled `written` (C1.8), so a fact
+   * is not presented as something said in a one-to-one conversation.
    */
-  source?: "records" | "moments";
+  source?: "records" | "moments" | "written";
   invoke: (messages: LLMMessage[]) => Promise<string>;
   onProgress?: (message: string) => void;
 }

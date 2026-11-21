@@ -17,7 +17,8 @@ export type ImportFormatId =
   | "discord-json"
   | "sms-xml"
   | "imessage-db"
-  | "column-map";
+  | "column-map"
+  | "monologue";
 
 export type ImportSourceName =
   | "wechat_export"
@@ -30,7 +31,8 @@ export type ImportSourceName =
   | "discord"
   | "sms"
   | "imessage"
-  | "generic";
+  | "generic"
+  | "monologue";
 
 export interface ImportSource {
   fileName: string;

@@ -295,6 +295,71 @@ describe("measureStyleProfile", () => {
     expect(short.fingerprint).toEqual(privateBefore);
   });
 
+  it("measures the written register separately and never mixes it into the chat voice (C1.8)", async () => {
+    getRecordsVersion.mockResolvedValue("45:45");
+    getPersonaStyleProfile.mockResolvedValue(null);
+    getPersonaById.mockResolvedValue({ id: 5, userId: 1, name: "小满", personaData: {} });
+    getUserById.mockResolvedValue({ id: 1, name: "阿树" });
+    const makeWritten = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        id: 20_000 + i,
+        role: "assistant",
+        content: i % 2 === 0 ? "今天去了海边，风很大。" : "想起去年冬天的事。",
+        timestamp: new Date(Date.UTC(2023, 4, 1 + (i % 28), 4, 0, i % 60)),
+        kind: "text",
+        speaker: "小满",
+        meta: { register: "written" },
+      }));
+    let writtenRows: ReturnType<typeof makeWritten> = makeWritten(45);
+    let privateRows: Array<Record<string, unknown>> = [];
+    iterateRecords.mockImplementation(async function* (
+      _personaId: number,
+      _userId: number,
+      options?: { register?: string },
+    ) {
+      const source = options?.register === "written" ? writtenRows : privateRows;
+      for (const row of source) yield row;
+    });
+
+    const onlyWritten = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    expect(onlyWritten.writtenFingerprint?.samples).toBe(45);
+    // With no private rows there is no chat fingerprint and no sample
+    // pool: the written lines must not fill that gap with a default.
+    expect(onlyWritten.fingerprint).toBeUndefined();
+    expect(onlyWritten.samplePool).toBeUndefined();
+
+    // The written measurement does not move the private one either.
+    privateRows = Array.from({ length: 40 }, (_, i) => ({
+      id: i + 1,
+      role: "assistant",
+      content: "在的呀",
+      timestamp: new Date(Date.UTC(2023, 4, 1, 12, 0, i % 60)),
+      kind: "text",
+      speaker: "小满",
+      meta: null,
+    }));
+    const both = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    expect(both.fingerprint?.samples).toBe(40);
+    expect(both.writtenFingerprint?.samples).toBe(45);
+
+    writtenRows = makeWritten(39);
+    const short = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    expect(short.writtenFingerprint).toBeUndefined();
+    expect(short.fingerprint?.samples).toBe(40);
+  });
+
   it("writes the call table from the fixture", async () => {
     getRecordsVersion.mockResolvedValue("3200:3200");
     getPersonaStyleProfile.mockResolvedValue(null);

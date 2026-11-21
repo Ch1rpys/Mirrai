@@ -114,13 +114,17 @@ export const importRouter = router({
       const persona = await getPersonaById(file.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
       assertPersonaWritable(persona, ctx.locale);
-      if (file.parseStatus === "needs_roles" && (input.me.length === 0 || input.them.length === 0)) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: copy(ctx.locale, "errors.importRolesRequired"),
-        });
-      }
-      if (input.me.length === 0 || input.them.length === 0) {
+      /**
+       * A monologue has no two sides to name.
+       *
+       * Every row in it is the persona's own written words, so confirming
+       * it needs no roles. Every other format still does.
+       */
+      const writtenOnly = input.format === "monologue";
+      if (
+        !writtenOnly
+        && (input.me.length === 0 || input.them.length === 0)
+      ) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: copy(ctx.locale, "errors.importRolesRequired"),

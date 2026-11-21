@@ -277,6 +277,21 @@ export default function ImportWizard(props: {
               ))}
             </select>
           </label>
+          {/**
+            * What the chosen format is.
+            *
+            * A monologue is not a chat log, so it is never detected: the
+            * person picks it, and is told what it can and cannot tell the
+            * persona before a word is written.
+            */}
+          {formatId === "monologue" && (
+            <div className="rounded-md border border-border/70 bg-muted/30 p-3 space-y-1">
+              <p className="text-sm font-medium text-foreground">{t("importWizard.monologueTitle")}</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {t("importWizard.monologueNote", { name: props.personaName })}
+              </p>
+            </div>
+          )}
           <Button
             type="button"
             size="sm"

@@ -39,6 +39,7 @@ vi.mock("@/lib/trpc", () => ({
             { id: "generic-line", label: "一行一条" },
             { id: "wechat-txt-2line", label: "微信两行" },
             { id: "column-map", label: "按列对应" },
+            { id: "monologue", label: "TA 写的信、日记、文章" },
           ],
         }),
       },
@@ -108,6 +109,31 @@ describe("the import wizard", () => {
     expect(screen.getByText(translate("zh", "importWizard.unknownFormat"))).toBeTruthy();
     expect(screen.getByLabelText(translate("zh", "importWizard.formatLabel"))).toBeTruthy();
     expect(screen.getByRole("button", { name: translate("zh", "importWizard.columnMap") })).toBeTruthy();
+  });
+
+  it("explains what a monologue can and cannot tell the persona, and imports it without roles", async () => {
+    const user = userEvent.setup();
+    status = fileStatus("needs_format");
+    render(<ImportWizard fileId={11} personaName="小满" timezone="Asia/Shanghai" />);
+
+    const select = screen.getByLabelText(translate("zh", "importWizard.formatLabel"));
+    await user.selectOptions(select, "monologue");
+
+    // The explanation is the one the manual promises, before any row is
+    // written.
+    expect(screen.getByText(translate("zh", "importWizard.monologueTitle"))).toBeTruthy();
+    expect(
+      screen.getByText(translate("zh", "importWizard.monologueNote", { name: "小满" })),
+    ).toBeTruthy();
+
+    await user.click(
+      screen.getByRole("button", { name: translate("zh", "importWizard.useFormat") }),
+    );
+    expect(apply).toHaveBeenCalledWith(
+      expect.objectContaining({ fileId: 11, format: "monologue" }),
+    );
+    // A monologue has no two sides, so nothing asks for them.
+    expect(confirm).not.toHaveBeenCalled();
   });
 
   it("lists the conversations in a multi-chat file and resumes with the chosen one", async () => {

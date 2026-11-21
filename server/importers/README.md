@@ -267,3 +267,21 @@ Convert it first, outside the app, to something ffmpeg reads — for
 example with `silk-v3-decoder` (`silk` → `pcm` → `wav`) or the online
 converter the project documents, then transcribe the WAV. The same
 applies to any other container the local ffmpeg build does not know.
+
+## monologue
+
+What the person wrote, not what they said: letters, diaries, articles.
+There is no conversation in the file, so this format is **never detected**
+— the wizard offers it and the user chooses it, and the wizard says what
+it can and cannot tell the persona.
+
+- Shape: paragraphs separated by a blank line; one paragraph is one
+  record. A line that is only a date dates the paragraphs after it.
+- Date lines: `YYYY-MM-DD`, `YYYY/MM/DD`, `YYYY.MM.DD`,
+  `YYYY年M月D日`, `YYYY年`, `M月D日` (the year comes from the last full
+  date; with no year there is no timestamp). A trailing weekday is
+  allowed.
+- Rows: every paragraph is `role: "assistant"`, `kind: "text"`,
+  `meta.register = "written"` — a written line is read for content, never
+  for the chat voice. A file with no date lines has no timestamps at all.
+- Sample (synthetic): `server/test-fixtures/exports/monologue/sample.txt`.

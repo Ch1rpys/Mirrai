@@ -96,7 +96,15 @@ export interface StyleProfile {
   photos?: PhotoStats; // B7.9
   calls?: CallStats; // B7.13
   publicFingerprint?: StyleFingerprint; // B7.12
-  writtenFingerprint?: unknown; // 由 C1.8 填
+  /**
+   * How they write when they are writing, not talking (C1.8).
+   *
+   * Measured from the `written` register only — letters, diaries,
+   * articles. It is shown on the profile and never mixed into the
+   * one-to-one voice: a written line is read for what it says, not for
+   * how they chat.
+   */
+  writtenFingerprint?: StyleFingerprint;
   group?: unknown; // 由 C9.8 填
   mirror?: MirrorProfile;
   rerankWeights?: unknown; // 由 B8.8 填

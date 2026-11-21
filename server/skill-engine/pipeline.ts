@@ -86,7 +86,7 @@ import { parseExportTime } from "../importers/normalize";
 import { copy, type CopyKey, type Locale } from "@shared/copy";
 import { extractMemories } from "../chat/memory-extract";
 import { storageToDataUrl } from "../storage";
-import { chunkRecords, type RecordLine } from "./chunks";
+import { chunkRecords, renderChunkForModel, type RecordLine } from "./chunks";
 import { DistillationMapFailed, mapObservationCards } from "./observations";
 import { confirmHarmFromRecords } from "./harm";
 import { mergeHarmDecision } from "@shared/harm";
@@ -1052,6 +1052,36 @@ async function loadPublicPipelineRecords(input: PipelineInput): Promise<RecordLi
   }
 }
 
+/**
+ * The written register, read separately (C1.8).
+ *
+ * Letters, diaries and articles are read for what they *say* — facts,
+ * people, likes, the words they use — and never for how they chat. They
+ * do not enter the private transcript, the tone measurements, the acts or
+ * the exemplars; they get their own factual extraction and join the
+ * content miners.
+ */
+async function loadWrittenPipelineRecords(input: PipelineInput): Promise<RecordLine[]> {
+  const iterate = dbFn("iterateRecords") as
+    | ((
+        personaId: number,
+        userId: number,
+        options?: { register?: string },
+      ) => AsyncIterable<unknown>)
+    | undefined;
+  if (!iterate) return [];
+  try {
+    const rows: RecordLine[] = [];
+    for await (const row of iterate(input.personaId, input.userId, { register: "written" })) {
+      const line = toRecordLine(row as Parameters<typeof toRecordLine>[0]);
+      if (line) rows.push(line);
+    }
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
 type TranscriptRow = {
   id: number;
   role: string;
@@ -1316,6 +1346,7 @@ async function runSkillPipelineOnce(
   try {
     const recordLines = await loadPipelineRecords(input);
     const publicRecordLines = await loadPublicPipelineRecords(input);
+    const writtenRecordLines = await loadWrittenPipelineRecords(input);
 
     // ── Celebrity research (researching → auditing → synthesizing → validating)
     let research: CelebrityResearchResult | null = null;
@@ -1361,7 +1392,8 @@ async function runSkillPipelineOnce(
       chatContent.trim().length > 0 ||
       (input.imageUrls?.length ?? 0) > 0 ||
       (input.videoFrames?.length ?? 0) > 0 ||
-      recordLines.length > 0;
+      recordLines.length > 0 ||
+      writtenRecordLines.length > 0;
     const intakeMessage = hasMaterial
       ? copy(locale, "skill.takingStock")
       : copy(locale, "skill.waitingMaterial");
@@ -1444,6 +1476,27 @@ async function runSkillPipelineOnce(
           themName: name,
         })
       : [];
+    const writtenRecordChunks = writtenRecordLines.length > 0
+      ? chunkRecords(writtenRecordLines, {
+          locale,
+          timeZone: input.timeZone,
+          themName: name,
+        })
+      : [];
+    /**
+     * A persona whose only material is written (C1.8).
+     *
+     * There is no conversation to analyse, so the analysis reads the
+     * written pieces for content and is told not to guess at a chat
+     * voice. The voice fields are replaced with honest words after the
+     * model answers, below.
+     */
+    const writtenOnlyMaterial =
+      recordLines.length === 0
+      && writtenRecordLines.length > 0
+      && chatContent.trim().length === 0
+      && (input.imageUrls?.length ?? 0) === 0
+      && (input.videoFrames?.length ?? 0) === 0;
     try {
       if (recordLines.length >= MIN_RECORDS_FOR_CHUNKED) {
         usedChunkedAnalysis = true;
@@ -1473,7 +1526,18 @@ async function runSkillPipelineOnce(
       } else {
         const analyzerPrompt = loadPrompt(characterFamily, "persona_analyzer", effectiveProfile);
         const chatSample = chatContent.slice(0, preset.chatSampleLimit);
-        const chatBlock = chatSample || copy(locale, "skillPrompts.pipeline.noChatBlock");
+        const chatBlock = writtenOnlyMaterial
+          ? [
+              copy(locale, "skillPrompts.pipeline.writtenOnlyAnalysis", { name }),
+              ...writtenRecordChunks.map((chunk) =>
+                renderChunkForModel(chunk, {
+                  locale,
+                  timeZone: input.timeZone,
+                  themName: name,
+                }),
+              ),
+            ].join("\n\n")
+          : chatSample || copy(locale, "skillPrompts.pipeline.noChatBlock");
         const analysisMaterial = research
           ? [
               chatBlock,
@@ -1731,6 +1795,20 @@ async function runSkillPipelineOnce(
       ...(publicVoice ? { publicVoice } : {}),
       ...(harmReport ? { harmReport } : {}),
     };
+    if (writtenOnlyMaterial) {
+      /**
+       * No chat voice is invented from written pieces.
+       *
+       * The model was asked for content only; these fields are where a
+       * model would reach for a voice anyway. A letter says what someone
+       * cares about, not how they greet you at midnight — so they say so.
+       */
+      enrichedData.speakingStyle = copy(locale, "labels.persona.writtenSpeakingStyle");
+      enrichedData.catchphrases = [];
+      enrichedData.attachmentStyle = copy(locale, "labels.persona.unknown");
+      enrichedData.loveLanguage = copy(locale, "labels.persona.unknown");
+      enrichedData.conflictStyle = copy(locale, "labels.persona.unknown");
+    }
 
     // ── Stage 4b: mine the discriminative rules ─────────────────────────────
     // The rules are read off the records and written into the contract; the
@@ -1749,6 +1827,21 @@ async function runSkillPipelineOnce(
     );
 
     const transcriptRows = transcriptRowsFrom(input, recordLines);
+    /**
+     * What the content miners read.
+     *
+     * The written rows are facts about the person — what they care about,
+     * who they mention, the words they use — so they join the content
+     * miners. The tone miners above and below keep reading only the
+     * private transcript.
+     */
+    const writtenTranscriptRows = writtenRecordLines.length > 0
+      ? transcriptRowsFrom(input, writtenRecordLines)
+      : [];
+    const contentRows =
+      writtenTranscriptRows.length > 0
+        ? [...transcriptRows, ...writtenTranscriptRows]
+        : transcriptRows;
 
     let microRules =
       input.mineRules === false
@@ -1870,7 +1963,7 @@ async function runSkillPipelineOnce(
       personaId,
       userId,
       locale,
-      records: transcriptRows,
+      records: contentRows,
       invoke: invokeForDistill,
     }).catch((e) => {
       console.warn("[SkillEngine] The lexicon could not be mined:", e.message);
@@ -1978,6 +2071,34 @@ async function runSkillPipelineOnce(
     }
 
     /**
+     * The written register contributes facts too (C1.8).
+     *
+     * They are read as what the person wrote, with their own `source`, so
+     * the memory panel can tell a letter from a chat line — and the
+     * one-to-one prompt never presents one as the other.
+     */
+    if (writtenRecordChunks.length > 0) {
+      await extractFactsFromRecords({
+        chunks: writtenRecordChunks,
+        rows: writtenRecordLines,
+        personaId,
+        userId,
+        name,
+        locale,
+        timeZone: input.timeZone,
+        themName: name,
+        mode: input.mode,
+        source: "written",
+        invoke: invokeForDistill,
+        onProgress: (message) => {
+          void setPersonaProgress(stageProgress.analyzing_persona, message);
+        },
+      }).catch((e) =>
+        console.warn("[SkillEngine] The facts could not be extracted from the written pieces:", e.message),
+      );
+    }
+
+    /**
      * Person cards become a table the user can confirm.
      *
      * Distillation already wrote a card per name. Folding happens
@@ -1991,7 +2112,7 @@ async function runSkillPipelineOnce(
       if (!listCards) return [];
       try {
         const cards = await listCards(personaId, userId, { kind: "person" });
-        return aggregatePeople(cards ?? [], transcriptRows);
+        return aggregatePeople(cards ?? [], contentRows);
       } catch (e) {
         console.warn(
           "[SkillEngine] The people could not be aggregated:",
@@ -2007,7 +2128,7 @@ async function runSkillPipelineOnce(
       if (!listCards) return [];
       try {
         const cards = await listCards(personaId, userId, { kind: "stance" });
-        return aggregateStances(cards ?? [], transcriptRows);
+        return aggregateStances(cards ?? [], contentRows);
       } catch (e) {
         console.warn(
           "[SkillEngine] The stances could not be aggregated:",

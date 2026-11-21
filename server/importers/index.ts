@@ -14,6 +14,7 @@ import {
   CHAT_IMPORT_FILE_TYPES,
   isChatImportFileType,
   type ChatImportFileType,
+  type RecordRole,
 } from "@shared/records";
 import { ENV } from "../_core/env";
 import { resolveUploadPath } from "../_core/filename";
@@ -57,6 +58,7 @@ import type {
   ImportSource,
   ParseReport,
   ParseWarning,
+  ParsedRecord,
 } from "./types";
 
 export { parseGenericLine } from "./formats/generic-line";
@@ -376,6 +378,15 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
   const confirmed = Boolean(
     input.me && input.them && input.me.length > 0 && input.them.length > 0,
   );
+  /**
+   * A monologue has no two sides.
+   *
+   * Every row is the persona's own written words, so there is nobody to
+   * confirm on the other side and the file is written as it was parsed.
+   * It is a format the person chose — detection never offers it — and the
+   * wizard explains what it can and cannot tell the persona.
+   */
+  const writtenOnly = importer.id === "monologue";
   const guessed = guessRoles(speakers, {
     personaName: persona?.name,
     userName: user?.name,
@@ -383,7 +394,7 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
   // A guess is not a confirmation. Upload, resume, and backfill stop
   // here even when the two sides are obvious, so the person sees the
   // preview and the redaction boxes before any row is stored.
-  if (!confirmed) {
+  if (!confirmed && !writtenOnly) {
     await updatePersonaFile(file.id, input.userId, {
       parseStatus: "needs_roles",
       parseReport: reportOf({
@@ -396,7 +407,9 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
   }
   const mapping = { me: input.me ?? [], them: input.them ?? [] };
 
-  const assigned = assignRoles(parsed.records, mapping);
+  const assigned: Array<ParsedRecord & { role: RecordRole }> = writtenOnly
+    ? parsed.records.map((record) => ({ ...record, role: "assistant" as RecordRole }))
+    : assignRoles(parsed.records, mapping);
   const keepNames = [
     ...(mapping.me ?? []),
     ...(mapping.them ?? []),

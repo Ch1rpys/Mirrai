@@ -27,6 +27,7 @@ import {
   trainRerankWeights,
 } from "../eval/ab-pairs";
 import {
+  MIN_FINGERPRINT_SAMPLES,
   defaultAddressForms,
   measureFingerprint,
   type FingerprintRow,
@@ -117,6 +118,32 @@ export async function measureStyleProfile(params: {
           : null,
     });
   }
+  /**
+   * The written register (C1.8).
+   *
+   * Letters, diaries and articles are read for *content*, never for the
+   * one-to-one voice: the words somebody chooses in a letter are not the
+   * words they send in a chat. A separate fingerprint is stored so the
+   * profile can show how they write without that being mistaken for how
+   * they talk.
+   */
+  const writtenRows: FingerprintRow[] = [];
+  for await (const row of iterateRecords(personaId, userId, { register: "written" })) {
+    writtenRows.push({
+      id: row.id,
+      role: row.role,
+      content: row.content,
+      timestamp: row.timestamp,
+      kind: row.kind,
+      act: row.act,
+      emotion: row.emotion,
+      speaker: row.speaker,
+      meta:
+        row.meta && typeof row.meta === "object" && !Array.isArray(row.meta)
+          ? (row.meta as Record<string, unknown>)
+          : null,
+    });
+  }
   const persona = await getPersonaById(personaId, userId);
   const user = await getUserById(userId);
   const rawData =
@@ -143,6 +170,16 @@ export async function measureStyleProfile(params: {
   const publicFingerprint =
     publicRows.length >= 40
       ? measureFingerprint(publicRows, { addressForms, periods }) ?? undefined
+      : undefined;
+  /**
+   * The written voice, measured on its own rows only.
+   *
+   * It has its own floor: forty of their written lines. Below that, the
+   * field does not exist, which is the honest answer.
+   */
+  const writtenFingerprint =
+    writtenRows.length >= MIN_FINGERPRINT_SAMPLES
+      ? measureFingerprint(writtenRows, { addressForms, periods }) ?? undefined
       : undefined;
   const userSide = measureUserSide(rows);
   if (userSide) {
@@ -215,6 +252,7 @@ export async function measureStyleProfile(params: {
     recordsVersion,
     fingerprint,
     publicFingerprint,
+    writtenFingerprint,
     userSide: userSide ?? undefined,
     imperfectionDrafts: drafts,
     addressHistory,
