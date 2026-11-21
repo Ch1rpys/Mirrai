@@ -168,6 +168,24 @@ describe("the goodbye", () => {
     expect(screen.queryByRole("button", { name: "记一条关系事件" })).toBeNull();
   });
 
+  it("closes the said-it ending with its own words (C6.6)", () => {
+    persona = {
+      id: 1,
+      userId: 1,
+      name: "小A",
+      farewellLetter: "嗯。",
+      graduatedAt: new Date("2026-03-01T00:00:00Z"),
+      personaData: null,
+      settings: { graduationKind: "said_it" },
+    };
+    render(<Graduation />);
+    expect(
+      screen.getAllByText("这里可以合上了。毕业的是害怕，不是 小A。").length,
+    ).toBeGreaterThan(0);
+    // Only "we made up" asks for the relationship event.
+    expect(screen.queryByRole("button", { name: "记一条关系事件" })).toBeNull();
+  });
+
   it("asks to mark the day when the two of them made up (C6.6)", () => {
     persona = {
       id: 1,

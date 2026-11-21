@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { findUnfinished, isTrailingLine } from "./unsaid";
 import { buildXiaomanRecords, XIAOMAN_TRUTH } from "../test-fixtures/xiaoman";
@@ -76,6 +78,16 @@ describe("the lines they started and never finished", () => {
     for (const line of ["我没事的", "好呀", "算了吧"]) {
       expect(isTrailingLine(line)).toBe(false);
     }
+  });
+
+  it("cannot call a model: the reader has no model to call (C6.5)", () => {
+    // The finding half is a pure function of the record. The model is
+    // only asked later, by `server/chat/unsaid.ts`, once the user
+    // presses the button. A scan rather than a mock, because a model
+    // imported here would be a model that runs on page load.
+    const source = readFileSync(path.resolve(__dirname, "unsaid.ts"), "utf8");
+    expect(source).not.toMatch(/from\s+["'][^"']*llm/);
+    expect(source).not.toMatch(/\b(llmService|invokeWithProvider|invoke)\s*\(/);
   });
 
   it("does not repeat a line that is both an open loop and a brush-off", () => {
