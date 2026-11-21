@@ -18,7 +18,14 @@ const capabilities = vi.hoisted(() => ({ ffmpeg: true }));
 const distillPage = vi.hoisted(() => ({
   status: "ready" as string,
   files: [] as unknown[],
-  estimate: { chunks: 0, chars: 0, mapCalls: 0, reduceCalls: 0, calls: 4 },
+  estimate: { chunks: 0, chars: 0, mapCalls: 0, reduceCalls: 0, calls: 4 } as {
+    chunks: number;
+    chars: number;
+    mapCalls: number;
+    reduceCalls: number;
+    calls: number;
+    priceEstimate?: { currency: string; micros: number } | null;
+  },
   collected: 0,
   confirm: true,
   trigger: vi.fn(),
@@ -290,6 +297,31 @@ describe("the files that are on their way", () => {
 
     render(<Upload />);
     expect(screen.getByText(/这次会读 24 段记录（约 14 万字），大约调用模型 31 次/)).toBeTruthy();
+  });
+
+  it("adds the estimated amount when the user has filled in a price", () => {
+    distillPage.status = "pending";
+    distillPage.collected = 3;
+    distillPage.estimate = {
+      chunks: 24,
+      chars: 140_000,
+      mapCalls: 24,
+      reduceCalls: 4,
+      calls: 31,
+      priceEstimate: { currency: "CNY", micros: 5_600_000 },
+    };
+
+    render(<Upload />);
+    expect(screen.getByText(/按你填的单价大约 5\.60 CNY/)).toBeTruthy();
+  });
+
+  it("shows no amount when no price is filled in", () => {
+    distillPage.status = "pending";
+    distillPage.collected = 3;
+    distillPage.estimate = { chunks: 24, chars: 140_000, mapCalls: 24, reduceCalls: 4, calls: 31, priceEstimate: null };
+
+    render(<Upload />);
+    expect(screen.queryByText(/按你填的单价/)).toBeNull();
   });
 
   it("asks once more when the estimate is over a hundred calls, and can stop", async () => {
