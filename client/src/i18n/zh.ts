@@ -7,7 +7,7 @@
  */
 export const zh = {
   landing: {
-    nav: { login: "登录", register: "注册", language: "EN", toggleTheme: "切换主题" },
+    nav: { login: "登录", register: "注册", language: "语言", toggleTheme: "切换主题" },
     brand: { kicker: "情感记忆操作系统" },
     hero: {
       tagline: "让思念有回应",
@@ -642,6 +642,7 @@ export const zh = {
       sources: "数据来源",
       templates: "模板库",
       data: "数据管理",
+      appearance: "外观",
     },
     page: {
       kicker: "账户与偏好",
@@ -3324,6 +3325,26 @@ export const zh = {
       pendingFix: "在浏览器里允许通知，推送才收得到。",
       unsupportedFix: "换一个支持通知的浏览器。",
     },
+  },
+  /**
+   * The accessibility panel (外观).
+   *
+   * Three settings that belong to the device rather than the account: how
+   * large the text is, how much contrast the palette has, and whether the
+   * interface animates. They are stored in the browser, applied to <html>,
+   * and read by the stylesheet.
+   */
+  accessibility: {
+    title: "外观",
+    note: "这三项只保存在这台设备的浏览器里，不影响其他人。",
+    fontScale: "字号",
+    fontScaleDefault: "默认",
+    fontScaleLarge: "大",
+    fontScaleLargest: "特大",
+    contrast: "高对比度",
+    contrastNote: "把文字和背景的颜色拉得更开，读起来更清楚。",
+    reduceMotion: "减少动效",
+    reduceMotionNote: "关闭界面里的过渡和动画。系统设置里的「减少动效」始终会被遵循。",
   },
 } as const;
 

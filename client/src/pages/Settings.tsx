@@ -43,6 +43,7 @@ import LlmRoles from "@/components/v6/LlmRoles";
 import UsagePanel from "@/components/v6/UsagePanel";
 import RecycleBin from "@/components/v6/RecycleBin";
 import Diagnostics from "@/components/v6/Diagnostics";
+import AccessibilitySettings from "@/components/v6/AccessibilitySettings";
 import type { GraduationMode } from "@shared/graduation-mode";
 import {
   DEFAULT_DISTILLATION_MODE,
@@ -59,6 +60,7 @@ const TABS = [
   { key: "sources", labelKey: "settings.tabs.sources" },
   { key: "templates", labelKey: "settings.tabs.templates" },
   { key: "data", labelKey: "settings.tabs.data" },
+  { key: "appearance", labelKey: "settings.tabs.appearance" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -3020,6 +3022,7 @@ export default function SettingsPage() {
           {activeTab === "sources" && <DataSourcesTab />}
           {activeTab === "templates" && <TemplateLibraryTab />}
           {activeTab === "data" && <DataManagementTab />}
+          {activeTab === "appearance" && <AccessibilitySettings />}
         </motion.div>
       </main>
     </div>

@@ -9,11 +9,9 @@ export const en = {
     nav: {
       login: "Login",
       register: "Sign Up",
-      // The button offers the language you would switch to, written in
-      // that language's own script — so this one says "中文" and the
-      // Chinese dictionary says "EN".
-      // i18n:allow-identifier
-      language: "中文",
+      // The name of the language menu. The languages themselves name
+      // themselves inside it, so this is the control's name, not a target.
+      language: "Language",
       toggleTheme: "Switch theme",
     },
     brand: { kicker: "An emotional memory operating system" },
@@ -643,6 +641,7 @@ export const en = {
       sources: "Data sources",
       templates: "Templates",
       data: "Data",
+      appearance: "Appearance",
     },
     page: {
       kicker: "Account and preferences",
@@ -3314,6 +3313,25 @@ export const en = {
       pendingFix: "Allow notifications in the browser so pushes can arrive.",
       unsupportedFix: "Use a browser that supports notifications.",
     },
+  },
+  /**
+   * The accessibility panel.
+   *
+   * Three settings that belong to the device rather than the account: how
+   * large the text is, how much contrast the palette has, and whether the
+   * interface animates.
+   */
+  accessibility: {
+    title: "Appearance",
+    note: "These three settings are kept in this browser on this device only.",
+    fontScale: "Text size",
+    fontScaleDefault: "Default",
+    fontScaleLarge: "Large",
+    fontScaleLargest: "Extra large",
+    contrast: "High contrast",
+    contrastNote: "Pushes the text and the background further apart, so it is easier to read.",
+    reduceMotion: "Reduce motion",
+    reduceMotionNote: "Turns off transitions and animations in the interface. The system's own reduce-motion setting is always respected.",
   },
 } as const;
 

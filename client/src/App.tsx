@@ -7,7 +7,7 @@ import { useRouteFocus } from "./lib/route-focus";
 import { ConfirmProvider } from "./components/ConfirmDialog";
 import ErrorBoundary from "./components/ErrorBoundary";
 import PageLoader from "./components/PageLoader";
-import { ThemeProvider } from "./contexts/ThemeContext";
+import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import { LocaleProvider } from "./contexts/LocaleContext";
 import HomePage from "./pages/HomePage";
 import TimezoneSync from "./components/TimezoneSync";
@@ -90,20 +90,36 @@ function Router() {
   );
 }
 
+/**
+ * Framer-motion's motion setting.
+ *
+ * The page transitions follow the operating system's motion setting by
+ * default. Framer-motion's own default is "never" — it does not consult the
+ * system at all — so a user with vestibular sensitivity got full sliding and
+ * fading transitions even though they had asked the system to reduce motion.
+ * The stylesheet's `prefers-reduced-motion` rules neutralised the CSS
+ * animations, which made it look handled.
+ *
+ * The app's own switch (the accessibility panel) is on top of the system's:
+ * turning it on means "always reduce", and leaving it off means "follow the
+ * system".
+ */
+function MotionSettings({ children }: { children: React.ReactNode }) {
+  const { reduceMotion } = useTheme();
+  return (
+    <MotionConfig reducedMotion={reduceMotion ? "always" : "user"}>
+      {children}
+    </MotionConfig>
+  );
+}
+
 function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="light" switchable>
         <LocaleProvider>
           <TooltipProvider>
-            {/* The page transitions follow the operating system's motion
-                setting. Framer-motion's own default is "never" — it
-                does not consult the system at all — so a user with
-                vestibular sensitivity got full sliding and fading
-                transitions even though they had asked the system to
-                reduce motion. The stylesheet neutralises the CSS
-                animations, which made it look handled. */}
-            <MotionConfig reducedMotion="user">
+            <MotionSettings>
               <Toaster />
               <TimezoneSync />
               <CommandPalette />
@@ -111,7 +127,7 @@ function App() {
               <ConfirmProvider>
                 <Router />
               </ConfirmProvider>
-            </MotionConfig>
+            </MotionSettings>
           </TooltipProvider>
         </LocaleProvider>
       </ThemeProvider>

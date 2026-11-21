@@ -784,6 +784,109 @@ html.dark .surface-interactive:hover {
   }
 }
 
+/* ─── Accessibility ───────────────────────────────────────────────────────────
+   The three settings from the accessibility panel, applied by ThemeContext to
+   `<html>`. The default document has none of these attributes, so the existing
+   look is untouched for anybody who never opens the panel.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * The font size.
+ *
+ * Everything is sized in rem or with Tailwind's spacing scale, which is rooted
+ * at the document's font size — so one root size enlarges the whole interface
+ * without a component knowing about it.
+ */
+html[data-font-scale="1"] {
+  font-size: 100%;
+}
+html[data-font-scale="1.125"] {
+  font-size: 112.5%;
+}
+html[data-font-scale="1.25"] {
+  font-size: 125%;
+}
+
+/**
+ * The higher-contrast palette.
+ *
+ * The design system's colours are deliberately soft; the foreground reaches
+ * the 4.5:1 minimum, and the muted text just over it. A person who asks for
+ * more contrast gets the same hues pushed apart: near-black on near-white in
+ * the light theme, near-white on near-black in the dark one, and stronger
+ * borders and muted text in both.
+ */
+html[data-contrast="high"] {
+  --color-background: oklch(0.99 0.004 85);
+  --color-foreground: oklch(0.13 0.015 240);
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: oklch(0.13 0.015 240);
+  --color-elevated: oklch(1 0 0);
+  --color-elevated-foreground: oklch(0.13 0.015 240);
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: oklch(0.13 0.015 240);
+  --color-primary: oklch(0.18 0.020 240);
+  --color-primary-foreground: oklch(1 0 0);
+  --color-secondary: oklch(0.93 0.006 85);
+  --color-secondary-foreground: oklch(0.13 0.015 240);
+  --color-muted: oklch(0.93 0.006 85);
+  --color-muted-foreground: oklch(0.33 0.020 240);
+  --color-muted-subtle: oklch(0.36 0.020 240);
+  --color-accent: oklch(0.44 0.150 42);
+  --color-accent-foreground: oklch(1 0 0);
+  --color-destructive: oklch(0.44 0.200 27);
+  --color-destructive-foreground: oklch(1 0 0);
+  --color-border: oklch(0.55 0.015 85);
+  --color-input: oklch(0.50 0.015 85);
+  --color-ring: oklch(0.40 0.160 42);
+  --color-cinnabar: oklch(0.44 0.150 42);
+}
+
+html.dark[data-contrast="high"] {
+  --color-background: oklch(0.10 0.008 265);
+  --color-foreground: oklch(0.99 0.004 90);
+  --color-card: oklch(0.14 0.010 265);
+  --color-card-foreground: oklch(0.99 0.004 90);
+  --color-elevated: oklch(0.18 0.012 265);
+  --color-elevated-foreground: oklch(0.99 0.004 90);
+  --color-popover: oklch(0.16 0.011 265);
+  --color-popover-foreground: oklch(0.99 0.004 90);
+  --color-primary: oklch(0.99 0.004 90);
+  --color-primary-foreground: oklch(0.10 0.008 265);
+  --color-secondary: oklch(0.22 0.012 265);
+  --color-secondary-foreground: oklch(0.99 0.004 90);
+  --color-muted: oklch(0.22 0.012 265);
+  --color-muted-foreground: oklch(0.82 0.010 265);
+  --color-muted-subtle: oklch(0.86 0.010 265);
+  --color-accent: oklch(0.86 0.140 75);
+  --color-accent-foreground: oklch(0.10 0.010 265);
+  --color-destructive: oklch(0.74 0.190 25);
+  --color-destructive-foreground: oklch(0.10 0.008 265);
+  --color-border: oklch(0.52 0.015 265);
+  --color-input: oklch(0.56 0.015 265);
+  --color-ring: oklch(0.86 0.140 75);
+  --color-cinnabar: oklch(0.86 0.140 75);
+}
+
+/**
+ * Motion off, from the app's own switch.
+ *
+ * The system setting is handled by the media query above. This is the same
+ * rule for somebody who turned motion off here without turning it off
+ * system-wide. It is as blunt on purpose: the point is that nothing moves.
+ */
+html[data-reduce-motion="true"] *,
+html[data-reduce-motion="true"] *::before,
+html[data-reduce-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+html[data-reduce-motion="true"] .surface-interactive:hover {
+  transform: none;
+}
+
 /**
  * The dictionary prints alone (C2.7).
  *
