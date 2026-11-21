@@ -171,7 +171,7 @@
 | C8.6 | 🟡 | fa12604 | `shared/search-tokens.test.ts` 6 通过（喜欢海→喜欢/欢海、OK吗→ok/吗、单引号/反斜杠转义、2000 上限）。`server/db-search.test.ts` 5 通过（带临时库）：三行里「喜欢海」只命中连续那一行、分开的「喜欢」「海」不命中；带单引号、反斜杠、`&`、`\|`、`:*` 的查询串和注入串都不报错；100 行置空后回填全部非空且查询结果前后 id 相同；两个 GIN 索引在 push 后仍在。迁移 0059 四步+升级路径：`--replay` 57 条、`--rollback 1` 后两列与索引消失、再 migrate 回来；DROP 两列+两索引并删 journal 行后 migrate，对象回来。`server/db-semantic.test.ts` 1 通过（假向量「沙滩」找到「海边」那一轮、正交的股票不返回）；`server/db-semantic-missing.test.ts` 1 通过（嵌入不可用返回 null）；`server/chat/embeddings.test.ts` 11 通过（B2.3 索引扩到双方每一轮）。10 万行草稿库实测：`searchRecordsLexical` 中位 54.6ms、p95 58.1ms；`candidateRecordsByOverlap` 中位 19.7ms、p95 21.0ms（p95 均 < 200ms）。`searchMessages` 原有 3 条用例不改仍过。 |
 | C8.7 | 🟡 | d100c62 | `server/chat/exemplar-query.test.ts` 5 通过：走索引、把时期的 from/to 传给候选查询、缺 token 时返回 null 走旧路径、无记录返回 null、没有重叠候选返回空且不评分。`server/chat/service.test.ts` 84 通过，新增一条：回填完成的分身走一轮，`getCollectedMessagesForPersona` 与 `iterateRecords` 调用次数都是 0、`candidateRecordsByOverlap` 被调用。`server/db-exemplars.test.ts`（带临时库）1 通过：夹具 18 条不同用户消息，新旧两条路径第一名相同 18/18，前四名 Jaccard 平均 0.894（差异见批次日志）。`prompt-golden.test.ts` 10 通过、快照未改。效果量（是否更像 TA）见未验证清单。 |
 | C8.8 | ⬜ |  |  |
-| C8.9 | ⬜ |  |  |
+| C8.9 | 🟡 | 1920587 (dep); 30561c4 (ledger); 5846be3 (budget); ba0b280 (routes/UI); 1a8daed (test) | 临时库 `mirrai_v6_scratch`（用完已 `dropdb`，`mirrai_live` 未连接）：`push --force` 后 `migrate` 应用 `0075_llm_usage`、`0076_user_budget`；`--replay` 重放 74 条；`--rollback 1` 后 `users.budget` 计数 0、再 `migrate` 回来 1；再 `--rollback 1` 后 `llm_usage` 为 `gone`、再 `migrate` 表与两个索引回来；两个迁移的升级路径（DROP 对象 + 删 `schema_migrations` 对应行 + `migrate`）对象都回来。`schema-parity` 5 通过（两个索引已声明）。带库 `server/db-llm-usage.test.ts` 3 通过：两个用户的账本互不可见、删分身只删该分身的行、删账号清空该用户的行。`server/llm/usage.test.ts` 10 通过：每次带归属的调用一行、purpose 正确、provider 报用量→`estimated: false`、没报→`true` 且 token 数大于 0、未带归属不记、写库抛错时调用照常返回、流式在结束时记一次；金额 `inputPerMTok: 2` + 100 万输入 token → `2_000_000` micros，没填价格→`costMicros: null`，填了按供应商匹配。`server/llm/budget.test.ts` 9 通过：预算解析、用户时区的月界（上海/纽约各一条）、token 与金额两种上限、数据库读不到时不抛错。`server/chat/generate.test.ts` 75 通过，新增 2 条：`budgetOver: true` 时 `twoStage`/`factRewrite`/`rerank` 不进 `layersUsed`、provider 只调 1 次且普通回复照常；未超预算时两层保留。`server/routers.budget-gate.test.ts` 6 通过：评测、试镜、排练、措辞助手四种贵功能在超预算时拒绝并带 `errors.budgetOver`，未超时不被预算拒。`server/routers-v6/usage.test.ts` 9 通过：汇总（合计、按用途/分身/天、货币只有一致时给出、rerank 与最近一次蒸馏）、空账本、`setBudget` 只写一个上限不丢另一个、清空即移除、`setPrice` 保留 `extraBody` 且拒绝未配置供应商、`usage.job`、`usage.budget`。`UsagePanel.test.tsx` 7 通过：金额与 token、没填价格时的说明、超预算提示、两个上限保存、单价保存、失败给重试、空账本；`BudgetNotice.test.tsx` 3 通过（未超不渲染、超了说、读失败不冒充）；`Upload.test.tsx` 10 通过（新增 2 条：填了单价时估价对话框显示金额、没填时不显示）。`server/llm/purpose.test.ts` 未改仍过。闸门：`corepack pnpm gate` 退出码 0，`589 passed \| 18 skipped (607)` 文件、`4799 passed \| 70 skipped (4869)` 用例、`all six steps passed`（相对 C8.2 收尾 583/17/600、4746/67/4813：通过文件 +6、跳过文件 +1 `server/db-llm-usage.test.ts` 已登记 `skip-audit`；通过用例 +53、跳过 +3）。效果（真实价格下的金额是否与账单一致）需要真实 provider 与真实账单，见未验证清单。 |
 | C8.10 | ⬜ |  |  |
 | C8.11 | ⬜ |  |  |
 | C8.12 | ⬜ |  |  |
@@ -566,6 +566,11 @@
 | 344 | C8.2 | 「定时发送之后的回复」计入未读 | 定时消息落库成用户消息时标 `origin: "scheduled"`，它的回复 `metadata.scheduled = true`；未读按它与 `personas.lastReadAt` 比 | 手册没说怎么认出这条回复。不标的话只能按时间猜，会把普通回复也算成未读。 |
 | 345 | C8.2 | `chat.markRead` 在聊天页可见时更新 `lastReadAt` | 聊天页挂 `client/src/components/v6/ReadMarker.tsx`：挂载、窗口重新可见、以及新消息到达各调一次；`lastReadAt` 用数据库的 `now()` 写 | 本仓库的 `timestamp` 列有两种写法（JS `Date` 存 UTC 墙钟、`defaultNow()` 存库时区墙钟），在 JS 里比较会差一个时区；统一用库的 `now()` 后与 `messages.createdAt` 可比。 |
 | 346 | C8.2 | 未读「不数主动开口和追一句」 | 只数 `metadata.deferred` 与 `metadata.scheduled` 两类回复 | 主动开口与追一句藏在 `origin` 里、没有 metadata；它们只是安静地留在对话里，不增加未读。 |
+| 347 | C8.9 | `server/llm/index.ts` 里每一次调用结束后写一行 | 只记**带归属上下文**的调用：`InvokeParams.usage` 由调用方传入，对话/两步/四选一/事实重写/摘要/记忆抽取/信件/主动开口/外发候选/情绪判定/轨迹评估/日记都带；蒸馏经 `invokeForUserWithReason` 只带 `userId`；评测 CLI（`eval/run`、`drift`）与 `unsaid`、`farewell` 两处直接 `provider.invoke` 不记 | 服务层不知道用户是谁，给全部调用点补上下文成本高且易漏；评测跑夹具时没有「用户的账」。漏记的路径写在未验证清单旁的偏差里，面板按用途仍只少这几项。 |
+| 348 | C8.9 | 价格填在 `llm_configs.extraConfig.price` | 只给**已配置的**供应商写价；没有配置行的供应商返回可读错误 | 建一条只有价格的配置行会被 `userHasOwnProvider` 当成「用户有自己的 provider」，进而改变回落规则——代价远大于一个价目表。 |
+| 349 | C8.9 | 蒸馏估价对话框在填了价格时显示金额 | `estimateDistillation` 只有字符数与调用次数；金额按「输入 token ≈ 字符数、输出 ≈ 调用次数 × 400」估算并标「大约」 | 手册没给估价公式；真实 token 要读完全部材料才算，估价对话框本来就是估算。 |
+| 350 | C8.9 | 预算按用户时区的「本月」 | 月界用用户时区换算成瞬时；`llm_usage.createdAt` 用 `timestamptz` 存 | 账本要和月界比较；`timestamp` 的两种写法会差一个时区（与 C8.2 偏差 345 同一个坑）。 |
+| 351 | C8.9 | 用量按分身汇总、`usage.job({ jobId })` | 蒸馏的调用没有 `personaId`/`jobId`（管线没有把它们传到模型调用层），这几行的 `personaId` 为空、「最近一次蒸馏」取最新一条 `purpose=distill` 的记录，`usage.job` 在有调用方传 `jobId` 时才有数据 | 不去伪造归属；面板里按用途与按天仍成立。把 `personaId`/`jobId` 补到蒸馏管线是后续可以做的小改动。 |
 
 ## 未验证清单
 
@@ -650,6 +655,9 @@
 | C6.5 | 「让分身试着把它说完」续写的那一句是否成立、是否像 TA；本机没有非 stub 的模型，单测只验证到围栏、承诺类过滤和不落库 | 配真实模型后在告别页对一条「算了」或未结事项点「让分身试着把它说完」，读续写是否成立；再确认没有新增消息、记忆或出口清单条目 | 配了真实模型和真实记录的人 |
 | C6.6 | 四种结局写出来的信是否真的各说各的那件事；本机没有非 stub 的模型，`farewell.test.ts` 只验证到指令段与默认快照 | 配真实模型后对同一个分身分别选四种结局各写一次，读信是否落在该结局上、有没有替真人说现在怎么想 | 配了真实模型和真实记录的人 |
 
+| C8.9 | 金额与供应商真实账单是否一致：账本记的是 provider 上报的 token（或本地估算）乘用户填的单价，没有和任何真实账单核对过 | 用真实 provider 跑一段对话与一次蒸馏，填上实际单价，在面板里读金额，再到供应商控制台核对同一时段的用量与费用 | 有真实 provider 账单的人 |
+| C8.9 | 蒸馏估价的准确度：估价按「输入 ≈ 字符数、输出 ≈ 调用次数 × 400」算，本机只验证了数字链路，没有和真实蒸馏的实际 token 对照过 | 一次真实蒸馏前后对比 `usage.summary` 的 `lastDistill` 与实际账单，记下偏差 | 有真实 provider 和真实记录的人 |
+
 ## 待用户决定
 
 | 条目 | 问题 | 两个选项各自的后果 |
@@ -657,6 +665,15 @@
 | A7 | 亲密度 `computeIntimacy` 里含连续对话天数（`consecutiveDays * 10`，最高 100 分），是否拿掉 | 拿掉：毕业门槛少这一项输入，已有分身的亲密度分数会下降，可能改变毕业建议。留着：大厅已经没有打卡，分数里仍奖励连续聊。手册 A7 边界写明这一条不动它，等决定。 |
 
 ## 批次日志
+
+### WP14 · 实现会话 · 2026-11-21 · C8.9 成本面板
+
+- 开工核对：HEAD `930a4e7`（C8.2 收尾），工作区干净。四个实现提交：`1920587` 加白名单依赖 `js-tiktoken`（MIT）、`30561c4` 账本（迁移 0075、`server/llm/usage.ts`、provider 上报用量、服务层记录、各调用点补 `usage`）、`5846be3` 预算（迁移 0076、`server/llm/budget.ts`、`planTurn` 关贵层、四个贵功能路由守卫）、`ba0b280` 路由与界面（`server/routers-v6/usage.ts`、`UsagePanel`、聊天页 `BudgetNotice`、蒸馏估价金额）、`1a8daed` 补估价金额的页面测试。
+- 数据库四步与升级路径、带库测试见进度表 C8.9 行；临时库用完 `dropdb`，`mirrai_live` 未连接。
+- 测试语义改动：`server/eval/drift.test.ts` 的「不写入」写入探针排除 `insertLlmUsage`——账单行不是内容写入（评测产生 50 次调用，每次一行）；断言本身未放宽，注释写明理由。
+- 闸门四轮（依赖、账本、预算、界面各一次）均 `all six steps passed`；最终 `589 passed | 18 skipped (607)` 文件、`4799 passed | 70 skipped (4869)` 用例。
+- 偏差 347–351；未验证清单新增两行（真实账单核对、真实蒸馏估价的准确度）；待用户决定没有新增。
+- 状态：C8.9 记 🟡——机器验收全部通过，但「金额与供应商真实账单一致」需要真实 provider 与真实账单，本机没有。
 
 ### WP14 · 实现会话 · 2026-11-21 · C8.2 全局信箱与未读
 
