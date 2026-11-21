@@ -11,6 +11,8 @@
  * against. The flat word lists are derived from them, so the two can never
  * drift apart.
  */
+import { toSimplified } from "./han-normalize";
+import { contentLocale, type Locale } from "./locale";
 
 /** The emotional states a trigger can point at. */
 export type EmotionTriggerState =
@@ -41,20 +43,45 @@ export const EMOTION_TRIGGER_PATTERNS: {
   en: Record<EmotionTriggerState, RegExp>;
 } = {
   zh: {
-    nostalgic: /想你|思念|好久|那时候|记得吗|以前/,
-    playful: /哈哈|笑死|好玩|有意思|逗|搞笑/,
-    melancholy: /难过|伤心|哭|委屈|不开心/,
-    happy: /开心|高兴|棒|太好了|耶|爱你/,
-    distant: /随便|无所谓|算了|不想说/,
+    nostalgic: /想你|思念|好久|那时候|记得吗|以前|想起|回忆|怀念|当年|从前|旧照片|老照片/,
+    playful: /哈哈|笑死|好玩|有意思|逗|搞笑|打趣|贫嘴|乐死|笑疯|笑喷|调皮/,
+    melancholy: /难过|伤心|哭|委屈|不开心|抑郁|低落|孤独|郁闷|沮丧|心酸|失落/,
+    happy: /开心|高兴|棒|太好了|耶|爱你|快乐|幸福|兴奋|满足/,
+    distant: /随便|无所谓|算了|不想说|爱怎样|爱咋咋地|随你便|随你吧|随你了|懒得|不想理|别问/,
   },
   en: {
-    nostalgic: /miss you|i miss you|remember when|used to|reminds me of/,
-    playful: /haha|lol|that'?s funny|joking|kidding/,
-    melancholy: /sad|crying|upset|hurt|heartbroken/,
-    happy: /happy|great|awesome|i love you|so glad/,
-    distant: /whatever|doesn'?t matter|forget it|not talking/,
+    nostalgic:
+      /miss (you|those|them|him|her|it)|i miss you|remember when|\bremember\b|used to|reminds me of|nostalg|old photos|back then|those days|thinking about (us|then|the past)|memories/,
+    playful:
+      /haha|lol|that'?s funny|\bfunny\b|joking|kidding|joke|crack me up|so much fun|having fun|hilarious|playful/,
+    melancholy:
+      /\bsad|crying|upset|hurt|heartbroken|lonely|depressed|miserable|hopeless|feeling down|feeling low|feel down|feel low|feeling empty|empty inside|gloomy/,
+    happy:
+      /\bhappy\b|great|awesome|i love you|so glad|\bglad\b|wonderful|thrilled|excited|amazing|fantastic|best day|\blove it\b|hooray/,
+    distant:
+      /whatever|doesn'?t matter|forget it|not talking|don'?t care|leave me alone|never mind|suit yourself|not interested|stop asking/,
   },
 };
+
+/**
+ * Expands the alternation groups in a pattern into flat variants.
+ *
+ * A pattern is not only a list of alternatives: it can carry a group of them
+ * (`miss (you|those|them)`) and a word boundary (`\bsad`). The flat word list
+ * is derived from the pattern — the tests hold the two together — so the
+ * groups are expanded and the boundaries dropped rather than handed out as
+ * regex fragments.
+ */
+function expandGroups(source: string): string[] {
+  const group = /\(([^()]*)\)/.exec(source);
+  if (!group) return [source];
+  const [full, inner] = group;
+  const expanded: string[] = [];
+  for (const option of inner.split("|")) {
+    expanded.push(...expandGroups(source.replace(full, option)));
+  }
+  return expanded;
+}
 
 /**
  * Splits a pattern's alternatives into plain words.
@@ -64,14 +91,16 @@ export const EMOTION_TRIGGER_PATTERNS: {
  */
 function wordsOf(pattern: RegExp): string[] {
   const words: string[] = [];
-  for (const alternative of pattern.source.split("|")) {
-    const trimmed = alternative.trim();
-    if (!trimmed) continue;
-    const parts = trimmed.split("'?");
-    if (parts.length === 2) {
-      words.push(parts[0] + parts[1], parts[0] + "'" + parts[1]);
-    } else {
-      words.push(trimmed);
+  for (const variant of expandGroups(pattern.source)) {
+    for (const alternative of variant.split("|")) {
+      const trimmed = alternative.trim().replace(/\\b/g, "").replace(/^\?:/, "");
+      if (!trimmed) continue;
+      const parts = trimmed.split("'?");
+      if (parts.length === 2) {
+        words.push(parts[0] + parts[1], parts[0] + "'" + parts[1]);
+      } else {
+        words.push(trimmed);
+      }
     }
   }
   return words;
@@ -96,11 +125,21 @@ export const EMOTION_TRIGGER_WORDS: { zh: string[]; en: string[] } = {
  */
 export function matchEmotionTrigger(
   text: string,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): EmotionTriggerState | null {
-  const patterns = EMOTION_TRIGGER_PATTERNS[locale] ?? EMOTION_TRIGGER_PATTERNS.zh;
+  /**
+   * Traditional Chinese is read as simplified before matching.
+   *
+   * The trigger words are written in simplified Chinese — 「难过」, 「想你」 —
+   * and a person who writes traditional Chinese writes them as 「難過」,
+   * 「想你」. A regex is a substring match and cannot know the two are the
+   * same word, so the mood went unrecognised. The normalisation is applied
+   * whatever the interface language is: the words are the words.
+   */
+  const haystack = toSimplified(text ?? "").toLowerCase();
+  const patterns = EMOTION_TRIGGER_PATTERNS[contentLocale(locale)];
   for (const state of EMOTION_TRIGGER_STATES) {
-    if (patterns[state].test(text)) return state;
+    if (patterns[state].test(haystack)) return state;
   }
   return null;
 }
