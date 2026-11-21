@@ -370,6 +370,7 @@ async function runExtraction(params: {
           { role: "user", content: chatText },
         ],
         options: { purpose: "extract" },
+        usage: { userId, personaId: persona.id },
       });
     }
   } catch (e) {
@@ -383,6 +384,7 @@ async function runExtraction(params: {
           { role: "user", content: chatText },
         ],
         options: { purpose: "extract" },
+        usage: { userId, personaId: persona.id },
       });
     } catch (e) {
       console.warn("[Memories] No provider could extract:", (e as Error).message);

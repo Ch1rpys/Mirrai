@@ -159,14 +159,17 @@ export async function assessTrajectory(params: {
       { role: "user" as const, content: transcript },
     ];
     const options = { provider: params.provider, temperature: 0, maxTokens: 300, purpose: "classify" as const };
+    const usage = { userId: params.userId, personaId: params.personaId };
     const response = params.providerInstance
       ? await llmService.invokeWithProvider(params.providerInstance, {
           messages,
           options: { ...options, purpose: "classify" },
+          usage,
         })
       : await llmService.invoke({
           messages,
           options: { ...options, purpose: "classify" },
+          usage,
         });
     const parsed = extractJsonObject(response);
     const parsedTrajectory = parsed?.trajectory;

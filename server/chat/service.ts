@@ -497,6 +497,7 @@ async function maybeCompactHistory(params: {
         { role: "user", content: asMaterial(transcript, locale) },
       ],
       options: { provider: params.providerName, temperature: 0.2, maxTokens: 500, purpose: "summarize" },
+      usage: { userId: params.userId, personaId: params.persona.id },
     });
 
     const trimmed = (summary || "").trim();
@@ -1008,6 +1009,8 @@ export async function commitPendingChoice(params: {
     provider: params.providerName,
     providerInstance: classifyProvider ?? undefined,
     locale,
+    userId: params.userId,
+    personaId: params.persona.id,
   });
   const newEmotionalState = emotion.state;
   const chosenIdx = pending.options[0] === params.chosen ? 0 : 1;
@@ -2115,6 +2118,8 @@ async function* runConversationTurn(
     // back to the environment one — that rule lives in the resolver.
     providerInstance: classifyProvider ?? undefined,
     locale,
+    userId,
+    personaId: persona.id,
   });
   let newEmotionalState = emotion.state;
   let emotionMeta: { proposed: string; kept: boolean; reason?: string } | undefined;

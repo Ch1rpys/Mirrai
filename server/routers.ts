@@ -5559,6 +5559,7 @@ export const appRouter = router({
           response = await llmService.invokeWithProvider(provider, {
             messages,
             options: { purpose: "summarize" },
+            usage: { userId: ctx.user.id },
           });
         }
         if (!response.trim() && !owned) {
@@ -5567,6 +5568,7 @@ export const appRouter = router({
           response = await llmService.invoke({
             messages,
             options: { purpose: "summarize" },
+            usage: { userId: ctx.user.id },
           });
         }
         if (!response.trim()) {
@@ -7667,6 +7669,7 @@ export const appRouter = router({
             raw = await llmService.invokeWithProvider(provider, {
               ...request,
               options: { ...request.options, purpose: "other" },
+              usage: { userId: ctx.user.id },
             });
           } catch (error) {
             console.warn("[Outbound] The user's wording suggestion failed:", (error as Error).message);
@@ -7677,6 +7680,7 @@ export const appRouter = router({
             raw = await llmService.invoke({
               ...request,
               options: { ...request.options, purpose: "other" },
+              usage: { userId: ctx.user.id },
             });
           } catch (error) {
             console.warn("[Outbound] No provider could suggest words:", (error as Error).message);

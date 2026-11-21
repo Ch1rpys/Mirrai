@@ -52,6 +52,13 @@ export class ClaudeProvider implements LLMProvider {
     jsonMode: false,
   };
 
+  get modelName(): string {
+    return this.model;
+  }
+
+  /** The usage the provider reported on the last call (C8.9). */
+  lastUsage: { promptTokens: number; completionTokens: number } | null = null;
+
   isConfigured(): boolean {
     return !!this.apiKey;
   }
@@ -135,6 +142,19 @@ export class ClaudeProvider implements LLMProvider {
     }
 
     const data = await response.json();
+    const usage = data?.usage;
+    if (
+      usage &&
+      typeof usage.input_tokens === "number" &&
+      typeof usage.output_tokens === "number"
+    ) {
+      this.lastUsage = {
+        promptTokens: usage.input_tokens,
+        completionTokens: usage.output_tokens,
+      };
+    } else {
+      this.lastUsage = null;
+    }
     const textBlock = data.content?.find((b: any) => b.type === "text");
     return textBlock?.text ?? "";
   }

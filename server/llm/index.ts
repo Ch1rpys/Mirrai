@@ -7,6 +7,7 @@ import { OllamaProvider } from "./providers/ollama";
 import { XunfeiProvider } from "./providers/xunfei";
 import { DifyProvider } from "./providers/dify";
 import { resolveProviderForUser, userHasOwnProvider } from "./user-provider";
+import { recordLlmCall } from "./usage";
 
 const registry = new ProviderRegistry();
 
@@ -357,11 +358,28 @@ export class LLMService {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const attempt_ = attemptSignal(params.options);
       try {
-        return await provider.invoke(params.messages, {
+        const text = await provider.invoke(params.messages, {
           ...params.options,
           purpose: params.options?.purpose ?? "other",
           signal: attempt_.signal,
         });
+        /**
+         * The call is on the ledger before its text is returned (C8.9).
+         *
+         * A failed attempt is not recorded — the provider did not
+         * answer — and recording never throws, so it cannot turn a
+         * successful call into a failure.
+         */
+        if (params.usage) {
+          await recordLlmCall({
+            usage: params.usage,
+            provider,
+            purpose: params.options?.purpose ?? "other",
+            messages: params.messages,
+            output: text,
+          });
+        }
+        return text;
       } catch (err) {
         lastError = err;
         if (isVersionError(err)) {
@@ -405,6 +423,7 @@ export class LLMService {
     const maxAttempts = provider.maxAttempts ?? 3;
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       let emitted = false;
+      let collected = "";
       const attempt_ = attemptSignal(params.options);
       try {
         for await (const chunk of provider.stream(params.messages, {
@@ -413,11 +432,23 @@ export class LLMService {
           signal: attempt_.signal,
         })) {
           emitted = true;
+          collected += chunk.text;
           // The deadline is for the *first* answer, not for the whole
           // generation: a long reply takes a long time, and the user is
           // watching it arrive.
           attempt_.clear();
           yield chunk;
+        }
+        // The stream ended: record what it used. A streamed response
+        // usually reports no usage, so this is the estimated path.
+        if (params.usage) {
+          await recordLlmCall({
+            usage: params.usage,
+            provider,
+            purpose: params.options?.purpose ?? "other",
+            messages: params.messages,
+            output: collected,
+          });
         }
         return;
       } catch (err) {
@@ -469,6 +500,10 @@ export async function invokeForUser(params: {
   providerName?: string;
   messages: LLMMessage[];
   options?: LLMOptions;
+  /** The persona the call is for (C8.9), when it is for one. */
+  personaId?: number | null;
+  /** The distillation or evaluation job the call belongs to (C8.9). */
+  jobId?: string | null;
 }): Promise<string | null> {
   const outcome = await invokeForUserWithReason({
     ...params,
@@ -490,7 +525,16 @@ export async function invokeForUserWithReason(params: {
   providerName?: string;
   messages: LLMMessage[];
   options?: LLMOptions;
+  /** The persona the call is for (C8.9), when it is for one. */
+  personaId?: number | null;
+  /** The distillation or evaluation job the call belongs to (C8.9). */
+  jobId?: string | null;
 }): Promise<{ text: string | null; reason?: string }> {
+  const usage = {
+    userId: params.userId,
+    personaId: params.personaId ?? null,
+    jobId: params.jobId ?? null,
+  };
   try {
     const provider = await resolveProviderForUser({
       userId: params.userId,
@@ -500,6 +544,7 @@ export async function invokeForUserWithReason(params: {
       const text = await llmService.invokeWithProvider(provider, {
         messages: params.messages,
         options: { ...params.options, purpose: params.options?.purpose ?? "other" },
+        usage,
       });
       if (text?.trim()) return { text };
     }
@@ -518,6 +563,7 @@ export async function invokeForUserWithReason(params: {
     const text = await llmService.invoke({
       messages: params.messages,
       options: { ...params.options, purpose: params.options?.purpose ?? "other" },
+      usage,
     });
     return text?.trim() ? { text } : { text: null, reason: "The provider returned nothing." };
   } catch (e) {

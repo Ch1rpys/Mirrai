@@ -616,6 +616,7 @@ async function collectWithModel(params: {
       raw = await llmService.invokeWithProvider(provider, {
         ...request,
         options: { ...request.options, purpose: "letter" },
+        usage: { userId: params.userId },
       });
     } catch (e) {
       console.warn(
@@ -630,6 +631,7 @@ async function collectWithModel(params: {
       raw = await llmService.invoke({
         ...request,
         options: { ...request.options, purpose: "letter" },
+        usage: { userId: params.userId },
       });
     } catch (e) {
       console.warn(

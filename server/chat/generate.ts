@@ -1214,6 +1214,14 @@ export async function* executePlan(
     return;
   }
 
+  /**
+   * Who every call in this turn is for (C8.9).
+   *
+   * The provider is chosen by the caller, so the service does not know
+   * the user; it has to be told, or the usage has nobody to belong to.
+   */
+  const usage = { userId: input.userId, personaId: input.persona.id };
+
   const invokeOptions = {
     provider: io.options.provider,
     temperature: io.options.temperature,
@@ -1255,6 +1263,7 @@ export async function* executePlan(
       const raw = await llmService.invokeWithProvider(plannerProvider, {
         messages: plan.plannerMessages ?? plan.messages,
         options: { ...plannerOptions, purpose: "plan" },
+        usage,
       });
       gist = parsePlannerGist(typeof raw === "string" ? raw : "");
     } catch {
@@ -1289,6 +1298,7 @@ export async function* executePlan(
           const answer = await llmService.invokeWithProvider(voiceProvider, {
             messages: replyMessages,
             options: { ...replyOptions, purpose: "reply" },
+            usage,
           });
           return typeof answer === "string" ? answer : "";
         } catch {
@@ -1313,6 +1323,7 @@ export async function* executePlan(
           const rewritten = await llmService.invokeWithProvider(voiceProvider, {
             messages: withFactRewriteInstruction(replyMessages, locale),
             options: { ...replyOptions, purpose: "reply" },
+            usage,
           });
           texts = [typeof rewritten === "string" ? rewritten : ""];
         } catch {
@@ -1378,6 +1389,7 @@ export async function* executePlan(
     const stream = llmService.streamWithProvider(voiceProvider, {
       messages: replyMessages,
       options: { ...replyOptions, purpose: "reply" },
+      usage,
     });
     const aborted = io.signal
       ? new Promise<never>((_, reject) => {
@@ -1416,6 +1428,7 @@ export async function* executePlan(
   let replyText = await invokeAbortable(voiceProvider, {
     messages: replyMessages,
     options: { ...replyOptions, purpose: "reply" },
+    usage,
   }, io.signal);
   if (io.emptyAsSilence === false) {
     replyText = typeof replyText === "string" ? replyText : "";
@@ -1428,6 +1441,7 @@ export async function* executePlan(
         const rewritten = await llmService.invokeWithProvider(voiceProvider, {
           messages: withFactRewriteInstruction(replyMessages, locale),
           options: { ...replyOptions, purpose: "reply" },
+          usage,
         });
         if (typeof rewritten === "string" && rewritten) replyText = rewritten;
       }

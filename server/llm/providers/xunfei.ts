@@ -28,6 +28,10 @@ export class XunfeiProvider implements LLMProvider {
     return !!this.appId && !!this.apiKey && !!this.apiSecret;
   }
 
+  get modelName(): string {
+    return this.modelVersion;
+  }
+
   private getModelDomain(): string {
     const map: Record<string, string> = {
       "v1.1": "general", "v2.1": "generalv2", "v3.1": "generalv3",

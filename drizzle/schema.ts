@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, customType, index, integer, pgEnum, pgTable, serial, text, timestamp, uniqueIndex, varchar, jsonb } from "drizzle-orm/pg-core";
+import { bigint, boolean, customType, index, integer, pgEnum, pgTable, serial, text, timestamp, uniqueIndex, varchar, jsonb } from "drizzle-orm/pg-core";
 
 /** Stored embedding vectors. Drizzle has no built-in bytea column. */
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
@@ -2257,3 +2257,42 @@ export const scheduledItems = pgTable("scheduled_items", {
 
 export type ScheduledItem = typeof scheduledItems.$inferSelect;
 export type InsertScheduledItem = typeof scheduledItems.$inferInsert;
+
+// ─── The cost panel (C8.9) ──────────────────────────────────────────────────
+
+/**
+ * One row per model call.
+ *
+ * The app spends the user's money (or the operator's) on every reply,
+ * and there was no record of it: not which feature was expensive, not
+ * how many tokens a distillation read, not what a month of chatting
+ * cost. A row says which call it was, how many tokens it used, and —
+ * when the user has filled in a price — what it cost.
+ *
+ * `estimated` is true when the provider did not report usage and the
+ * numbers were counted locally. An estimate is not a measurement and it
+ * says so, so a total can be read correctly.
+ */
+export const llmUsage = pgTable("llm_usage", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  /** The persona the call was for, when it was for one. */
+  personaId: integer("personaId"),
+  provider: varchar("provider", { length: 64 }).notNull(),
+  model: varchar("model", { length: 128 }).notNull(),
+  purpose: varchar("purpose", { length: 16 }).notNull(),
+  promptTokens: integer("promptTokens").notNull(),
+  completionTokens: integer("completionTokens").notNull(),
+  estimated: boolean("estimated").default(false).notNull(),
+  /** Millionths of the configured currency; empty when no price is set. */
+  costMicros: bigint("costMicros", { mode: "number" }),
+  /** The distillation or evaluation job the calls belong to. */
+  jobId: varchar("jobId", { length: 64 }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  userCreatedIdx: index("llm_usage_user_created_idx").on(table.userId, table.createdAt),
+  jobIdx: index("llm_usage_job_idx").on(table.jobId),
+}));
+
+export type LlmUsageRow = typeof llmUsage.$inferSelect;
+export type InsertLlmUsage = typeof llmUsage.$inferInsert;

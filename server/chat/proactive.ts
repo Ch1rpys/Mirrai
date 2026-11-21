@@ -359,6 +359,7 @@ export async function composeProactiveMessage(params: {
       text = await llmService.invokeWithProvider(provider, {
         messages,
         options: { purpose: "reply" },
+        usage: { userId: params.userId, personaId: persona.id },
       });
     } catch (e) {
       console.warn("[Proactive] The user's provider failed:", (e as Error).message);
@@ -370,6 +371,7 @@ export async function composeProactiveMessage(params: {
       text = await llmService.invoke({
         messages,
         options: { purpose: "reply" },
+        usage: { userId: params.userId, personaId: persona.id },
       });
     } catch (e) {
       console.warn("[Proactive] No provider could write the message:", (e as Error).message);

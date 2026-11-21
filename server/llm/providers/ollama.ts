@@ -26,6 +26,13 @@ export class OllamaProvider implements LLMProvider {
     return !!this.url && !!this.model;
   }
 
+  get modelName(): string {
+    return this.model;
+  }
+
+  /** The usage the provider reported on the last call (C8.9). */
+  lastUsage: { promptTokens: number; completionTokens: number } | null = null;
+
   /** Sampling fields Ollama accepts on `options`. */
   private samplingOptions(options?: LLMOptions) {
     const next: Record<string, unknown> = {};
@@ -57,6 +64,23 @@ export class OllamaProvider implements LLMProvider {
     }
 
     const data = await response.json();
+    /**
+     * Ollama counts tokens itself (C8.9).
+     *
+     * `prompt_eval_count`/`eval_count` are its own numbers, so the panel
+     * shows them as measured rather than estimated.
+     */
+    if (
+      typeof data?.prompt_eval_count === "number" &&
+      typeof data?.eval_count === "number"
+    ) {
+      this.lastUsage = {
+        promptTokens: data.prompt_eval_count,
+        completionTokens: data.eval_count,
+      };
+    } else {
+      this.lastUsage = null;
+    }
     return data.message?.content ?? "";
   }
 

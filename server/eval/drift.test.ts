@@ -117,6 +117,15 @@ beforeEach(() => {
     const value = db[name];
     if (typeof value !== "function") continue;
     if (!/^(create|save|update|delete|set|insert|upsert|write)/i.test(String(name))) continue;
+    /**
+     * The cost ledger is not user data (C8.9).
+     *
+     * A drift run is fifty model calls, and each one writes a usage row.
+     * What this list enforces is that the evaluation writes none of the
+     * *content* it generates — no messages, no memories, no persona
+     * changes. A ledger row records the call, not what was said.
+     */
+    if (String(name) === "insertLlmUsage") continue;
     writeSpies.push({ name: String(name), spy: vi.spyOn(db, name as never) });
   }
 });

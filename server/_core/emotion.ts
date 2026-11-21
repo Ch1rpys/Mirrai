@@ -52,6 +52,9 @@ export async function inferEmotionalState(params: {
   provider?: string;
   providerInstance?: LLMProvider;
   locale?: "zh" | "en";
+  /** The payer of this call (C8.9), when the caller knows. */
+  userId?: number;
+  personaId?: number | null;
 }): Promise<EmotionInferenceResult> {
   const locale = params.locale ?? "zh";
   const useHeuristic = (): EmotionInferenceResult => ({
@@ -109,14 +112,19 @@ export async function inferEmotionalState(params: {
       },
     ];
 
+    const usage = params.userId
+      ? { userId: params.userId, personaId: params.personaId ?? null }
+      : undefined;
     const response = params.providerInstance
       ? await llmService.invokeWithProvider(params.providerInstance, {
           messages,
           options: { provider: params.provider, temperature: 0, maxTokens: 200, purpose: "classify" },
+          ...(usage ? { usage } : {}),
         })
       : await llmService.invoke({
           messages,
           options: { provider: params.provider, temperature: 0, maxTokens: 200, purpose: "classify" },
+          ...(usage ? { usage } : {}),
         });
 
     const parsed = extractJsonObject(response);

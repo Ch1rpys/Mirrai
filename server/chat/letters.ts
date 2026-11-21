@@ -420,6 +420,7 @@ export async function composeLetterReply(params: {
       const response = await llmService.invokeWithProvider(provider, {
         messages,
         options: { purpose: "letter" },
+        usage: { userId: persona.userId, personaId: persona.id },
       });
       if (response?.trim()) return response.trim();
     } catch (e) {
@@ -432,6 +433,7 @@ export async function composeLetterReply(params: {
       const response = await llmService.invoke({
         messages,
         options: { purpose: "letter" },
+        usage: { userId: persona.userId, personaId: persona.id },
       });
       if (response?.trim()) return response.trim();
     } catch (e) {

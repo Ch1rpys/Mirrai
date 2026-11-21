@@ -27,6 +27,13 @@ export class OpenAIProvider implements LLMProvider {
     jsonMode: true,
   };
 
+  get modelName(): string {
+    return this.model;
+  }
+
+  /** The usage the provider reported on the last call (C8.9). */
+  lastUsage: { promptTokens: number; completionTokens: number } | null = null;
+
   isConfigured(): boolean {
     // A key on its own is not enough. A provider with no base URL calls
     // "/chat/completions", which is not a URL, and one with no model is
@@ -113,6 +120,26 @@ export class OpenAIProvider implements LLMProvider {
     }
 
     const data = await response.json();
+    /**
+     * What the response says it used (C8.9).
+     *
+     * OpenAI-compatible servers report `usage` on a non-streaming call.
+     * A server that leaves it out is estimated locally, and the row says
+     * so.
+     */
+    const usage = data?.usage;
+    if (
+      usage &&
+      typeof usage.prompt_tokens === "number" &&
+      typeof usage.completion_tokens === "number"
+    ) {
+      this.lastUsage = {
+        promptTokens: usage.prompt_tokens,
+        completionTokens: usage.completion_tokens,
+      };
+    } else {
+      this.lastUsage = null;
+    }
     const message = data.choices?.[0]?.message;
     // Some providers answer with the reasoning in `reasoning_content` and
     // leave `content` empty. Reading only `content` turned such a reply

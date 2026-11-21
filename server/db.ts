@@ -38,6 +38,7 @@ import {
   scheduledItems, InsertScheduledItem, ScheduledItem,
   personaShares, InsertPersonaShare,
   oralAccounts, InsertOralAccount, OralAccount,
+  llmUsage, InsertLlmUsage,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
@@ -1470,6 +1471,13 @@ export async function deleteUserAccount(id: number) {
     await tx.delete(fidelityFeedback).where(eq(fidelityFeedback.userId, id));
     await tx.delete(graduationAssessments).where(eq(graduationAssessments.userId, id));
     await tx.delete(llmConfigs).where(eq(llmConfigs.userId, id));
+    /**
+     * The usage ledger goes with the account (C8.9).
+     *
+     * It says what the user's own money bought — and with the account
+     * gone there is nobody it belongs to.
+     */
+    await tx.delete(llmUsage).where(eq(llmUsage.userId, id));
     await tx.delete(letters).where(eq(letters.userId, id));
     await tx.delete(memories).where(eq(memories.userId, id));
     await tx.delete(memoryExtractions).where(eq(memoryExtractions.userId, id));
@@ -2392,6 +2400,13 @@ export async function deletePersona(id: number, userId: number) {
     await tx.delete(fidelityPairs).where(and(eq(fidelityPairs.personaId, id), eq(fidelityPairs.userId, userId)));
     await tx.delete(fidelityFeedback).where(and(eq(fidelityFeedback.personaId, id), eq(fidelityFeedback.userId, userId)));
     await tx.delete(graduationAssessments).where(and(eq(graduationAssessments.personaId, id), eq(graduationAssessments.userId, userId)));
+    /**
+     * The usage rows for this persona go with it (C8.9).
+     *
+     * The ledger is the user's; a row names the persona it was spent
+     * on. Once that persona is gone the row has nothing left to say.
+     */
+    await tx.delete(llmUsage).where(and(eq(llmUsage.personaId, id), eq(llmUsage.userId, userId)));
     await tx.delete(memories).where(and(eq(memories.personaId, id), eq(memories.userId, userId)));
     /**
      * Every account of the persona, whoever told it.
@@ -4304,6 +4319,147 @@ export async function getLlmConfigsByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(llmConfigs).where(eq(llmConfigs.userId, userId));
+}
+
+// ─── The usage ledger (C8.9) ───────────────────────────────────────────────
+
+/** Appends one row to the usage ledger. */
+export async function insertLlmUsage(data: InsertLlmUsage): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(llmUsage).values(data);
+}
+
+/** The newest rows of one user's ledger, for the panel and the tests. */
+export async function llmUsageRowsForUser(userId: number, limit = 500) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(llmUsage)
+    .where(eq(llmUsage.userId, userId))
+    .orderBy(desc(llmUsage.createdAt), desc(llmUsage.id))
+    .limit(limit);
+}
+
+/** What was spent, by why it was spent. */
+export async function sumLlmUsageByPurpose(userId: number, from: Date, to?: Date | null) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({
+    purpose: llmUsage.purpose,
+    promptTokens: sum(llmUsage.promptTokens),
+    completionTokens: sum(llmUsage.completionTokens),
+    calls: count(),
+    costMicros: sql<string>`coalesce(sum(${llmUsage.costMicros}), 0)`,
+    /**
+     * The rows belong to one user, and the query says so itself.
+     *
+     * A helper that takes a user id and does not bind the row to it is
+     * how one person's ledger becomes another's (the structural test
+     * scans this).
+     */
+  }).from(llmUsage)
+    .where(and(
+      eq(llmUsage.userId, userId),
+      gte(llmUsage.createdAt, from),
+      ...(to ? [lte(llmUsage.createdAt, to)] : []),
+    ))
+    .groupBy(llmUsage.purpose);
+  return rows.map((row) => ({
+    purpose: row.purpose,
+    promptTokens: Number(row.promptTokens ?? 0),
+    completionTokens: Number(row.completionTokens ?? 0),
+    calls: Number(row.calls ?? 0),
+    costMicros: Number(row.costMicros ?? 0),
+  }));
+}
+
+/** What was spent, by the persona it was spent on. */
+export async function sumLlmUsageByPersona(userId: number, from: Date, to?: Date | null) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({
+    personaId: llmUsage.personaId,
+    promptTokens: sum(llmUsage.promptTokens),
+    completionTokens: sum(llmUsage.completionTokens),
+    calls: count(),
+    costMicros: sql<string>`coalesce(sum(${llmUsage.costMicros}), 0)`,
+  }).from(llmUsage)
+    .where(and(
+      eq(llmUsage.userId, userId),
+      gte(llmUsage.createdAt, from),
+      ...(to ? [lte(llmUsage.createdAt, to)] : []),
+    ))
+    .groupBy(llmUsage.personaId);
+  return rows.map((row) => ({
+    personaId: row.personaId,
+    promptTokens: Number(row.promptTokens ?? 0),
+    completionTokens: Number(row.completionTokens ?? 0),
+    calls: Number(row.calls ?? 0),
+    costMicros: Number(row.costMicros ?? 0),
+  }));
+}
+
+/** What was spent, by the day it was spent on, in the user's own days. */
+export async function sumLlmUsageByDay(
+  userId: number,
+  from: Date,
+  timeZone: string | null,
+  to?: Date | null,
+) {
+  const db = await getDb();
+  if (!db) return [];
+  const zone = timeZone || "UTC";
+  const day = sql<string>`to_char(${llmUsage.createdAt} AT TIME ZONE ${zone}, 'YYYY-MM-DD')`;
+  const rows = await db.select({
+    day,
+    promptTokens: sum(llmUsage.promptTokens),
+    completionTokens: sum(llmUsage.completionTokens),
+    calls: count(),
+    costMicros: sql<string>`coalesce(sum(${llmUsage.costMicros}), 0)`,
+  }).from(llmUsage)
+    .where(and(
+      eq(llmUsage.userId, userId),
+      gte(llmUsage.createdAt, from),
+      ...(to ? [lte(llmUsage.createdAt, to)] : []),
+    ))
+    .groupBy(day)
+    .orderBy(day);
+  return rows.map((row) => ({
+    day: row.day,
+    promptTokens: Number(row.promptTokens ?? 0),
+    completionTokens: Number(row.completionTokens ?? 0),
+    calls: Number(row.calls ?? 0),
+    costMicros: Number(row.costMicros ?? 0),
+  }));
+}
+
+/** What one distillation or evaluation job spent. */
+export async function sumLlmUsageForJob(userId: number, jobId: string) {
+  const db = await getDb();
+  if (!db) return { calls: 0, promptTokens: 0, completionTokens: 0, costMicros: 0 };
+  const [row] = await db.select({
+    calls: count(),
+    promptTokens: sum(llmUsage.promptTokens),
+    completionTokens: sum(llmUsage.completionTokens),
+    costMicros: sql<string>`coalesce(sum(${llmUsage.costMicros}), 0)`,
+  }).from(llmUsage).where(and(eq(llmUsage.userId, userId), eq(llmUsage.jobId, jobId)));
+  return {
+    calls: Number(row?.calls ?? 0),
+    promptTokens: Number(row?.promptTokens ?? 0),
+    completionTokens: Number(row?.completionTokens ?? 0),
+    costMicros: Number(row?.costMicros ?? 0),
+  };
+}
+
+/** The newest call made for one purpose — what the last distillation cost. */
+export async function latestLlmUsageForPurpose(userId: number, purpose: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(llmUsage)
+    .where(and(eq(llmUsage.userId, userId), eq(llmUsage.purpose, purpose)))
+    .orderBy(desc(llmUsage.createdAt), desc(llmUsage.id))
+    .limit(1);
+  return rows[0] ?? null;
 }
 
 export async function upsertLlmConfig(userId: number, data: Partial<InsertLlmConfig> & { providerName: string }) {

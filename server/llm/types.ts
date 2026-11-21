@@ -84,9 +84,36 @@ export const NO_CAPABILITIES: LLMCapabilities = {
 
 export type LLMStreamChunk = { text: string };
 
+/**
+ * What a provider says it used, when it says anything.
+ *
+ * Most APIs report it on the response; a provider that does not leaves
+ * `lastUsage` null and the service counts the tokens locally instead.
+ * An estimate is marked as one — the cost panel never mixes the two.
+ */
+export interface LLMUsage {
+  promptTokens: number;
+  completionTokens: number;
+}
+
+/**
+ * Who a call is for (C8.9).
+ *
+ * The service does not know the user; the caller does. Passing it here
+ * is what makes a row in `llm_usage` attributable. A call without it is
+ * not recorded — evaluation runs against a fixture are one example.
+ */
+export interface LlmUsageContext {
+  userId: number;
+  personaId?: number | null;
+  jobId?: string | null;
+}
+
 export type InvokeParams = {
   messages: LLMMessage[];
   options?: LLMOptions;
+  /** Who the call is for, so it can be recorded in `llm_usage`. */
+  usage?: LlmUsageContext;
 };
 
 export type InvokeResult = string;
@@ -97,6 +124,14 @@ export interface LLMProvider {
   /** Declared once at construction; every provider must set it. */
   capabilities: LLMCapabilities;
   isConfigured(): boolean;
+  /** The model this instance was built with, for the usage record. */
+  readonly modelName?: string;
+  /**
+   * The usage the provider reported on its last successful call, or
+   * null. The service reads it after the call and clears nothing: the
+   * next call overwrites it.
+   */
+  lastUsage?: LLMUsage | null;
   invoke(messages: LLMMessage[], options?: LLMOptions): Promise<string>;
   /** Optional: yields text incrementally. */
   stream?(messages: LLMMessage[], options?: LLMOptions): AsyncIterable<LLMStreamChunk>;
