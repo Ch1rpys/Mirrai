@@ -82,6 +82,9 @@ vi.mock("@/lib/trpc", () => ({
       list: { useQuery: () => ({ data: { items: memoryItems, total: memoryTotal } }) },
       adjudicate: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    interview: {
+      fromOral: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     oral: {
       list: {
         useQuery: () => ({

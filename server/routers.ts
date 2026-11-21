@@ -189,6 +189,7 @@ import { unsaidRouter } from "./routers-v6/unsaid";
 import { bookRouter } from "./routers-v6/book";
 import { shareRouter } from "./routers-v6/share";
 import { oralRouter } from "./routers-v6/oral";
+import { interviewRouter } from "./routers-v6/interview";
 import { usageRouter } from "./routers-v6/usage";
 import { markRouter } from "./routers-v6/mark";
 import { mineMicroRules } from "./skill-engine/micro-rules";
@@ -432,7 +433,33 @@ type DistillationMaterial = {
   files: Awaited<ReturnType<typeof getFilesByPersonaId>>;
   /** How many structured rows there are. The pipeline pages them itself. */
   collectedCount: number;
+  /**
+   * How many rows are in the `written` register (C1.8).
+   *
+   * A persona whose only upload is a monologue has no private rows at
+   * all. The written rows are still material — they are read for what
+   * they say — so the "is there anything to distil" guard has to see
+   * them.
+   */
+  writtenCount: number;
 };
+
+/**
+ * Whether a file was imported as a monologue (C1.8).
+ *
+ * A monologue file's extracted text is the same words as its records.
+ * The records are read for content and never for tone, so the raw text
+ * must not go down the chat-transcript path as well.
+ */
+function isMonologueFile(file: { parseReport?: unknown }): boolean {
+  const report = file.parseReport;
+  return Boolean(
+    report
+    && typeof report === "object"
+    && !Array.isArray(report)
+    && (report as { format?: unknown }).format === "monologue",
+  );
+}
 
 /**
  * The material for a persona: the uploaded files, and a count of the
@@ -450,8 +477,11 @@ async function readDistillationMaterial(
   const files = await getFilesByPersonaId(personaId, userId, {
     withExtractedMemory: true,
   });
-  const collectedCount = await countRecords(personaId, userId);
-  return { files, collectedCount };
+  const [collectedCount, writtenCount] = await Promise.all([
+    countRecords(personaId, userId),
+    countRecords(personaId, userId, { register: "written" }),
+  ]);
+  return { files, collectedCount, writtenCount };
 }
 
 /**
@@ -470,11 +500,17 @@ async function readDistillationMaterial(
 function hasDistillationMaterial(material: DistillationMaterial): boolean {
   const uploadedText = material.files
     .filter((f) => f.fileType === "chat_txt" || f.fileType === "chat_csv")
+    .filter((f) => !isMonologueFile(f))
     .map((f) => f.extractedMemory || "")
     .join("\n")
     .trim();
   const hasPhotos = material.files.some((f) => f.fileType === "image" && f.fileUrl);
-  return Boolean(uploadedText) || hasPhotos || material.collectedCount > 0;
+  return (
+    Boolean(uploadedText)
+    || hasPhotos
+    || material.collectedCount > 0
+    || material.writtenCount > 0
+  );
 }
 
 async function assertDistillCallBudget(params: {
@@ -578,6 +614,9 @@ async function startPersonaDistillation(params: {
     const files = material.files;
     const uploadedText = files
       .filter((f) => f.fileType === "chat_txt" || f.fileType === "chat_csv")
+      // A monologue is read from its records, for content only; its raw
+      // text must not become a chat transcript (C1.8).
+      .filter((f) => !isMonologueFile(f))
       .map((f) => f.extractedMemory || "")
       .join("\n\n---\n\n")
       .slice(0, MAX_DISTILLATION_CHARS);
@@ -630,6 +669,7 @@ async function startPersonaDistillation(params: {
       && videoMaterial.frameDataUrls.length === 0
       && videoMaterial.transcripts.length === 0
       && material.collectedCount === 0
+      && material.writtenCount === 0
     ) {
       console.warn(
         `[SkillEngine] Persona ${personaId} has no material to distil — nothing was written.`,
@@ -7965,6 +8005,7 @@ export const appRouter = router({
   book: bookRouter,
   share: shareRouter,
   oral: oralRouter,
+  interview: interviewRouter,
   usage: usageRouter,
   mark: markRouter,
 

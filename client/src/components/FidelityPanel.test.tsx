@@ -190,6 +190,16 @@ describe("the ruler and the timing", () => {
     expect(screen.getByText(translate("zh", "fidelity.noRun"))).toBeInTheDocument();
   });
 
+  it("says there is nothing to compare when the persona was written from a description (C1.8)", () => {
+    render(<FidelityPanel personaId={1} name="小满" described />);
+    expect(screen.getByTestId("fidelity-described")).toHaveTextContent(
+      translate("zh", "fidelity.described", { name: "小满" }),
+    );
+    // The usual "not measured yet" would promise a measurement this
+    // persona can never have.
+    expect(screen.queryByText(translate("zh", "fidelity.noRun"))).toBeNull();
+  });
+
   it("shows the last run's numbers", () => {
     lastRun = {
       metricsJson: {

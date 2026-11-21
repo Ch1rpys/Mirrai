@@ -408,6 +408,23 @@ export default function Onboarding() {
               {t("onboarding.useQuestionnaire")}
             </Button>
 
+            {/* The other way to build a persona without a chat log: talk
+                about the person, and the interview writes it down (C1.8). */}
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                const chosen = personaName.trim();
+                navigate(
+                  chosen
+                    ? `/persona/new/interview?name=${encodeURIComponent(chosen)}`
+                    : "/persona/new/interview",
+                );
+              }}
+            >
+              {t("interview.entry", { name: personaName.trim() || "TA" })}
+            </Button>
+
             <Button
               variant="ghost"
               className="w-full text-muted-foreground"

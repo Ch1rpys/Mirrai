@@ -509,4 +509,30 @@ describe("a memorial persona's prompt (C7.1)", () => {
     expect(built).toContain("告别前的事");
     expect(built).not.toContain("告别后的事");
   });
+
+  it("carries what was described, with its quotes, and no exemplars (C1.8)", async () => {
+    const built = await buildPromptForPersona({
+      persona: {
+        ...persona,
+        personaData: {
+          personality: "温柔",
+          described: [
+            {
+              text: "生气时先沉默，过一会儿才开口。",
+              source: "described",
+              quote: "他生气时一句话都不说",
+              teller: "阿树",
+            },
+          ],
+        },
+      },
+      userId: 1,
+      userMessage: "在吗",
+    });
+    expect(built).toContain("生气时先沉默");
+    expect(built).toContain("他生气时一句话都不说");
+    // No exemplars come from a persona that has no records.
+    expect(built).not.toContain(copy("zh", "prompt.exemplarsHeading"));
+    expect(built).not.toContain(copy("zh", "prompt.exemplarsIntro"));
+  });
 });

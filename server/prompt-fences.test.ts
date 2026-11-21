@@ -547,3 +547,33 @@ describe("an account a family member told us (C7.4)", () => {
     expect(unfencedUser).not.toContain(HOSTILE_NOTE);
   });
 });
+
+describe("what the user described about a person (C1.8)", () => {
+  it("keeps the described sentences and their quotes inside the fence", () => {
+    const prompt = buildSystemPrompt(
+      persona({
+        personaData: {
+          described: [
+            {
+              text: "生气时先沉默，过一会儿才开口。",
+              source: "described",
+              quote: `他生气的时候：${HOSTILE_NOTE}`,
+              teller: "琪琪",
+            },
+          ],
+        },
+      }),
+      { locale: "zh" },
+    );
+    expect(prompt).toContain("生气时先沉默");
+    expect(prompt).toContain(HOSTILE_NOTE);
+    expect(prompt).toContain(copy("zh", "prompt.describedHeading"));
+    expect(unfenced(prompt)).not.toContain("生气时先沉默");
+    expect(unfenced(prompt)).not.toContain(HOSTILE_NOTE);
+  });
+
+  it("adds no described section when nothing was described", () => {
+    const prompt = buildSystemPrompt(persona(), { locale: "zh" });
+    expect(prompt).not.toContain(copy("zh", "prompt.describedHeading"));
+  });
+});

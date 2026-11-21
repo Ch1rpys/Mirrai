@@ -197,6 +197,16 @@ export const LABELS = {
     zh: "安全型",
     en: "Secure",
   },
+  /**
+   * A persona whose only material is what the person wrote (C1.8).
+   *
+   * Its voice fields are empty on purpose: letters say what somebody
+   * cares about, not how they text at midnight.
+   */
+  "labels.persona.writtenSpeakingStyle": {
+    zh: "这些是 TA 写的东西，不是对话；TA 聊天时怎么说话，从这里看不出来。",
+    en: "These are things they wrote, not a conversation; how they talk in chat cannot be told from them.",
+  },
   "labels.persona.unknown": {
     zh: "未知",
     en: "Unknown",

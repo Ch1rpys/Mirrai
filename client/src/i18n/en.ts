@@ -1174,6 +1174,32 @@ export const en = {
     },
   },
 
+  interview: {
+    entry: "Talk about {{name}} (no chat logs needed)",
+    intro: "Say whatever comes to mind. I will keep asking, and you can say \"that's all\" at any point.",
+    title: "Talk about {{name}}",
+    nameLabel: "Their name",
+    namePlaceholder: "Xiao A",
+    nameHint: "Give this person a name first, then start talking.",
+    start: "Start",
+    placeholder: "Write whatever comes to mind…",
+    send: "That's said — ask next",
+    done: "That's all",
+    thinking: "Thinking of the next question…",
+    failed: "The next question did not arrive. Try again.",
+    empty: "Write something first.",
+    finishHint: "Press \"that's all\" when you are done; the persona is written from what you have said.",
+    finishing: "Writing them from what you said…",
+    finished: "Done.",
+    createFailed: "Could not write it: {{message}}",
+    record: "Say a passage",
+    stopRecording: "Stop",
+    recording: "Recording…",
+    micDenied: "The microphone could not be opened.",
+    voiceNotUnderstood: "That could not be heard. Try again.",
+    transcriptNote: "The words go into the box so you can read them before sending.",
+  },
+
   upload: {
     unsupportedType: "That kind of file is not accepted: {{name}}. A chat export, a zip, an image or a video will do.",
     fileTooLarge: "That file is too large: {{name}}. One file cannot be over 50 MB.",
@@ -1228,6 +1254,8 @@ export const en = {
   },
 
   importWizard: {
+    monologueTitle: "One-way writing",
+    monologueNote: "These are things {{name}} wrote, not a conversation. They can tell you what {{name}} cared about and lived through; they cannot tell you how {{name}} talks in chat.",
     unknownFormat: "This export was not recognised. Pick a format below, or tell us what each column is.",
     rolesPrompt: "This log has {{count}} speakers. Which one is you, and which one is {{name}}?",
     previewTitle: "Look first, and see whether it was read right",
@@ -1859,6 +1887,7 @@ export const en = {
    * measured by whether the persona is still the person.
    */
   fidelity: {
+    described: "This persona was written from your description. There are no original words of {{name}} to compare against, so how close it is cannot be measured.",
     title: "Does it still sound like them",
     hint: "One of their real lines is held back, and the rebuilt persona has to produce it. The numbers measure likeness, not usefulness.",
     run: "Run it",
@@ -2313,6 +2342,10 @@ export const en = {
   },
 
   profile: {
+    described: "From your description",
+    describedBy: "From {{teller}}'s description",
+    describedTitle: "What you told about {{name}}",
+    describedNote: "Every line of this persona comes from what you (or your family) described; the quotation is what was actually said.",
     recordsEntryNote: "Read the imported record line by line, and keep bookmarks and notes.",
     manualEntry: "The manual of {{name}}",
     manualEntryNote: "A printable page: how they speak, what those words mean, how you make up. Only what you confirmed.",
@@ -3224,6 +3257,10 @@ export const en = {
     },
   },
   oral: {
+    generate: "Write the persona from these accounts",
+    generateHint: "Turn these submitted accounts into a persona. Every line carries who told it; this only works while the persona has no chat records.",
+    generating: "Writing…",
+    generated: "Wrote {{n}} lines.",
     title: "Say something about {{name}}",
     hint: "Whatever comes to mind: who {{name}} was, what they liked to say, the habits they had, the one thing you still remember.",
     saveDraft: "Save as a draft",

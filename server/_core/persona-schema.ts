@@ -50,6 +50,10 @@ import { normalizeHarmReport, type HarmReport } from "@shared/harm";
 import { normalizeLexicon, type LexiconEntry } from "@shared/lexicon";
 import { normalizePeople, type Person } from "@shared/people";
 import { normalizeStances, type Stance } from "@shared/stances";
+import {
+  normalizeDescribedStatements,
+  type DescribedStatement,
+} from "@shared/described";
 
 export interface PersonaData {
   personality: string;
@@ -131,6 +135,15 @@ export interface PersonaData {
    */
   publicVoice?: string;
   /**
+   * What people described about this person (C1.8).
+   *
+   * Each sentence carries the words it was made from. It is the whole
+   * portrait of a persona that has no records: there is nothing to
+   * measure, so everything it knows was told by somebody — and every
+   * sentence can be checked against what they actually said.
+   */
+  described?: DescribedStatement[];
+  /**
    * Places where a curve of the record visibly changed (C2.5).
    *
    * These are for the user only: they are never put into a prompt.
@@ -183,6 +196,7 @@ export const PERSONA_DATA_FIELDS: Array<keyof PersonaData> = [
   "people",
   "stances",
   "publicVoice",
+  "described",
   "turningPoints",
 ];
 
@@ -234,6 +248,7 @@ export const PERSONA_DOCUMENT_EXCLUDED_FIELDS: Array<keyof PersonaData> = [
   "people",
   "stances",
   "publicVoice",
+  "described",
   "turningPoints",
 ];
 
@@ -384,6 +399,7 @@ export function normalizePersonaData(
   const lexicon = normalizeLexicon(source.lexicon ?? fallback.lexicon);
   const people = normalizePeople(source.people ?? fallback.people);
   const stances = normalizeStances(source.stances ?? fallback.stances);
+  const described = normalizeDescribedStatements(source.described ?? fallback.described);
   const publicVoice = toText(source.publicVoice ?? fallback.publicVoice);
 
   return {
@@ -414,5 +430,6 @@ export function normalizePersonaData(
     people,
     stances,
     ...(publicVoice ? { publicVoice } : {}),
+    ...(described.length ? { described } : {}),
   };
 }

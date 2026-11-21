@@ -25,6 +25,7 @@ const Upload = lazy(() => import("./pages/Upload"));
 const Chat = lazy(() => import("./pages/Chat"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Questionnaire = lazy(() => import("./pages/Questionnaire"));
+const Interview = lazy(() => import("./pages/Interview"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const BlindTest = lazy(() => import("./pages/BlindTest"));
 const BlindGuest = lazy(() => import("./pages/BlindGuest"));
@@ -60,10 +61,12 @@ function Router() {
           <Route path="/" component={HomePage} />
           <Route path="/onboarding" component={Onboarding} />
           <Route path="/persona/new/questionnaire" component={Questionnaire} />
+          <Route path="/persona/new/interview" component={Interview} />
           <Route path="/login" component={Login} />
           <Route path="/settings" component={Settings} />
           <Route path="/analytics" component={Analytics} />
           <Route path="/diary" component={Diary} />
+          <Route path="/persona/:id/interview" component={Interview} />
           <Route path="/persona/:id/edit" component={PersonaEdit} />
           <Route path="/persona/:id/profile" component={PersonaProfile} />
           <Route path="/persona/:id/blind-test" component={BlindTest} />

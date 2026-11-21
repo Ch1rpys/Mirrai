@@ -886,6 +886,17 @@ export const SKILL_PROMPTS = {
     zh: "（暂无聊天记录，请基于已有信息谨慎推断）",
     en: "(There is no chat log yet — infer carefully from the information that is available.)",
   },
+  /**
+   * A persona whose only material is what the person wrote (C1.8).
+   *
+   * A letter is not a conversation. Reading it for content is honest;
+   * reading its wording as the person's chat voice is not, so the
+   * analysis is told which question it may answer.
+   */
+  "skillPrompts.pipeline.writtenOnlyAnalysis": {
+    zh: "没有聊天记录。下面是 {{name}} 自己写的信、日记或文章。只读内容：他们在意什么、经历过什么、身边有谁；不要从这些文字推断 TA 聊天时的口气、口头禅或打字习惯。",
+    en: "There is no chat log. Below are letters, diaries or articles {{name}} wrote. Read them for content only — what they care about, what they have lived through, who is around them. Do not infer their chat voice, catchphrases or typing habits from these words.",
+  },
   "skillPrompts.pipeline.analyzerName": {
     zh: "人物名称：{{name}}",
     en: "Person's name: {{name}}",

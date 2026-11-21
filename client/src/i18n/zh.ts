@@ -1171,6 +1171,32 @@ export const zh = {
     },
   },
 
+  interview: {
+    entry: "聊一聊 {{name}}（没有记录也可以）",
+    intro: "想到什么说什么。我会接着问，你随时可以说「就这些」。",
+    title: "聊一聊 {{name}}",
+    nameLabel: "TA 的名字",
+    namePlaceholder: "小 A",
+    nameHint: "先给这个人一个名字，再开始聊。",
+    start: "开始",
+    placeholder: "想到什么就写什么…",
+    send: "说完了，接着问",
+    done: "就这些",
+    thinking: "正在想下一个问题…",
+    failed: "没有问出下一个问题。再试一次。",
+    empty: "先写一句再发。",
+    finishHint: "不想说了就点「就这些」，剩下的按你讲过的写。",
+    finishing: "正在把讲到的写成 TA…",
+    finished: "写好了。",
+    createFailed: "没有写成：{{message}}",
+    record: "说一段",
+    stopRecording: "停止",
+    recording: "正在录…",
+    micDenied: "打不开麦克风。",
+    voiceNotUnderstood: "没听清，再说一次。",
+    transcriptNote: "转出来的字会放在写作框里，你看过再发。",
+  },
+
   upload: {
     unsupportedType: "不支持的文件类型：{{name}}。聊天导出、压缩包、图片或视频都可以。",
     fileTooLarge: "文件太大：{{name}}。单个文件不能超过 50 MB。",
@@ -1225,6 +1251,8 @@ export const zh = {
   },
 
   importWizard: {
+    monologueTitle: "单向文字",
+    monologueNote: "这些是 {{name}} 写的东西，不是对话。能用来知道 {{name}} 在意什么、经历过什么；{{name}} 聊天时怎么说话，从这里看不出来。",
     unknownFormat: "没认出这是哪种导出文件。可以从下面选一种，或者告诉我们每一列是什么。",
     rolesPrompt: "这份记录里有 {{count}} 个说话的人。哪个是你，哪个是 {{name}}？",
     previewTitle: "先看一眼认得对不对",
@@ -1862,6 +1890,7 @@ export const zh = {
    * measured by whether the persona is still the person.
    */
   fidelity: {
+    described: "这个分身是按你的描述写的，没有 {{name}} 的原话可以对照，所以量不出像不像。",
     title: "像不像",
     hint: "从 TA 真实说过的话里扣下一句不给看，看重建出来的分身能不能写得出。分数是量「像不像」，不是量「好不好用」。",
     run: "跑一次",
@@ -2326,6 +2355,10 @@ export const zh = {
   },
 
   profile: {
+    described: "来自你的描述",
+    describedBy: "来自{{teller}}的描述",
+    describedTitle: "你讲的 {{name}}",
+    describedNote: "这个分身的每一句都来自你（或家人）的描述，引号里是当时的原话。",
     recordsEntryNote: "从导入的记录里逐条往回读，可以加书签和批注。",
     manualEntry: "{{name}} 的说明书",
     manualEntryNote: "一份可以打印的说明：说话的样子、这些话的意思、怎么和好。只收你确认过的条目。",
@@ -3236,6 +3269,10 @@ export const zh = {
     },
   },
   oral: {
+    generate: "用这些口述生成人设",
+    generateHint: "把这些已经提交的口述写成 TA 的人设。每一句都带出处；只在还没有聊天记录时能用。",
+    generating: "正在写…",
+    generated: "写好了 {{n}} 句。",
     title: "讲讲 {{name}}",
     hint: "想到什么说什么：{{name}} 是什么样的人，爱说什么话，有什么习惯，哪件事你一直记得。",
     saveDraft: "存成草稿",

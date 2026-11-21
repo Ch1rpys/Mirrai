@@ -32,6 +32,8 @@ import { normalizePersonaSettings } from "@shared/persona-settings";
 import VoicesEntry from "@/components/v6/VoicesEntry";
 import ReunionSummary from "@/components/v6/ReunionSummary";
 import OralAccounts from "@/components/v6/OralAccounts";
+import DescribedStatements from "@/components/v6/DescribedStatements";
+import { normalizeDescribedStatements } from "@shared/described";
 
 /**
  * What the app has understood.
@@ -167,6 +169,13 @@ export default function PersonaProfile() {
    */
   const confirmedRules = normalizeMicroRules(data.microRules).filter((rule) => rule.verified);
   const styleProfile = normalizeStyleProfile(persona.styleProfile);
+  /**
+   * What was described about this persona (C1.8).
+   *
+   * A persona with no records has no measured portrait; its lines come
+   * from what the user (and their family) told, each one marked.
+   */
+  const described = normalizeDescribedStatements(data.described);
   const addressHistory = normalizeAddressHistory(styleProfile.addressHistory);
   const triggers = styleProfile.triggers ?? [];
 
@@ -593,11 +602,27 @@ export default function PersonaProfile() {
           <OralAccounts personaId={personaId} name={persona.name} />
         </motion.section>
 
+        {described.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.21 }}
+          >
+            <DescribedStatements
+              statements={described}
+              name={persona.name}
+              ownName={(user as { name?: string | null } | null | undefined)?.name ?? ""}
+            />
+          </motion.section>
+        )}
+
         <motion.section
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}
           className="surface p-5 sm:p-6"
         >
-          <FidelityPanel personaId={personaId} name={persona.name} />
+          <FidelityPanel
+            personaId={personaId}
+            name={persona.name}
+            described={described.length > 0}
+          />
         </motion.section>
 
         <motion.p

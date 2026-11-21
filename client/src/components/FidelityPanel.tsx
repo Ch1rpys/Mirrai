@@ -13,6 +13,7 @@ import DiscriminatorView, {
 } from "@/components/v6/DiscriminatorView";
 import AuditionView from "@/components/v6/AuditionView";
 import FidelityHistory from "@/components/v6/FidelityHistory";
+import DescribedFidelityNote from "@/components/v6/DescribedFidelityNote";
 
 /**
  * The ruler, and the timing.
@@ -117,9 +118,18 @@ function discriminatorOf(raw: unknown): DiscriminatorReportView | null {
 export default function FidelityPanel({
   personaId,
   name,
+  described = false,
 }: {
   personaId: number;
   name?: string;
+  /**
+   * Whether this persona was written from descriptions (C1.8).
+   *
+   * The panel's usual "nothing measured yet" is a promise to measure
+   * later; for a persona with no records there is nothing to hold back
+   * and compare. It says the true thing instead.
+   */
+  described?: boolean;
 }) {
   const { t, locale } = useLocale();
   /**
@@ -424,6 +434,8 @@ export default function FidelityPanel({
           </dl>
           <DiscriminatorView report={discriminator} name={name} />
           </>
+        ) : described ? (
+          <DescribedFidelityNote name={name ?? ""} />
         ) : (
           <p className="text-xs text-muted-foreground">{t("fidelity.noRun")}</p>
         )}

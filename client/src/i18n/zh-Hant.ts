@@ -1244,6 +1244,31 @@ export const zhHant = {
       "service": "日常的照顧、實際做的事"
     }
   },
+  "interview": {
+    "entry": "聊一聊 {{name}}（沒有記錄也可以）",
+    "intro": "想到什麼說什麼。我會接著問，你隨時可以說「就這些」。",
+    "title": "聊一聊 {{name}}",
+    "nameLabel": "TA 的名字",
+    "namePlaceholder": "小 A",
+    "nameHint": "先給這個人一個名字，再開始聊。",
+    "start": "開始",
+    "placeholder": "想到什麼就寫什麼…",
+    "send": "說完了，接著問",
+    "done": "就這些",
+    "thinking": "正在想下一個問題…",
+    "failed": "沒有問出下一個問題。再試一次。",
+    "empty": "先寫一句再發。",
+    "finishHint": "不想說了就點「就這些」，剩下的按你講過的寫。",
+    "finishing": "正在把講到的寫成 TA…",
+    "finished": "寫好了。",
+    "createFailed": "沒有寫成：{{message}}",
+    "record": "說一段",
+    "stopRecording": "停止",
+    "recording": "正在錄…",
+    "micDenied": "打不開麥克風。",
+    "voiceNotUnderstood": "沒聽清，再說一次。",
+    "transcriptNote": "轉出來的字會放在寫作框裡，你看過再發。"
+  },
   "upload": {
     "unsupportedType": "不支持的文件類型：{{name}}。聊天導出、壓縮包、圖片或視頻都可以。",
     "fileTooLarge": "文件太大：{{name}}。單個文件不能超過 50 MB。",
@@ -1297,6 +1322,8 @@ export const zhHant = {
     ]
   },
   "importWizard": {
+    "monologueTitle": "單向文字",
+    "monologueNote": "這些是 {{name}} 寫的東西，不是對話。能用來知道 {{name}} 在意什麼、經歷過什麼；{{name}} 聊天時怎麼說話，從這裡看不出來。",
     "unknownFormat": "沒認出這是哪種導出文件。可以從下面選一種，或者告訴我們每一列是什麼。",
     "rolesPrompt": "這份記錄裡有 {{count}} 個說話的人。哪個是你，哪個是 {{name}}？",
     "previewTitle": "先看一眼認得對不對",
@@ -1865,6 +1892,7 @@ export const zhHant = {
     "assistedMark": "這句用了建議的說法"
   },
   "fidelity": {
+    "described": "這個分身是按你的描述寫的，沒有 {{name}} 的原話可以對照，所以量不出像不像。",
     "title": "像不像",
     "hint": "從 TA 真實說過的話里扣下一句不給看，看重建出來的分身能不能寫得出。分數是量「像不像」，不是量「好不好用」。",
     "run": "跑一次",
@@ -2305,6 +2333,10 @@ export const zhHant = {
     "transcribeDone": "這次轉好了 {{done}} 條，{{failed}} 條沒轉成。"
   },
   "profile": {
+    "described": "來自你的描述",
+    "describedBy": "來自{{teller}}的描述",
+    "describedTitle": "你講的 {{name}}",
+    "describedNote": "這個分身的每一句都來自你（或家人）的描述，引號裡是當時的原話。",
     "recordsEntryNote": "從導入的記錄裡逐條往回讀，可以加書籤和批註。",
     "manualEntry": "{{name}} 的說明書",
     "manualEntryNote": "一份可以打印的說明：說話的樣子、這些話的意思、怎麼和好。只收你確認過的條目。",
@@ -3178,6 +3210,10 @@ export const zhHant = {
     }
   },
   "oral": {
+    "generate": "用這些口述生成人設",
+    "generateHint": "把這些已經提交的口述寫成 TA 的人設。每一句都帶出處；只在還沒有聊天記錄時能用。",
+    "generating": "正在寫…",
+    "generated": "寫好了 {{n}} 句。",
     "title": "講講 {{name}}",
     "hint": "想到什麼說什麼：{{name}} 是什麼樣的人，愛說什麼話，有什麼習慣，哪件事你一直記得。",
     "saveDraft": "存成草稿",

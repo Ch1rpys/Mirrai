@@ -6,11 +6,27 @@ import { translate } from "@/i18n";
 const save = vi.fn();
 const extract = vi.fn();
 const adjudicate = vi.fn();
+const generate = vi.fn();
+const invalidatePersona = vi.fn();
 const refetch = vi.fn();
 let listState: Record<string, unknown> = {};
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    useUtils: () => ({
+      persona: { get: { invalidate: (...a: unknown[]) => invalidatePersona(...a) } },
+    }),
+    interview: {
+      fromOral: {
+        useMutation: (options?: any) => ({
+          mutate: (input: any) => {
+            generate(input);
+            options?.onSuccess?.({ personaId: 5, statements: 2, dropped: 0, tellers: ["琪琪"] });
+          },
+          isPending: false,
+        }),
+      },
+    },
     oral: {
       list: { useQuery: () => listState, },
       save: {
@@ -180,6 +196,31 @@ describe("what people remember (C7.4)", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getAllByText(translate("zh", "oral.keepThis"))[0]);
     expect(adjudicate).toHaveBeenCalledWith({ personaId: 5, winnerId: 7, loserId: 8 });
+  });
+
+  it("offers the owner the interview's generation path over the submitted accounts (C7.4 step 5)", () => {
+    listState = ready({
+      data: {
+        accounts: [{ id: 2, tellerName: "琪琪", body: "他怕黑。", submitted: true, mine: false }],
+      },
+    });
+    render(<OralAccounts personaId={5} name="小满" />);
+    expect(screen.getByText(translate("zh", "oral.generate"))).toBeInTheDocument();
+    fireEvent.click(screen.getByText(translate("zh", "oral.generate")));
+    expect(generate).toHaveBeenCalledWith({ personaId: 5 });
+    expect(invalidatePersona).toHaveBeenCalled();
+  });
+
+  it("does not offer the generation path to a family member", () => {
+    listState = ready({
+      data: {
+        isOwner: false,
+        ownerName: "阿树",
+        accounts: [{ id: 3, tellerName: "小满的妹妹", body: "他很怕黑。", submitted: true, mine: true }],
+      },
+    });
+    render(<OralAccounts personaId={11} name="小满" />);
+    expect(screen.queryByText(translate("zh", "oral.generate"))).toBeNull();
   });
 
   it("says nobody has said anything yet", () => {

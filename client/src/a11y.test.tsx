@@ -338,6 +338,9 @@ vi.mock("@/lib/trpc", () => ({
         }),
       },
     },
+    interview: {
+      fromOral: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     oral: {
       list: {
         useQuery: () => ({

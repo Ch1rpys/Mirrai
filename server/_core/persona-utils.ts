@@ -12,6 +12,7 @@ import {
 import { renderSuppressions, type Suppression } from "@shared/suppressions";
 import { ACT_COPY_KEYS, renderActInstruction, type SpeechAct } from "@shared/speech-acts";
 import { normalizePersonaData } from "./persona-schema";
+import { normalizeDescribedStatements } from "@shared/described";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import { shouldInstructHarm } from "@shared/harm";
 import { normalizeAddressHistory, pickThemToMeAddress } from "@shared/address-history";
@@ -657,6 +658,35 @@ export function buildSystemPromptParts(
     ? asMaterial(imperfectionSection)
     : "";
 
+  /**
+   * What the user (and their family) described (C1.8).
+   *
+   * A persona with no records was not measured; it was told. Each
+   * sentence carries the words it was told with, so the persona knows
+   * how the people who remember it actually remember it — and the whole
+   * block is material, fenced like the rest.
+   */
+  const described = normalizeDescribedStatements(
+    (p as { described?: unknown }).described,
+  );
+  const describedSection =
+    described.length > 0
+      ? asMaterial(
+          copy(locale, "prompt.describedHeading"),
+          [
+            copy(locale, "prompt.describedIntro"),
+            ...described.map((statement) => {
+              const teller = statement.teller
+                ? `${copy(locale, "prompt.describedTeller", { teller: statement.teller })}：`
+                : "";
+              return `- ${statement.text}${teller}${copy(locale, "prompt.describedQuote", {
+                quote: statement.quote,
+              })}`;
+            }),
+          ].join("\n"),
+        )
+      : "";
+
   const blocks: PromptBlock[] = [
     { kind: "stable", text: identityRule },
     { kind: "stable", text: hardRules },
@@ -691,6 +721,7 @@ export function buildSystemPromptParts(
           )
         : "",
     },
+    { kind: "stable", text: describedSection },
     { kind: "stable", text: microRulesSection ? asMaterial(microRulesSection) : "" },
     { kind: "stable", text: suppressionsSection ? asMaterial(suppressionsSection) : "" },
     { kind: "volatile", text: actInstruction, id: "act" },

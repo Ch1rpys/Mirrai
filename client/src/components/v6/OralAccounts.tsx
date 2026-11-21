@@ -103,6 +103,20 @@ export default function OralAccounts({
     onSuccess: () => list.refetch(),
     onError: (error: { message: string }) => toast.error(error.message),
   });
+  /**
+   * The family's accounts become the persona (C7.4 step 5, C1.8).
+   *
+   * The same generation path the interview uses, with the submitted
+   * accounts as the transcript: every sentence names who told it.
+   */
+  const utils = trpc.useUtils();
+  const generate = trpc.interview.fromOral.useMutation({
+    onSuccess: (result: { statements: number }) => {
+      toast.success(t("oral.generated", { n: result.statements }));
+      void utils.persona.get.invalidate();
+    },
+    onError: (error: { message: string }) => toast.error(error.message),
+  });
 
   const canRecord =
     typeof window !== "undefined" &&
@@ -266,6 +280,19 @@ export default function OralAccounts({
           <p className="text-xs text-muted-foreground leading-relaxed">
             {t("oral.extractHint", { name })}
           </p>
+          <div className="pt-2 space-y-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={generate.isPending}
+              onClick={() => generate.mutate({ personaId })}
+            >
+              {generate.isPending ? t("oral.generating") : t("oral.generate")}
+            </Button>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {t("oral.generateHint", { name })}
+            </p>
+          </div>
         </div>
       )}
 

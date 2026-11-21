@@ -1585,4 +1585,183 @@ export const V6 = {
     zh: "稍后再检查一次；一直出错的话，看看服务日志。",
     en: "Check again in a moment; if it keeps failing, read the server log.",
   },
+
+  /**
+   * The interview for a person with no records (C1.8).
+   *
+   * The ten things the interview has to cover are a closed set, in this
+   * order. The aspect labels are used inside the model's instruction —
+   * the model only phrases the question; the code decides which aspect
+   * is asked about.
+   */
+  "interview.aspect.address": {
+    zh: "怎么称呼彼此",
+    en: "what you call each other",
+  },
+  "interview.aspect.catchphrase": {
+    zh: "口头禅",
+    en: "the phrases they always use",
+  },
+  "interview.aspect.happy": {
+    zh: "高兴时什么样",
+    en: "what they are like when they are happy",
+  },
+  "interview.aspect.angry": {
+    zh: "生气时什么样",
+    en: "what they are like when they are angry",
+  },
+  "interview.aspect.comfort": {
+    zh: "怎么安慰人",
+    en: "how they comfort someone",
+  },
+  "interview.aspect.routine": {
+    zh: "作息",
+    en: "their daily routine",
+  },
+  "interview.aspect.likes": {
+    zh: "喜欢和讨厌",
+    en: "what they like and dislike",
+  },
+  "interview.aspect.people": {
+    zh: "身边重要的人",
+    en: "the important people around them",
+  },
+  "interview.aspect.story": {
+    zh: "你们之间的一件事",
+    en: "one thing that happened between you",
+  },
+  "interview.aspect.neverSay": {
+    zh: "TA 绝不会说的话",
+    en: "something they would never say",
+  },
+
+  /**
+   * The interviewer's own fallback questions.
+   *
+   * The model is asked to phrase the question naturally; without a
+   * model, or without an answer, the interview still goes on with these.
+   */
+  "interview.question.address": {
+    zh: "你们平时怎么称呼对方？",
+    en: "What do you two call each other?",
+  },
+  "interview.question.catchphrase": {
+    zh: "TA 有没有常挂在嘴边的话？",
+    en: "Is there something they always say?",
+  },
+  "interview.question.happy": {
+    zh: "TA 高兴的时候是什么样？",
+    en: "What are they like when they are happy?",
+  },
+  "interview.question.angry": {
+    zh: "TA 生气的时候是什么样？",
+    en: "What are they like when they are angry?",
+  },
+  "interview.question.comfort": {
+    zh: "TA 是怎么安慰人的？",
+    en: "How do they comfort someone?",
+  },
+  "interview.question.routine": {
+    zh: "TA 平时的作息是什么样的？",
+    en: "What is their daily routine like?",
+  },
+  "interview.question.likes": {
+    zh: "TA 喜欢什么、讨厌什么？",
+    en: "What do they like, and what do they dislike?",
+  },
+  "interview.question.people": {
+    zh: "TA 身边有哪些重要的人？",
+    en: "Who are the important people around them?",
+  },
+  "interview.question.story": {
+    zh: "说说你们之间的一件事吧。",
+    en: "Tell me about one thing that happened between you.",
+  },
+  "interview.question.neverSay": {
+    zh: "有什么事是 TA 绝不会说的？",
+    en: "Is there something they would never say?",
+  },
+
+  /** How one turn of the interview is written into the stored account. */
+  "interview.transcriptAsk": {
+    zh: "问：{{text}}",
+    en: "Q: {{text}}",
+  },
+  "interview.transcriptAnswer": {
+    zh: "答：{{text}}",
+    en: "A: {{text}}",
+  },
+
+  /** What the persona was made from when there was nothing else. */
+  "persona.fromInterview": {
+    zh: "按你的描述写的。",
+    en: "Written from your description.",
+  },
+
+  /**
+   * The described material in the persona's own prompt (C1.8).
+   *
+   * A described persona knows what it was told about itself, and the
+   * words it was told with. The whole block is fenced like every other
+   * piece of material.
+   */
+  "prompt.describedHeading": {
+    zh: "【来自你的描述】",
+    en: "【From your description】",
+  },
+  "prompt.describedIntro": {
+    zh: "下面这些是访谈里或家人凭记忆讲的，不是你自己说过的话。每句后面是当时讲的原话，可以当作别人是这样记得你的。",
+    en: "What follows was told in an interview or remembered by family — not words you said yourself. Each line ends with what was actually said at the time. This is how somebody remembers you.",
+  },
+  "prompt.describedTeller": {
+    zh: "{{teller}} 讲的",
+    en: "told by {{teller}}",
+  },
+  "prompt.describedQuote": {
+    zh: "原话：{{quote}}",
+    en: "In their words: {{quote}}",
+  },
+
+  /**
+   * The honest fallbacks for a described persona.
+   *
+   * The usual fallbacks describe a warm, gentle person with cute filler
+   * words. That is an invented voice. A persona built from somebody's
+   * description has no records to stand on, so its empty fields say so
+   * instead of pretending.
+   */
+  "labels.persona.describedFallback": {
+    zh: "{{name}} 是按你的描述写下的。",
+    en: "{{name}} is written from your description.",
+  },
+  "labels.persona.describedSpeakingStyle": {
+    zh: "按你的描述写的；没有原话，量不出 TA 平时怎么说话。",
+    en: "Written from your description; there are no original words here, so how they usually speak cannot be measured.",
+  },
+
+  "errors.interviewEmpty": {
+    zh: "还没有讲到什么。先说说 TA 是什么样的人。",
+    en: "Nothing has been said yet. Start with what this person is like.",
+  },
+  "errors.interviewUnreadable": {
+    zh: "没读懂这段描述。刚才说的都还在，再试一次。",
+    en: "That description could not be read. What you said is still here; try again.",
+  },
+  "errors.describedHasRecords": {
+    zh: "这个分身已经有聊天记录，人设要从记录来生成。",
+    en: "This persona already has records; its persona is built from them.",
+  },
+  "errors.describedNoAccounts": {
+    zh: "还没有人讲过 {{name}}。先写一段口述再说。",
+    en: "Nobody has told anything about {{name}} yet. Ask somebody to write a passage first.",
+  },
+  "errors.interviewNameRequired": {
+    zh: "给这个人起个名字再开始。",
+    en: "Give this person a name before starting.",
+  },
+
+  "import.format.monologue": {
+    zh: "TA 写的信、日记、文章",
+    en: "Letters, diaries and articles they wrote",
+  },
 } as const satisfies CopyTable;

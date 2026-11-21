@@ -811,14 +811,25 @@ export default function Upload() {
         <ScreenshotImport personaId={personaId} personaName={persona?.name ?? ""} />
         <MomentsImport personaId={personaId} />
 
-        {/* No chat logs? The questionnaire builds a persona without them. */}
-        <div className="text-center mb-6 animate-fade-in-up">
-          <button
-            onClick={() => navigate("/persona/new/questionnaire")}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4"
-          >
-            {t("upload.noChatLogs")}
-          </button>
+        {/* No chat logs? The questionnaire builds one without them, and the
+            interview builds one from what the person says about them. */}
+        <div className="text-center mb-6 animate-fade-in-up space-y-2">
+          <div>
+            <button
+              onClick={() => navigate("/persona/new/questionnaire")}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4"
+            >
+              {t("upload.noChatLogs")}
+            </button>
+          </div>
+          <div>
+            <button
+              onClick={() => navigate(`/persona/${personaId}/interview`)}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4"
+            >
+              {t("interview.entry", { name: persona?.name ?? "TA" })}
+            </button>
+          </div>
         </div>
 
         {/* Uploaded Files */}

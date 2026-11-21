@@ -1654,12 +1654,26 @@ function CreatePersonaDialog({ open, onOpenChange, onCreated }: {
         </DialogFooter>
         {/* Two other ways in: a ready-made persona, or a guided questionnaire
             for people who have no chat logs to upload. */}
-        <div className="flex items-center justify-between gap-3 pt-1 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs">
           <button
             onClick={() => { onOpenChange(false); navigate("/persona/new/questionnaire"); }}
             className="text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4"
           >
             {t("lobby.createFromQuestionnaire")}
+          </button>
+          <button
+            onClick={() => {
+              onOpenChange(false);
+              const chosen = name.trim();
+              navigate(
+                chosen
+                  ? `/persona/new/interview?name=${encodeURIComponent(chosen)}`
+                  : "/persona/new/interview",
+              );
+            }}
+            className="text-muted-foreground hover:text-foreground transition-colors underline underline-offset-4"
+          >
+            {t("interview.entry", { name: name.trim() || "TA" })}
           </button>
           <button
             onClick={() => { onOpenChange(false); document.getElementById("lobby-template-library")?.scrollIntoView({ behavior: "smooth" }); }}
