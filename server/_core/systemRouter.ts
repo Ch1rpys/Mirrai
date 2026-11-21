@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { notifyOwner } from "./notification";
-import { adminProcedure, publicProcedure, router } from "./trpc";
+import { adminProcedure, protectedProcedure, publicProcedure, rateLimit, router } from "./trpc";
+import { RATE_LIMITS } from "./rate-limit";
 import { registry } from "../llm";
 import { hasFfmpeg } from "./ffmpeg";
 import { sttIsLocal, sttEngine } from "./stt";
@@ -57,5 +58,31 @@ export const systemRouter = router({
         channel: result.channel,
         ...(result.reason ? { reason: result.reason } : {}),
       } as const;
+    }),
+
+  /**
+   * One-click diagnosis (C8.12).
+   *
+   * Runs every self-check and returns the results, problems first. It is a
+   * mutation rather than a query because it is not a read: it sends one
+   * real request to every configured model, and the rate limit below keeps
+   * that to once a minute per user.
+   *
+   * The logic and its real dependencies are imported when the button is
+   * pressed. The diagnosis is the only caller, and importing the model
+   * registry, the scheduler and the channel adapters on every server start
+   * — for a button most people press rarely — is not worth it.
+   */
+  diagnose: protectedProcedure
+    .use(rateLimit(RATE_LIMITS.diagnose))
+    .mutation(async ({ ctx }) => {
+      const [{ runDiagnose }, { createDiagnoseDeps }] = await Promise.all([
+        import("../system/diagnose"),
+        import("../system/diagnose-deps"),
+      ]);
+      return runDiagnose({
+        locale: ctx.locale,
+        deps: createDiagnoseDeps(ctx.user.id),
+      });
     }),
 });

@@ -1146,4 +1146,391 @@ export const V6 = {
     zh: "这个月的用量已经超过你定的预算。四选一、两步生成、事实重写、评测、试镜、排练和措辞助手先停用了；普通对话、安全回复和记忆抽取不受影响。",
     en: "This month's usage is past the budget you set. The four-way choice, two-stage generation, the fact rewrite, evaluation, audition, the rehearsal room and the wording assistant are switched off for now; ordinary replies, safety answers and memory extraction still work.",
   },
+
+  // ─── One-click diagnosis (C8.12) ──────────────────────────────────────────
+  //
+  // Every sentence here is built from a whitelisted field of a check:
+  // a status, a count, a version number, a provider or engine name. No
+  // error message, key, message content, username or path is ever passed
+  // into one of them — the report is meant to be pasteable.
+
+  "diagnostics.database.ok": {
+    zh: "数据库连上了。",
+    en: "The database is reachable.",
+  },
+  "diagnostics.database.skipped": {
+    zh: "没有配置数据库。",
+    en: "No database is configured.",
+  },
+  "diagnostics.database.skippedFix": {
+    zh: "在 .env 里填上 DATABASE_URL，再启动一次。",
+    en: "Set DATABASE_URL in .env and start the app again.",
+  },
+  "diagnostics.database.fail": {
+    zh: "连不上数据库。",
+    en: "The database could not be reached.",
+  },
+  "diagnostics.database.failFix": {
+    zh: "看看 PostgreSQL 是不是在运行，再检查 .env 里的 DATABASE_URL。",
+    en: "Check that PostgreSQL is running, then check DATABASE_URL in .env.",
+  },
+
+  "diagnostics.migrations.ok": {
+    zh: "迁移已经是最新的（{{version}}）。",
+    en: "The migrations are up to date ({{version}}).",
+  },
+  "diagnostics.migrations.warn": {
+    zh: "数据库里的迁移比代码新（{{applied}} 比 {{latest}} 新），代码可能旧了。",
+    en: "The database is ahead of the code ({{applied}} is newer than {{latest}}); the code may be out of date.",
+  },
+  "diagnostics.migrations.warnFix": {
+    zh: "更新代码，或者换回和数据库对应的版本。",
+    en: "Update the code, or go back to the version the database matches.",
+  },
+  "diagnostics.migrations.fail": {
+    zh: "迁移没有跑完：数据库是 {{applied}}，最新的是 {{latest}}。",
+    en: "The migrations are not complete: the database is at {{applied}}, the latest is {{latest}}.",
+  },
+  "diagnostics.migrations.failFix": {
+    zh: "运行 node scripts/migrate.mjs 把迁移补上。",
+    en: "Run node scripts/migrate.mjs to apply them.",
+  },
+  "diagnostics.migrations.empty": {
+    zh: "数据库里还没有应用过任何迁移。",
+    en: "No migration has been applied to the database yet.",
+  },
+  "diagnostics.migrations.skipped": {
+    zh: "数据库不可用，看不到迁移版本。",
+    en: "The database is unavailable, so the migration versions cannot be read.",
+  },
+
+  "diagnostics.redis.ok": {
+    zh: "Redis 连接正常。",
+    en: "Redis is connected.",
+  },
+  "diagnostics.redis.skipped": {
+    zh: "没有可用的 Redis，限额和锁只在当前进程里生效。",
+    en: "No Redis is available; the limits and locks count per process.",
+  },
+  "diagnostics.redis.skippedFix": {
+    zh: "只开一份 Mirrai 的话不用管；多开时配置 REDIS_URL。",
+    en: "Nothing to do for a single copy of Mirrai; set REDIS_URL when running more than one.",
+  },
+  "diagnostics.redis.fail": {
+    zh: "配置了 Redis，但连不上。",
+    en: "Redis is configured, but it could not be reached.",
+  },
+  "diagnostics.redis.failFix": {
+    zh: "看看 Redis 是不是在运行，或者把 REDIS_URL 去掉。",
+    en: "Check that Redis is running, or remove REDIS_URL.",
+  },
+
+  "diagnostics.providers.skipped": {
+    zh: "还没有配置模型。",
+    en: "No model is configured yet.",
+  },
+  "diagnostics.providers.skippedFix": {
+    zh: "在设置里填一个模型，聊天和朗读才能用。",
+    en: "Add a model in the settings; chat and read-aloud need one.",
+  },
+  "diagnostics.provider.ok": {
+    zh: "{{provider}}：请求成功。{{streaming}}，{{vision}}，{{transcription}}。",
+    en: "{{provider}}: the request succeeded. {{streaming}}; {{vision}}; {{transcription}}.",
+  },
+  "diagnostics.provider.warn": {
+    zh: "{{provider}}：请求成功，但回复不能边生成边显示。{{vision}}，{{transcription}}。",
+    en: "{{provider}}: the request succeeded, but replies cannot be streamed as they are written. {{vision}}; {{transcription}}.",
+  },
+  "diagnostics.provider.warnFix": {
+    zh: "换一个支持流式的模型，长回复就不用等它整段写完。",
+    en: "Use a model that supports streaming, so long replies appear as they are written.",
+  },
+  "diagnostics.provider.canStream": {
+    zh: "可以流式",
+    en: "streaming works",
+  },
+  "diagnostics.provider.noStream": {
+    zh: "不能流式",
+    en: "streaming does not work",
+  },
+  "diagnostics.provider.canSee": {
+    zh: "能看图",
+    en: "image input works",
+  },
+  "diagnostics.provider.noSee": {
+    zh: "不能看图",
+    en: "image input does not work",
+  },
+  "diagnostics.provider.canTranscribe": {
+    zh: "能转写",
+    en: "speech-to-text works",
+  },
+  "diagnostics.provider.noTranscribe": {
+    zh: "不能转写",
+    en: "speech-to-text does not work",
+  },
+  "diagnostics.provider.fail": {
+    zh: "{{provider}}：请求没有成功。",
+    en: "{{provider}}: the request failed.",
+  },
+  "diagnostics.provider.failFix": {
+    zh: "检查这个模型的 API Key、地址和模型名。",
+    en: "Check this model's API key, address and model name.",
+  },
+
+  "diagnostics.ollama.ok": {
+    zh: "本机 Ollama 在运行，嵌入模型 {{model}} 也在。",
+    en: "The local Ollama is running and the embedding model {{model}} is there.",
+  },
+  "diagnostics.ollama.noModel": {
+    zh: "Ollama 在运行，但没有嵌入模型 {{model}}。",
+    en: "Ollama is running, but the embedding model {{model}} is not there.",
+  },
+  "diagnostics.ollama.noModelFix": {
+    zh: "运行 ollama pull {{model}}，语义检索才会用上它。",
+    en: "Run ollama pull {{model}} so semantic search can use it.",
+  },
+  "diagnostics.ollama.unreachable": {
+    zh: "连不上本机的 Ollama。",
+    en: "The local Ollama could not be reached.",
+  },
+  "diagnostics.ollama.unreachableFix": {
+    zh: "要用语义检索就启动 Ollama，并拉取 {{model}}；不用可以不管。",
+    en: "Start Ollama and pull {{model}} to use semantic search; ignore this if you do not.",
+  },
+
+  "diagnostics.stt.ok": {
+    zh: "转写引擎：{{engine}}。",
+    en: "Transcription engine: {{engine}}.",
+  },
+  "diagnostics.stt.warn": {
+    zh: "转写引擎 {{engine}} 缺运行需要的东西。",
+    en: "The transcription engine {{engine}} is missing what it needs to run.",
+  },
+  "diagnostics.stt.warnFix": {
+    zh: "按设置里的说明补上转写引擎需要的程序或地址。",
+    en: "Add the program or address the transcription engine needs, as described in the settings.",
+  },
+  "diagnostics.stt.skipped": {
+    zh: "转写没有开启。",
+    en: "Transcription is switched off.",
+  },
+  "diagnostics.stt.skippedFix": {
+    zh: "要用语音消息，就在设置里选一个转写引擎。",
+    en: "Choose a transcription engine in the settings to use voice messages.",
+  },
+
+  "diagnostics.tts.ok": {
+    zh: "朗读引擎：{{engine}}。",
+    en: "Read-aloud engine: {{engine}}.",
+  },
+  "diagnostics.tts.warn": {
+    zh: "朗读引擎 {{engine}} 缺运行需要的东西。",
+    en: "The read-aloud engine {{engine}} is missing what it needs to run.",
+  },
+  "diagnostics.tts.warnFix": {
+    zh: "按设置里的说明补上朗读引擎需要的程序或地址。",
+    en: "Add the program or address the read-aloud engine needs, as described in the settings.",
+  },
+  "diagnostics.tts.skipped": {
+    zh: "朗读没有开启。",
+    en: "Read-aloud is switched off.",
+  },
+  "diagnostics.tts.skippedFix": {
+    zh: "要听回复，就在设置里选一个朗读引擎。",
+    en: "Choose a read-aloud engine in the settings to listen to replies.",
+  },
+
+  "diagnostics.ffmpeg.ok": {
+    zh: "ffmpeg 在。",
+    en: "ffmpeg is installed.",
+  },
+  "diagnostics.ffmpeg.warn": {
+    zh: "没有 ffmpeg。",
+    en: "ffmpeg is not installed.",
+  },
+  "diagnostics.ffmpeg.warnFix": {
+    zh: "装上 ffmpeg，语音、视频和音频才能读。",
+    en: "Install ffmpeg so voice, video and audio can be read.",
+  },
+
+  "diagnostics.push.vapidOk": {
+    zh: "推送密钥在。",
+    en: "The push keys are in place.",
+  },
+  "diagnostics.push.vapidWarn": {
+    zh: "还没有推送密钥。",
+    en: "The push keys are not there yet.",
+  },
+  "diagnostics.push.vapidWarnFix": {
+    zh: "第一次推送时会自动生成；如果推送一直失败，再检查 VAPID 设置。",
+    en: "They are generated on the first push; if pushes keep failing, check the VAPID settings.",
+  },
+  "diagnostics.push.subscriptionsOk": {
+    zh: "有 {{count}} 个浏览器订阅。",
+    en: "{{count}} browser subscription(s).",
+  },
+  "diagnostics.push.subscriptionsWarn": {
+    zh: "还没有浏览器订阅，推送到不了。",
+    en: "There are no browser subscriptions, so pushes cannot arrive.",
+  },
+  "diagnostics.push.subscriptionsWarnFix": {
+    zh: "在浏览器里允许通知，再打开推送开关。",
+    en: "Allow notifications in the browser, then switch push on.",
+  },
+
+  "diagnostics.channel.wechat": {
+    zh: "微信",
+    en: "WeChat",
+  },
+  "diagnostics.channel.feishu": {
+    zh: "飞书",
+    en: "Feishu",
+  },
+  "diagnostics.channel.ok": {
+    zh: "{{channel}} 已连接。",
+    en: "{{channel}} is connected.",
+  },
+  "diagnostics.channel.warn": {
+    zh: "{{channel}} 配置了，但还没有连上。",
+    en: "{{channel}} is configured but not connected.",
+  },
+  "diagnostics.channel.warnFix": {
+    zh: "在设置里重新连接 {{channel}}。",
+    en: "Reconnect {{channel}} in the settings.",
+  },
+  "diagnostics.channel.fail": {
+    zh: "{{channel}} 连不上。",
+    en: "{{channel}} could not be reached.",
+  },
+  "diagnostics.channel.failFix": {
+    zh: "检查 {{channel}} 的设置，再重新连接一次。",
+    en: "Check the {{channel}} settings, then reconnect.",
+  },
+  "diagnostics.channel.skipped": {
+    zh: "{{channel}} 没有配置。",
+    en: "{{channel}} is not configured.",
+  },
+  "diagnostics.channel.off": {
+    zh: "{{channel}} 没有连接。",
+    en: "{{channel}} is not connected.",
+  },
+
+  "diagnostics.python.ok": {
+    zh: "采集器要用的 Python 在。",
+    en: "The Python the collectors need is available.",
+  },
+  "diagnostics.python.warn": {
+    zh: "找不到采集器要用的 Python。",
+    en: "The Python the collectors need could not be found.",
+  },
+  "diagnostics.python.warnFix": {
+    zh: "装上 Python 3，或者把 PYTHON_PATH 指对。",
+    en: "Install Python 3, or point PYTHON_PATH at it.",
+  },
+
+  "diagnostics.backfill.ok": {
+    zh: "检索索引没有待补的。",
+    en: "The search index has no gaps.",
+  },
+  "diagnostics.backfill.warn": {
+    zh: "检索回填还有 {{records}} 条记录、{{messages}} 条消息没建索引。",
+    en: "The search backfill still has {{records}} records and {{messages}} messages without an index.",
+  },
+  "diagnostics.backfill.warnFix": {
+    zh: "运行 scripts/backfill-search-tokens.ts 把索引补完。",
+    en: "Run scripts/backfill-search-tokens.ts to finish the index.",
+  },
+
+  "diagnostics.replyJobs.ok": {
+    zh: "没有待办的回复任务。",
+    en: "No reply jobs are waiting.",
+  },
+  "diagnostics.replyJobs.pendingOk": {
+    zh: "有 {{pending}} 个待办的回复任务，都还没到时间。",
+    en: "{{pending}} reply jobs are waiting, and none of them is overdue.",
+  },
+  "diagnostics.replyJobs.warn": {
+    zh: "有 {{pending}} 个待办的回复任务，其中 {{overdue}} 个已经过了时间。",
+    en: "{{pending}} reply jobs are waiting, and {{overdue}} of them are overdue.",
+  },
+  "diagnostics.replyJobs.warnFix": {
+    zh: "看看模型服务是不是正常；任务会按时间自动重试。",
+    en: "Check that the model service is working; the jobs retry on schedule.",
+  },
+
+  "diagnostics.scheduler.ok": {
+    zh: "调度器运行正常，上一次是 {{minutes}} 分钟前。",
+    en: "The scheduler is running; its last pass was {{minutes}} minutes ago.",
+  },
+  "diagnostics.scheduler.justNow": {
+    zh: "调度器刚刚跑过。",
+    en: "The scheduler ran just now.",
+  },
+  "diagnostics.scheduler.warn": {
+    zh: "调度器已经 {{minutes}} 分钟没跑了。",
+    en: "The scheduler has not run for {{minutes}} minutes.",
+  },
+  "diagnostics.scheduler.warnFix": {
+    zh: "看看服务日志，调度器可能卡住了。",
+    en: "Check the server log; the scheduler may be stuck.",
+  },
+  "diagnostics.scheduler.skipped": {
+    zh: "调度器还没跑过第一轮。",
+    en: "The scheduler has not run its first pass yet.",
+  },
+  "diagnostics.scheduler.skippedFix": {
+    zh: "启动后等一分钟再看。",
+    en: "Wait a minute after start-up and check again.",
+  },
+
+  "diagnostics.storage.uploadsOk": {
+    zh: "上传目录里有 {{files}} 个文件，共 {{size}}。",
+    en: "The uploads directory holds {{files}} files, {{size}} in total.",
+  },
+  "diagnostics.storage.uploadsCapped": {
+    zh: "上传目录里的文件超过 5 万个，没有继续数。",
+    en: "The uploads directory holds more than 50,000 files, so counting stopped there.",
+  },
+  "diagnostics.storage.uploadsCappedFix": {
+    zh: "清一清不需要的上传文件，能省出空间。",
+    en: "Remove uploads you no longer need to free up space.",
+  },
+  "diagnostics.storage.dbOk": {
+    zh: "数据库 {{size}}。",
+    en: "The database is {{size}}.",
+  },
+  "diagnostics.storage.dbSkipped": {
+    zh: "数据库不可用，读不到大小。",
+    en: "The database is unavailable, so its size cannot be read.",
+  },
+  "diagnostics.storage.diskOk": {
+    zh: "磁盘还剩 {{free}}（共 {{total}}）。",
+    en: "{{free}} of disk is free (of {{total}}).",
+  },
+  "diagnostics.storage.diskWarn": {
+    zh: "磁盘只剩 {{free}} 了。",
+    en: "Only {{free}} of disk is left.",
+  },
+  "diagnostics.storage.diskWarnFix": {
+    zh: "清理一下磁盘空间，再检查一次。",
+    en: "Free up some disk space, then check again.",
+  },
+
+  "diagnostics.timeout": {
+    zh: "这项检查超过 {{seconds}} 秒没有返回。",
+    en: "This check did not return within {{seconds}} seconds.",
+  },
+  "diagnostics.timeoutFix": {
+    zh: "稍后再检查一次；如果总是超时，看看这一项对应的服务。",
+    en: "Check again in a moment; if it keeps timing out, look at the service this check is about.",
+  },
+  "diagnostics.error": {
+    zh: "这项检查出错了。",
+    en: "This check went wrong.",
+  },
+  "diagnostics.errorFix": {
+    zh: "稍后再检查一次；一直出错的话，看看服务日志。",
+    en: "Check again in a moment; if it keeps failing, read the server log.",
+  },
 } as const satisfies CopyTable;

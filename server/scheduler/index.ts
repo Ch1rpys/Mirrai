@@ -52,6 +52,22 @@ let sweeping = false;
 let firstSweep: NodeJS.Timeout | null = null;
 
 /**
+ * When the scheduler last went around.
+ *
+ * The one-click diagnosis (C8.12) reports it: a scheduler that has stopped
+ * ticking leaves reminders and replies unsent, and there was no way to see
+ * that from inside the app. It is set after a tick attempt has finished —
+ * including the attempt of a copy of the app that found another copy
+ * holding the lock, which still knows the schedule is being kept.
+ */
+let lastTickAt: Date | null = null;
+
+/** What the scheduler has done, for the diagnosis to read. */
+export function getSchedulerStatus(): { lastTickAt: Date | null } {
+  return { lastTickAt };
+}
+
+/**
  * Runs everything the scheduler is responsible for.
  *
  * The three sweeps used to run one after the other — so a slow one held
@@ -130,6 +146,7 @@ export async function runSchedulerTick(): Promise<void> {
     }
   } finally {
     sweeping = false;
+    lastTickAt = new Date();
   }
 }
 

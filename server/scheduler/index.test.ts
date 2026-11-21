@@ -46,7 +46,7 @@ vi.mock("./purge", () => ({
   runDailyPurge: (...a: unknown[]) => runDailyPurge(...a),
 }));
 
-import { runSchedulerTick } from "./index";
+import { getSchedulerStatus, runSchedulerTick } from "./index";
 
 const handle = { url: "redis://127.0.0.1:6379", client: {}, managed: false };
 
@@ -119,6 +119,20 @@ describe("the scheduler tick", () => {
     expect(answerDueLetters).not.toHaveBeenCalled();
     expect(runProactiveSweep).not.toHaveBeenCalled();
     expect(sweepReplyJobs).not.toHaveBeenCalled();
+  });
+
+  it("records when it last went around, for the diagnosis to read", async () => {
+    // C8.12 asks "when did the scheduler last run". Before this the answer
+    // did not exist anywhere, so a scheduler that had stopped ticking looked
+    // exactly like one that had just ticked.
+    const before = getSchedulerStatus().lastTickAt;
+    connectRedis.mockResolvedValue(null);
+
+    await runSchedulerTick();
+
+    const after = getSchedulerStatus().lastTickAt;
+    expect(after).toBeInstanceOf(Date);
+    expect(after!.getTime()).toBeGreaterThanOrEqual(before?.getTime() ?? 0);
   });
 
   it("sweeps under the lock when the lock is taken", async () => {

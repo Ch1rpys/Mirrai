@@ -289,6 +289,14 @@ export const RATE_LIMITS = {
    * One click could therefore be worth a browser and half an hour.
    */
   collector: { name: "collector", limit: 5, windowMs: 60_000, scope: "user" } as RateLimitRule,
+  /**
+   * The one-click diagnosis — keyed by user id.
+   *
+   * Its own bucket: pressing it once sends a tiny request to every model
+   * the user configured, so once a minute is the most that may happen —
+   * and that is what the manual asks for (C8.12).
+   */
+  diagnose: { name: "diagnose", limit: 1, windowMs: 60_000, scope: "user" } as RateLimitRule,
 };
 
 /**

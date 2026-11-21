@@ -40,6 +40,7 @@ import {
   oralAccounts, InsertOralAccount, OralAccount,
   llmUsage, InsertLlmUsage,
   messageMarks, InsertMessageMark, MessageMark,
+  schemaMigrations,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
@@ -90,6 +91,61 @@ export async function getDb() {
     }
   }
   return null;
+}
+
+/**
+ * Whether the database answers at all (C8.12).
+ *
+ * `getDb()` only builds the client; the first query is what actually opens
+ * the connection. So this asks the database a question with no tables in
+ * it — the cheapest one there is — and lets the driver's error out. A
+ * caller that gets `false` knows there is no DATABASE_URL, which is a
+ * different answer from "the connection failed".
+ */
+export async function pingDatabase(): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  await db.execute(sql`SELECT 1`);
+  return true;
+}
+
+/**
+ * The newest migration the database says it has applied (C8.12).
+ *
+ * The versions are zero-padded numbers (`0078_soft_delete`), but the
+ * newest is worked out from the number rather than from the text, so a
+ * file numbered ten thousand and first would still sort last.
+ */
+export async function getLatestAppliedMigrationVersion(): Promise<string | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select({ version: schemaMigrations.version })
+    .from(schemaMigrations);
+  if (rows.length === 0) return null;
+  return rows
+    .map((row) => row.version)
+    .sort((a, b) => {
+      const numberA = Number.parseInt(a, 10);
+      const numberB = Number.parseInt(b, 10);
+      if (Number.isFinite(numberA) && Number.isFinite(numberB) && numberA !== numberB) {
+        return numberA - numberB;
+      }
+      return a.localeCompare(b);
+    })
+    .at(-1) ?? null;
+}
+
+/** The size of the database on disk, as PostgreSQL reports it (C8.12). */
+export async function getDatabaseSizeBytes(): Promise<number | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.execute(
+    sql`SELECT pg_database_size(current_database()) AS size`,
+  );
+  const row = (result as unknown as { rows?: Array<{ size?: unknown }> }).rows?.[0];
+  const size = Number(row?.size);
+  return Number.isFinite(size) && size >= 0 ? size : null;
 }
 
 /**
@@ -3154,6 +3210,41 @@ export async function getPendingReplyJob(
     .orderBy(asc(replyJobs.dueAt))
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * How many reply jobs are waiting for one user, and how many are late
+ * (C8.12, B5.2).
+ *
+ * A queue that is merely waiting is not a problem — the jobs are due at a
+ * time the persona chose. A queue with jobs past their due time is one the
+ * scheduler has stopped working through, and that is worth saying.
+ */
+export interface PendingReplyJobCount {
+  pending: number;
+  overdue: number;
+}
+
+export async function countPendingReplyJobs(
+  userId: number,
+  now: Date,
+): Promise<PendingReplyJobCount> {
+  const db = await getDb();
+  if (!db) return { pending: 0, overdue: 0 };
+  const [row] = await db
+    .select({
+      pending: count(),
+      overdue: sql<string>`coalesce(sum(case when ${replyJobs.dueAt} <= ${now} then 1 else 0 end), 0)`,
+    })
+    .from(replyJobs)
+    .where(and(
+      eq(replyJobs.userId, userId),
+      inArray(replyJobs.status, ["pending", "running"]),
+    ));
+  return {
+    pending: Number(row?.pending ?? 0),
+    overdue: Number(row?.overdue ?? 0),
+  };
 }
 
 export async function listDueReplyJobs(now: Date, limit = 20): Promise<ReplyJob[]> {
