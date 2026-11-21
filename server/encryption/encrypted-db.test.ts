@@ -1,0 +1,482 @@
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { sql } from "drizzle-orm";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { normalizeUserEncryption } from "@shared/encryption";
+import { normalizeBackupSettings } from "@shared/backup";
+import { hashPassword, verifyPassword } from "../_core/password";
+import { forgetAllDataKeys, forgetDataKey, rememberDataKey } from "../_core/data-keys";
+import { forgetAllEncryptionStates, setEncryptionEnabled } from "../_core/encrypted-values";
+import {
+  createCollectedMessage,
+  createDiaryEntry,
+  createLetter,
+  createMemory,
+  createMessage,
+  createOralAccount,
+  createOutboundLetter,
+  createPersona,
+  createPersonaVersion,
+  createRehearsal,
+  createRoleplaySession,
+  createScheduledItem,
+  createUser,
+  createJournalEntry,
+  getCollectedMessagesForPersona,
+  getDb,
+  getDiaryEntries,
+  getLetters,
+  getMemoriesByPersonaId,
+  getMessagesByPersonaId,
+  getOutboundLetters,
+  getPersonaById,
+  getRoleplaySession,
+  getUserById,
+  getUserEncryption,
+  getUserJournal,
+  getScheduledItem,
+  listRehearsals,
+  searchMessages,
+  searchRecordsLexical,
+  setUserBackupSettings,
+} from "../db";
+import {
+  disableEncryptionForUser,
+  enableEncryptionForUser,
+  encryptionStatusForUser,
+  resetPasswordWithRecovery,
+  rewrapDataKeyForNewPassword,
+  runPendingMigrationForTests,
+} from "./enable";
+import { isEncryptionLocked } from "./lock";
+import { countMigrationWork } from "./migrate";
+import { createBackup } from "../_core/backup";
+import { inspectBackup } from "../_core/backup";
+
+/**
+ * The encrypted database end to end (C8.5 steps 2, 4, 6).
+ *
+ * The unit tests prove the primitives; this file proves the promise: after
+ * enabling and letting the background job finish, an `psql`-level read of
+ * every listed column finds no plaintext, the application still reads the
+ * same content back, search still works, and disabling puts the plaintext
+ * back without losing a row.
+ *
+ * A database is required: `describe.skipIf(!process.env.DATABASE_URL)` is
+ * the same rule as every other DB test (`server/skip-audit.test.ts`).
+ */
+
+
+const PASSWORD = "correct horse battery";
+const SENTINEL = "哨兵内容XYZ";
+/** Every encrypted column and its storage kind, for the raw-SQL sweep. */
+const COLUMNS: Array<[string, string, "text" | "json"]> = [
+  ["messages", "content", "text"],
+  ["memories", "title", "text"],
+  ["memories", "description", "text"],
+  ["letters", "body", "text"],
+  ["letters", "replyText", "text"],
+  ["outbound_letters", "text", "text"],
+  ["outbound_letters", "outcomeNote", "text"],
+  ["user_journal", "body", "text"],
+  ["diary_entries", "summary", "text"],
+  ["diary_entries", "reflection", "text"],
+  ["collected_messages", "content", "text"],
+  ["collected_messages", "meta", "json"],
+  ["personas", "personaData", "json"],
+  ["personas", "styleProfile", "json"],
+  ["rehearsals", "line", "text"],
+  ["rehearsals", "result", "json"],
+  ["roleplay_sessions", "transcript", "json"],
+  ["scheduled_items", "body", "text"],
+  ["oral_accounts", "body", "text"],
+  ["persona_versions", "personaData", "json"],
+];
+
+interface Seeded {
+  userId: number;
+  personaId: number;
+  ids: Record<string, number>;
+}
+
+/** Creates one persona with sentinels in every encrypted column. */
+async function seedUser(tag: string): Promise<Seeded> {
+  const username = `c85-${tag}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const userId = await createUser({
+    username,
+    passwordHash: await hashPassword(PASSWORD),
+    name: "阿树",
+  });
+  const personaId = await createPersona({
+    userId,
+    name: "小满",
+    personaData: { rules: [`${SENTINEL}规则`] },
+    styleProfile: { version: 1, measuredAt: "2024-01-01T00:00:00.000Z", recordsVersion: "1:1" },
+  });
+  const ids: Record<string, number> = {};
+  ids.message = await createMessage({
+    personaId,
+    userId,
+    role: "assistant",
+    content: `${SENTINEL}晚安`,
+    messageType: "text",
+    channel: "web",
+  });
+  ids.memory = await createMemory({
+    personaId,
+    userId,
+    title: `${SENTINEL}生日`,
+    description: `${SENTINEL}描述`,
+  });
+  const letterRow = await createLetter({
+    userId,
+    personaId,
+    body: `${SENTINEL}信`,
+    status: "waiting",
+  });
+  ids.letter = letterRow.id;
+  ids.diary = (await createDiaryEntry({
+    userId,
+    personaId,
+    date: "2024-01-01",
+    summary: `${SENTINEL}日记`,
+    reflection: `${SENTINEL}反思`,
+  }))!;
+  ids.oral = await createOralAccount({
+    personaId,
+    userId,
+    tellerName: "琪琪",
+    body: `${SENTINEL}口述`,
+  });
+  ids.rehearsal = (await createRehearsal({
+    userId,
+    personaId,
+    line: `${SENTINEL}排练`,
+    result: { variants: [`${SENTINEL}变体`] },
+  }))!;
+  await createJournalEntry({ userId, body: `${SENTINEL}自己的日记`, entryDate: "2024-01-02" });
+  ids.roleplay = (await createRoleplaySession({ userId, personaId, startedAt: new Date() }))!;
+  ids.scheduled = (
+    await createScheduledItem({
+      userId,
+      personaId,
+      kind: "capsule",
+      body: `${SENTINEL}胶囊`,
+      dueAt: new Date(),
+    })
+  ).id;
+  ids.record = (await createCollectedMessage({
+    personaId,
+    userId,
+    role: "assistant",
+    content: `${SENTINEL}喜欢海`,
+    kind: "text",
+    source: "import",
+    sourceMessageId: `src-${tag}`,
+  }))!;
+  ids.outbound = (await createOutboundLetter({
+    userId,
+    personaId,
+    text: `${SENTINEL}要说的话`,
+  }))!;
+  ids.version = (await createPersonaVersion(personaId, userId, "test"))!;
+  // A reply on the letter, so `letters.replyText` has content too.
+  const db = await getDb();
+  await db!.execute(sql`
+    UPDATE "letters" SET "replyText" = ${`${SENTINEL}回信`} WHERE "id" = ${ids.letter}
+  `);
+  return { userId, personaId, ids };
+}
+
+/** Grants the "a full backup exists" prerequisite for enabling. */
+async function markBackupDone(userId: number): Promise<void> {
+  await setUserBackupSettings(userId, {
+    enabled: false,
+    frequency: "daily",
+    lastFullBackupAt: new Date().toISOString(),
+  });
+}
+
+/** Waits until the background job clears the migration flag. */
+async function waitForMigration(userId: number, timeoutMs = 20_000): Promise<void> {
+  const started = Date.now();
+  for (;;) {
+    const user = await getUserById(userId);
+    const encryption = normalizeUserEncryption(user?.encryption);
+    if (!encryption?.migration) return;
+    if (Date.now() - started > timeoutMs) {
+      throw new Error(`migration did not finish: ${JSON.stringify(encryption.migration)}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+/** Raw SQL: how many rows hold the sentinel in one column. */
+async function plaintextRows(table: string, column: string, userId: number): Promise<number> {
+  const db = await getDb();
+  const escaped = SENTINEL;
+  const result = await db!.execute(sql.raw(
+    `SELECT count(*)::int AS n FROM "${table}" WHERE "userId" = ${userId} AND "${column}"::text LIKE '%${escaped}%'`,
+  ));
+  return Number((result as unknown as { rows?: Array<{ n?: number }> }).rows?.[0]?.n ?? 0);
+}
+
+/** Seeds the process with the account's key, the way a sign-in does. */
+async function unlockInProcess(userId: number, password = PASSWORD): Promise<void> {
+  const user = await getUserById(userId);
+  const encryption = normalizeUserEncryption(user?.encryption);
+  if (!encryption) throw new Error("not encrypted");
+  const { unwrapDataKeyWithPassword } = await import("../_core/content-crypto");
+  const key = await unwrapDataKeyWithPassword(encryption.wrappedKey, encryption.salt, password);
+  if (!key) throw new Error("the password did not unwrap the key");
+  rememberDataKey(userId, key);
+  setEncryptionEnabled(userId, true);
+}
+
+describe.skipIf(!process.env.DATABASE_URL)("the encrypted database", () => {
+  beforeAll(() => {
+    forgetAllDataKeys();
+    forgetAllEncryptionStates();
+  });
+
+  afterAll(() => {
+    forgetAllDataKeys();
+    forgetAllEncryptionStates();
+  });
+
+  it("refuses to enable before a full backup exists", async () => {
+    const { userId } = await seedUser("nobackup");
+    await expect(enableEncryptionForUser(userId, PASSWORD)).rejects.toMatchObject({
+      code: "backup_required",
+    });
+    const user = await getUserById(userId);
+    expect(normalizeUserEncryption(user?.encryption)).toBeNull();
+  });
+
+  it("encrypts every listed column and reads the same content back", async () => {
+    const { userId, personaId, ids } = await seedUser("full");
+    await markBackupDone(userId);
+
+    const { recoveryCode } = await enableEncryptionForUser(userId, PASSWORD);
+    expect(recoveryCode).toMatch(/^[A-Z2-9]{4}(-[A-Z2-9]{4}){5}$/);
+    await waitForMigration(userId);
+
+    const status = await encryptionStatusForUser(userId);
+    expect(status).toMatchObject({ enabled: true, unlocked: true, migrating: false });
+    expect(status.migration).toBeNull();
+
+    // Raw SQL: no sentinel in any listed column.
+    for (const [table, column] of COLUMNS) {
+      expect(await plaintextRows(table, column, userId), `${table}.${column}`).toBe(0);
+    }
+
+    // Raw SQL: the money columns are actually ciphertext, not merely empty.
+    const db = await getDb();
+    const messageRow = await db!.execute(
+      sql.raw(`SELECT "content"::text AS c FROM "messages" WHERE "id" = ${ids.message}`),
+    );
+    expect(String((messageRow as unknown as { rows: Array<{ c: string }> }).rows[0]!.c)).toMatch(
+      /^enc:v1:/,
+    );
+
+    // The application still reads the same words.
+    expect((await getPersonaById(personaId, userId))?.personaData).toEqual({
+      rules: [`${SENTINEL}规则`],
+    });
+    expect((await getMessagesByPersonaId(personaId, userId))[0]?.content).toBe(`${SENTINEL}晚安`);
+    expect((await getMemoriesByPersonaId(personaId, userId))[0]?.title).toBe(`${SENTINEL}生日`);
+    expect((await getLetters(personaId, userId))[0]?.body).toBe(`${SENTINEL}信`);
+    expect((await getDiaryEntries(userId, personaId))[0]?.summary).toBe(`${SENTINEL}日记`);
+    expect((await listRehearsals(personaId, userId))[0]?.line).toBe(`${SENTINEL}排练`);
+    expect((await getUserJournal(userId))[0]?.body).toBe(`${SENTINEL}自己的日记`);
+    expect((await getScheduledItem(ids.scheduled!, userId))?.body).toBe(`${SENTINEL}胶囊`);
+    expect((await getCollectedMessagesForPersona(personaId, userId))[0]?.content).toBe(
+      `${SENTINEL}喜欢海`,
+    );
+    expect((await getOutboundLetters(personaId, userId))[0]?.text).toBe(`${SENTINEL}要说的话`);
+    expect((await getRoleplaySession(ids.roleplay!, userId))?.transcript).toEqual([]);
+
+    // Search still works, through the blind index.
+    const hit = await searchRecordsLexical(personaId, userId, { q: "喜欢海" });
+    expect(hit.map((row) => row.content)).toEqual([`${SENTINEL}喜欢海`]);
+    const messageHit = await searchMessages(personaId, userId, "晚安");
+    expect(messageHit).toHaveLength(1);
+    const tokens = await db!.execute(
+      sql.raw(`SELECT "searchTokens"::text AS t FROM "collected_messages" WHERE "id" = ${ids.record}`),
+    );
+    const tokenText = String(
+      (tokens as unknown as { rows: Array<{ t: string }> }).rows[0]!.t,
+    );
+    expect(tokenText).not.toContain("喜欢");
+    expect(tokenText).toMatch(/'[0-9a-f]{16}'/);
+  });
+
+  it("can be interrupted midway and resumed, and every read stays correct", async () => {
+    const { userId, personaId } = await seedUser("resume");
+    await markBackupDone(userId);
+    // The background job is not started: the test drives the batches.
+    await enableEncryptionForUser(userId, PASSWORD, { startInBackground: false });
+    const first = await runPendingMigrationForTests(userId, { maxSteps: 1, batchSize: 2 });
+    expect(first.finished).toBe(false);
+    // Half the rows are plaintext, half ciphertext; every helper must
+    // still return the original words.
+    expect((await getMessagesByPersonaId(personaId, userId))[0]?.content).toBe(`${SENTINEL}晚安`);
+    expect((await getPersonaById(personaId, userId))?.personaData).toEqual({
+      rules: [`${SENTINEL}规则`],
+    });
+    // Finishing the job encrypts the rest.
+    for (let i = 0; i < 50; i++) {
+      const step = await runPendingMigrationForTests(userId, { maxSteps: 3, batchSize: 2 });
+      if (step.finished) break;
+    }
+    expect((await encryptionStatusForUser(userId)).migrating).toBe(false);
+    for (const [table, column] of COLUMNS) {
+      expect(await plaintextRows(table, column, userId), `${table}.${column}`).toBe(0);
+    }
+  });
+
+  it("cannot be opened with the wrong password, and the recovery code resets the password", async () => {
+    const { userId, personaId } = await seedUser("recovery");
+    await markBackupDone(userId);
+    const { recoveryCode } = await enableEncryptionForUser(userId, PASSWORD);
+    await waitForMigration(userId);
+    forgetDataKey(userId);
+
+    const user = await getUserById(userId);
+    const encryption = normalizeUserEncryption(user?.encryption);
+    expect(encryption).not.toBeNull();
+    const { unwrapDataKeyWithPassword } = await import("../_core/content-crypto");
+    expect(
+      await unwrapDataKeyWithPassword(encryption!.wrappedKey, encryption!.salt, "wrong password"),
+    ).toBeNull();
+
+    await resetPasswordWithRecovery(userId, recoveryCode, "a brand new password");
+    const updated = await getUserById(userId);
+    expect(await verifyPassword("a brand new password", updated?.passwordHash)).toBe(true);
+    expect(await verifyPassword(PASSWORD, updated?.passwordHash)).toBe(false);
+    // The data key is still the same one: the content reads.
+    await unlockInProcess(userId, "a brand new password");
+    expect((await getMessagesByPersonaId(personaId, userId))[0]?.content).toBe(`${SENTINEL}晚安`);
+  });
+
+  it("keeps the data and the recovery code working after a password change", async () => {
+    const { userId, personaId } = await seedUser("rewrap");
+    await markBackupDone(userId);
+    const { recoveryCode } = await enableEncryptionForUser(userId, PASSWORD);
+    await waitForMigration(userId);
+    await rewrapDataKeyForNewPassword(userId, PASSWORD, "another password");
+
+    // The new wrapper opens only with the new password.
+    const user = await getUserById(userId);
+    const encryption = normalizeUserEncryption(user?.encryption);
+    const { unwrapDataKeyWithPassword } = await import("../_core/content-crypto");
+    expect(
+      await unwrapDataKeyWithPassword(encryption!.wrappedKey, encryption!.salt, PASSWORD),
+    ).toBeNull();
+    expect(
+      await unwrapDataKeyWithPassword(
+        encryption!.wrappedKey,
+        encryption!.salt,
+        "another password",
+      ),
+    ).not.toBeNull();
+
+    // The content is still there, read through the new password.
+    forgetDataKey(userId);
+    await unlockInProcess(userId, "another password");
+    expect((await getMessagesByPersonaId(personaId, userId))[0]?.content).toBe(`${SENTINEL}晚安`);
+
+    // The recovery code survived the password change.
+    forgetDataKey(userId);
+    await resetPasswordWithRecovery(userId, recoveryCode, "the third password");
+    const updated = await getUserById(userId);
+    expect(await verifyPassword("the third password", updated?.passwordHash)).toBe(true);
+    await unlockInProcess(userId, "the third password");
+    expect((await getMessagesByPersonaId(personaId, userId))[0]?.content).toBe(`${SENTINEL}晚安`);
+  });
+
+  it("puts the plaintext back on disable without losing a row", async () => {
+    const { userId, personaId } = await seedUser("disable");
+    await markBackupDone(userId);
+    await enableEncryptionForUser(userId, PASSWORD);
+    await waitForMigration(userId);
+    const db = await getDb();
+    const countBefore = await db!.execute(
+      sql.raw(`SELECT count(*)::int AS n FROM "messages" WHERE "userId" = ${userId}`),
+    );
+    await disableEncryptionForUser(userId, PASSWORD);
+    await waitForMigration(userId);
+    const user = await getUserById(userId);
+    expect(normalizeUserEncryption(user?.encryption)).toBeNull();
+    expect(await plaintextRows("messages", "content", userId)).toBeGreaterThan(0);
+    expect(await plaintextRows("personas", "personaData", userId)).toBeGreaterThan(0);
+    const countAfter = await db!.execute(
+      sql.raw(`SELECT count(*)::int AS n FROM "messages" WHERE "userId" = ${userId}`),
+    );
+    expect((countAfter as unknown as { rows: Array<{ n: number }> }).rows[0]!.n).toBe(
+      (countBefore as unknown as { rows: Array<{ n: number }> }).rows[0]!.n,
+    );
+    // The app still reads the same words, and a new write is plaintext.
+    expect((await getMessagesByPersonaId(personaId, userId))[0]?.content).toBe(`${SENTINEL}晚安`);
+    expect((await getPersonaById(personaId, userId))?.personaData).toEqual({
+      rules: [`${SENTINEL}规则`],
+    });
+    await createMessage({
+      personaId,
+      userId,
+      role: "assistant",
+      content: "禁用之后的新消息",
+      messageType: "text",
+      channel: "web",
+    });
+    expect(await plaintextRows("messages", "content", userId)).toBeGreaterThan(0);
+    expect(await countMigrationWork(userId, "decrypt")).toBe(0);
+  });
+
+  it("defers the background jobs of a locked account until it signs in", async () => {
+    const { userId } = await seedUser("locked");
+    await markBackupDone(userId);
+    await enableEncryptionForUser(userId, PASSWORD);
+    await waitForMigration(userId);
+    forgetDataKey(userId);
+    forgetAllEncryptionStates();
+    expect(await isEncryptionLocked(userId)).toBe(true);
+    await unlockInProcess(userId);
+    expect(await isEncryptionLocked(userId)).toBe(false);
+  });
+
+  it("writes a backup whose encrypted rows stay ciphertext", async () => {
+    const { userId } = await seedUser("backup");
+    await markBackupDone(userId);
+    await enableEncryptionForUser(userId, PASSWORD);
+    await waitForMigration(userId);
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mirrai-c85-backup-"));
+    const file = path.join(dir, "encrypted.mirrai-backup");
+    try {
+      const created = await createBackup({
+        scope: userId,
+        passphrase: "backup passphrase",
+        out: file,
+      });
+      expect(created.bytes).toBeGreaterThan(0);
+      let sawEncryption = false;
+      let sawSentinel = false;
+      await inspectBackup({
+        file,
+        passphrase: "backup passphrase",
+        onManifest: async (_manifest, staging) => {
+          const userPart = await fs.readFile(path.join(staging, "db", "users.ndjson"), "utf8");
+          sawEncryption = userPart.includes("\"encryption\"") && userPart.includes("wrappedKey");
+          const messages = await fs.readFile(path.join(staging, "db", "messages.ndjson"), "utf8");
+          sawSentinel = messages.includes(SENTINEL);
+          expect(messages).toContain("enc:v1:");
+        },
+      });
+      expect(sawEncryption).toBe(true);
+      expect(sawSentinel).toBe(false);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true }).catch(() => undefined);
+    }
+  });
+});

@@ -27,6 +27,7 @@ import {
 } from "@shared/backup";
 import { decryptIfEncrypted } from "../_core/crypto";
 import { createBackup } from "../_core/backup";
+import { isEncryptionLocked, logPostponed } from "../encryption/lock";
 import {
   BackupDeliveryError,
   deleteBackupFile,
@@ -139,6 +140,16 @@ export async function runScheduledBackups(
     const settings = normalizeBackupSettings(user.backupSettings);
     if (!settings.enabled || !settings.target) continue;
     if (!isBackupDue(settings, clock())) continue;
+    /**
+     * An encrypted account whose key is not in this process still has
+     * ciphertext in its rows — a backup of it would be a backup of
+     * bytes nobody can read (C8.5). The run waits for the next
+     * sign-in, like the other background jobs.
+     */
+    if (await isEncryptionLocked(user.id)) {
+      logPostponed(user.id, "backup");
+      continue;
+    }
 
     const startedAt = clock();
     const passphrase = await decrypt(settings.passphraseSecret ?? null);

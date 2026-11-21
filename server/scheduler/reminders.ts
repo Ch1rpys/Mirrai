@@ -15,6 +15,7 @@ import { normalizePersonaSettings } from "@shared/persona-settings";
 import { resolveRelationshipPhase } from "@shared/user-side";
 import { copy, type Locale } from "@shared/copy";
 import { pushToUser } from "../_core/push";
+import { withoutEncryptionLocked } from "../encryption/lock";
 
 export type ReminderKind =
   | "anniversary"
@@ -563,7 +564,16 @@ export async function runReminderSweep(now: Date = new Date()): Promise<number> 
   }>();
 
   try {
-    const personas = await db.getAllPersonasForReminders();
+    /**
+     * An encrypted account with no key in this process must not have
+     * reminders composed for it: the memories and photos are ciphertext
+     * (C8.5).
+     */
+    const personas = await withoutEncryptionLocked(
+      await db.getAllPersonasForReminders(),
+      (persona) => persona.userId,
+      "reminder",
+    );
     for (const persona of personas) {
       /**
        * One persona at a time.

@@ -19,6 +19,7 @@ import { sweepReplyJobs } from "../chat/reply-jobs";
 import { sweepScheduledItems } from "./scheduled-items";
 import { runDailyPurge } from "./purge";
 import { runScheduledBackups } from "../backup/schedule";
+import { resumeEncryptionMigrations } from "../encryption/scheduler";
 import { connectRedis, withRedisLock, isRedisUsable } from "../_core/redis";
 
 const TICK_INTERVAL_MS = 60_000;
@@ -94,11 +95,14 @@ async function tick(): Promise<void> {
     // frequency is checked inside; a failure is recorded on the user's
     // row and does not stop the other sweeps.
     runScheduledBackups(),
+    // Enable/disable jobs that were interrupted by a restart (C8.5).
+    // An account whose key is not unlocked is skipped until it signs in.
+    resumeEncryptionMigrations(),
   ]);
   results.forEach((result, index) => {
     if (result.status === "rejected") {
       console.warn(
-        `[Scheduler] The ${["reminder", "letter", "proactive", "reply", "scheduled", "purge", "backup"][index]} sweep failed:`,
+        `[Scheduler] The ${["reminder", "letter", "proactive", "reply", "scheduled", "purge", "backup", "encryption"][index]} sweep failed:`,
         result.reason instanceof Error ? result.reason.message : String(result.reason),
       );
     }

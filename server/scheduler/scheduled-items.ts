@@ -14,6 +14,7 @@ import { preferredClockZone } from "@shared/timezone";
 import { resolveReplyAt } from "@shared/letters";
 import { detectCrisis } from "../safety/crisis";
 import { pushToUser } from "../_core/push";
+import { withoutEncryptionLocked } from "../encryption/lock";
 
 /** Why an item was called off, in the words the interface uses. */
 export type CancelReason = "asleep" | "sealed" | "closed" | "deleted";
@@ -32,7 +33,16 @@ export interface ScheduledSweepResult {
 export async function sweepScheduledItems(
   now: Date = new Date(),
 ): Promise<ScheduledSweepResult> {
-  const due = await db.listDueScheduledItems(now);
+  /**
+   * Capsules and scheduled messages carry the user's own words; an
+   * encrypted account with no key in this process waits for the next
+   * sign-in (C8.5).
+   */
+  const due = await withoutEncryptionLocked(
+    await db.listDueScheduledItems(now),
+    (item) => item.userId,
+    "scheduled",
+  );
   let delivered = 0;
   let cancelled = 0;
 

@@ -18,6 +18,7 @@ import { openingRateForWindow, normalizeOpeningProfile } from "@shared/opening-p
 import { parseQuietHours } from "@shared/proactive-decision";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import type { Locale } from "@shared/copy";
+import { withoutEncryptionLocked } from "../encryption/lock";
 
 /**
  * Sends the message on whichever channel is bound.
@@ -141,7 +142,15 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
     timezone: string | null;
   }>();
 
-  const candidates = await db.getProactivePersonas();
+  /**
+   * Encrypted accounts with no key in this process are skipped until
+   * the next sign-in (C8.5).
+   */
+  const candidates = await withoutEncryptionLocked(
+    await db.getProactivePersonas(),
+    (row) => row.userId,
+    "proactive",
+  );
   for (const row of candidates) {
     try {
       /**

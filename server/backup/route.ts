@@ -142,6 +142,14 @@ export function registerBackupRoutes(app: Express): void {
     let temporary: { path: string; fileName: string } | null = null;
     try {
       temporary = await createBackupForDownload({ scope: user.id, passphrase });
+      /**
+       * A full backup is a precondition for enabling database
+       * encryption (C8.5): if the password and the recovery code are
+       * both lost, this file is the way back. Recording the marker here
+       * is what the enable route checks.
+       */
+      const { recordFullBackupAt } = await import("../db");
+      await recordFullBackupAt(user.id).catch(() => undefined);
       const stat = await fs.stat(temporary.path);
       res.setHeader("Content-Type", "application/octet-stream");
       res.setHeader(

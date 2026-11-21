@@ -24,6 +24,7 @@ import { getEffectivePresence } from "../_core/graduation";
 import { deliverLetterEmail } from "../_core/mail";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import type { Locale } from "@shared/copy";
+import { withoutEncryptionLocked } from "../encryption/lock";
 
 /**
  * How long a letter to a sleeping persona is left alone.
@@ -142,7 +143,15 @@ export async function writeLetter(params: {
  * it a reply rather than a notification.
  */
 export async function answerDueLetters(now: Date = new Date()): Promise<number> {
-  const due = await db.getDueLetters(now);
+  /**
+   * An encrypted account that has not signed in since the restart has
+   * no key here; its letters wait for the next sign-in (C8.5).
+   */
+  const due = await withoutEncryptionLocked(
+    await db.getDueLetters(now),
+    (letter) => letter.userId,
+    "letter",
+  );
   let answered = 0;
 
   for (const letter of due) {

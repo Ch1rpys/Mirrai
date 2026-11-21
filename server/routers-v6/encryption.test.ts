@@ -102,7 +102,9 @@ describe("the encryption routes", () => {
   it("reports the account's state without the key material", async () => {
     const caller = appRouter.createCaller(ctxFor());
     const status = await caller.encryption.status();
-    expect(status).toEqual({ enabled: true, unlocked: false, hasRecoveryCode: true });
+    // The state now also reports a pending enable/disable job (C8.5).
+    expect(status).toMatchObject({ enabled: true, unlocked: false, hasRecoveryCode: true });
+    expect(status).toMatchObject({ migrating: false, migration: null, migratedAt: null });
     expect(JSON.stringify(status)).not.toContain(wrapped.salt);
     expect(JSON.stringify(status)).not.toContain(wrapped.wrappedKey);
   });
@@ -115,7 +117,7 @@ describe("the encryption routes", () => {
     expect(hasDataKey(1)).toBe(false);
 
     const opened = await caller.encryption.unlock({ password: "correct horse" });
-    expect(opened).toEqual({ enabled: true, unlocked: true, hasRecoveryCode: true });
+    expect(opened).toMatchObject({ enabled: true, unlocked: true, hasRecoveryCode: true });
     expect(hasDataKey(1)).toBe(true);
 
     const locked = await caller.encryption.lock();
@@ -129,11 +131,63 @@ describe("the encryption routes", () => {
     const denied = await caller.encryption.unlock({ password: "correct horse" }).catch((error) => error);
     expect(denied.code).toBe("BAD_REQUEST");
     expect(denied.message).toBe(copy("zh", "errors.encryptionNotEnabled"));
-    await expect(caller.encryption.status()).resolves.toEqual({
+    await expect(caller.encryption.status()).resolves.toMatchObject({
       enabled: false,
       unlocked: false,
       hasRecoveryCode: false,
+      migrating: false,
+      migration: null,
     });
+  });
+});
+
+describe("turning the feature on and off (C8.5 step 6)", () => {
+  it("refuses to enable without the two acknowledgements", async () => {
+    const caller = appRouter.createCaller(ctxFor());
+    await expect(
+      (caller.encryption.enable as unknown as (input: unknown) => Promise<unknown>)({
+        password: "correct horse",
+      }),
+    ).rejects.toBeTruthy();
+  });
+
+  it("refuses to enable an account that is already encrypted", async () => {
+    const caller = appRouter.createCaller(ctxFor());
+    await expect(
+      caller.encryption.enable({
+        password: "correct horse",
+        lostContentUnderstood: true,
+        restartUnderstood: true,
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("refuses to disable an account with no encryption", async () => {
+    getUserById.mockResolvedValue({
+      id: 1,
+      username: "阿树",
+      passwordHash: await hashPassword("correct horse"),
+      encryption: null,
+    });
+    const caller = appRouter.createCaller(plaintextCtx());
+    const denied = await caller.encryption.disable({ password: "correct horse" }).catch((error) => error);
+    expect(denied.code).toBe("BAD_REQUEST");
+    expect(denied.message).toBe(copy("zh", "errors.encryptionNotEnabled"));
+  });
+
+  it("refuses to recover an account that has no recovery code", async () => {
+    getUserById.mockResolvedValue({
+      id: 1,
+      username: "阿树",
+      passwordHash: await hashPassword("correct horse"),
+      encryption: { enabled: true, ...wrapped },
+    });
+    const caller = appRouter.createCaller(ctxFor());
+    const denied = await caller.encryption
+      .recover({ recoveryCode: "ABCD-EFGH-JKLM-NPQR-STUV-WXYZ", newPassword: "a new password" })
+      .catch((error) => error);
+    expect(denied.code).toBe("BAD_REQUEST");
+    expect(denied.message).toBe(copy("zh", "errors.encryptionRecoveryMissing"));
   });
 });
 

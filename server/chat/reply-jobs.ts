@@ -35,6 +35,7 @@ import { parseZoneless, preferredClockZone, zonedDateKey } from "@shared/timezon
 import { getEffectivePresence } from "../_core/graduation";
 import { pushToUser } from "../_core/push";
 import { getChannelAdapter } from "../channels";
+import { withoutEncryptionLocked } from "../encryption/lock";
 import {
   currentGeneration,
   enter,
@@ -227,7 +228,16 @@ export function clearReplyJobTimers(): void {
 }
 
 export async function sweepReplyJobs(now: Date = new Date()): Promise<number> {
-  const due = await db.listDueReplyJobs(now);
+  /**
+   * Deferred replies belong to an encrypted account's content; an
+   * account with no key in this process waits for the next sign-in
+   * (C8.5).
+   */
+  const due = await withoutEncryptionLocked(
+    await db.listDueReplyJobs(now),
+    (job) => job.userId,
+    "reply",
+  );
   let ran = 0;
   for (const job of due) {
     const ok = await runReplyJob(job.id, job.userId);

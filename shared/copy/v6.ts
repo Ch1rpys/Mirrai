@@ -1908,6 +1908,30 @@ export const V6 = {
     zh: "加密密钥打不开。请用恢复码或账号密码重试。",
     en: "The encryption key could not be opened. Try the recovery code or the account password again.",
   },
+  "errors.encryptionAlreadyEnabled": {
+    zh: "这个账号已经开了加密存储。",
+    en: "Encrypted storage is already on for this account.",
+  },
+  "errors.encryptionBackupRequired": {
+    zh: "开加密之前，先在「数据管理」里下载一次完整备份。",
+    en: "Download a full backup under Data management before turning encryption on.",
+  },
+  "errors.encryptionMigrationRunning": {
+    zh: "加密迁移还在跑，等它完成再关。",
+    en: "The encryption migration is still running. Wait for it to finish before turning it off.",
+  },
+  "errors.encryptionRecoveryMissing": {
+    zh: "这个账号没有恢复码。用账号密码解锁，或者重设密码后再生成。",
+    en: "This account has no recovery code. Unlock with the account password, or reset it and create one.",
+  },
+  "errors.encryptionRecoveryWrong": {
+    zh: "恢复码不对，没有解开。",
+    en: "That recovery code did not work.",
+  },
+  "errors.encryptionPasswordTooShort": {
+    zh: "新密码至少 8 个字符。",
+    en: "The new password needs at least 8 characters.",
+  },
   "lock.personaPinNeeded": {
     zh: "这个分身锁着。输入 PIN 解锁。",
     en: "This persona is locked. Enter the PIN to unlock it.",

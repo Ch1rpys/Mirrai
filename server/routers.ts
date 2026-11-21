@@ -6,10 +6,9 @@ import { detectCrisis } from "./safety/crisis";
 import { worseStreakFor } from "./safety/checkins";
 import { withPersonaDataLock } from "./_core/lock";
 import { hasRecentUnlock, sessionKeyFromRequest } from "./_core/app-lock";
-import { normalizeUserEncryption } from "@shared/encryption";
+
 import { setUserEncryption } from "./db";
-import { unwrapDataKeyWithPassword, wrapDataKeyForPassword } from "./_core/content-crypto";
-import { dataKeyFor, rememberDataKey } from "./_core/data-keys";
+import { rewrapDataKeyForNewPassword } from "./encryption/enable";
 import { requestAbortSignal } from "./_core/context";
 import { QuotedRecordsError } from "./chat/quoted-records";
 import { countSceneRangeLines, loadSceneRangeMaterial, sceneRangeOf, sceneUsableForPersona } from "./chat/scene-range";
@@ -1336,18 +1335,18 @@ export const appRouter = router({
          *
          * So a password change has to wrap it again with the new one,
          * while the old password is still here. The key itself does not
-         * change — that would mean re-encrypting the whole database.
+         * change — that would mean re-encrypting the whole database —
+         * and the recovery wrap keeps its own salt, so the recovery code
+         * still works afterwards.
          */
-        const encryption = normalizeUserEncryption(user.encryption);
-        if (encryption) {
-          const dataKey = dataKeyFor(ctx.user.id)
-            ?? await unwrapDataKeyWithPassword(encryption.wrappedKey, encryption.salt, input.currentPassword);
-          if (!dataKey) {
-            throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.encryptionKeyFailed") });
-          }
-          const rewrapped = await wrapDataKeyForPassword(dataKey, input.newPassword);
-          await setUserEncryption(ctx.user.id, { ...encryption, ...rewrapped });
-          rememberDataKey(ctx.user.id, dataKey);
+        try {
+          await rewrapDataKeyForNewPassword(
+            ctx.user.id,
+            input.currentPassword,
+            input.newPassword,
+          );
+        } catch {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.encryptionKeyFailed") });
         }
         await updateUserPassword(ctx.user.id, await hashPassword(input.newPassword));
         /**
