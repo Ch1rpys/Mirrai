@@ -948,6 +948,17 @@ export default function Upload() {
                     chars: Math.round((distillEstimate.chars / 10_000) * 10) / 10,
                     calls: distillEstimate.calls,
                   })}
+                  {/**
+                   * The money, when the user has filled in a price
+                   * (C8.9). It is an estimate from the amount of
+                   * material, not a bill.
+                   */}
+                  {distillEstimate.priceEstimate && (
+                    t("distillation.estimateCost", {
+                      cost: (distillEstimate.priceEstimate.micros / 1_000_000).toFixed(2),
+                      currency: distillEstimate.priceEstimate.currency,
+                    })
+                  )}
                 </p>
               )}
             </div>

@@ -4349,6 +4349,7 @@ export async function sumLlmUsageByPurpose(userId: number, from: Date, to?: Date
     promptTokens: sum(llmUsage.promptTokens),
     completionTokens: sum(llmUsage.completionTokens),
     calls: count(),
+    estimatedCalls: sql<string>`coalesce(sum(case when ${llmUsage.estimated} then 1 else 0 end), 0)`,
     costMicros: sql<string>`coalesce(sum(${llmUsage.costMicros}), 0)`,
     /**
      * The rows belong to one user, and the query says so itself.
@@ -4369,6 +4370,7 @@ export async function sumLlmUsageByPurpose(userId: number, from: Date, to?: Date
     promptTokens: Number(row.promptTokens ?? 0),
     completionTokens: Number(row.completionTokens ?? 0),
     calls: Number(row.calls ?? 0),
+    estimatedCalls: Number(row.estimatedCalls ?? 0),
     costMicros: Number(row.costMicros ?? 0),
   }));
 }
@@ -4382,6 +4384,7 @@ export async function sumLlmUsageByPersona(userId: number, from: Date, to?: Date
     promptTokens: sum(llmUsage.promptTokens),
     completionTokens: sum(llmUsage.completionTokens),
     calls: count(),
+    estimatedCalls: sql<string>`coalesce(sum(case when ${llmUsage.estimated} then 1 else 0 end), 0)`,
     costMicros: sql<string>`coalesce(sum(${llmUsage.costMicros}), 0)`,
   }).from(llmUsage)
     .where(and(
@@ -4395,6 +4398,7 @@ export async function sumLlmUsageByPersona(userId: number, from: Date, to?: Date
     promptTokens: Number(row.promptTokens ?? 0),
     completionTokens: Number(row.completionTokens ?? 0),
     calls: Number(row.calls ?? 0),
+    estimatedCalls: Number(row.estimatedCalls ?? 0),
     costMicros: Number(row.costMicros ?? 0),
   }));
 }
@@ -4415,6 +4419,7 @@ export async function sumLlmUsageByDay(
     promptTokens: sum(llmUsage.promptTokens),
     completionTokens: sum(llmUsage.completionTokens),
     calls: count(),
+    estimatedCalls: sql<string>`coalesce(sum(case when ${llmUsage.estimated} then 1 else 0 end), 0)`,
     costMicros: sql<string>`coalesce(sum(${llmUsage.costMicros}), 0)`,
   }).from(llmUsage)
     .where(and(
@@ -4429,6 +4434,7 @@ export async function sumLlmUsageByDay(
     promptTokens: Number(row.promptTokens ?? 0),
     completionTokens: Number(row.completionTokens ?? 0),
     calls: Number(row.calls ?? 0),
+    estimatedCalls: Number(row.estimatedCalls ?? 0),
     costMicros: Number(row.costMicros ?? 0),
   }));
 }

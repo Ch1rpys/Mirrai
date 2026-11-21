@@ -40,6 +40,7 @@ import EmailDelivery from "@/components/v6/EmailDelivery";
 import EmbedStatus from "@/components/v6/EmbedStatus";
 import ExtraBodyEditor from "@/components/v6/ExtraBodyEditor";
 import LlmRoles from "@/components/v6/LlmRoles";
+import UsagePanel from "@/components/v6/UsagePanel";
 import type { GraduationMode } from "@shared/graduation-mode";
 import {
   DEFAULT_DISTILLATION_MODE,
@@ -879,6 +880,7 @@ function AISettingsTab() {
       <LlmRoles />
       <ExtraBodyEditor />
       <EmbedStatus />
+      <UsagePanel />
     </div>
   );
 }

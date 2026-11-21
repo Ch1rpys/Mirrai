@@ -13,6 +13,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { llmService, registry } from "./llm";
 import { budgetExceeded } from "./llm/budget";
+import { estimateRunCostMicros, priceForDefaultProvider } from "./llm/usage";
 import type { InvokeParams, InvokeResult } from "./llm/types";
 import { getTextContent } from "./llm/types";
 import {
@@ -183,6 +184,7 @@ import { unsaidRouter } from "./routers-v6/unsaid";
 import { bookRouter } from "./routers-v6/book";
 import { shareRouter } from "./routers-v6/share";
 import { oralRouter } from "./routers-v6/oral";
+import { usageRouter } from "./routers-v6/usage";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { stateRulesFromTranscript } from "./skill-engine/state-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
@@ -4739,13 +4741,28 @@ export const appRouter = router({
         } catch {
           timezone = null;
         }
-        return estimateDistillationForPersona({
+        const estimate = await estimateDistillationForPersona({
           personaId: input.personaId,
           userId: ctx.user.id,
           mode: input.mode ?? null,
           timeZone: timezone,
           themName: persona.name,
         });
+        /**
+         * What the run is likely to cost, when the user has filled in a
+         * price (C8.9). Without one there is no amount to show, and the
+         * dialog says nothing about money.
+         */
+        const price = await priceForDefaultProvider(ctx.user.id);
+        return {
+          ...estimate,
+          priceEstimate: price
+            ? {
+                currency: price.currency,
+                micros: estimateRunCostMicros(price, estimate.chars, estimate.calls),
+              }
+            : null,
+        };
       }),
 
     startPipeline: protectedProcedure
@@ -7767,6 +7784,7 @@ export const appRouter = router({
   book: bookRouter,
   share: shareRouter,
   oral: oralRouter,
+  usage: usageRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {

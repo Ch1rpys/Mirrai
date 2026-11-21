@@ -44,6 +44,7 @@ import TheirSide from "@/components/v6/TheirSide";
 import ScheduledSend from "@/components/v6/ScheduledSend";
 import ClosedComposer from "@/components/v6/ClosedComposer";
 import ReadMarker from "@/components/v6/ReadMarker";
+import BudgetNotice from "@/components/v6/BudgetNotice";
 import AfterChat from "@/components/v6/AfterChat";
 import { useTypingReveal, waitMs } from "@/components/v6/useTypingReveal";
 
@@ -2440,6 +2441,8 @@ export default function Chat() {
            * "show graduated" toggle. So the person was told to do
            * something they could not do from where they were.
            */}
+          {/* The month's ceiling, said where the spending happens (C8.9). */}
+          <BudgetNotice />
           {persona?.graduationStatus === "graduated" && (
             <div className="mb-3 rounded-lg border border-border bg-muted/40 px-3.5 py-3 flex items-center gap-3 flex-wrap">
               <p className="text-xs text-muted-foreground leading-relaxed flex-1 min-w-[12rem]">

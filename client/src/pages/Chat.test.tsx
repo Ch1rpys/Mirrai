@@ -52,6 +52,10 @@ vi.mock("@/lib/trpc", () => ({
       graduate: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       declineGraduation: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    usage: {
+      // The budget notice above the composer (C8.9).
+      budget: { useQuery: () => ({ data: { over: false } }) },
+    },
     chat: {
       markRead: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       getHistory: {

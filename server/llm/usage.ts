@@ -117,6 +117,35 @@ export async function priceForProvider(
   }
 }
 
+/** The price of the provider a background run will use, if one is set. */
+export async function priceForDefaultProvider(userId: number): Promise<UsagePrice | null> {
+  try {
+    const configs = await getLlmConfigsByUserId(userId);
+    const config = configs.find((row) => row.isDefault) ?? configs[0];
+    const extra = config?.extraConfig as { price?: unknown } | null | undefined;
+    return normalizeUsagePrice(extra?.price);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A rough cost for a run that has not happened yet.
+ *
+ * A distillation reads `chars` characters of material and writes about
+ * `calls × 400` tokens of observations. Both numbers are estimates and
+ * the interface says so; this is an early warning, not a bill.
+ */
+export function estimateRunCostMicros(
+  price: UsagePrice,
+  chars: number,
+  calls: number,
+): number {
+  const promptTokens = Math.max(0, chars);
+  const completionTokens = Math.max(0, calls) * 400;
+  return costMicrosFor(price, promptTokens, completionTokens);
+}
+
 /**
  * Records one finished call.
  *
