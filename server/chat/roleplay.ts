@@ -15,6 +15,7 @@ import { copy } from "@shared/copy";
 import { asMaterial } from "@shared/material";
 import { describeFingerprint } from "@shared/fingerprint-prose";
 import type { UserSideProfile } from "@shared/user-side-profile";
+import type { Locale } from "@shared/copy";
 
 /** The practice limits. Both are enforced on the server. */
 export const ROLEPLAY_MAX_MINUTES = 15;
@@ -24,7 +25,7 @@ export const ROLEPLAY_MIN_USER_LINES = 200;
 
 export interface SelfPromptInput {
   personaName: string;
-  locale: "zh" | "en";
+  locale: Locale;
   userSide?: UserSideProfile | null;
   /** The user's own real lines, chosen near the line being answered. */
   examples: string[];

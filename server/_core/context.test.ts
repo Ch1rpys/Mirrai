@@ -164,4 +164,11 @@ describe("the language the client asks for", () => {
     expect(readLocale({ headers: { "x-mirrai-locale": "fr" } })).toBe("zh");
     expect(readLocale({ headers: { "x-mirrai-locale": ["en"] } })).toBe("en");
   });
+
+  it("reads traditional Chinese when the client says so", () => {
+    // The traditional interface is a locale of its own: the server's copy
+    // converts its Chinese words for it, while the prompts stay simplified.
+    expect(readLocale({ headers: { "x-mirrai-locale": "zh-Hant" } })).toBe("zh-Hant");
+    expect(readLocale({ headers: { "x-mirrai-locale": ["zh-Hant"] } })).toBe("zh-Hant");
+  });
 });

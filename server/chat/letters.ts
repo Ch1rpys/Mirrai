@@ -23,6 +23,7 @@ import { pushToUser } from "../_core/push";
 import { getEffectivePresence } from "../_core/graduation";
 import { deliverLetterEmail } from "../_core/mail";
 import { normalizePersonaSettings } from "@shared/persona-settings";
+import type { Locale } from "@shared/copy";
 
 /**
  * How long a letter to a sleeping persona is left alone.
@@ -310,7 +311,7 @@ export async function answerDueLetters(now: Date = new Date()): Promise<number> 
 export async function composeLetterReply(params: {
   persona: Persona;
   letterBody: string;
-  locale?: "zh" | "en";
+  locale?: Locale;
   now?: Date;
   /**
    * How the user was feeling when they wrote it.

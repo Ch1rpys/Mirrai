@@ -10,7 +10,7 @@
  * engines exposes a parameter for it, and pretending otherwise would be
  * a setting that does nothing.
  */
-import type { Locale } from "./copy";
+import { contentLocale, type ContentLocale, type Locale } from "./copy";
 
 export interface ProsodyProfile {
   /** Characters spoken per second, measured from transcripts. */
@@ -31,7 +31,7 @@ export interface ProsodyProfile {
  * five characters a second is the usual range for Mandarin speech; for
  * English, about fifteen characters a second.
  */
-export const PROSODY_BASIS: Record<Locale, number> = {
+export const PROSODY_BASIS: Record<ContentLocale, number> = {
   zh: 4.2,
   en: 15,
 };
@@ -55,7 +55,7 @@ function clamp(value: number, min: number, max: number): number {
  * recordings, not a lab result.
  */
 export function prosodyToTts(prosody: ProsodyProfile, locale: Locale): TtsDirection {
-  const basis = PROSODY_BASIS[locale] ?? PROSODY_BASIS.zh;
+  const basis = PROSODY_BASIS[contentLocale(locale)];
   const measured = Number.isFinite(prosody.charsPerSec) && prosody.charsPerSec > 0
     ? prosody.charsPerSec
     : basis;

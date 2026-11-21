@@ -25,6 +25,7 @@
  * shared letter logic.
  */
 import { copy } from "./copy";
+import type { Locale } from "./copy";
 
 /**
  * A marker nobody can guess.
@@ -49,7 +50,7 @@ export function materialNonce(): string {
  * The nonce is inside both markers, so the closing marker cannot be
  * written by the material itself — the user would have to guess it.
  */
-export function asMaterial(block: string, locale: "zh" | "en" = "zh"): string {
+export function asMaterial(block: string, locale: Locale = "zh"): string {
   const nonce = materialNonce();
   const header = `MATERIAL>>>:${nonce}`;
   const end = `${copy(locale, "prompt.materialFenceEnd")}:${nonce}`;

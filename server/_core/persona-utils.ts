@@ -1,5 +1,5 @@
 import { INTIMACY_LEVELS, normalizeIntimacyLevel } from "@shared/intimacy";
-import { EMOTION_TRIGGER_PATTERNS } from "@shared/emotion-triggers";
+import { matchEmotionTrigger } from "@shared/emotion-triggers";
 import { zonedHour } from "@shared/timezone";
 import { buildReachabilityNote, type Reachability } from "@shared/user-side";
 import { copy, type CopyKey } from "@shared/copy";
@@ -22,6 +22,7 @@ import {
   formatReanchorIssues,
   type ReanchorIssue,
 } from "@shared/style-reminder";
+import type { Locale } from "@shared/copy";
 
 export { INTIMACY_LEVELS, normalizeIntimacyLevel };
 
@@ -52,7 +53,7 @@ export function computeIntimacy(params: {
  * the persona's own mood to the persona, in the language the persona is
  * speaking.
  */
-export function getEmotionalStateDesc(state: string, locale: "zh" | "en" = "zh"): string {
+export function getEmotionalStateDesc(state: string, locale: Locale = "zh"): string {
   /**
    * The map is typed with the key type, so a key that is not in the
    * table is a compile error.
@@ -79,22 +80,18 @@ export function getEmotionalStateDesc(state: string, locale: "zh" | "en" = "zh")
  * deliberately conservative so it never fights the model's judgement.
  *
  * The table itself lives in `shared/emotion-triggers.ts` so that the server
- * and the client speak about the same triggers.
+ * and the client speak about the same triggers. The matching goes through
+ * `matchEmotionTrigger`, which reads traditional Chinese as simplified
+ * before it tests a word — so 「難過」 counts as 「难过」 here too.
  */
-const EMOTION_TRIGGERS = EMOTION_TRIGGER_PATTERNS;
-
 export function computeEmotionalState(
   userMsg: string,
   aiReply: string,
   current: string,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): string {
-  const combined = `${userMsg} ${aiReply}`;
-  const triggers = EMOTION_TRIGGERS[locale] ?? EMOTION_TRIGGERS.zh;
-  for (const state of ["nostalgic", "playful", "melancholy", "happy", "distant"] as const) {
-    if (triggers[state].test(combined)) return state;
-  }
-  return current || "warm";
+  const triggered = matchEmotionTrigger(`${userMsg} ${aiReply}`, locale);
+  return triggered ?? (current || "warm");
 }
 
 /**
@@ -107,7 +104,7 @@ export function computeEmotionalState(
 export function getTimeOfDay(
   date: Date = new Date(),
   timeZone?: string | null,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): { key: string; label: string; intimate: boolean } {
   const hour = zonedHour(date, timeZone);
   // The label goes into the prompt, so it has to be in the language the
@@ -207,7 +204,7 @@ export interface SystemPromptOptions {
   /** Current emotional state description override. */
   emotionalDesc?: string;
   /** Locale for the prompt language. */
-  locale?: "zh" | "en";
+  locale?: Locale;
   /** Reference time for time-of-day and relationship length. */
   now?: Date;
   /**
@@ -932,7 +929,7 @@ function nicknameForPrompt(
   persona: { styleProfile?: unknown; personaData?: unknown },
   stored: string,
   periodId: string | null | undefined,
-  locale: "zh" | "en",
+  locale: Locale,
 ): string {
   const history = normalizeAddressHistory(
     persona.styleProfile && typeof persona.styleProfile === "object"
@@ -972,7 +969,7 @@ function asMaterial(headingOrBody: string, body?: string): string {
 function buildTimeAwareness(
   timeOfDay: { key: string; label: string; intimate: boolean },
   togetherDays: number | null,
-  locale: "zh" | "en",
+  locale: Locale,
   relationshipEnded = false,
   routineTitle?: string,
   nextMeetLine?: string | null,
@@ -1000,7 +997,7 @@ function buildTimeAwareness(
   return `${copy(locale, "prompt.timeAwarenessHeading")}\n${parts.join("\n")}`;
 }
 
-function buildRealismRules(realismLevel: number, locale: "zh" | "en" = "zh"): string {
+function buildRealismRules(realismLevel: number, locale: Locale = "zh"): string {
   const level = Math.max(0, Math.min(100, Number(realismLevel) || 0));
   if (level === 0) return "";
   const intensity = copy(
@@ -1017,7 +1014,7 @@ function buildRealismRules(realismLevel: number, locale: "zh" | "en" = "zh"): st
   ].join("\n");
 }
 
-function buildRelationshipPhase(phase: unknown, locale: "zh" | "en" = "zh"): string {
+function buildRelationshipPhase(phase: unknown, locale: Locale = "zh"): string {
   if (typeof phase !== "string" || !phase) return "";
   const map: Record<string, CopyKey> = {
     initial: "prompt.phaseInitial",
@@ -1068,7 +1065,7 @@ export function checkGraduationEligibility(params: {
    * The reason is read by a person, in a chat window, at the moment they
    * are deciding whether to say goodbye. It has to be in their language.
    */
-  locale?: "zh" | "en";
+  locale?: Locale;
   /**
    * Three conversations in a row that left the user worse (C4.2).
    *

@@ -10,10 +10,11 @@
  */
 import { TRPCError } from "@trpc/server";
 import { copy } from "@shared/copy";
+import type { Locale } from "@shared/copy";
 
 export function assertPersonaWritable(
   persona: { sharedFromPersonaId?: number | null },
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): void {
   if (persona?.sharedFromPersonaId) {
     throw new TRPCError({

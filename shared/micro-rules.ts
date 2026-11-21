@@ -20,6 +20,7 @@
  * rule the model cannot source is a rule the model will hallucinate from.
  */
 import { copy } from "./copy";
+import type { Locale } from "./copy";
 
 /** One message the rule was read off. */
 export interface MicroRuleEvidence {
@@ -169,7 +170,7 @@ export function matchesMicroRule(rule: MicroRule, text: string): boolean {
  * are placed in the prompt with the same weight as the persona's own
  * hard rules — a model told "you may" will sometimes do otherwise.
  */
-export function renderMicroRules(rules: MicroRule[], locale: "zh" | "en" = "zh"): string {
+export function renderMicroRules(rules: MicroRule[], locale: Locale = "zh"): string {
   const active = activeMicroRules(rules);
   if (!active.length) return "";
   const lines = active.map((rule) =>

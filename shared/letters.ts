@@ -13,6 +13,7 @@
 
 import { copy } from "./copy";
 import { asMaterial } from "./material";
+import type { Locale } from "./copy";
 
 export type LetterStatus = "private" | "waiting" | "answered";
 
@@ -86,7 +87,7 @@ export function earliestAnswerAt(
  */
 export function buildLetterReplyInstruction(params: {
   letterBody: string;
-  locale?: "zh" | "en";
+  locale?: Locale;
   relationshipEnded?: boolean;
 }): string {
   const locale = params.locale ?? "zh";

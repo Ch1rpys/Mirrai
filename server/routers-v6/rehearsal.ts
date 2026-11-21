@@ -39,6 +39,7 @@ import { planTurn, executePlan, type TurnInput } from "../chat/generate";
 import { retrieveMemories } from "../chat/retrieval";
 import { resolveProviderForUser } from "../llm/user-provider";
 import { detectCrisis } from "../safety/crisis";
+import type { Locale } from "@shared/copy";
 
 /** The daily cap, in the user's own calendar. */
 export const REHEARSAL_DAILY_LIMIT = 20;
@@ -248,7 +249,7 @@ async function generateVariant(params: {
   persona: NonNullable<Awaited<ReturnType<typeof getPersonaById>>>;
   userId: number;
   line: string;
-  locale: "zh" | "en";
+  locale: Locale;
   now: Date;
   memories: never;
   forcedAct: string;

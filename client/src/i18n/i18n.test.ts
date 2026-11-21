@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { zh } from "./zh";
 import { en } from "./en";
-import { translate, NAMESPACES, type TranslationKey } from "./index";
+import { zhHant } from "./zh-Hant";
+import { dictionaries, LOCALE_NAMES, translate, NAMESPACES, type TranslationKey } from "./index";
 
 /** Every dotted path in an object, including array leaves. */
 function leaves(value: unknown, prefix = ""): string[] {
@@ -137,10 +138,45 @@ function collectSource(dir: string): string {
 }
 
 describe("the dictionaries", () => {
-  it("have the same keys in both languages", () => {
+  it("have the same keys in every language", () => {
+    /**
+     * The Chinese dictionary is the registry: every other dictionary has to
+     * cover exactly its keys. English is a translation somebody wrote;
+     * Traditional Chinese is machine-converted from the same file
+     * (`pnpm i18n:hant`), so a missing key there means the generator ran
+     * against an older `zh.ts`.
+     */
     const zhKeys = leaves(zh).sort();
     const enKeys = leaves(en).sort();
     expect(enKeys).toEqual(zhKeys);
+    expect(leaves(zhHant).sort()).toEqual(zhKeys);
+  });
+
+  it("keeps the same shape in the generated traditional dictionary", () => {
+    // A converter that dropped an array or turned a string into a number
+    // would still pass a key-set test if the keys survived.
+    const mismatched: string[] = [];
+    for (const key of leaves(zh)) {
+      const zhValue = key.split(".").reduce<any>((acc, part) => acc?.[part], zh);
+      const hantValue = key.split(".").reduce<any>((acc, part) => acc?.[part], zhHant);
+      if (Array.isArray(zhValue)) {
+        if (!Array.isArray(hantValue) || hantValue.length !== zhValue.length) {
+          mismatched.push(key);
+        }
+      } else if (typeof zhValue !== typeof hantValue) {
+        mismatched.push(key);
+      }
+    }
+    expect(mismatched).toEqual([]);
+  });
+
+  it("marks the traditional dictionary as generated", () => {
+    // The file is written by `pnpm i18n:hant`; a hand edit would be erased
+    // by the next run, so the header has to say so where an editor sees it.
+    const { readFileSync } = require("fs") as typeof import("fs");
+    const { join } = require("path") as typeof import("path");
+    const source = readFileSync(join(__dirname, "zh-Hant.ts"), "utf8");
+    expect(source).toContain("GENERATED FILE — DO NOT EDIT BY HAND");
   });
 
   it("have no empty strings", () => {
@@ -157,7 +193,11 @@ describe("the dictionaries", () => {
      */
     const empties: string[] = [];
     for (const key of leaves(zh)) {
-      for (const [name, table] of [["zh", zh], ["en", en]] as const) {
+      for (const [name, table] of [
+        ["zh", zh],
+        ["en", en],
+        ["zh-Hant", zhHant],
+      ] as const) {
         const value = key.split(".").reduce<any>((acc, part) => acc?.[part], table);
         if (typeof value === "string" && !value.trim()) empties.push(`${name}:${key}`);
       }
@@ -170,8 +210,14 @@ describe("the dictionaries", () => {
     for (const key of leaves(zh)) {
       const zhValue = key.split(".").reduce<any>((acc, part) => acc?.[part], zh);
       const enValue = key.split(".").reduce<any>((acc, part) => acc?.[part], en);
-      if (typeof zhValue !== "string" || typeof enValue !== "string") continue;
-      if (placeholders(zhValue).join(",") !== placeholders(enValue).join(",")) {
+      const hantValue = key.split(".").reduce<any>((acc, part) => acc?.[part], zhHant);
+      if (typeof zhValue !== "string") continue;
+      if (typeof enValue === "string" && placeholders(zhValue).join(",") !== placeholders(enValue).join(",")) {
+        mismatched.push(key);
+      }
+      // The conversion is character-level, so the placeholders must survive
+      // it exactly — a placeholder translated to 繁體 would never be filled.
+      if (typeof hantValue === "string" && placeholders(zhValue).join(",") !== placeholders(hantValue).join(",")) {
         mismatched.push(key);
       }
     }
@@ -258,6 +304,21 @@ describe("translate", () => {
 
   it("returns the English text for the English locale", () => {
     expect(translate("en", "common.save")).toBe(en.common.save);
+  });
+
+  it("is offered in the language switcher", () => {
+    // Each language names itself in its own script — the only label a person
+    // looking for their language can read.
+    expect(LOCALE_NAMES["zh-Hant"]).toBe("繁體中文");
+    expect(Object.keys(dictionaries).sort()).toEqual(["en", "zh", "zh-Hant"]);
+  });
+
+  it("returns the traditional text for the traditional locale", () => {
+    expect(translate("zh-Hant", "common.save")).toBe(zhHant.common.save);
+    // It is the traditional dictionary, not the simplified one under a new
+    // name: the words are the same words in the other characters.
+    expect(translate("zh-Hant", "landing.nav.login")).toBe(zhHant.landing.nav.login);
+    expect(translate("zh-Hant", "landing.nav.login")).not.toBe(zh.landing.nav.login);
   });
 
   it("interpolates parameters", () => {

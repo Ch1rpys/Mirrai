@@ -2,7 +2,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { rateLimiter, resolveRateLimitKey, type RateLimitRule } from "./rate-limit";
-import { copy, type CopyKey } from "@shared/copy";
+import { copy, type CopyKey, type Locale } from "@shared/copy";
 import { sealState } from "@shared/persona-state";
 
 /**
@@ -29,7 +29,7 @@ export function formatErrorForClient({
 }: {
   shape: { message: string; code: number; data: Record<string, unknown> };
   error: unknown;
-  ctx?: { locale?: "zh" | "en" };
+  ctx?: { locale?: Locale };
 }): { message: string; code: number; data: Record<string, unknown> } {
   const locale = ctx?.locale ?? "zh";
   /**

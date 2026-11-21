@@ -9,6 +9,7 @@ import { SPEECH_ACTS, USER_ACTS, USER_ACT_COPY_KEYS, FEEDBACK_REASONS, type Spee
 import { SUPPRESSION_KINDS, normalizeSuppressions, type Suppression, type SuppressionKind } from "@shared/suppressions";
 import { normalizeLifeEvents, type LifeEvent, type LifeEventKind } from "@shared/life-events";
 import { ACT_MIN_SAMPLES, emptyCounts, normalizeActProfile, topRepliesForUserAct, type ActCounts } from "@shared/act-profile";
+import type { Locale } from "@shared/copy";
 
 /**
  * The fifth-stage editors: subtractions, life events, action counts,
@@ -352,7 +353,7 @@ function AdjacencyTable({
   share,
 }: {
   byUserAct: Partial<Record<(typeof USER_ACTS)[number], ActCounts>> | undefined;
-  locale: "zh" | "en";
+  locale: Locale;
   title: string;
   hint: string;
   share: (act: string, pct: number) => string;

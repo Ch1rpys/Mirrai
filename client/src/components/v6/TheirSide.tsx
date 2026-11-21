@@ -4,6 +4,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import { zonedDateKey } from "@shared/timezone";
 import { sunTimes } from "@shared/sun";
+import type { Locale } from "@shared/copy";
 
 /** The WMO weather-code groups the header can name. */
 export type WeatherGroup =
@@ -32,7 +33,7 @@ export function weatherGroup(code: number): WeatherGroup {
   return "unknown";
 }
 
-function clockIn(zone: string | null, date: Date, locale: "zh" | "en"): string {
+function clockIn(zone: string | null, date: Date, locale: Locale): string {
   if (!zone) {
     return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
   }

@@ -7,6 +7,7 @@
  * stays; the documents and the interface call it a record.
  */
 import { copy } from "./copy";
+import type { Locale } from "./copy";
 
 export const RECORD_KINDS = [
   "text",
@@ -98,7 +99,7 @@ export function recordText(row: RecordContentRow): string {
   return row.content;
 }
 
-function formatDuration(seconds: number, locale: "zh" | "en"): string {
+function formatDuration(seconds: number, locale: Locale): string {
   const sec = Math.max(0, Math.floor(seconds));
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
@@ -128,7 +129,7 @@ function tokenParts(content: string): { kind: string; parts: string[] } | null {
  */
 export function renderRecordContent(
   row: RecordContentRow,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): string {
   const kind = row.kind ?? "text";
   if (kind === "text" || kind === "system") return row.content;

@@ -16,6 +16,7 @@ import {
   parseStoredEntities,
   type MemoryEntities,
 } from "@shared/memory-entities";
+import type { Locale } from "@shared/copy";
 
 export interface MemoryCandidate {
   id: number;
@@ -366,7 +367,7 @@ function hopMemories(params: {
  * one piece of punctuation that has no words in it stays here, where it is
  * one character wide.
  */
-function descriptionSeparator(locale: "zh" | "en"): string {
+function descriptionSeparator(locale: Locale): string {
   return locale === "en" ? ": " : "：";
 }
 
@@ -378,7 +379,7 @@ function descriptionSeparator(locale: "zh" | "en"): string {
  */
 export function formatMemoriesForPrompt(
   memories: ScoredMemory[],
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
   now: number = Date.now(),
 ): string {
   if (memories.length === 0) return "";
@@ -427,7 +428,7 @@ export function splitMemorySections<T extends { category: string; subject?: stri
  */
 export function formatAnchorsForPrompt(
   anchors: ScoredMemory[],
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): string {
   /**
    * The guard lives here as well as at the callers. The anchor block is
@@ -462,7 +463,7 @@ export function formatAnchorsForPrompt(
  */
 export function fileSummaryCandidates(
   files: Array<{ id: number; originalName: string; extractedMemory: string | null; createdAt: Date }>,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): MemoryCandidate[] {
   return files
     .filter((file) => (file.extractedMemory ?? "").trim().length > 0)
@@ -515,7 +516,7 @@ export async function retrieveMemories(params: {
   userId: number;
   userMessage: string;
   topK?: number;
-  locale?: "zh" | "en";
+  locale?: Locale;
   now?: number;
   /**
    * Whether the selected memories are marked as recalled.

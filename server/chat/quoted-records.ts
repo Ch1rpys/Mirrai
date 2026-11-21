@@ -13,6 +13,7 @@
 import { copy } from "@shared/copy";
 import { zonedDateKey } from "@shared/timezone";
 import * as db from "../db";
+import type { Locale } from "@shared/copy";
 
 export const MAX_QUOTED_RECORDS = 8;
 export const MAX_QUOTED_CHARS = 1200;
@@ -37,7 +38,7 @@ export interface QuotedRecordLine {
 /** The section, as the prompt receives it (the caller fences it). */
 export function buildQuotedRecordsSection(
   lines: QuotedRecordLine[],
-  params: { locale: "zh" | "en"; timeZone?: string | null; themName: string; meName?: string },
+  params: { locale: Locale; timeZone?: string | null; themName: string; meName?: string },
 ): string {
   const zone = params.timeZone ?? "UTC";
   const rendered = lines.map((line) => {
@@ -68,7 +69,7 @@ export async function loadQuotedRecordsSection(params: {
   persona: { id: number; name: string };
   userId: number;
   ids: number[];
-  locale: "zh" | "en";
+  locale: Locale;
   timeZone?: string | null;
   meName?: string;
 }): Promise<string> {

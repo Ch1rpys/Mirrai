@@ -14,6 +14,7 @@ import { normalizePersonaData, type PersonaData } from "../_core/persona-schema"
 import type { CharacterFamily } from "./pipeline";
 import { copy } from "@shared/copy";
 import type { LLMProvider } from "../llm/types";
+import type { Locale } from "@shared/copy";
 
 export interface CorrectionRequest {
   /** The persona being corrected. */
@@ -43,7 +44,7 @@ export interface CorrectionRequest {
    */
   providerOwned?: boolean;
   /** The language the correction is written in. */
-  locale?: "zh" | "en";
+  locale?: Locale;
 }
 
 export interface CorrectionResult {

@@ -8,10 +8,11 @@
 import { labelSpeechActByRule, type SpeechAct } from "@shared/speech-acts";
 import { labelMissingActs } from "../skill-engine/acts";
 import type { EvalCaseData } from "./dataset";
+import type { Locale } from "@shared/copy";
 
 export async function labelEvalCases(
   cases: EvalCaseData[],
-  options: { userId: number; locale?: "zh" | "en" },
+  options: { userId: number; locale?: Locale },
 ): Promise<EvalCaseData[]> {
   if (!cases.length) return cases;
   const unlabeled = cases.flatMap((item, index) => {

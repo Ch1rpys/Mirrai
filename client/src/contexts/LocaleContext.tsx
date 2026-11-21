@@ -37,10 +37,18 @@ function storedLocale(): Locale {
   if (typeof window === "undefined") return "zh";
   try {
     const value = localStorage.getItem("mirrai-locale");
-    return value === "en" ? "en" : "zh";
+    if (value === "en" || value === "zh-Hant") return value;
+    return "zh";
   } catch {
     return "zh";
   }
+}
+
+/** The `lang` attribute for a locale. */
+function documentLanguage(locale: Locale): string {
+  if (locale === "en") return "en";
+  if (locale === "zh-Hant") return "zh-Hant";
+  return "zh-CN";
 }
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
@@ -70,7 +78,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     }
     // The document language should follow the interface language.
     if (typeof document !== "undefined") {
-      document.documentElement.lang = l === "zh" ? "zh-CN" : "en";
+      document.documentElement.lang = documentLanguage(l);
     }
     // The server has to know too: the things it sends on its own — a
     // reminder at midnight, a reply in a chat window — are not asked.
@@ -86,7 +94,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
    */
   useEffect(() => {
     if (typeof document !== "undefined") {
-      document.documentElement.lang = locale === "en" ? "en" : "zh-CN";
+      document.documentElement.lang = documentLanguage(locale);
       /**
        * The page's description follows the language too.
        *

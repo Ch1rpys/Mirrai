@@ -7,6 +7,7 @@
  * emotional state, the safety layer, the graduation check — is shared.
  */
 import type { ChannelId } from "./bridge";
+import type { Locale } from "@shared/copy";
 
 export type { ChannelId };
 
@@ -31,7 +32,7 @@ export interface ChannelAdapter {
    * A channel is a place a person talks to their persona; the name is
    * how they recognise it.
    */
-  labelForLocale?(locale: "zh" | "en"): string;
+  labelForLocale?(locale: Locale): string;
   /** True when the channel needs credentials before it can be started. */
   requiresCredentials: boolean;
   /**
@@ -40,7 +41,7 @@ export interface ChannelAdapter {
    * The locale is the language of the person starting it, and it decides
    * the language of the errors a failure reports.
    */
-  start(userId: number, locale?: "zh" | "en"): Promise<void>;
+  start(userId: number, locale?: Locale): Promise<void>;
   /** Stops the channel for one user. */
   stop(userId: number): Promise<void>;
   /**
@@ -59,14 +60,14 @@ export interface ChannelAdapter {
    * The locale is the language of the person the message goes to, and it
    * decides the language of the error a failed send reports.
    */
-  send(userId: number, targetId: string, text: string, locale?: "zh" | "en"): Promise<void>;
+  send(userId: number, targetId: string, text: string, locale?: Locale): Promise<void>;
   /**
    * Binds a persona as the default for the channel's conversations.
    *
    * The locale is the language of the person who is binding it, and it
    * decides the language of the error a failed bind reports.
    */
-  setDefaultPersona(userId: number, personaId: number, locale?: "zh" | "en"): Promise<void>;
+  setDefaultPersona(userId: number, personaId: number, locale?: Locale): Promise<void>;
   /**
    * Restores a previously connected channel on boot.
    *
@@ -79,6 +80,6 @@ export interface ChannelAdapter {
 /**
  * The display name of a channel, in the language asked for.
  */
-export function channelLabel(adapter: ChannelAdapter, locale: "zh" | "en" = "zh"): string {
+export function channelLabel(adapter: ChannelAdapter, locale: Locale = "zh"): string {
   return adapter.labelForLocale ? adapter.labelForLocale(locale) : adapter.label;
 }

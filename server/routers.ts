@@ -130,7 +130,7 @@ import {
   MEMORY_PHOTO_DAYS,
 } from "@shared/memory-date";
 import { resolveRelationshipPhase, parseRecalledIds } from "@shared/user-side";
-import { copy, localizeScene } from "@shared/copy";
+import { contentLocale, copy, localizeScene } from "@shared/copy";
 import { normalizeHarmReport } from "@shared/harm";
 import { normalizePeriods } from "@shared/periods";
 import {
@@ -286,6 +286,7 @@ import {
   listCollectorJobs,
 } from "./collectors";
 import { listPersistedCollectorJobs, getPersistedCollectorJob } from "./collectors/db-store";
+import type { Locale } from "@shared/copy";
 
 /**
  * Resolves a persona's picture to PNG bytes for the character-card export.
@@ -480,7 +481,7 @@ async function assertDistillCallBudget(params: {
   personaId: number;
   userId: number;
   mode?: DistillationMode | null;
-  locale: "zh" | "en";
+  locale: Locale;
   name?: string;
 }): Promise<void> {
   let timezone: string | null = null;
@@ -534,7 +535,7 @@ async function startPersonaDistillation(params: {
    */
   mode?: DistillationMode | null;
   /** The language the status messages are written in. */
-  locale?: "zh" | "en";
+  locale?: Locale;
   /**
    * The provider this persona is pinned to.
    *
@@ -730,7 +731,7 @@ const runningDistillations = new Set<number>();
 async function assertNoRunningDistillation(
   persona: { analysisStatus?: string | null; skillJobId?: number | null },
   userId: number,
-  locale: "zh" | "en",
+  locale: Locale,
 ): Promise<void> {
   if (persona.analysisStatus !== "analyzing") return;
   const jobId = persona.skillJobId ?? null;
@@ -755,7 +756,7 @@ async function assertNoRunningDistillation(
  * a model they never chose. A custom endpoint is expressed by pointing a
  * registered provider (OpenAI, for instance) at a different `baseUrl`.
  */
-function assertKnownProvider(providerName: string, locale: "zh" | "en" = "zh"): void {
+function assertKnownProvider(providerName: string, locale: Locale = "zh"): void {
   const known = registry.list().map((p) => p.name.toLowerCase());
   if (known.includes(providerName.trim().toLowerCase())) return;
   throw new TRPCError({
@@ -985,7 +986,7 @@ export const appRouter = router({
      * anyway.
      */
     setLocale: publicProcedure
-      .input(z.object({ locale: z.enum(["zh", "en"]) }))
+      .input(z.object({ locale: z.enum(["zh", "en", "zh-Hant"]) }))
       .mutation(async ({ ctx, input }) => {
         if (!ctx.user) return { success: true };
         await setUserLocale(ctx.user.id, input.locale);
@@ -1207,7 +1208,7 @@ export const appRouter = router({
             includeJournal: input.includeJournal,
             journal: journal.map((entry) => ({ entryDate: entry.entryDate, body: entry.body })),
           },
-          ctx.locale,
+          contentLocale(ctx.locale),
         );
         return { html };
       }),
@@ -1395,7 +1396,7 @@ export const appRouter = router({
               routine: profile?.routine ?? null,
             },
           },
-          ctx.locale,
+          contentLocale(ctx.locale),
         );
         return { html };
       }),

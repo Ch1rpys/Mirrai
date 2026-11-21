@@ -25,6 +25,7 @@ import {
 } from "@shared/style-fingerprint";
 import { normalizeStyleProfile } from "@shared/style-profile";
 import type { EvalCaseData } from "./dataset";
+import type { Locale } from "@shared/copy";
 
 export const DRIFT_WINDOW_SIZE = 10;
 export const DRIFT_TURNS_DEFAULT = 50;
@@ -62,7 +63,7 @@ export class DriftNeedUserSideError extends Error {
 /**
  * The instruction the simulated user sees, with the real lines fenced.
  */
-export function simUserSystemPrompt(locale: "zh" | "en", sampleLines: string[]): string {
+export function simUserSystemPrompt(locale: Locale, sampleLines: string[]): string {
   return [copy(locale, "prompts.eval.simUser"), asMaterial(sampleLines.join("\n"), locale)].join(
     "\n\n",
   );
@@ -137,7 +138,7 @@ export interface DriftOptions {
   startCase: EvalCaseData;
   provider: LLMProvider;
   seed?: string;
-  locale?: "zh" | "en";
+  locale?: Locale;
 }
 
 /**

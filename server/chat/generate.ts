@@ -89,6 +89,7 @@ import {
 import { normalizeAddressHistory } from "@shared/address-history";
 import { renderRecordContent } from "@shared/records";
 import type { ScoredMemory } from "./retrieval";
+import type { Locale } from "@shared/copy";
 
 export interface TurnInput {
   persona: Persona;
@@ -103,7 +104,7 @@ export interface TurnInput {
     metadata?: unknown;
   }>;
   now: Date;
-  locale: "zh" | "en";
+  locale: Locale;
   periodId?: string | null;
   quotedSection?: string;
   sceneOverlay?: string | null;
@@ -712,7 +713,7 @@ function routineForTurn(input: TurnInput, timeZone: string | null): string | nul
 function peopleLayerOn(
   enabled: boolean,
   messages: LLMMessage[],
-  locale: "zh" | "en",
+  locale: Locale,
 ): boolean {
   if (!enabled) return false;
   const prompt = String(messages[0]?.content ?? "");
@@ -820,7 +821,7 @@ function parsePlannerGist(raw: string): string | null {
 function appendVoiceInstruction(
   messages: LLMMessage[],
   gist: string,
-  locale: "zh" | "en",
+  locale: Locale,
 ): LLMMessage[] {
   const line = copy(locale, "prompts.twoStage.voice", { gist });
   const first = messages[0];
@@ -1135,7 +1136,7 @@ function tighterTokenBudget(plan: number | undefined, requested: number | undefi
   return Math.min(plan, requested);
 }
 
-function withFactRewriteInstruction(messages: LLMMessage[], locale: "zh" | "en"): LLMMessage[] {
+function withFactRewriteInstruction(messages: LLMMessage[], locale: Locale): LLMMessage[] {
   const line = copy(locale, "prompt.factRewrite");
   if (messages.length === 0) return [{ role: "system", content: line }];
   const first = messages[0]!;

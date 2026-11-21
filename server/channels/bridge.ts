@@ -14,6 +14,7 @@ import { fallbackChannelGapMs, waitAbortable } from "../chat/inbox";
 import type { ChannelReply } from "./send-parts";
 import { claimSilenceNotice } from "../chat/silence-notice";
 import { zonedDateKey, localDateKey } from "@shared/timezone";
+import type { Locale } from "@shared/copy";
 
 export type ChannelId = "wechat" | "feishu";
 
@@ -32,7 +33,7 @@ export interface ChannelChatParams {
    * the user's saved preference. It decides which emotion triggers the
    * heuristic uses and which language the prompt is written in.
    */
-  locale?: "zh" | "en";
+  locale?: Locale;
 }
 
 function gapsFor(parts: string[], given?: number[]): number[] {

@@ -178,7 +178,10 @@ function putImportFile(args: {
     });
     xhr.open("PUT", `/api/import/upload?${params.toString()}`);
     xhr.withCredentials = true;
-    xhr.setRequestHeader("x-mirrai-locale", args.locale === "en" ? "en" : "zh");
+    xhr.setRequestHeader(
+      "x-mirrai-locale",
+      args.locale === "en" ? "en" : args.locale === "zh-Hant" ? "zh-Hant" : "zh",
+    );
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && event.total > 0) {
         args.onProgress(Math.round((event.loaded / event.total) * 100));

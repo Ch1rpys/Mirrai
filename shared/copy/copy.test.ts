@@ -1,7 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Converter } from "opencc-js/cn2t";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { COPY, copy, copyKey, detectLocale, interpolate, isCopyKey } from "./index";
+import {
+  COPY,
+  copy,
+  copyKey,
+  detectLocale,
+  interpolate,
+  isCopyKey,
+  registerTraditionalConverter,
+} from "./index";
 import { registerSkillPrompts } from "./skill-prompts";
 
 // The skill prompts are added to the table when the pipeline is loaded.
@@ -261,6 +270,92 @@ describe("the type of the key", () => {
     const key = "channels.noPersonas" as const;
     expect(isCopyKey(key)).toBe(true);
     expect(Object.keys(COPY)).toContain(key);
+  });
+});
+
+/** The same converter the server registers at startup. */
+const cnToTw = Converter({ from: "cn", to: "tw" });
+
+/**
+ * Traditional Chinese is the same words in different characters.
+ *
+ * The server's copy is written once, in simplified Chinese, and the
+ * traditional interface reads it in traditional characters. The converter is
+ * injected rather than imported by `shared/copy`, because the client imports
+ * that module too and the simplified → traditional table is over a megabyte.
+ */
+describe("traditional Chinese", () => {
+  afterEach(() => {
+    // The rest of the file expects no converter registered.
+    registerTraditionalConverter(null);
+  });
+
+  it("returns the Chinese sentence in traditional characters", () => {
+    registerTraditionalConverter(cnToTw);
+    const simplified = copy("zh", "errors.userNotFound");
+    const traditional = copy("zh-Hant", "errors.userNotFound");
+    // It is the same sentence in different characters, not a second
+    // translation: 用户 → 用戶, 找到 → 找到.
+    expect(traditional).not.toBe(simplified);
+    expect(traditional).toBe(cnToTw(simplified));
+  });
+
+  it("converts the key that is built at runtime too", () => {
+    registerTraditionalConverter(cnToTw);
+    expect(copyKey("zh-Hant", "errors.userNotFound")).toBe(cnToTw(copy("zh", "errors.userNotFound")));
+  });
+
+  it("fills the placeholders after converting", () => {
+    registerTraditionalConverter(cnToTw);
+    const text = copyKey("zh-Hant", "skipped", { n: 3 } as never);
+    // An unknown key is returned as it is — which is the contract of
+    // copyKey, and shows that the conversion did not swallow it.
+    expect(text).toBe("skipped");
+  });
+
+  it("does not convert a model instruction", () => {
+    /**
+     * The prompts stay in simplified Chinese: the manual says so, because
+     * "给模型的指令保持简体" — the model is told to answer in simplified
+     * Chinese, and the persona's replies are whatever the records carry.
+     */
+    registerTraditionalConverter(cnToTw);
+    expect(copy("zh-Hant", "prompt.emotionalWarm")).toBe(copy("zh", "prompt.emotionalWarm"));
+    expect(copy("zh-Hant", "prompts.emotionClassification")).toBe(
+      copy("zh", "prompts.emotionClassification"),
+    );
+    expect(copy("zh-Hant", "prompt.act.answer")).toBe(copy("zh", "prompt.act.answer"));
+  });
+
+  it("converts a skill-engine progress message but not its prompt", () => {
+    // The skill prompts are a prompt namespace, so their instructions stay
+    // simplified — but the handful of lines the person reads while it runs
+    // are ordinary sentences and are converted with everything else.
+    registerTraditionalConverter(cnToTw);
+    const simplified = copy("zh", "skillPrompts.pipeline.personaReady");
+    expect(copy("zh-Hant", "skillPrompts.pipeline.personaReady")).toBe(cnToTw(simplified));
+    // And a real instruction from the same table stays as it is.
+    expect(copy("zh-Hant", "skillPrompts.pipeline.describeImages")).toBe(
+      copy("zh", "skillPrompts.pipeline.describeImages"),
+    );
+  });
+
+  it("caches the conversion per key", () => {
+    const counting = vi.fn((text: string) => cnToTw(text));
+    registerTraditionalConverter(counting);
+    copy("zh-Hant", "errors.userNotFound");
+    copy("zh-Hant", "errors.userNotFound");
+    expect(counting).toHaveBeenCalledTimes(1);
+    // A different key is its own conversion.
+    copy("zh-Hant", "errors.passwordWrong");
+    expect(counting).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to the simplified sentence when no converter is registered", () => {
+    // The client never registers one — its own words are the generated
+    // dictionary — and the copy table must still answer rather than throw.
+    registerTraditionalConverter(null);
+    expect(copy("zh-Hant", "errors.userNotFound")).toBe(copy("zh", "errors.userNotFound"));
   });
 });
 

@@ -8,6 +8,7 @@
  */
 import path from "path";
 import { copy } from "@shared/copy";
+import type { Locale } from "@shared/copy";
 
 /** Control characters plus the punctuation that is unsafe on at least one OS. */
 const UNSAFE_CHARS = /[\u0000-\u001f\u007f<>:"/\\|?*]/g;
@@ -122,7 +123,7 @@ export function fileExtension(name: string): string {
 export function checkFileExtension(
   fileName: string,
   fileType: string,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): string | null {
   const allowed = ALLOWED_EXTENSIONS[fileType];
   // An unknown kind is not allowed to carry any extension at all.

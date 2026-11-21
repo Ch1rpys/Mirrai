@@ -1,5 +1,6 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
+import type { Locale } from "@shared/copy";
 import { authenticateRequest } from "./auth";
 
 export type TrpcContext = {
@@ -14,7 +15,7 @@ export type TrpcContext = {
    * that is in a header. Without it the server could only guess, and it
    * guessed Chinese.
    */
-  locale: "zh" | "en";
+  locale: Locale;
 };
 
 export async function createContext(
@@ -29,11 +30,19 @@ export async function createContext(
   return { req: opts.req, res: opts.res, user, locale: readLocale(opts.req) };
 }
 
-/** The language the client asked for, from the request headers. */
-export function readLocale(req: { headers?: Record<string, unknown> }): "zh" | "en" {
+/**
+ * The language the client asked for, from the request headers.
+ *
+ * `zh-Hant` is the traditional Chinese interface. It is stored in
+ * `users.locale` and sent on the header like the other two; the copy table
+ * converts its own words for it, while prompts stay in simplified Chinese.
+ */
+export function readLocale(req: { headers?: Record<string, unknown> }): Locale {
   const raw = req?.headers?.["x-mirrai-locale"];
   const value = Array.isArray(raw) ? raw[0] : raw;
-  return value === "en" ? "en" : "zh";
+  if (value === "en") return "en";
+  if (value === "zh-Hant") return "zh-Hant";
+  return "zh";
 }
 
 /**

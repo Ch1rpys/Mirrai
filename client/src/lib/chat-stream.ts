@@ -91,7 +91,7 @@ export interface StreamChatOptions {
   personaId: number;
   message: string;
   /** The interface language — it decides the language of the prompt. */
-  locale?: "zh" | "en";
+  locale?: Locale;
   /**
    * The message being replied to.
    *

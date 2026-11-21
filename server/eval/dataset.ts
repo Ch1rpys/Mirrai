@@ -22,6 +22,7 @@ import { isSpeechAct, labelSpeechActByRule, type SpeechAct } from "@shared/speec
 import { FINGERPRINT_STATES } from "@shared/style-fingerprint";
 import { zonedHour } from "@shared/timezone";
 import { EVAL_MIN_ASSISTANT_LINES } from "@shared/eval-limits";
+import type { Locale } from "@shared/copy";
 
 export { EVAL_MIN_ASSISTANT_LINES };
 
@@ -92,7 +93,7 @@ export interface EvalCaseOptions {
    * words are in. Without this, an English persona's held-out lines
    * carried no state at all — and every per-state bucket was empty.
    */
-  locale?: "zh" | "en";
+  locale?: Locale;
   /** Stretches of the record, from personaData.periods. */
   periods?: EvalPeriodRange[];
   /** The persona's timezone, for day vs night. */

@@ -14,6 +14,7 @@ import { subprocessEnvironment } from "../_core/subprocess-env";
 import { parseZoneless } from "@shared/timezone";
 import { copy } from "@shared/copy";
 import type { CollectedMessage, CollectorSourceId, CollectResult } from "./types";
+import type { Locale } from "@shared/copy";
 
 /** Default budget for a single collector run (30 minutes). */
 export const DEFAULT_COLLECTOR_TIMEOUT_MS = 30 * 60 * 1000;
@@ -33,7 +34,7 @@ export interface RunCollectorOptions {
    *
    * The errors the runner raises are read by a person.
    */
-  locale?: "zh" | "en";
+  locale?: Locale;
 }
 
 /**
@@ -346,7 +347,7 @@ export interface NormaliseCollectorOptions {
    * The failures are said to the person who asked for the collection —
    * and they used to be written in English, in the middle of the code.
    */
-  locale?: "zh" | "en";
+  locale?: Locale;
 }
 
 /** A `[PROGRESS] 0.42` line, as the collectors print it. */

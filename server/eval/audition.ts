@@ -18,6 +18,7 @@ import { copy } from "@shared/copy";
 import { runEval, type EvalRunOptions } from "./run";
 import type { EvalCaseData } from "./dataset";
 import type { EvalMetrics } from "./metrics";
+import type { Locale } from "@shared/copy";
 
 export interface AuditionSlot {
   id: string;
@@ -54,7 +55,7 @@ export interface AuditionOptions {
   userId: number;
   cases: EvalCaseData[];
   trainingTexts: string[];
-  locale?: "zh" | "en";
+  locale?: Locale;
   providers?: AuditionSlot[];
 }
 

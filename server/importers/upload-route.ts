@@ -42,7 +42,9 @@ class ImportTooLargeError extends Error {
 function localeOf(req: Request): Locale {
   const header = req.headers["x-mirrai-locale"];
   const value = Array.isArray(header) ? header[0] : header;
-  return value === "en" ? "en" : "zh";
+  if (value === "en") return "en";
+  if (value === "zh-Hant") return "zh-Hant";
+  return "zh";
 }
 
 function queryValue(req: Request, key: string): string {

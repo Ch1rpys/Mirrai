@@ -1,4 +1,5 @@
 import { formatTimeInZone } from "@/lib/dates";
+import type { Locale } from "@shared/copy";
 
 /** Five minutes. Adjacent messages further apart than this get a bar. */
 export const TIME_BAR_GAP_MS = 5 * 60_000;
@@ -20,7 +21,7 @@ export default function TimeBar({
   at: Date | string | null | undefined;
   previousAt?: Date | string | null;
   skin: string;
-  locale: "zh" | "en";
+  locale: Locale;
   timeZone?: string | null;
 }) {
   if (skin === "classic") return null;

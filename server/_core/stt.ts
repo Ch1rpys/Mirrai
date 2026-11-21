@@ -6,6 +6,7 @@ import { assertLocalEndpoint, isLocalEndpoint } from "./local-endpoint";
 import { runBinary } from "./run-binary";
 import { llmService } from "../llm";
 import type { LLMProvider } from "../llm/types";
+import type { Locale } from "@shared/copy";
 
 /**
  * Where a recording is turned into words.
@@ -97,7 +98,7 @@ export interface TranscribeInput {
   buffer?: Buffer;
   filePath?: string;
   fileName: string;
-  language?: "zh" | "en" | "auto";
+  language?: Locale | "auto";
   purpose: "chat" | "import";
   /** Used only by the `provider` engine. */
   provider?: LLMProvider;

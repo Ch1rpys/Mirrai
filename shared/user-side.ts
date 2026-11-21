@@ -18,8 +18,9 @@
  * six states. The persona's moods are what the app infers from the
  * conversation; these are what the user says about themselves.
  */
-import { copy } from "./copy";
+import { contentLocale, copy } from "./copy";
 import { zonedDateKey } from "./timezone";
+import type { Locale } from "./copy";
 
 export type UserMood = "great" | "okay" | "low" | "down" | "anxious" | "numb";
 
@@ -121,7 +122,7 @@ export interface UserContext {
  */
 export function buildUserContextBlock(
   context: UserContext,
-  options: { locale?: "zh" | "en"; mood?: UserMood | null } = {},
+  options: { locale?: Locale; mood?: UserMood | null } = {},
 ): string {
   const locale = options.locale ?? "zh";
   const parts: string[] = [];
@@ -147,7 +148,7 @@ export function buildUserContextBlock(
     parts.push(copy(locale, "userSide.timezone", { zone: timeZone }));
   }
   if (options.mood) {
-    const label = USER_MOOD_LABELS[options.mood][locale];
+    const label = USER_MOOD_LABELS[options.mood][contentLocale(locale)];
     parts.push(copy(locale, "userSide.mood", { label }));
   }
 
@@ -224,7 +225,7 @@ export function buildRelationshipSection(
     happenedAt?: Date | string | null;
   }>,
   phase: RelationshipEventKind | null,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
   now: Date = new Date(),
   /**
    * The user's own time zone.
@@ -239,7 +240,7 @@ export function buildRelationshipSection(
   const parts: string[] = [];
   for (const event of events.slice(0, 8)) {
     const kind = isRelationshipEventKind(event.kind) ? event.kind : null;
-    const label = kind ? EVENT_LABELS[kind][locale] : null;
+    const label = kind ? EVENT_LABELS[kind][contentLocale(locale)] : null;
     const when = event.happenedAt ? formatWhen(event.happenedAt, locale, now, timeZone) : null;
     // The punctuation follows the language.
     //
@@ -361,7 +362,7 @@ export function calendarDaysBetween(
  */
 function formatWhen(
   value: Date | string,
-  locale: "zh" | "en",
+  locale: Locale,
   now: Date = new Date(),
   timeZone?: string | null,
 ): string {
@@ -423,7 +424,7 @@ export function isReachability(value: unknown): value is Reachability {
  */
 export function buildReachabilityNote(
   reachability: Reachability,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): string {
   if (reachability !== "unreachable") return "";
   return copy(locale, "userSide.unreachable");

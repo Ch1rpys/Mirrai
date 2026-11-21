@@ -31,6 +31,7 @@ import { encryptSecret } from "../_core/crypto";
 import { normaliseCollectorOutput, parseNormalisedPayload, runCollector } from "./runner";
 import { copy } from "@shared/copy";
 import { zonedOffsetMinutes } from "@shared/timezone";
+import type { Locale } from "@shared/copy";
 
 export type CollectorSourceId = "feishu" | "dingtalk" | "slack" | "email" | "wechat_export";
 
@@ -133,7 +134,7 @@ export interface CollectInput {
    * The collectors report what went wrong in words, and those words
    * are read by a person.
    */
-  locale?: "zh" | "en";
+  locale?: Locale;
   /** Progress sink (0..100) injected by the job runner. */
   onProgress?: (pct: number) => void;
   /** Cancellation signal injected by the job runner. */
@@ -151,7 +152,7 @@ export interface SourceConnector {
    * person picking it. A source that cannot say its own name in the
    * language of the interface is a source nobody finds.
    */
-  labelForLocale?(locale: "zh" | "en"): string;
+  labelForLocale?(locale: Locale): string;
   /** True when the source needs Playwright + a Chromium download. */
   requiresBrowser?: boolean;
   /**
@@ -713,7 +714,7 @@ const FEISHU_CREDENTIAL_KEYS = [
 const feishuConnector: SourceConnector = {
   id: "feishu",
   label: copy("zh", "labels.collector.feishu"),
-  labelForLocale: (locale: "zh" | "en") => copy(locale, "labels.collector.feishu"),
+  labelForLocale: (locale: Locale) => copy(locale, "labels.collector.feishu"),
   requiresBrowser: false,
   tool: "feishu_auto_collector.py",
   credentialKeys: FEISHU_CREDENTIAL_KEYS,
@@ -837,7 +838,7 @@ const dingtalkConnector: SourceConnector = {
    * and could never collect.
    */
   needsChromeProfile: true,
-  labelForLocale: (locale: "zh" | "en") => copy(locale, "labels.collector.dingtalk"),
+  labelForLocale: (locale: Locale) => copy(locale, "labels.collector.dingtalk"),
   requiresBrowser: true,
   tool: "dingtalk_auto_collector.py",
   credentialKeys: DINGTALK_CREDENTIAL_KEYS,
@@ -935,7 +936,7 @@ const SLACK_CREDENTIAL_KEYS = ["bot_token"];
 const slackConnector: SourceConnector = {
   id: "slack",
   label: copy("zh", "collectors.slack"),
-  labelForLocale: (locale: "zh" | "en") => copy(locale, "collectors.slack"),
+  labelForLocale: (locale: Locale) => copy(locale, "collectors.slack"),
   requiresBrowser: false,
   tool: "slack_auto_collector.py",
   credentialKeys: SLACK_CREDENTIAL_KEYS,
@@ -1019,7 +1020,7 @@ const slackConnector: SourceConnector = {
 const emailConnector: SourceConnector = {
   id: "email",
   label: copy("zh", "labels.collector.email"),
-  labelForLocale: (locale: "zh" | "en") => copy(locale, "labels.collector.email"),
+  labelForLocale: (locale: Locale) => copy(locale, "labels.collector.email"),
   requiresBrowser: false,
   tool: "email_parser.py",
   credentialKeys: [],
@@ -1087,7 +1088,7 @@ const emailConnector: SourceConnector = {
 const wechatExportConnector: SourceConnector = {
   id: "wechat_export",
   label: copy("zh", "labels.collector.wechatExport"),
-  labelForLocale: (locale: "zh" | "en") => copy(locale, "labels.collector.wechatExport"),
+  labelForLocale: (locale: Locale) => copy(locale, "labels.collector.wechatExport"),
   requiresBrowser: false,
   tool: "feishu_parser.py",
   credentialKeys: [],
@@ -1155,6 +1156,6 @@ export const COLLECTOR_SOURCES: SourceConnector[] = [
  * The label a source carries is the name it is listed under; the person
  * reading the list may be reading in the other language.
  */
-export function sourceLabel(source: SourceConnector, locale: "zh" | "en" = "zh"): string {
+export function sourceLabel(source: SourceConnector, locale: Locale = "zh"): string {
   return source.labelForLocale ? source.labelForLocale(locale) : source.label;
 }

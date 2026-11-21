@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bareChineseInSource, scanForBareChinese } from "../scripts/lib/chinese-scan";
+import {
+  bareChineseInSource,
+  isChineseDictionaryHalf,
+  scanForBareChinese,
+} from "../scripts/lib/chinese-scan";
 
 /**
  * The app speaks two languages.
@@ -75,6 +81,36 @@ describe("the app's languages", () => {
 
     const excluded = scanForBareChinese(join(ROOT, "server"));
     expect(excluded.filter((hit) => hit.file.startsWith("wechat/"))).toEqual([]);
+  });
+
+  it("knows the generated traditional dictionary is a Chinese half", () => {
+    /**
+     * The traditional Chinese dictionary is generated from `zh.ts` and is
+     * Chinese by definition, like `zh.ts` itself. The scanner identifies a
+     * dictionary half by its name and its siblings — so the generated file
+     * has to be recognised, or the audit reports all 2,600 of its strings as
+     * Chinese without an English counterpart.
+     *
+     * The sibling rule matters: a lone `zh-Hant.ts` with no `zh.ts` is a
+     * copy with nothing guaranteeing its keys match.
+     */
+    expect(isChineseDictionaryHalf(join(ROOT, "client/src/i18n/zh.ts"))).toBe(true);
+    expect(isChineseDictionaryHalf(join(ROOT, "client/src/i18n/zh-Hant.ts"))).toBe(true);
+    expect(isChineseDictionaryHalf(join(ROOT, "client/src/i18n/en.ts"))).toBe(false);
+
+    // `zh-Hant.ts` only counts when the simplified file it was generated
+    // from is beside it: a lone copy has nothing guaranteeing its keys.
+    const directory = mkdtempSync(join(tmpdir(), "mirrai-dictionary-"));
+    try {
+      writeFileSync(join(directory, "zh-Hant.ts"), "export const zhHant = {};");
+      expect(isChineseDictionaryHalf(join(directory, "zh-Hant.ts"))).toBe(false);
+      writeFileSync(join(directory, "en.ts"), "");
+      expect(isChineseDictionaryHalf(join(directory, "zh-Hant.ts"))).toBe(false);
+      writeFileSync(join(directory, "zh.ts"), "");
+      expect(isChineseDictionaryHalf(join(directory, "zh-Hant.ts"))).toBe(true);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("knows a bilingual copy table when it sees one", () => {

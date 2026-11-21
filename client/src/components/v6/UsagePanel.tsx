@@ -6,6 +6,7 @@ import { formatDateTimeInZone } from "@/lib/dates";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import type { Locale } from "@shared/copy";
 
 /**
  * What the model calls cost (C8.9).
@@ -368,6 +369,6 @@ export default function UsagePanel() {
 
 // Re-exported for tests that build labels without rendering the panel.
 export { PURPOSE_LABELS };
-export function usagePurposeLabelOf(purpose: string, locale: "zh" | "en"): string {
+export function usagePurposeLabelOf(purpose: string, locale: Locale): string {
   return String(translate(locale, PURPOSE_LABELS[purpose] ?? "usage.purpose.other"));
 }

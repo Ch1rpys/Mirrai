@@ -7,6 +7,7 @@
  */
 import * as db from "../db";
 import { charBigrams } from "@shared/act-clusters";
+import type { Locale } from "@shared/copy";
 
 export const CLAIM_COVERAGE_MIN = 0.5;
 
@@ -85,7 +86,7 @@ function hasLatin(text: string): boolean {
 }
 
 // i18n:allow-input — particles that mark a question in what they typed
-function isQuestionClause(clause: string, locale: "zh" | "en"): boolean {
+function isQuestionClause(clause: string, locale: Locale): boolean {
   if (/[？?]/.test(clause)) return true;
   const trimmed = clause.replace(/[。！!…\s]+$/g, "");
   if (trimmed.endsWith("吗") || clause.includes("是不是")) return true;
@@ -281,7 +282,7 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function extractDates(clause: string, start: number, locale: "zh" | "en"): Claim[] {
+function extractDates(clause: string, start: number, locale: Locale): Claim[] {
   const patterns = [
     ...(locale === "zh" || hasHan(clause) ? DATE_RES : []),
     ...(locale === "en" || hasLatin(clause) ? EN_DATE_RES : []),
@@ -377,7 +378,7 @@ function extractEnglishPlaces(clause: string, start: number): Claim[] {
   return out;
 }
 
-function extractPlaces(clause: string, start: number, locale: "zh" | "en"): Claim[] {
+function extractPlaces(clause: string, start: number, locale: Locale): Claim[] {
   const out: Claim[] = [];
   QUOTED_RE.lastIndex = 0;
   let quoted: RegExpExecArray | null;
@@ -419,7 +420,7 @@ function extractPlaces(clause: string, start: number, locale: "zh" | "en"): Clai
   );
 }
 
-function extractEvents(clause: string, start: number, locale: "zh" | "en"): Claim[] {
+function extractEvents(clause: string, start: number, locale: Locale): Claim[] {
   const patterns = [
     ...(locale === "zh" || hasHan(clause) ? [EVENT_RE] : []),
     ...(locale === "en" || hasLatin(clause) ? [EN_EVENT_RE] : []),
@@ -444,7 +445,7 @@ function extractEvents(clause: string, start: number, locale: "zh" | "en"): Clai
   ];
 }
 
-export function extractClaims(reply: string, locale: "zh" | "en"): Claim[] {
+export function extractClaims(reply: string, locale: Locale): Claim[] {
   const out: Claim[] = [];
   for (const clause of splitClauses(reply)) {
     if (isQuestionClause(clause.text, locale)) continue;
@@ -540,7 +541,7 @@ export async function verifyClaims(
 export async function hasUnsupportedClaim(
   reply: string,
   ctx: VerifyClaimsContext,
-  locale: "zh" | "en",
+  locale: Locale,
 ): Promise<boolean> {
   const claims = extractClaims(reply, locale);
   if (claims.length === 0) return false;

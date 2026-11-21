@@ -25,6 +25,7 @@
 import { existsSync, readFileSync } from "fs";
 import { ENV } from "../_core/env";
 import { copy } from "@shared/copy";
+import type { Locale } from "@shared/copy";
 
 export interface CrisisResource {
   id: string;
@@ -142,7 +143,7 @@ export function getCrisisResources(): CrisisResource[] {
  */
 export function formatResources(
   resources: CrisisResource[] = getCrisisResources(),
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): string {
   const separator = locale === "en" ? ": " : "：";
   return resources

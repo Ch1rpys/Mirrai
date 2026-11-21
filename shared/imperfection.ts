@@ -17,6 +17,7 @@
  * strongly the per-state deviations apply.
  */
 import { copy, type CopyKey } from "./copy";
+import type { Locale } from "./copy";
 
 /** The states a persona can be in. Mirrors `emotional_state` in the schema. */
 export type ImperfectionState =
@@ -71,7 +72,7 @@ function isState(value: unknown): value is ImperfectionState {
  */
 export function normalizeImperfectionProfile(
   value: unknown,
-  _locale: "zh" | "en" = "zh",
+  _locale: Locale = "zh",
 ): ImperfectionEntry[] {
   if (!Array.isArray(value)) return [];
   const out: ImperfectionEntry[] = [];
@@ -103,7 +104,7 @@ export function normalizeImperfectionProfile(
  */
 export function mergeImperfectionDefaults(
   profile: ImperfectionEntry[],
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): ImperfectionEntry[] {
   const defaults = defaultImperfectionProfile(locale);
   const byState = new Map(profile.map((entry) => [entry.state, entry]));
@@ -120,7 +121,7 @@ function joined(deviations: string[]): string {
 /** True when this state's words are the product's generic sentence. */
 export function isProductDefaultEntry(
   entry: ImperfectionEntry,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): boolean {
   const fallback = defaultImperfectionProfile(locale).find((item) => item.state === entry.state);
   if (!fallback) return false;
@@ -130,7 +131,7 @@ export function isProductDefaultEntry(
 /** The stored states whose words are still the product's. */
 export function productWrittenStates(
   profile: ImperfectionEntry[],
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): ImperfectionState[] {
   return profile.filter((entry) => isProductDefaultEntry(entry, locale)).map((entry) => entry.state);
 }
@@ -150,7 +151,7 @@ export function productWrittenStates(
 export function persistableImperfection(
   draft: ImperfectionEntry[],
   stored: ImperfectionEntry[],
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): ImperfectionEntry[] {
   const storedByState = new Map(stored.map((entry) => [entry.state, entry]));
   const out: ImperfectionEntry[] = [];
@@ -168,7 +169,7 @@ export function persistableImperfection(
 /** Drops the product's own sentences, keeps what the user wrote. */
 export function clearProductWrittenImperfection(
   profile: ImperfectionEntry[],
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): ImperfectionEntry[] {
   return profile.filter((entry) => !isProductDefaultEntry(entry, locale));
 }
@@ -182,7 +183,7 @@ export function clearProductWrittenImperfection(
  * app's language because they are the app's instructions; a user who
  * writes their own writes them in their own words, and those stay.
  */
-export function defaultImperfectionProfile(locale: "zh" | "en" = "zh"): ImperfectionEntry[] {
+export function defaultImperfectionProfile(locale: Locale = "zh"): ImperfectionEntry[] {
   return IMPERFECTION_STATES.map((state) => ({
     state,
     deviations: copy(locale, IMPERFECTION_STATE_LABEL_KEYS[state])
@@ -236,7 +237,7 @@ export function selectImperfection(
 export function renderImperfection(
   entry: ImperfectionEntry | null,
   realismLevel: number,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): string {
   if (!entry || !entry.deviations.length) return "";
   const level = Math.max(0, Math.min(100, Number(realismLevel) || 0));

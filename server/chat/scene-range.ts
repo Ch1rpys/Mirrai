@@ -30,6 +30,7 @@ import {
   selectSceneRangeLines,
   type SceneRecordRange,
 } from "@shared/scene-range";
+import type { Locale } from "@shared/copy";
 
 /**
  * The most rows of a stretch the prompt will read.
@@ -165,7 +166,7 @@ export async function countSceneRangeLines(params: {
 export async function loadSceneRangeMaterial(params: {
   scene: Pick<Scene, "recordRange"> | null | undefined;
   persona: SceneRangePersona;
-  locale: "zh" | "en";
+  locale: Locale;
   /** The clock zone the days are read in. */
   timeZone?: string | null;
   /** The user's name, for lines the user said. */

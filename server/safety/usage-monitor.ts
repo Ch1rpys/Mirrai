@@ -9,6 +9,7 @@
 import * as db from "../db";
 import { copy } from "@shared/copy";
 import { zonedDateKey, zonedDayStart } from "@shared/timezone";
+import type { Locale } from "@shared/copy";
 
 /** A single unbroken conversation longer than this triggers a check-in. */
 export const LONG_SESSION_MS = 2 * 60 * 60 * 1000;
@@ -219,7 +220,7 @@ export interface CareNote {
  */
 export function pickCareNote(
   signals: UsageSignals,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
   options: { memorial?: boolean } = {},
 ): CareNote | null {
   if (signals.dependencyRising) {

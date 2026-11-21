@@ -46,6 +46,7 @@ import {
   renderOpeningInstruction,
   type ProactiveOpening,
 } from "@shared/speech-acts";
+import type { Locale } from "@shared/copy";
 
 /**
  * The longest a proactive message may be. A first word is not a letter.
@@ -129,7 +130,7 @@ export async function collectProactiveContext(params: {
  */
 export function buildProactiveInstruction(
   context: ProactiveContext,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): string {
   const parts: string[] = [];
   if (context.opening) {
@@ -278,7 +279,7 @@ async function pickProactiveMaterial(params: {
 export async function composeProactiveMessage(params: {
   persona: Persona;
   userId: number;
-  locale?: "zh" | "en";
+  locale?: Locale;
   now?: Date;
 }): Promise<{ text: string; opening: ProactiveOpening | null; factId: number | null } | null> {
   const { persona } = params;

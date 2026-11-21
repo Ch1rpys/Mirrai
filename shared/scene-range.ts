@@ -15,6 +15,7 @@ import { copy } from "./copy";
 import { filterHarm, type HarmReport } from "./harm";
 import { isSafeSeedLine } from "./seed-safety";
 import { zonedDateKey } from "./timezone";
+import type { Locale } from "./copy";
 
 /** What a scene remembers about the stretch it was taken from. */
 export interface SceneRecordRange {
@@ -165,7 +166,7 @@ export function selectSceneRangeLines<T extends SceneRangeRow>(
 export function renderSceneRangeLines(
   lines: SceneRangeRow[],
   params: {
-    locale: "zh" | "en";
+    locale: Locale;
     timeZone?: string | null;
     /** The persona's name, for lines they said. */
     themName: string;

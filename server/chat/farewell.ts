@@ -34,6 +34,7 @@ import {
   writeFarewellLetterInTwoPasses,
   type FarewellFallbackReason,
 } from "./farewell-candidates";
+import type { Locale } from "@shared/copy";
 
 export { FAREWELL_TWO_PASS_TIMEOUT_MS } from "./farewell-candidates";
 
@@ -55,7 +56,7 @@ export interface FarewellPrompt {
 export async function buildFarewellPrompt(params: {
   persona: Persona;
   userId: number;
-  locale?: "zh" | "en";
+  locale?: Locale;
   now?: Date;
 }): Promise<FarewellPrompt> {
   const { persona, userId } = params;
@@ -133,7 +134,7 @@ export async function buildFarewellPrompt(params: {
  */
 export function fallbackFarewellLetter(
   persona: Persona,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): string {
   return copy(locale, "prompts.farewellFallback", { name: persona.name });
 }
@@ -158,7 +159,7 @@ export function fallbackFarewellLetter(
 export async function writeFarewellLetter(params: {
   persona: Persona;
   userId: number;
-  locale?: "zh" | "en";
+  locale?: Locale;
 }): Promise<string> {
   const { letter } = await writeFarewellLetterWithStatus(params);
   return letter;
@@ -176,7 +177,7 @@ export async function writeFarewellLetter(params: {
 export async function writeFarewellLetterWithStatus(params: {
   persona: Persona;
   userId: number;
-  locale?: "zh" | "en";
+  locale?: Locale;
 }): Promise<{
   letter: string;
   degraded: boolean;
@@ -232,7 +233,7 @@ export async function writeFarewellLetterWithStatus(params: {
 async function writeSinglePassLetter(params: {
   persona: Persona;
   userId: number;
-  locale?: "zh" | "en";
+  locale?: Locale;
 }): Promise<string> {
   const { persona, userId } = params;
   const locale = params.locale ?? "zh";

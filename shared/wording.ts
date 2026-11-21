@@ -12,6 +12,7 @@
  */
 import { copy } from "./copy";
 import { asMaterial } from "./material";
+import type { Locale } from "./copy";
 
 export type WordingKind = "direct" | "soft" | "short";
 
@@ -34,7 +35,7 @@ export interface WordingMessage {
  */
 export function buildWordingMessages(
   text: string,
-  locale: "zh" | "en",
+  locale: Locale,
 ): WordingMessage[] {
   return [
     { role: "system", content: copy(locale, "prompts.wordingAssistant") },

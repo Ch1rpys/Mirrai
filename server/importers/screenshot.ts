@@ -14,6 +14,7 @@ import type { LLMProvider } from "../llm/types";
 import { llmService } from "../llm";
 import { extractJsonObject } from "../_core/json";
 import type { ScreenshotMessage } from "./screenshot-merge";
+import type { Locale } from "@shared/copy";
 
 export interface ScreenshotImage {
   name: string;
@@ -79,7 +80,7 @@ export async function readScreenshotPages(params: {
   images: ScreenshotImage[];
   provider: LLMProvider;
   name: string;
-  locale: "zh" | "en";
+  locale: Locale;
 }): Promise<ScreenshotReadResult> {
   const pages: ScreenshotMessage[][] = [];
   const failures: ScreenshotReadFailure[] = [];

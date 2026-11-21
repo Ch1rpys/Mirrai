@@ -29,6 +29,7 @@ import { resolveProviderForUser } from "../llm/user-provider";
 import type { LLMProvider } from "../llm/types";
 import { resolveStoredPath } from "../storage";
 import { runConversation } from "./service";
+import type { Locale } from "@shared/copy";
 
 /** A call is cut off after an hour. */
 export const CALL_MAX_MS = 60 * 60_000;
@@ -39,7 +40,7 @@ export interface CallUser {
   id: number;
   name?: string | null;
   timezone?: string | null;
-  locale?: "zh" | "en";
+  locale?: Locale;
 }
 
 export interface CallPersona {
@@ -75,7 +76,7 @@ export interface CallDeps {
     mode: "stream";
     channel: "web";
     now: Date;
-    locale: "zh" | "en";
+    locale: Locale;
     signal?: AbortSignal;
   }) => AsyncGenerator<Record<string, unknown>>;
   trimReply: (personaId: number, userId: number, since: Date, content: string) => Promise<void>;

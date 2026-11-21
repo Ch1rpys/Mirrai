@@ -9,6 +9,7 @@
 import { copy } from "@shared/copy";
 import { isLayerId, type LayerId } from "@shared/layers";
 import { compareMetricCI, type EvalMetrics } from "./metrics";
+import type { Locale } from "@shared/copy";
 
 export interface AblationRow {
   layer: LayerId;
@@ -31,7 +32,7 @@ const MEASURES = [
   ["actMatch", "higher"],
 ] as const;
 
-export function ablationVerdict(on: EvalMetrics, off: EvalMetrics, locale: "zh" | "en"): string {
+export function ablationVerdict(on: EvalMetrics, off: EvalMetrics, locale: Locale): string {
   const verdicts = MEASURES.map(([key, better]) => compareMetricCI(on, off, key, better));
   if (verdicts.some((verdict) => verdict === "worse")) return copy(locale, "eval.ablate.worse");
   if (verdicts.some((verdict) => verdict === "better")) return copy(locale, "eval.ablate.helps");
@@ -52,7 +53,7 @@ export function layersFromBaseline(metrics: EvalMetrics): LayerId[] {
 export function tabulateAblation(
   baseline: EvalMetrics,
   offByLayer: Array<{ layer: LayerId; metrics: EvalMetrics }>,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): AblationReport {
   const rows: AblationRow[] = offByLayer.map(({ layer, metrics }) => ({
     layer,
@@ -68,7 +69,7 @@ export function tabulateAblation(
 export async function runAblation(options: {
   baseline: EvalMetrics;
   layers?: LayerId[];
-  locale?: "zh" | "en";
+  locale?: Locale;
   runWithout: (layer: LayerId) => Promise<EvalMetrics>;
 }): Promise<AblationReport> {
   const locale = options.locale ?? "zh";

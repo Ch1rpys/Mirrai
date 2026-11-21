@@ -300,7 +300,7 @@ export function mergeUserDecisions(
   fresh: PersonaData,
   previous: Partial<PersonaData>,
   minedRules: MicroRule[],
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
   mined: MinedV5 = {},
 ): PersonaData {
   const confirmed = normalizeMicroRules(previous.microRules).filter(

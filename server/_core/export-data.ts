@@ -11,7 +11,7 @@
  */
 import * as db from "../db";
 import { computeIntimacy } from "./persona-utils";
-import { copy, type Locale } from "@shared/copy";
+import { contentLocale, copy, type Locale } from "@shared/copy";
 import { intimacyLevelLabel } from "@shared/intimacy";
 import {
   USER_MOOD_LABELS,
@@ -391,7 +391,7 @@ export function exportAsMarkdown(bundle: ExportBundle, locale: Locale = bundle.l
        * file that is otherwise in the reader's language. The labels
        * already existed; they were simply not used here.
        */
-      const label = USER_MOOD_LABELS[mood.mood]?.[locale] ?? mood.mood;
+      const label = USER_MOOD_LABELS[mood.mood]?.[contentLocale(locale)] ?? mood.mood;
       lines.push(`- ${mood.date} · ${label}${mood.note ? ` — ${mood.note}` : ""}`);
     }
     lines.push("");
@@ -402,7 +402,7 @@ export function exportAsMarkdown(bundle: ExportBundle, locale: Locale = bundle.l
     lines.push("");
     for (const entry of bundle.journal) {
       const mood = entry.mood
-        ? ` · ${USER_MOOD_LABELS[entry.mood as UserMood]?.[locale] ?? entry.mood}`
+        ? ` · ${USER_MOOD_LABELS[entry.mood as UserMood]?.[contentLocale(locale)] ?? entry.mood}`
         : "";
       lines.push(`**${entry.entryDate}${mood}**`);
       lines.push("");
@@ -443,7 +443,7 @@ export function exportAsMarkdown(bundle: ExportBundle, locale: Locale = bundle.l
       for (const event of persona.events) {
         // The kind is named, not coded: "breakup" is not a thing to
         // read years from now.
-        const kind = EVENT_LABELS[event.kind]?.[locale] ?? event.kind;
+        const kind = EVENT_LABELS[event.kind]?.[contentLocale(locale)] ?? event.kind;
         lines.push(`- ${iso(event.happenedAt)} · ${kind} · ${event.title}`);
         if (event.detail) lines.push(`  - ${event.detail}`);
       }

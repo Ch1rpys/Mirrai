@@ -1,4 +1,6 @@
 import "dotenv/config";
+// The traditional Chinese converter for the server's own words (side effect).
+import "./traditional";
 import express from "express";
 import { createServer } from "http";
 import net from "net";

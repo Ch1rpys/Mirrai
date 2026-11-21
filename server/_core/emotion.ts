@@ -14,6 +14,7 @@ import { ENV } from "./env";
 import type { LLMProvider } from "../llm/types";
 import { copy } from "@shared/copy";
 import { asMaterial } from "./material";
+import type { Locale } from "@shared/copy";
 
 export const EMOTIONAL_STATES = [
   "warm",
@@ -51,7 +52,7 @@ export async function inferEmotionalState(params: {
   currentState: string;
   provider?: string;
   providerInstance?: LLMProvider;
-  locale?: "zh" | "en";
+  locale?: Locale;
   /** The payer of this call (C8.9), when the caller knows. */
   userId?: number;
   personaId?: number | null;

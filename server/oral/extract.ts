@@ -27,13 +27,14 @@ import { llmService } from "../llm";
 import type { LLMMessage } from "../llm/types";
 import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 import * as db from "../db";
+import type { Locale } from "@shared/copy";
 
 /** The accounts the extraction reads. */
 export interface OralExtractionParams {
   persona: Persona;
   userId: number;
   accounts: OralAccountForExtraction[];
-  locale?: "zh" | "en";
+  locale?: Locale;
 }
 
 export interface OralExtractionResult {
@@ -57,7 +58,7 @@ export interface OralExtractionResult {
  */
 export function buildOralMessages(params: {
   accounts: OralAccountForExtraction[];
-  locale?: "zh" | "en";
+  locale?: Locale;
 }): LLMMessage[] {
   const locale = params.locale ?? "zh";
   const block = params.accounts
@@ -84,7 +85,7 @@ export function buildOralMessages(params: {
  */
 export function oralMemoryRow(
   statement: OralStatement,
-  locale: "zh" | "en",
+  locale: Locale,
 ): {
   title: string;
   description: string;

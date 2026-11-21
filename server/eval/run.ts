@@ -28,6 +28,7 @@ import type { SpeechAct } from "@shared/speech-acts";
 import { normalizeStyleProfile } from "@shared/style-profile";
 import { dayPartFromHour, type ActDayPart } from "@shared/act-profile";
 import { zonedHour } from "@shared/timezone";
+import type { Locale } from "@shared/copy";
 
 /**
  * Which version of the persona to measure.
@@ -133,7 +134,7 @@ export interface PreviewLayersOptions {
   persona: Persona;
   userId: number;
   cases: EvalCaseData[];
-  locale?: "zh" | "en";
+  locale?: Locale;
   variant?: EvalVariant;
   without?: string[];
   rerank?: boolean;
@@ -202,7 +203,7 @@ export interface EvalRunOptions {
   cases: EvalCaseData[];
   /** The persona's other lines, for the n-gram model. Never the held-out ones. */
   trainingTexts: string[];
-  locale?: "zh" | "en";
+  locale?: Locale;
   variant?: EvalVariant;
   /** Extra layers to turn off, from `--without a,b`. */
   without?: string[];

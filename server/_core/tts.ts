@@ -9,6 +9,7 @@ import { assertLocalEndpoint } from "./local-endpoint";
 import { runBinary } from "./run-binary";
 import { subprocessEnvironment } from "./subprocess-env";
 import { copy } from "@shared/copy";
+import type { Locale } from "@shared/copy";
 
 const UPLOAD_DIR = ENV.uploadDir || "./uploads";
 const TTS_ROOT = path.join(UPLOAD_DIR, "tts");
@@ -35,7 +36,7 @@ export interface TtsVoice {
   /** The name of the voice in the other language. */
   labelEn: string;
   /** The language the voice speaks. */
-  locale: "zh" | "en";
+  locale: Locale;
 }
 
 /**
@@ -109,7 +110,7 @@ export const TTS_VOICES: TtsVoice[] = [
 export interface LocalisedVoice {
   id: string;
   label: string;
-  locale: "zh" | "en";
+  locale: Locale;
 }
 
 /**
@@ -118,7 +119,7 @@ export interface LocalisedVoice {
  * The picker shows the name the person reading it can read, so the
  * label follows the interface rather than the voice.
  */
-export function voicesForLocale(locale: "zh" | "en"): LocalisedVoice[] {
+export function voicesForLocale(locale: Locale): LocalisedVoice[] {
   const matching = TTS_VOICES.filter((voice) => voice.locale === locale);
   const voices = matching.length > 0 ? matching : TTS_VOICES;
   return voices.map((voice) => ({

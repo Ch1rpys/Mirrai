@@ -8,7 +8,7 @@ import { readFile } from "node:fs/promises";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { isUnparsedChatUpload, RECORD_KINDS, type RecordKind } from "@shared/records";
-import { copy } from "@shared/copy";
+import { contentLocale, copy } from "@shared/copy";
 import { protectedProcedure, rateLimit, router } from "../_core/trpc";
 import { assertPersonaWritable } from "../_core/persona-access";
 import { RATE_LIMITS } from "../_core/rate-limit";
@@ -60,7 +60,7 @@ export const importRouter = router({
   formats: protectedProcedure.query(({ ctx }) => {
     return IMPORTERS.map((row) => ({
       id: row.id,
-      label: row.label[ctx.locale] ?? row.label.zh,
+      label: row.label[contentLocale(ctx.locale)] ?? row.label.zh,
     }));
   }),
 

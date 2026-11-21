@@ -17,7 +17,7 @@
 import type { PersonaData } from "../_core/persona-schema";
 import { normalizePersonaData } from "../_core/persona-schema";
 import type { CharacterBookEntry, CharacterCardV2, CharacterCardV2Data } from "./card";
-import { copy, type Locale } from "@shared/copy";
+import { contentLocale, copy, type ContentLocale, type Locale } from "@shared/copy";
 
 /** A memory of the persona, as used to build the card's lore book. */
 export interface PersonaCardMemory {
@@ -114,13 +114,13 @@ const MES_EXAMPLE_LABELS: Record<string, CardLabel> = {
 };
 
 /** The separator between a label and its value, per language. */
-const LABEL_SEPARATOR: Record<Locale, string> = { zh: "：", en: ": " };
+const LABEL_SEPARATOR: Record<ContentLocale, string> = { zh: "：", en: ": " };
 
 /**
  * The label of a field, in the language the card is written in.
  */
 function cardLabel(labels: Record<string, CardLabel>, key: string, locale: Locale): string {
-  return labels[key]?.[locale] ?? labels[key]?.zh ?? key;
+  return labels[key]?.[contentLocale(locale)] ?? labels[key]?.zh ?? key;
 }
 
 /**
@@ -136,7 +136,7 @@ function labelledValue(
   key: string,
   locale: Locale,
 ): string {
-  const order: Locale[] = locale === "en" ? ["en", "zh"] : ["zh", "en"];
+  const order: ContentLocale[] = contentLocale(locale) === "en" ? ["en", "zh"] : ["zh", "en"];
   for (const language of order) {
     const value = parsed[labels[key]?.[language] ?? ""];
     if (value) return value;
@@ -180,7 +180,7 @@ function personaText(persona: PersonaData, key: keyof PersonaData): string {
 
 /** Joins `标签：内容` pairs, skipping the ones without content. */
 function joinLabelled(pairs: Array<[string, string]>, locale: Locale): string {
-  const separator = LABEL_SEPARATOR[locale] ?? LABEL_SEPARATOR.zh;
+  const separator = LABEL_SEPARATOR[contentLocale(locale)];
   return pairs
     .filter((pair) => pair[1].trim().length > 0)
     .map((pair) => `${pair[0]}${separator}${pair[1].trim()}`)

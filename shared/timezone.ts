@@ -11,6 +11,7 @@
  * old behaviour — rather than throwing.
  */
 import { copy } from "./copy";
+import type { Locale } from "./copy";
 
 /** The hour of the day (0-23) in a given time zone. */
 /**
@@ -233,7 +234,7 @@ export function zonedOffsetHours(date: Date, timeZone?: string | null): number {
 export function formatZonedClock(
   date: Date,
   timeZone?: string | null,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): string {
   if (!timeZone) {
     const hours = date.getHours();

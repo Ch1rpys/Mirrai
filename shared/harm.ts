@@ -1,3 +1,4 @@
+import type { Locale } from "./copy";
 /**
  * Lines in the record that look like they were meant to hurt.
  *
@@ -199,7 +200,7 @@ function haystack(text: string): { zh: string; en: string } {
   return { zh: raw, en: raw.toLowerCase() };
 }
 
-function matchesCue(text: { zh: string; en: string }, cue: string, locale: "zh" | "en"): boolean {
+function matchesCue(text: { zh: string; en: string }, cue: string, locale: Locale): boolean {
   if (locale === "en") return text.en.includes(cue.toLowerCase());
   return text.zh.includes(cue);
 }

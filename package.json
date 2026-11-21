@@ -42,6 +42,7 @@
     "db:migrate": "node scripts/migrate.mjs",
     "db:replay": "node scripts/migrate.mjs --replay",
     "audit:i18n": "tsx scripts/audit-cn.ts",
+    "i18n:hant": "tsx scripts/gen-zh-hant.ts",
     "eval": "tsx scripts/eval-run.ts",
     "fidelity:gate": "tsx scripts/fidelity-gate.ts",
     "gate": "node scripts/gate-all.mjs",

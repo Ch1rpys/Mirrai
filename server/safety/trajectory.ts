@@ -16,6 +16,7 @@ import type { LLMProvider } from "../llm/types";
 import * as db from "../db";
 import { copy } from "@shared/copy";
 import { asMaterial } from "../_core/material";
+import type { Locale } from "@shared/copy";
 
 export type Trajectory = "improving" | "stable" | "worsening";
 
@@ -96,7 +97,7 @@ export async function assessTrajectory(params: {
    */
   providerInstance?: LLMProvider;
   /** The language the assessment is written in. */
-  locale?: "zh" | "en";
+  locale?: Locale;
   now?: number;
 }): Promise<TrajectoryAssessment | null> {
   const now = params.now ?? Date.now();

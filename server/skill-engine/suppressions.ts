@@ -13,10 +13,11 @@ import {
 import { residueFlags } from "@shared/assistant-residue";
 import { copy } from "@shared/copy";
 import { isTextRecord } from "@shared/records";
+import type { Locale } from "@shared/copy";
 
 export interface MineSuppressionParams {
   messages: Array<{ role: string; content: string; timestamp?: Date | string | null; kind?: string | null }>;
-  locale?: "zh" | "en";
+  locale?: Locale;
 }
 
 // i18n:allow-input — these are matched against what they actually wrote.

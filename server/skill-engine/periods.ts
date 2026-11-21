@@ -19,12 +19,13 @@ import type { Suppression } from "@shared/suppressions";
 import { labelSpeechActByRule } from "@shared/speech-acts";
 import { mineForgetStyles, mineSuppressions } from "./suppressions";
 import { mineMultiPoint } from "@shared/multi-point";
+import type { Locale } from "@shared/copy";
 
 export function minePeriods(params: {
   messages: Array<{ role: string; content: string; timestamp: Date | null }>;
   actProfiles?: ActProfile[];
   suppressions?: Suppression[][];
-  locale?: "zh" | "en";
+  locale?: Locale;
 }): PersonaPeriod[] {
   const splits = findPeriodSplits(params.messages);
   const periods = periodsFromSplits(params.messages, splits);

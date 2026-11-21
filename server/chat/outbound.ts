@@ -31,6 +31,7 @@ import { extractJsonObject } from "../_core/json";
 import { asMaterial } from "../_core/material";
 import { llmService, type LLMProvider } from "../llm";
 import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
+import type { Locale } from "@shared/copy";
 
 export interface OutboundCandidate {
   /** The user's own words, copied exactly. */
@@ -469,7 +470,7 @@ export function selectOutboundCandidatesLocally(
  */
 function buildTranscript(
   messages: OutboundMessage[],
-  locale: "zh" | "en",
+  locale: Locale,
 ): string {
   const lines = messages.slice(-TRANSCRIPT_LIMIT).map((message) => {
     const speaker = isUserRole(message.role)
@@ -550,7 +551,7 @@ async function collectWithModel(params: {
   userId: number;
   messages: OutboundMessage[];
   max: number;
-  locale: "zh" | "en";
+  locale: Locale;
 }): Promise<ModelPass> {
   const empty: ModelPass = { candidates: [], note: "" };
 
@@ -699,7 +700,7 @@ export async function collectOutboundCandidates(params: {
   personaId: number;
   messages: OutboundMessage[];
   max?: number;
-  locale?: "zh" | "en";
+  locale?: Locale;
   /** The timezone the hour of the day should be read in. */
   timezone?: string;
 }): Promise<{ candidates: OutboundCandidate[]; note: string }> {

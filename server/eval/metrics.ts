@@ -35,6 +35,7 @@ import {
   type StyleFingerprintCore,
 } from "@shared/style-fingerprint";
 import { seededRandom } from "../_core/behavior-profile";
+import { contentLocale, type ContentLocale, type Locale } from "@shared/copy";
 
 /** One held-out exchange, and what the rebuilt persona said instead. */
 export interface EvalCaseScore {
@@ -209,7 +210,7 @@ export interface LineShape {
  * addressing the user constantly when the real person only did so in
  * the state they were in.
  */
-const ADDRESS_WORDS: Record<"zh" | "en", RegExp> = {
+const ADDRESS_WORDS: Record<ContentLocale, RegExp> = {
   zh: /宝贝|宝宝|亲爱的|老婆|老公|小可爱|小笨蛋|小朋友|哥哥|姐姐|宝儿/g,
   en: /baby|babe|dear|honey|love|darling/gi,
 };
@@ -224,14 +225,14 @@ function countSentences(text: string): number {
 }
 
 /** How many times the line addresses the other person. */
-function countAddresses(text: string, locale: "zh" | "en"): number {
-  const pattern = ADDRESS_WORDS[locale] ?? ADDRESS_WORDS.zh;
+function countAddresses(text: string, locale: Locale): number {
+  const pattern = ADDRESS_WORDS[contentLocale(locale)] ?? ADDRESS_WORDS.zh;
   const matches = text.match(pattern);
   return matches ? matches.length : 0;
 }
 
 /** The shape of a line. */
-export function measureLineShape(text: string, locale: "zh" | "en" = "zh"): LineShape {
+export function measureLineShape(text: string, locale: Locale = "zh"): LineShape {
   return {
     chars: text.length,
     sentences: countSentences(text),
@@ -373,7 +374,7 @@ export function scoreCase(params: {
    * emotion, it means the ruler was reading it with the wrong table, and
    * every number it produced afterwards was quietly wrong.
    */
-  locale?: "zh" | "en";
+  locale?: Locale;
   expectedAct?: SpeechAct | null;
   sampledAct?: SpeechAct | null;
   previousUser?: string | null;

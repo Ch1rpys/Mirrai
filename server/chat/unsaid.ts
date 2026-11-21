@@ -24,6 +24,7 @@ import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 import { copy } from "@shared/copy";
 import { asMaterial } from "@shared/material";
 import { containsCommitment } from "@shared/rehearsal";
+import type { Locale } from "@shared/copy";
 
 export interface CompleteUnfinishedParams {
   persona: Persona;
@@ -31,7 +32,7 @@ export interface CompleteUnfinishedParams {
   line: string;
   /** The lines just before it, so the continuation has the exchange. */
   context?: string[];
-  locale?: "zh" | "en";
+  locale?: Locale;
 }
 
 /**
@@ -43,7 +44,7 @@ export function buildUnsaidMessages(params: {
   persona: Persona;
   line: string;
   context?: string[];
-  locale?: "zh" | "en";
+  locale?: Locale;
 }): Array<{ role: "system" | "user"; content: string }> {
   const locale = params.locale ?? "zh";
   const trimmed = String(params.line ?? "").trim();

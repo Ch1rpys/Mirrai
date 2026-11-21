@@ -17,6 +17,7 @@ import { ENV } from "../_core/env";
 import { openingRateForWindow, normalizeOpeningProfile } from "@shared/opening-profile";
 import { parseQuietHours } from "@shared/proactive-decision";
 import { normalizePersonaSettings } from "@shared/persona-settings";
+import type { Locale } from "@shared/copy";
 
 /**
  * Sends the message on whichever channel is bound.
@@ -30,7 +31,7 @@ async function deliverProactive(params: {
   text: string;
   emotionalState: string | null;
   /** The user's language, if the sweep has already read it. */
-  locale?: "zh" | "en";
+  locale?: Locale;
 }): Promise<"web" | "wechat" | "feishu"> {
   const bindings = await db
     .getChannelBindingsByUserId(params.userId)
@@ -136,7 +137,7 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
    * minute, for ever.
    */
   const perUser = new Map<number, {
-    locale: "zh" | "en";
+    locale: Locale;
     timezone: string | null;
   }>();
 

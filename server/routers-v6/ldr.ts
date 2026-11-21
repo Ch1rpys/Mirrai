@@ -20,6 +20,7 @@ import { copy } from "@shared/copy";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getPersonaById, getPersonaSettings } from "../db";
+import type { Locale } from "@shared/copy";
 
 const GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search";
 const FORECAST_URL = "https://api.open-meteo.com/v1/forecast";
@@ -53,7 +54,7 @@ function cityKey(latitude: number, longitude: number): string {
   return `${rounded(latitude).toFixed(2)},${rounded(longitude).toFixed(2)}`;
 }
 
-async function searchOpenMeteo(name: string, locale: "zh" | "en") {
+async function searchOpenMeteo(name: string, locale: Locale) {
   const url = new URL(GEOCODING_URL);
   url.searchParams.set("name", name);
   url.searchParams.set("count", "8");

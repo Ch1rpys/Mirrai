@@ -1,3 +1,4 @@
+import type { Locale } from "./copy";
 /**
  * Intimacy levels, shared by the server and the client.
  *
@@ -58,7 +59,7 @@ export function normalizeIntimacyLevel(value: string | null | undefined): string
  */
 export function intimacyLevelLabel(
   value: string | null | undefined,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): string {
   const trimmed = value?.trim() ?? "";
   const match = INTIMACY_LEVELS.find(

@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useLocale } from "@/contexts/LocaleContext";
+import { LOCALE_NAMES, type Locale } from "@/i18n";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Wordmark } from "@/components/Wordmark";
 import {
@@ -20,9 +21,61 @@ const stagger = {
 
 /* ─── Nav ─── */
 
+/**
+ * The language menu.
+ *
+ * It used to be a two-way toggle: one button that swapped Chinese for
+ * English. There are three languages now — 中文, English and 繁體中文 — so a
+ * toggle can no longer say what it does. The button opens the list and each
+ * language names itself in its own script, which is the only label a person
+ * looking for their language can read.
+ */
+function LanguageMenu() {
+  const { t, locale, setLocale } = useLocale();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((value) => !value)}
+        className="app-nav-back gap-1.5 text-sm"
+        aria-label={t("landing.nav.language")}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <Globe className="w-4 h-4" />
+        <span className="hidden sm:inline">{LOCALE_NAMES[locale]}</span>
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          aria-label={t("landing.nav.language")}
+          className="absolute right-0 top-full z-50 mt-2 min-w-40 rounded-md border border-border bg-popover p-1 shadow-pop"
+        >
+          {(Object.keys(LOCALE_NAMES) as Locale[]).map((code) => (
+            <button
+              key={code}
+              role="option"
+              aria-selected={code === locale}
+              onClick={() => {
+                setLocale(code);
+                setOpen(false);
+              }}
+              className={`block w-full rounded-sm px-3 py-1.5 text-left text-sm transition-colors hover:bg-muted ${
+                code === locale ? "text-foreground font-medium" : "text-muted-foreground"
+              }`}
+            >
+              {LOCALE_NAMES[code]}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function LandingNav() {
   const [, navigate] = useLocation();
-  const { t, locale, setLocale } = useLocale();
+  const { t } = useLocale();
   const { theme, toggleTheme } = useTheme();
 
   return (
@@ -38,14 +91,7 @@ function LandingNav() {
               {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
           )}
-          <button
-            onClick={() => setLocale(locale === "zh" ? "en" : "zh")}
-            className="app-nav-back gap-1.5 text-sm"
-            aria-label={t("landing.nav.language")}
-          >
-            <Globe className="w-4 h-4" />
-            <span className="hidden sm:inline">{t("landing.nav.language")}</span>
-          </button>
+          <LanguageMenu />
           <div className="app-nav-divider" />
           <Button variant="ghost" size="sm" onClick={() => navigate("/login")} className="text-sm">
             {t("landing.nav.login")}

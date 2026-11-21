@@ -22,6 +22,7 @@ import type { CollectorJob, CollectorJobStatus } from "./jobs";
 import { copy } from "@shared/copy";
 import type { ParsedRecord, RecordRole } from "@shared/records";
 import { zonedDateKey, zonedHour, zonedMinute } from "@shared/timezone";
+import type { Locale } from "@shared/copy";
 
 /**
  * The write chain, per job.
@@ -508,7 +509,7 @@ export async function importRecords(params: {
  * person — has none of them. So it is spelled out here, with its English
  * counterpart beside it.
  */
-export function collectedSpeaker(role: string, locale: "zh" | "en" = "zh"): string {
+export function collectedSpeaker(role: string, locale: Locale = "zh"): string {
   if (role === "user") return copy(locale, "prompt.speakerSelf");
   /**
    * The same words the parser knows.
@@ -529,7 +530,7 @@ export function collectedSpeaker(role: string, locale: "zh" | "en" = "zh"): stri
  */
 export function toTranscript(
   messages: Array<{ role: string; content: string }>,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): string {
   return messages
     .map((m) => `${collectedSpeaker(m.role, locale)}${m.content}`)
@@ -553,7 +554,7 @@ function formatRecordStamp(date: Date, timeZone?: string | null): string {
  */
 export function toTimedTranscript(
   messages: Array<{ role: string; content: string; timestamp?: Date | string | null }>,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
   timeZone?: string | null,
 ): string {
   return messages

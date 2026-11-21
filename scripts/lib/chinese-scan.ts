@@ -306,17 +306,36 @@ export function bareChineseInSource(
 }
 
 /**
+ * The names a Chinese half of a bilingual dictionary can have.
+ *
+ * `zh.ts` is the original. `zh-Hant.ts` is the traditional Chinese half:
+ * it is generated from `zh.ts` by `scripts/gen-zh-hant.ts` and therefore
+ * just as Chinese by definition — and it has the same key set, which the
+ * interface's dictionary test enforces.
+ */
+const DICTIONARY_HALF_NAMES = ["zh.ts", "zh.tsx", "zh-Hant.ts", "zh-Hant.tsx"] as const;
+
+/**
  * Whether a file is the Chinese half of a bilingual dictionary.
  *
  * `client/src/i18n/zh.ts` next to `client/src/i18n/en.ts` is the interface's
- * dictionary. The name and the sibling are what identify it — not a
+ * dictionary. The name and the siblings are what identify it — not a
  * marker, because the file is Chinese on purpose and always will be.
+ *
+ * The traditional half is only recognised when the simplified file it is
+ * generated from is next to it as well: a lone `zh-Hant.ts` with no `zh.ts`
+ * would be a copy with nothing guaranteeing its keys match.
  */
 export function isChineseDictionaryHalf(filePath: string): boolean {
   const name = filePath.split(/[\\/]/).pop() ?? "";
-  if (name !== "zh.ts" && name !== "zh.tsx") return false;
+  if (!(DICTIONARY_HALF_NAMES as readonly string[]).includes(name)) return false;
   const directory = filePath.slice(0, filePath.length - name.length);
-  return existsSync(join(directory, "en.ts")) || existsSync(join(directory, "en.tsx"));
+  const hasEnglish = existsSync(join(directory, "en.ts")) || existsSync(join(directory, "en.tsx"));
+  if (!hasEnglish) return false;
+  if (name === "zh-Hant.ts" || name === "zh-Hant.tsx") {
+    return existsSync(join(directory, "zh.ts")) || existsSync(join(directory, "zh.tsx"));
+  }
+  return true;
 }
 
 /**

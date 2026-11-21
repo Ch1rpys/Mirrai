@@ -97,7 +97,10 @@ const trpcClient = trpc.createClient({
         } catch {
           locale = null;
         }
-        headers.set("x-mirrai-locale", locale === "en" ? "en" : "zh");
+        headers.set(
+          "x-mirrai-locale",
+          locale === "en" ? "en" : locale === "zh-Hant" ? "zh-Hant" : "zh",
+        );
         return globalThis.fetch(input, {
           ...(init ?? {}),
           headers,

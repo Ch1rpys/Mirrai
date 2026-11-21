@@ -558,7 +558,7 @@ export async function runReminderSweep(now: Date = new Date()): Promise<number> 
    * with five personas was read five times, every minute, for ever.
    */
   const perUser = new Map<number, {
-    locale: "zh" | "en";
+    locale: Locale;
     timezone: string | null;
   }>();
 

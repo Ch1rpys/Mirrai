@@ -33,6 +33,7 @@ import { retrieveExemplarsFromTable } from "./exemplar-query";
 import type { ReanchorIssue } from "@shared/style-reminder";
 import { preferredClockZone } from "@shared/timezone";
 import { meetCountdown } from "@shared/persona-state";
+import type { Locale } from "@shared/copy";
 
 /**
  * The user's own time zone, for the parts of the prompt that are about
@@ -103,7 +104,7 @@ export interface PromptContext {
   persona: Persona;
   userId: number;
   userMessage?: string;
-  locale?: "zh" | "en";
+  locale?: Locale;
   now?: Date;
   /** The scene overlay, when a scene is active. */
   sceneOverlay?: string | null;
@@ -424,7 +425,7 @@ function mentionTexts(context: PromptContext): string[] {
   ];
 }
 
-function peopleSectionFor(context: PromptContext, locale: "zh" | "en"): string {
+function peopleSectionFor(context: PromptContext, locale: Locale): string {
   if (context.peopleSection === null) return "";
   if (typeof context.peopleSection === "string") return context.peopleSection;
   const people = normalizePeople(
@@ -433,7 +434,7 @@ function peopleSectionFor(context: PromptContext, locale: "zh" | "en"): string {
   return renderPeopleSection(mentionedPeople(people, mentionTexts(context)), locale);
 }
 
-function stancesSectionFor(context: PromptContext, locale: "zh" | "en"): string {
+function stancesSectionFor(context: PromptContext, locale: Locale): string {
   if (context.stancesSection === null) return "";
   if (typeof context.stancesSection === "string") return context.stancesSection;
   const stances = normalizeStances(
@@ -489,7 +490,7 @@ export function actProfileForTurn(
  */
 export function renderContrastPairs(
   pairs: Array<{ unlike: string; rewrite: string }>,
-  locale: "zh" | "en",
+  locale: Locale,
 ): string {
   const lines: string[] = [];
   for (const pair of pairs) {
@@ -504,7 +505,7 @@ export function renderContrastPairs(
 
 async function contrastSectionFor(
   context: PromptContext,
-  locale: "zh" | "en",
+  locale: Locale,
 ): Promise<string> {
   const pairs = await optionalCall(
     () => db.listFidelityRewritePairs(context.persona.id, context.userId, 3),
@@ -515,7 +516,7 @@ async function contrastSectionFor(
 
 async function exemplarSectionFor(
   context: PromptContext,
-  locale: "zh" | "en",
+  locale: Locale,
 ): Promise<string> {
   if (!context.userMessage) return "";
   const period = periodOf(context.persona, context.periodId);
@@ -566,7 +567,7 @@ async function exemplarSectionFor(
 
 function memoryConflictSectionFor(
   memories: Array<{ factKey?: string | null; status?: string | null; title: string; description?: string | null }>,
-  locale: "zh" | "en",
+  locale: Locale,
 ): string {
   const groups = new Map<string, typeof memories>();
   for (const memory of memories) {

@@ -7,13 +7,24 @@
  */
 import { zh } from "./zh";
 import { en } from "./en";
+import { zhHant } from "./zh-Hant";
 
 export { zh } from "./zh";
 export { en } from "./en";
+export { zhHant } from "./zh-Hant";
 
-export type Locale = "zh" | "en";
+/**
+ * The languages the interface speaks.
+ *
+ * Traditional Chinese is machine-converted from the simplified dictionary
+ * (`pnpm i18n:hant`) rather than translated a second time, so the two stay
+ * the same words in different characters. Any other language still needs a
+ * person: adding one means adding a dictionary here, and the key-parity
+ * test makes sure it covers every key.
+ */
+export type Locale = "zh" | "en" | "zh-Hant";
 
-export const dictionaries = { zh, en } as const;
+export const dictionaries = { zh, en, "zh-Hant": zhHant } as const;
 
 /**
  * The namespaces the dictionaries carry.
@@ -132,8 +143,16 @@ export function translate<K extends TranslationKey>(
   return key as unknown as ValueAt<typeof zh, K>;
 }
 
-/** The locale names, in their own language. */
+/**
+ * The locale names, in their own language.
+ *
+ * Each language names itself, which is the only way a name is readable to
+ * the person looking for it — an English name for 繁體中文 is no use to
+ * somebody who cannot read English.
+ */
+// i18n:allow-identifier — a language's own name, written in that language; it is the same in every interface.
 export const LOCALE_NAMES: Record<Locale, string> = {
   zh: "中文",
   en: "English",
+  "zh-Hant": "繁體中文",
 };

@@ -32,6 +32,7 @@ import {
   updateOralAccount,
 } from "../db";
 import { extractOralMemories } from "../oral/extract";
+import type { Locale } from "@shared/copy";
 
 /**
  * A voice passage is capped at the same size as a chat voice note.
@@ -58,7 +59,7 @@ function ownerPersonaId(persona: { id: number; sharedFromPersonaId?: number | nu
  */
 function assertShareAlive(
   persona: { sharedFromPersonaId?: number | null; sharedFromUserId?: number | null },
-  locale: "zh" | "en",
+  locale: Locale,
 ): void {
   if (persona.sharedFromPersonaId && !persona.sharedFromUserId) {
     throw new TRPCError({ code: "FORBIDDEN", message: copy(locale, "chat.revoked") });

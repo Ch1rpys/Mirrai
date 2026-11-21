@@ -17,6 +17,7 @@ import { resolveProviderForPurposeWithOwnership } from "../llm/user-provider";
 import { copy } from "@shared/copy";
 import { asMaterial } from "../_core/material";
 import { sanitizeEntities } from "@shared/memory-entities";
+import type { Locale } from "@shared/copy";
 
 /**
  * How many messages back the extraction looks when there is no cut-off.
@@ -143,7 +144,7 @@ export interface ExtractResult {
 export async function extractMemories(params: {
   persona: Persona;
   userId: number;
-  locale?: "zh" | "en";
+  locale?: Locale;
   now?: Date;
   /**
    * The messages to read, when they are not in the conversation.
@@ -207,7 +208,7 @@ export async function extractMemories(params: {
  * only true of an in-app conversation. An uploaded transcript is a
  * record, and both sides of it were said.
  */
-function extractionInstructions(locale: "zh" | "en", fromUpload: boolean): string {
+function extractionInstructions(locale: Locale, fromUpload: boolean): string {
   const base = copy(locale, "prompts.memoryExtraction");
   if (fromUpload) return base;
   return `${base}\n\n${copy(locale, "prompts.memoryExtractionInApp")}`;
@@ -219,7 +220,7 @@ function extractionInstructions(locale: "zh" | "en", fromUpload: boolean): strin
 async function runExtraction(params: {
   persona: Persona;
   userId: number;
-  locale?: "zh" | "en";
+  locale?: Locale;
   now?: Date;
   history?: Array<{
     id: number;
@@ -561,7 +562,7 @@ async function runExtraction(params: {
  * transcript has as many as the export had — so a line that is neither
  * is shown under its own name, rather than being called the persona.
  */
-function speakerName(role: string, personaName: string, locale: "zh" | "en"): string {
+function speakerName(role: string, personaName: string, locale: Locale): string {
   if (role === "user") return copy(locale, "prompt.roleUser");
   /**
    * The persona.

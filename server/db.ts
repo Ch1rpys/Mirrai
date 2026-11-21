@@ -1,4 +1,5 @@
 import { eq, ne, desc, and, or, sql, count, sum, gte, ilike, asc, lt, lte, max, min, inArray, notInArray, isNull, isNotNull, exists } from "drizzle-orm";
+import type { Locale } from "@shared/copy";
 import { drizzle } from "drizzle-orm/node-postgres";
 import {
   InsertUser, users,
@@ -1286,18 +1287,20 @@ export async function deleteRelationshipEvent(id: number, userId: number) {
  * on its own — a reminder at midnight, a reply in a chat window — have to
  * know it without being asked, so it is kept here.
  */
-export async function getUserLocale(userId: number): Promise<"zh" | "en"> {
+export async function getUserLocale(userId: number): Promise<Locale> {
   const db = await getDb();
   if (!db) return "zh";
   const [row] = await db
     .select({ locale: users.locale })
     .from(users)
     .where(eq(users.id, userId));
-  return row?.locale === "en" ? "en" : "zh";
+  if (row?.locale === "en") return "en";
+  if (row?.locale === "zh-Hant") return "zh-Hant";
+  return "zh";
 }
 
 /** Remembers the language the user reads. */
-export async function setUserLocale(userId: number, locale: "zh" | "en"): Promise<void> {
+export async function setUserLocale(userId: number, locale: Locale): Promise<void> {
   const db = await getDb();
   if (!db) return;
   await db.update(users).set({ locale }).where(eq(users.id, userId));

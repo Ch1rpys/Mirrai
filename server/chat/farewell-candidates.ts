@@ -44,6 +44,7 @@ import { normalizeMicroRules, renderMicroRules } from "@shared/micro-rules";
 import { toStringList, toText } from "../_core/persona-schema";
 import { asMaterial } from "../_core/material";
 import * as db from "../db";
+import type { Locale } from "@shared/copy";
 
 /** One sentence the persona might say but has never said. */
 export interface FarewellCandidate {
@@ -159,7 +160,7 @@ export interface FarewellContext {
 export async function assembleFarewellContext(params: {
   persona: Persona;
   userId: number;
-  locale?: "zh" | "en";
+  locale?: Locale;
   /** The reference time, so that a caller can ask for a fixed moment. */
   now?: Date;
 }): Promise<FarewellContext> {
@@ -221,7 +222,7 @@ export async function assembleFarewellContext(params: {
  */
 export function describePersonaForCandidates(
   persona: Persona,
-  locale: "zh" | "en" = "zh",
+  locale: Locale = "zh",
 ): string {
   /**
    * The persona's data, read safely.
@@ -295,7 +296,7 @@ export function describePersonaForCandidates(
 export async function buildFarewellCandidates(params: {
   persona: Persona;
   userId: number;
-  locale?: "zh" | "en";
+  locale?: Locale;
   now?: Date;
   /** Cancels the request when the budget runs out. */
   signal?: AbortSignal;
@@ -362,7 +363,7 @@ export async function editFarewellCandidates(params: {
   persona: Persona;
   userId: number;
   candidates: FarewellCandidate[];
-  locale?: "zh" | "en";
+  locale?: Locale;
   now?: Date;
   /** Cancels the request when the budget runs out. */
   signal?: AbortSignal;
@@ -411,7 +412,7 @@ export async function editFarewellCandidates(params: {
 export async function writeFarewellLetterInTwoPasses(params: {
   persona: Persona;
   userId: number;
-  locale?: "zh" | "en";
+  locale?: Locale;
   now?: Date;
 }): Promise<{
   letter: string;
