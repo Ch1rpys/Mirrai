@@ -53,6 +53,29 @@ describe("a stretch of the record quoted into a turn", () => {
   });
 });
 
+describe("the stretch of the record a scene was taken from", () => {
+  it("is material, inside the fence, under its own heading", () => {
+    const prompt = buildSystemPrompt(persona(), {
+      locale: "zh",
+      sceneRangeSection: HOSTILE_NOTE,
+      sceneRangeBoundary: copy("zh", "prompt.sceneRangeBoundary", {
+        from: "2026-03-01",
+        to: "2026-03-02",
+      }),
+    } as any);
+
+    // The hostile line is in the prompt…
+    expect(prompt).toContain(HOSTILE_NOTE);
+    // …and only inside the fence. A record line that looked like an
+    // instruction is data, exactly like every other piece of material.
+    expect(unfenced(prompt)).not.toContain(HOSTILE_NOTE);
+    // The boundary is an instruction, so it stays outside the fence.
+    expect(unfenced(prompt)).toContain(
+      copy("zh", "prompt.sceneRangeBoundary", { from: "2026-03-01", to: "2026-03-02" }),
+    );
+  });
+});
+
 describe("the sentence given to the wording assistant", () => {
   it("is material, fenced, and not an instruction", () => {
     const messages = buildWordingMessages(HOSTILE_NOTE, "zh");

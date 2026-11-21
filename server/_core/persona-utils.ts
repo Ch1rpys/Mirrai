@@ -183,6 +183,11 @@ export interface SystemPromptOptions {
   guardInstruction?: string | null;
   /** Overlay describing the active scene. */
   sceneOverlay?: string | null;
+  /**
+   * The lines the two of them said in the stretch of the record this
+   * scene came from (C8.13). Material: fenced, under its own heading.
+   */
+  sceneRangeSection?: string | null;
   /** Retrieved memories, already formatted. */
   memorySection?: string;
   /**
@@ -324,6 +329,11 @@ export interface SystemPromptOptions {
    * This stretch of them does not know what came after. Instruction.
    */
   periodBoundary?: string | null;
+  /**
+   * The days a scene drawn from the record covers, and that after them
+   * is unknown (C8.13). Instruction: outside the fence.
+   */
+  sceneRangeBoundary?: string | null;
   /**
    * Past replies of theirs, already formatted and fenced by the caller.
    */
@@ -690,6 +700,7 @@ export function buildSystemPromptParts(
     { kind: "volatile", text: closingInstruction },
     { kind: "volatile", text: options.inSessionShare || "" },
     { kind: "volatile", text: options.periodBoundary || "" },
+    { kind: "volatile", text: options.sceneRangeBoundary || "" },
     { kind: "volatile", text: memorialBoundary },
     {
       kind: "volatile",
@@ -835,6 +846,19 @@ export function buildSystemPromptParts(
       kind: "volatile",
       text: options.sceneOverlay
         ? asMaterial(copy(locale, "prompt.sceneHeading"), options.sceneOverlay)
+        : "",
+    },
+    {
+      /**
+       * What they were saying in those days.
+       *
+       * The whole block — heading and lines — is fenced: the lines are
+       * the record's own words, and the heading says so. A hostile line
+       * inside them stays inside the fence.
+       */
+      kind: "volatile",
+      text: options.sceneRangeSection
+        ? asMaterial(copy(locale, "prompt.sceneRangeHeading"), options.sceneRangeSection)
         : "",
     },
     {

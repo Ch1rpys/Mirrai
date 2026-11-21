@@ -18,6 +18,11 @@ import { sanitizeRoles } from "../llm/roles";
 import { inspectExtraBody } from "../llm/extra-body";
 import { budgetExceeded } from "../llm/budget";
 import { loadQuotedRecordsSection } from "./quoted-records";
+import {
+  loadSceneRangeMaterial,
+  sceneRangeOf,
+  sceneUsableForPersona,
+} from "./scene-range";
 import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { computeIntimacy, getEmotionalStateDesc } from "../_core/persona-utils";
@@ -613,6 +618,28 @@ async function toLLMMessage(
 }
 
 /**
+ * The zone a scene's days are read in.
+ *
+ * The persona's own zone first — that is where the two of them were —
+ * then the user's. A failure to read it falls back to the server's own
+ * day, which is what the prompt does without a zone.
+ */
+async function sceneClockZoneFor(
+  persona: { timezone?: string | null },
+  userId: number,
+): Promise<string | null> {
+  const own = typeof persona.timezone === "string" && persona.timezone.trim()
+    ? persona.timezone.trim()
+    : "";
+  if (own) return own;
+  try {
+    return (await db.getUserTimezone(userId)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Builds the message list sent to the model.
  */
 export async function composeMessages(params: {
@@ -666,8 +693,31 @@ export async function composeMessages(params: {
   const history = (await db.getMessagesByPersonaId(params.persona.id, params.userId, 200))
     .filter((row) => row.origin !== "system-notice" && !quirkKindOf(row));
 
-  const scene = params.persona.activeSceneId
+  const storedScene = params.persona.activeSceneId
     ? await db.getSceneById(params.persona.activeSceneId, params.userId)
+    : null;
+  /**
+   * A scene drawn from a stretch of the record belongs to the persona it
+   * came from (C8.13). Activation refuses to attach it elsewhere; a
+   * persona that carries one anyway (a stale row, a shared persona) is
+   * treated as having no scene at all, rather than speaking from
+   * somebody else's records.
+   */
+  const scene =
+    storedScene && sceneUsableForPersona(storedScene, params.persona.id) ? storedScene : null;
+  /**
+   * Only a scene drawn from a stretch of the record needs the record
+   * read and the clock zone. An ordinary scene is a string in the
+   * prompt and nothing else.
+   */
+  const sceneRangeScene = scene && sceneRangeOf(scene) ? scene : null;
+  const sceneRange = sceneRangeScene
+    ? await loadSceneRangeMaterial({
+        scene: sceneRangeScene,
+        persona: params.persona,
+        locale,
+        timeZone: await sceneClockZoneFor(params.persona, params.userId),
+      }).catch(() => null)
     : null;
 
   const retrieved = await retrieveMemories({
@@ -741,6 +791,11 @@ export async function composeMessages(params: {
     sceneOverlay: scene
       ? (localizeScene(scene as any, params.locale ?? "zh") as any).systemPromptOverlay ?? null
       : null,
+    // The lines of the stretch the scene was drawn from, and the days
+    // it covers. Material is fenced; the boundary is an instruction.
+    sceneRangeSection: sceneRange?.section ?? null,
+    sceneRangeBoundary: sceneRange?.boundary ?? null,
+    recordRangeEnd: sceneRange?.end ?? null,
     // A scene carries the mood it is meant to be set in. It is a
     // presentation override, not a state change: the persona's own state
     // machine keeps running in the database, so leaving the scene puts the

@@ -108,6 +108,23 @@ export interface PromptContext {
   /** The scene overlay, when a scene is active. */
   sceneOverlay?: string | null;
   /**
+   * The lines the scene's stretch of the record carries (C8.13).
+   *
+   * Already rendered, one line per record; the prompt fences the whole
+   * block under its heading.
+   */
+  sceneRangeSection?: string | null;
+  /** The instruction that says how far the scene's knowledge goes. */
+  sceneRangeBoundary?: string | null;
+  /**
+   * The end of the stretch a record-range scene covers.
+   *
+   * It is a knowledge boundary in the same way the selected period and
+   * the deathday are: a memory or an event dated after it is not
+   * injected.
+   */
+  recordRangeEnd?: Date | null;
+  /**
    * The state the prompt is describing.
    *
    * It is not always the persona's stored state: a scene can set the
@@ -246,8 +263,13 @@ export async function buildPromptBundleForPersona(
     personaSettings.mode === "memorial" && personaSettings.memorial?.deathday
       ? periodToInstant(personaSettings.memorial.deathday, clockZone)
       : null;
+  /**
+   * The earliest of the boundaries: the selected period (B6.5), the
+   * deathday (C7.1), and the end of a stretch a scene was drawn from
+   * (C8.13). What is known cannot reach past any of them.
+   */
   const knowledgeEnd =
-    [periodEnd, deathdayEnd]
+    [periodEnd, deathdayEnd, context.recordRangeEnd ?? null]
       .filter((value): value is Date => Boolean(value))
       .sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
 
@@ -282,7 +304,7 @@ export async function buildPromptBundleForPersona(
     title: string;
     detail?: string | null;
     happenedAt?: Date | string | null;
-  }>).filter((event) => eventKnownBy(event.happenedAt, periodEnd));
+  }>).filter((event) => eventKnownBy(event.happenedAt, knowledgeEnd));
   const phase = resolveRelationshipPhase(events as any);
 
   const userContext = buildUserContextBlock(
@@ -357,6 +379,8 @@ export async function buildPromptBundleForPersona(
       period?.from && period?.to
         ? copy(locale, "prompt.periodBoundary", { from: period.from, to: period.to })
         : "",
+    sceneRangeBoundary: context.sceneRangeBoundary ?? null,
+    sceneRangeSection: context.sceneRangeSection ?? null,
     promptMode: context.promptMode,
     exemplarSection:
       context.promptMode === "planner" || context.skipExemplars

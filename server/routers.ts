@@ -7,6 +7,7 @@ import { worseStreakFor } from "./safety/checkins";
 import { withPersonaDataLock } from "./_core/lock";
 import { requestAbortSignal } from "./_core/context";
 import { QuotedRecordsError } from "./chat/quoted-records";
+import { countSceneRangeLines, loadSceneRangeMaterial, sceneRangeOf, sceneUsableForPersona } from "./chat/scene-range";
 import { extractMemories } from "./chat/memory-extract";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router, rateLimit } from "./_core/trpc";
@@ -54,7 +55,7 @@ import {
   getIntimacyData, updateIntimacy,
   getMessageVolume, getEmotionTimeline, getPersonaEngagement, getHourlyDistribution, getAnalyticsStats,
   createDiaryEntry, getDiaryEntries, getDiaryByDate, deleteDiaryEntry, getMessagesByDate, getDiaryDates,
-  getScenes, getSceneById, createScene, deleteScene, activateScene,
+  getScenes, getSceneById, createScene, deleteScene, activateScene, updateScene,
   getExportData, getRecentEmotionTrend, getMessageCountInRange, setGraduationStatus,
   countCollectedMessagesForPersona,
   getSafetyEvents, resolveSafetyEvent, getLatestGraduationAssessment, getLatestGraduationAssessments,
@@ -110,6 +111,7 @@ import { getEffectiveGraduationMode, getGraduationModeDetails, canOfferGraduatio
 import type { personas as personasTable } from "../drizzle/schema";
 import type { DistillationMode } from "@shared/distillation-modes";
 import { INTIMACY_LEVELS } from "@shared/intimacy";
+import { SCENE_RANGE_MIN_LINES, type SceneRecordRange } from "@shared/scene-range";
 import { getCrisisResources } from "./safety/resources";
 import {
   zonedNoonForDayKey,
@@ -876,6 +878,42 @@ function personaForEval<T extends { timezone?: string | null }>(
   if (!timezone || persona.timezone) return persona;
   return { ...persona, timezone };
 }
+
+/**
+ * The six states a scene may put the persona in.
+ *
+ * Kept as a list so the create and update routes ask for the same six:
+ * a scene's mood has to be one the persona's state machine knows.
+ */
+const SCENE_STATES = ["warm", "playful", "nostalgic", "melancholy", "happy", "distant"] as const;
+
+/**
+ * The fields a scene carries, and their limits.
+ *
+ * `scene.create` and `scene.update` share this one object, so the two
+ * cannot drift: the overlay limit the create route enforces is the same
+ * limit an edit is held to (C8.13).
+ */
+const sceneFieldsSchema = z.object({
+  name: z.string().min(1).max(100),
+  /**
+   * Bounded, like every other free-text field.
+   *
+   * The description and the overlay had no limit at all — and the
+   * overlay is injected into every prompt built for a persona with
+   * that scene active. So a pasted (or scripted) multi-megabyte
+   * overlay silently became part of every system prompt, and the
+   * provider started refusing the request.
+   */
+  description: z.string().max(2000).optional(),
+  icon: z.string().max(10).optional(),
+  systemPromptOverlay: z.string().max(20_000).optional(),
+  // The scene's mood has to be one the persona's state machine knows,
+  // otherwise the scene would put a word into the prompt that nothing
+  // else understands.
+  emotionalState: z.enum(SCENE_STATES).optional(),
+  starters: z.array(z.string().max(500)).max(20).optional(),
+});
 
 export const appRouter = router({
   system: systemRouter,
@@ -2161,9 +2199,23 @@ export const appRouter = router({
          * not the prompt the persona was given — and the docstring said
          * it was.
          */
-        const scene = persona.activeSceneId
+        const storedScene = persona.activeSceneId
           ? await getSceneById(persona.activeSceneId, ctx.user.id).catch(() => null)
           : null;
+        const scene = storedScene && sceneUsableForPersona(storedScene, persona.id)
+          ? storedScene
+          : null;
+        /**
+         * A scene drawn from a stretch of the record carries the days
+         * and the lines as well (C8.13). The inspection has to show the
+         * prompt the persona is given — including this.
+         */
+        const sceneRange = await loadSceneRangeMaterial({
+          scene,
+          persona,
+          locale: ctx.locale,
+          timeZone: (persona as { timezone?: string | null }).timezone ?? ctx.user.timezone ?? null,
+        }).catch(() => null);
         const prompt = await buildPromptForPersona({
           persona,
           userId: ctx.user.id,
@@ -2174,6 +2226,9 @@ export const appRouter = router({
           sceneOverlay: scene
             ? (localizeScene(scene as any, ctx.locale) as any).systemPromptOverlay ?? null
             : null,
+          sceneRangeSection: sceneRange?.section ?? null,
+          sceneRangeBoundary: sceneRange?.boundary ?? null,
+          recordRangeEnd: sceneRange?.end ?? null,
           emotionalState: scene?.emotionalState && isEmotionalState(scene.emotionalState)
             ? scene.emotionalState
             : null,
@@ -7922,28 +7977,149 @@ export const appRouter = router({
     }),
 
     create: protectedProcedure
-      .input(z.object({
-        name: z.string().min(1).max(100),
-        /**
-         * Bounded, like every other free-text field.
-         *
-         * The description and the overlay had no limit at all — and the
-         * overlay is injected into every prompt built for a persona with
-         * that scene active. So a pasted (or scripted) multi-megabyte
-         * overlay silently became part of every system prompt, and the
-         * provider started refusing the request.
-         */
-        description: z.string().max(2000).optional(),
-        icon: z.string().max(10).optional(),
-        systemPromptOverlay: z.string().max(20_000).optional(),
-        // The scene's mood has to be one the persona's state machine knows,
-        // otherwise the scene would put a word into the prompt that nothing
-        // else understands.
-        emotionalState: z.enum(["warm", "playful", "nostalgic", "melancholy", "happy", "distant"]).optional(),
-        starters: z.array(z.string().max(500)).max(20).optional(),
-      }))
+      .input(sceneFieldsSchema)
       .mutation(async ({ ctx, input }) => {
         return createScene({ ...input, userId: ctx.user.id, starters: input.starters || [], isBuiltin: false });
+      }),
+
+    /**
+     * Changes a scene of the user's own (C8.13).
+     *
+     * The checks are the same as the create route's, because the input
+     * is the same object. What is different is who owns the row: a
+     * scene of somebody else's is not found, and a built-in scene is
+     * refused with the way forward — copy it first.
+     */
+    update: protectedProcedure
+      .input(sceneFieldsSchema.partial().extend({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const { id, ...patch } = input;
+        const scene = await getSceneById(id, ctx.user.id);
+        if (!scene) {
+          throw new TRPCError({ code: "NOT_FOUND", message: copy(ctx.locale, "errors.sceneNotYours") });
+        }
+        if (scene.isBuiltin) {
+          throw new TRPCError({ code: "FORBIDDEN", message: copy(ctx.locale, "errors.sceneBuiltinReadOnly") });
+        }
+        if (Object.keys(patch).length === 0) return localizeScene(scene as any, ctx.locale);
+        const updated = await updateScene(id, ctx.user.id, patch);
+        if (!updated) {
+          // It was deleted between the read and the write.
+          throw new TRPCError({ code: "NOT_FOUND", message: copy(ctx.locale, "errors.sceneNotYours") });
+        }
+        return localizeScene(updated as any, ctx.locale);
+      }),
+
+    /**
+     * Copies any readable scene into the user's own (C8.13).
+     *
+     * A built-in scene is the one this exists for: it belongs to the
+     * installation and cannot be edited, so the way to make it yours is
+     * to copy it and edit the copy. The copy is an ordinary custom
+     * scene; its name says it is a copy, and a scene drawn from the
+     * record keeps that stretch (and therefore stays bound to the
+     * persona it came from).
+     */
+    duplicate: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const scene = await getSceneById(input.id, ctx.user.id);
+        if (!scene) {
+          throw new TRPCError({ code: "NOT_FOUND", message: copy(ctx.locale, "errors.sceneNotYours") });
+        }
+        const localized = localizeScene(scene as any, ctx.locale) as any;
+        const starters = Array.isArray(localized.starters)
+          ? (localized.starters as unknown[]).filter((line): line is string => typeof line === "string").slice(0, 20)
+          : [];
+        return createScene({
+          userId: ctx.user.id,
+          name: copy(ctx.locale, "scenes.duplicateName", { name: localized.name }).slice(0, 100),
+          description: localized.description ?? null,
+          icon: localized.icon ?? null,
+          systemPromptOverlay: localized.systemPromptOverlay ?? null,
+          emotionalState: localized.emotionalState ?? null,
+          starters,
+          isBuiltin: false,
+          recordRange: (scene as any).recordRange ?? null,
+        });
+      }),
+
+    /**
+     * A scene made from a stretch of the record (C8.13).
+     *
+     * The reader selects consecutive lines and asks to talk in their
+     * context. The scene remembers only the two ends and the days: the
+     * lines the prompt carries are read out of the record when it is
+     * used, so a deleted or harm-filtered record is not resurrected.
+     *
+     * This scene is bound to the persona whose record it came from.
+     */
+    createFromRecords: protectedProcedure
+      .input(z.object({
+        personaId: z.number(),
+        fromId: z.number().int().positive(),
+        toId: z.number().int().positive(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const persona = await getPersonaById(input.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const ids = [...new Set([input.fromId, input.toId])];
+        const rows = await getRecordsByIds(ids, ctx.user.id);
+        const byId = new Map(rows.map((row) => [row.id, row]));
+        const wanted = [byId.get(input.fromId), byId.get(input.toId)];
+        if (
+          wanted.some((row) => !row || row.personaId !== persona.id)
+        ) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.sceneRangeNotYours") });
+        }
+        const spokenAt = (row: { timestamp?: Date | string | null; createdAt?: Date | string | null }) => {
+          const value = row.timestamp ?? row.createdAt ?? null;
+          if (!value) return null;
+          const at = value instanceof Date ? value : new Date(value);
+          return Number.isNaN(at.getTime()) ? null : at;
+        };
+        const first = wanted[0]!;
+        const second = wanted[1]!;
+        const firstAt = spokenAt(first);
+        const secondAt = spokenAt(second);
+        if (!firstAt || !secondAt) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.sceneRangeNotYours") });
+        }
+        const forward = firstAt.getTime() === secondAt.getTime()
+          ? first.id <= second.id
+          : firstAt.getTime() < secondAt.getTime();
+        const start = forward ? first : second;
+        const last = forward ? second : first;
+        /**
+         * The days are read in the persona's own clock, which is also
+         * where the prompt reads the boundary from. The user's zone is
+         * the fallback when the persona has none.
+         */
+        const zone = (persona as { timezone?: string | null }).timezone?.trim()
+          || ctx.user.timezone?.trim()
+          || null;
+        const from = zonedDateKey(spokenAt(start)!, zone);
+        const to = zonedDateKey(spokenAt(last)!, zone);
+        const range: SceneRecordRange = {
+          personaId: persona.id,
+          fromId: start.id,
+          toId: last.id,
+          from,
+          to,
+        };
+        const usable = await countSceneRangeLines({ range, persona });
+        if (usable < SCENE_RANGE_MIN_LINES) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.sceneRangeTooShort") });
+        }
+        return createScene({
+          userId: ctx.user.id,
+          // The name defaults to the days themselves.
+          name: (from === to ? from : `${from}–${to}`).slice(0, 100),
+          description: copy(ctx.locale, "scenes.rangeDescription", { from, to }),
+          starters: [],
+          isBuiltin: false,
+          recordRange: range,
+        });
       }),
 
     delete: protectedProcedure
@@ -7964,6 +8140,19 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const scene = await getSceneById(input.sceneId, ctx.user.id);
+        if (!scene) {
+          throw new TRPCError({ code: "NOT_FOUND", message: copy(ctx.locale, "errors.sceneNotYours") });
+        }
+        /**
+         * A scene drawn from one persona's record is only for that
+         * persona (C8.13). Attaching it elsewhere would let one
+         * persona speak from another's records.
+         */
+        const range = sceneRangeOf(scene);
+        if (range && range.personaId !== input.personaId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.sceneRangeOwner") });
+        }
         await activateScene(input.personaId, input.sceneId, ctx.user.id);
         return { success: true };
       }),

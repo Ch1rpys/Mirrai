@@ -4,7 +4,7 @@ import {
   InsertUser, users,
   personas, personaFiles, messages,
   wechatBindings, skillJobs, llmConfigs, wechatBotState,
-  memories, emotionSnapshots, diaryEntries, scenes,
+  memories, emotionSnapshots, diaryEntries, scenes, type Scene,
   chatSummaries, safetyEvents, graduationAssessments,
   channelBindings, channelStates, channelDefaultPersonas, personaTemplates, personaQuestionnaireAnswers,
   reminderDeliveries, researchProfiles, collectedMessages, collectionSources,
@@ -55,6 +55,7 @@ import { RELATIONSHIP_PHASE_EVENTS } from "@shared/user-side";
 import { mergeInheritedPersonaState } from "@shared/persona-sharing";
 import { BEHAVIOR_MAX_GAP_SEC, BEHAVIOR_MIN_GAP_SEC } from "@shared/behavior-profile";
 import { DEFAULT_SCENE_BREAK_HOURS } from "@shared/scenes";
+import { normalizeSceneRecordRange } from "@shared/scene-range";
 import { PERIOD_SILENCE_DAYS } from "@shared/periods";
 import type { MaterialCounts } from "@shared/material-report";
 import { RITUAL_MAX_REPLY_CHARS, RITUAL_MAX_TRIGGER_CHARS } from "@shared/ritual-table";
@@ -6006,6 +6007,32 @@ export async function createScene(data: InsertScene) {
 }
 
 /**
+ * Changes a custom scene (C8.13).
+ *
+ * The owner and the built-in flag are in the query, not in the caller:
+ * a built-in scene belongs to the installation, and another user's
+ * scene was never readable in the first place. What a caller may change
+ * is decided by the route, which also reports *why* nothing changed —
+ * "not found" and "built-in" are different answers.
+ *
+ * Returns the updated row, or null when there was nothing to update.
+ */
+export async function updateScene(
+  id: number,
+  userId: number,
+  patch: Partial<InsertScene>,
+): Promise<Scene | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db.update(scenes).set(patch).where(and(
+    eq(scenes.id, id),
+    eq(scenes.isBuiltin, false),
+    eq(scenes.userId, userId),
+  )).returning();
+  return row ?? null;
+}
+
+/**
  * Deletes a custom scene.
  *
  * Returns false when nothing was deleted — the scene belongs to somebody
@@ -6037,6 +6064,16 @@ export async function activateScene(personaId: number, sceneId: number | null, u
   if (sceneId != null) {
     const scene = await getSceneById(sceneId, userId);
     if (!scene) throw new Error("Scene not found");
+    /**
+     * A scene drawn from a stretch of the record belongs to the persona
+     * it came from (C8.13). The route reports this in the user's
+     * language; the query-level guard is here so no other caller can
+     * attach one across personas either.
+     */
+    const range = normalizeSceneRecordRange(scene.recordRange);
+    if (range && range.personaId !== personaId) {
+      throw new Error("A scene drawn from the record can only be used on its own persona");
+    }
   }
 
   await db.update(personas).set({ activeSceneId: sceneId, updatedAt: new Date() })

@@ -33,7 +33,14 @@ const RECORD_READ = /(?:iterateRecords|getCollectedMessagesForPersona|candidateR
 /**
  * Entry points that compose a turn. They must pass the scope themselves.
  */
-const GENERATION_FILES = new Set(["generate.ts", "prompt.ts", "service.ts"]);
+const GENERATION_FILES = new Set([
+  "generate.ts",
+  "prompt.ts",
+  "service.ts",
+  // The record-range scenes (C8.13) read the record too: the loader is
+  // handed the persona and resolves the scope itself, like the others.
+  "scene-range.ts",
+]);
 
 /**
  * Helpers that receive the `(personaId, userId)` pair from an entry

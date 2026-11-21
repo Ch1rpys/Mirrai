@@ -1021,6 +1021,19 @@ export const scenes = pgTable("scenes", {
   emotionalState: varchar("emotionalState", { length: 50 }),
   starters: jsonb("starters"),
   isBuiltin: boolean("isBuiltin").default(false).notNull(),
+  /**
+   * The stretch of the record this scene was drawn from (C8.13).
+   *
+   * `{ personaId, fromId, toId, from, to }`: the two records that end
+   * the stretch, the persona it was taken from, and the two days the
+   * interface names. Null for an ordinary scene.
+   *
+   * The lines themselves are not stored — they are read out of the
+   * record each time the scene is used, so deleting a record or
+   * filtering a harmful one reaches the prompt instead of being frozen
+   * into the scene.
+   */
+  recordRange: jsonb("recordRange"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => ({
   // A built-in scene is identified by its name, and the seeding routine

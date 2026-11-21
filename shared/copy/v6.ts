@@ -1142,6 +1142,58 @@ export const V6 = {
     zh: "最多带连续 8 句、合计 1200 字去聊。少选几句。",
     en: "At most eight consecutive lines and 1,200 characters in total. Choose fewer.",
   },
+
+  // ─── A scene drawn from the record (C8.13) ─────────────────────────────────
+  //
+  // The reader can take a day, or one consecutive run of lines, and ask
+  // to talk in its context. The scene is only usable on the persona the
+  // stretch came from; the lines it carries are the ones the two of
+  // them actually said, not a model's summary.
+
+  "errors.sceneNotYours": {
+    zh: "这个场景不存在，或者不是你的。",
+    en: "That scene does not exist, or it is not yours.",
+  },
+  "errors.sceneBuiltinReadOnly": {
+    zh: "内置场景不能改。先把它复制成你的，再改复制出来的那个。",
+    en: "A built-in scene cannot be edited. Copy it to your own scenes first, then edit the copy.",
+  },
+  "errors.sceneRangeOwner": {
+    zh: "这个场景是从某个分身的记录里做出来的，只能用在那一个分身上。",
+    en: "This scene was made from one persona's records, so it can only be used on that persona.",
+  },
+  "errors.sceneRangeNotYours": {
+    zh: "这一段记录不属于这个分身，或者已经不在记录里了。",
+    en: "That stretch of the record does not belong to this persona, or it is no longer in the record.",
+  },
+  "errors.sceneRangeTooShort": {
+    zh: "这一段里能用的原话不够 6 句。多选几句，或者换一段。",
+    en: "That stretch has fewer than six usable lines. Select a longer stretch.",
+  },
+  "scenes.duplicateName": {
+    zh: "{{name}}（副本）",
+    en: "{{name}} (copy)",
+  },
+  "scenes.rangeDescription": {
+    zh: "按 {{from}}–{{to}} 那几天的语境聊",
+    en: "Talking in the context of {{from}}–{{to}}",
+  },
+  /**
+   * The heading goes *inside* the fence: it is the stretch of the
+   * record talking, not an instruction to the model.
+   */
+  "prompt.sceneRangeHeading": {
+    zh: "【那几天你们在说的】",
+    en: "[What the two of you were saying those days]",
+  },
+  /**
+   * The boundary is an instruction, so it stays outside the fence —
+   * the same shape as the period boundary from B6.5.
+   */
+  "prompt.sceneRangeBoundary": {
+    zh: "你现在处在 {{from}} 到 {{to}} 那几天的语境里。{{to}} 之后发生的任何事你都不知道；被问到之后的事，照不知道来接。",
+    en: "You are in the context of the days from {{from}} to {{to}}. You do not know anything that happened after {{to}}; if you are asked about later, answer as someone who does not know.",
+  },
   "errors.budgetOver": {
     zh: "这个月的用量已经超过你定的预算。四选一、两步生成、事实重写、评测、试镜、排练和措辞助手先停用了；普通对话、安全回复和记忆抽取不受影响。",
     en: "This month's usage is past the budget you set. The four-way choice, two-stage generation, the fact rewrite, evaluation, audition, the rehearsal room and the wording assistant are switched off for now; ordinary replies, safety answers and memory extraction still work.",
