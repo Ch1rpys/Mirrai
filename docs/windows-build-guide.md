@@ -114,7 +114,13 @@ dotnet publish scripts\windows\launcher\Mirrai.Launcher.csproj `
   → 启动 powershell -File start.ps1，实时读取它的输出
     → 按日志里的阶段标记推进进度条
       → 就绪后自动打开浏览器
+
+关掉窗口  → 启动器收进通知区域（托盘），Mirrai 继续运行
+托盘菜单  → 打开 Mirrai / 看日志 / 退出（退出才真的停掉服务器）
+Ctrl+Alt+M → 从任何地方打开/切回浏览器里的 Mirrai
 ```
+
+启动器的输出同时写进 `%APPDATA%\Mirrai\logs\launcher.log`，托盘菜单的「看日志」打开它。
 
 GUI 启动器把 `start.ps1` 的 `[Mirrai] ...` 日志映射成 11 个阶段：
 

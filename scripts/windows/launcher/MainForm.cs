@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Mirrai.Launcher;
@@ -33,6 +34,42 @@ internal sealed class MainForm : Form
     private Process? _process;
     private bool _ready;
     private bool _closing;
+    /// <summary>True only when the user chose 退出 — a window close goes to the tray.</summary>
+    private bool _reallyExit;
+
+    // ─── The tray and the shortcut (C8.8) ──────────────────────────────
+    //
+    // The window used to be the whole app: closing it stopped Mirrai.
+    // Now closing it puts the launcher in the notification area and the
+    // server keeps running; the menu there has open / logs / quit, and
+    // Ctrl+Alt+M brings the browser back from anywhere.
+    private readonly NotifyIcon _trayIcon = new();
+    private const int WM_HOTKEY = 0x0312;
+    private const int HOTKEY_OPEN = 1;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    /// <summary>Where the start script's output is kept for "看日志".</summary>
+    private string LogPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "Mirrai", "logs", "launcher.log");
+
+    private void WriteLogLine(string line)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(LogPath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            File.AppendAllText(LogPath, line.TrimEnd() + Environment.NewLine, Encoding.UTF8);
+        }
+        catch
+        {
+            // The log is a convenience; the window still shows everything.
+        }
+    }
 
     // The start script announces each stage; the first match wins.
     private static readonly (string Marker, int Percent, string Status)[] Stages =
@@ -123,6 +160,77 @@ internal sealed class MainForm : Form
 
         FormClosing += OnFormClosing;
         Shown += (_, _) => BeginStartup();
+        BuildTray();
+    }
+
+    // ─── The tray (C8.8) ────────────────────────────────────────────────
+
+    private void BuildTray()
+    {
+        Icon? icon = null;
+        try { icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
+        _trayIcon.Icon = icon ?? SystemIcons.Application;
+        _trayIcon.Text = "Mirrai";
+        _trayIcon.Visible = false;
+        _trayIcon.DoubleClick += (_, _) => RestoreWindow();
+
+        var menu = new ContextMenuStrip();
+        var open = new ToolStripMenuItem("打开 Mirrai");
+        open.Click += (_, _) => OpenBrowser();
+        var logs = new ToolStripMenuItem("看日志");
+        logs.Click += (_, _) => OpenLog();
+        var quit = new ToolStripMenuItem("退出");
+        quit.Click += (_, _) =>
+        {
+            _reallyExit = true;
+            _trayIcon.Visible = false;
+            Close();
+        };
+        menu.Items.Add(open);
+        menu.Items.Add(logs);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(quit);
+        _trayIcon.ContextMenuStrip = menu;
+
+        // Ctrl+Alt+M opens the browser from anywhere while Mirrai runs.
+        // The id is ours; MOD_CONTROL = 0x0002, MOD_ALT = 0x0001.
+        RegisterHotKey(Handle, HOTKEY_OPEN, 0x0002 | 0x0001, (uint)Keys.M);
+    }
+
+    private void RestoreWindow()
+    {
+        Show();
+        WindowState = FormWindowState.Normal;
+        ShowInTaskbar = true;
+        _trayIcon.Visible = false;
+        Activate();
+    }
+
+    private void OpenLog()
+    {
+        try
+        {
+            if (!File.Exists(LogPath))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
+                File.WriteAllText(LogPath, string.Empty, Encoding.UTF8);
+            }
+            Process.Start(new ProcessStartInfo(LogPath) { UseShellExecute = true });
+        }
+        catch
+        {
+            // No default handler for .log is not worth a dialog.
+        }
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == WM_HOTKEY && m.WParam.ToInt32() == HOTKEY_OPEN)
+        {
+            OpenBrowser();
+            return;
+        }
+        base.WndProc(ref m);
     }
 
     // ─── Startup ────────────────────────────────────────────────────────────
@@ -209,7 +317,7 @@ internal sealed class MainForm : Form
         _ready = true;
         _openBrowser.Enabled = true;
         _status.Text = "已就绪";
-        _detail.Text = "Mirrai 正在运行，本窗口保持打开。关掉它就会停止 Mirrai。";
+        _detail.Text = "Mirrai 正在运行。关掉这个窗口它会留在任务栏托盘里；从托盘菜单可以退出。";
         OpenBrowser();
     }
 
@@ -227,6 +335,7 @@ internal sealed class MainForm : Form
 
     private void Append(string line)
     {
+        WriteLogLine(line);
         if (IsDisposed) return;
         BeginInvoke(() =>
         {
@@ -261,7 +370,24 @@ internal sealed class MainForm : Form
 
     private void OnFormClosing(object? sender, FormClosingEventArgs e)
     {
+        /**
+         * Closing the window is not quitting (C8.8).
+         *
+         * It puts the launcher in the tray and leaves the server
+         * running. 退出 in the tray menu — or Windows shutting the
+         * process down — is the real exit.
+         */
+        if (!_reallyExit && e.CloseReason == CloseReason.UserClosing && _ready)
+        {
+            e.Cancel = true;
+            Hide();
+            ShowInTaskbar = false;
+            _trayIcon.Visible = true;
+            return;
+        }
         _closing = true;
+        _trayIcon.Visible = false;
+        UnregisterHotKey(Handle, HOTKEY_OPEN);
         StopMirrai();
     }
 
