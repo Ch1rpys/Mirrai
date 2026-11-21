@@ -133,6 +133,7 @@ function makeCtx(userId = 1): TrpcContext {
       tokenVersion: 0,
       graduationMode: "suggest",
       timezone: null,
+      budget: null,
     locale: "zh",
       addressStyle: null,
       boundaries: null,

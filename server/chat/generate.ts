@@ -136,6 +136,14 @@ export interface TurnInput {
   mediaType?: string | null;
   /** Memory retrieval query. Defaults to `userMessage`. */
   retrievalQuery?: string;
+  /**
+   * The month's spending ceiling is used up (C8.9).
+   *
+   * Only the optional expensive layers are taken out of this turn —
+   * the four-way rerank, two-stage generation and the fact rewrite.
+   * An ordinary reply is still an ordinary reply.
+   */
+  budgetOver?: boolean;
 }
 
 export interface TurnPlan {
@@ -255,7 +263,17 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       clockZone,
     ),
   };
-  const layers = applyLayerOverrides(layersFromSettings(input.persona), input.layerOverrides);
+  const configuredLayers = applyLayerOverrides(layersFromSettings(input.persona), input.layerOverrides);
+  /**
+   * A month over its ceiling turns off what costs extra (C8.9).
+   *
+   * The rewrite of the layers happens here rather than at each use, so
+   * a layer added later cannot slip past the ceiling by being read
+   * somewhere that forgot it. Ordinary replies are not a layer.
+   */
+  const layers = input.budgetOver
+    ? { ...configuredLayers, twoStage: false, rerank: false, factRewrite: false }
+    : configuredLayers;
   let layersUsed = layersInEffect(layers, input.persona);
   if (layersUsed.includes("rerank") && !input.exclude) {
     const scope = resolveRecordScope(input.persona);

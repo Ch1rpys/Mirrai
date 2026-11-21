@@ -15,6 +15,7 @@ import { assertPersonaWritable } from "../_core/persona-access";
 import { RATE_LIMITS } from "../_core/rate-limit";
 import { copy } from "@shared/copy";
 import { mayChatNow } from "@shared/persona-state";
+import { budgetExceeded } from "../llm/budget";
 import { normalizeActProfile, countsForCondition } from "@shared/act-profile";
 import { labelUserActByRule } from "@shared/speech-acts";
 import { zonedDayStart } from "@shared/timezone";
@@ -66,6 +67,13 @@ export const rehearsalRouter = router({
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
       assertPersonaWritable(persona, ctx.locale);
+      /**
+       * The room is three generation calls (C8.9); a spent budget turns
+       * it off the way it turns off the other optional extras.
+       */
+      if (await budgetExceeded(ctx.user.id, ctx.user.timezone ?? null)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.budgetOver") });
+      }
       /**
        * The user's own step-down closes the rehearsal room too (C6.1).
        *

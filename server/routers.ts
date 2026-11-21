@@ -12,6 +12,7 @@ import { protectedProcedure, publicProcedure, router, rateLimit } from "./_core/
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { llmService, registry } from "./llm";
+import { budgetExceeded } from "./llm/budget";
 import type { InvokeParams, InvokeResult } from "./llm/types";
 import { getTextContent } from "./llm/types";
 import {
@@ -6202,6 +6203,13 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        /**
+         * An evaluation is up to twelve model calls (C8.9). It is one
+         * of the things a spent budget turns off.
+         */
+        if (await budgetExceeded(ctx.user.id, ctx.user.timezone ?? null)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(input.locale, "errors.budgetOver") });
+        }
 
         /**
          * One run at a time.
@@ -6383,6 +6391,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        if (await budgetExceeded(ctx.user.id, ctx.user.timezone ?? null)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(input.locale, "errors.budgetOver") });
+        }
         const runKey = `${ctx.user.id}:audition`;
         if (runningEvals.has(runKey)) {
           throw new TRPCError({
@@ -7644,6 +7655,14 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const letter = await getOutboundLetterById(input.id, ctx.user.id);
         if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
+        /**
+         * The wording assistant is an extra model call (C8.9), so a
+         * spent budget turns it off. A crisis is still answered — it
+         * does not need the model.
+         */
+        if (await budgetExceeded(ctx.user.id, ctx.user.timezone ?? null)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.budgetOver") });
+        }
         // The same rule as everywhere else a person writes something:
         // a crisis is handled before anything else happens, and no model
         // is called.

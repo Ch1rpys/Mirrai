@@ -2576,3 +2576,53 @@ describe("the daily rhythm", () => {
 });
 
 
+
+/**
+ * A month past its ceiling (C8.9).
+ *
+ * What the budget takes away is the optional cost: the four-way rerank,
+ * two stages, the fact rewrite. An ordinary reply is not optional — it
+ * is the reason the app exists — so it still happens, once.
+ */
+describe("a month over its budget", () => {
+  it("does not run two stages or the fact rewrite, and still answers", async () => {
+    const input = {
+      persona: personaWithTwoStage({
+        settings: { layers: { twoStage: true, factRewrite: true } },
+      }),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "budget:over",
+      exclude: { texts: [HELD_OUT] },
+      budgetOver: true,
+    };
+    const plan = await planTurn(input);
+    expect(plan.layersUsed).not.toContain("twoStage");
+    expect(plan.layersUsed).not.toContain("factRewrite");
+    expect(plan.layersUsed).not.toContain("rerank");
+    invokeWithProvider.mockResolvedValueOnce("在吃");
+    const final = await runExecute(plan, input);
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+    expect(final?.text).toBe("在吃");
+    expect(final?.twoStage).toBeUndefined();
+  });
+
+  it("keeps the layers when the ceiling has not been reached", async () => {
+    const input = {
+      persona: personaWithTwoStage(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "budget:under",
+      exclude: { texts: [HELD_OUT] },
+      budgetOver: false,
+    };
+    const plan = await planTurn(input);
+    expect(plan.layersUsed).toContain("twoStage");
+  });
+});

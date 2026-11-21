@@ -1114,4 +1114,8 @@ export const V6 = {
     zh: "只有这个分身的主人能整理口述。",
     en: "Only the persona's owner can turn these accounts into memories.",
   },
+  "errors.budgetOver": {
+    zh: "这个月的用量已经超过你定的预算。四选一、两步生成、事实重写、评测、试镜、排练和措辞助手先停用了；普通对话、安全回复和记忆抽取不受影响。",
+    en: "This month's usage is past the budget you set. The four-way choice, two-stage generation, the fact rewrite, evaluation, audition, the rehearsal room and the wording assistant are switched off for now; ordinary replies, safety answers and memory extraction still work.",
+  },
 } as const satisfies CopyTable;

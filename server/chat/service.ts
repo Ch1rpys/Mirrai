@@ -16,6 +16,7 @@ import { resolveProviderForUser, resolveProviderForPurpose } from "../llm/user-p
 import { resolveStageProviders } from "../llm/stage-providers";
 import { sanitizeRoles } from "../llm/roles";
 import { inspectExtraBody } from "../llm/extra-body";
+import { budgetExceeded } from "../llm/budget";
 import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { computeIntimacy, getEmotionalStateDesc } from "../_core/persona-utils";
@@ -1458,9 +1459,23 @@ async function* runConversationTurn(
       });
     }
   }
+  /**
+   * Whether this month's ceiling is already reached (C8.9).
+   *
+   * The check sits after the crisis path has returned: a crisis is
+   * answered with the support resources and no model call at all, so a
+   * ceiling can never swallow it. What it takes away is only the
+   * optional cost: the four-way rerank, two stages and the rewrite.
+   */
+  const budgetOver = await budgetExceeded(
+    userId,
+    (persona as { timezone?: string | null }).timezone
+      || (await db.getUserTimezone(userId).catch(() => null)),
+  );
   const turnInput = {
     persona,
     userId,
+    budgetOver,
     userMessage: message,
     retrievalQuery,
     history: [] as Array<{ role: "user" | "assistant"; content: string }>,

@@ -4451,6 +4451,25 @@ export async function sumLlmUsageForJob(userId: number, jobId: string) {
   };
 }
 
+/** The monthly ceiling the user set, raw (C8.9). */
+export async function getUserBudget(userId: number): Promise<unknown> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select({ budget: users.budget }).from(users)
+    .where(eq(users.id, userId)).limit(1);
+  return rows[0]?.budget ?? null;
+}
+
+/** Writes the monthly ceiling; `null` removes it. */
+export async function setUserBudget(userId: number, budget: unknown): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(users).set({ budget: budget as never })
+    .where(eq(users.id, userId))
+    .returning({ id: users.id });
+  return rows.length > 0;
+}
+
 /** The newest call made for one purpose — what the last distillation cost. */
 export async function latestLlmUsageForPurpose(userId: number, purpose: string) {
   const db = await getDb();

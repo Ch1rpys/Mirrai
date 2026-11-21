@@ -226,6 +226,7 @@ describe("a scene of the user's own", () => {
         tokenVersion: 0,
         graduationMode: "suggest",
         timezone: null,
+        budget: null,
     locale: "zh",
         addressStyle: null,
         boundaries: null,

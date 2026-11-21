@@ -109,6 +109,15 @@ export const users = pgTable("users", {
    * the persona is told about and respects.
    */
   boundaries: text("boundaries"),
+  /**
+   * The monthly ceiling the user set (C8.9).
+   *
+   * `{ monthlyTokens?, monthlyCost? }`, both optional. When the month's
+   * usage passes it, the optional expensive layers stop on their own —
+   * ordinary replies, safety paths and memory extraction keep working.
+   * Empty means no ceiling.
+   */
+  budget: jsonb("budget"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
