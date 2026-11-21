@@ -486,7 +486,7 @@
 | 254 | 全部 | 手册 §2.1「跳过数不能增加」 | 2026-11-20 用户拍板：改成「已有测试不得改成跳过；跳过只允许来自 §2.3 新增的 `describe.skipIf(!DATABASE_URL)` 数据库测试，每次变化记进度」 | §2.2 的基线本身就有 2 个文件 8 条数据库跳过，§2.3 又要求继续新增这类测试，两条规则从写下起就互斥；`server/skip-audit.test.ts` 把「只允许四种环境条件、禁止无条件 `.skip`/`.todo`/`.only`、数据库测试文件清单固定」变成结构测试，放宽的只是数字，实质没有松。 |
 
 | 275 | C4.1 | 短回复的门槛是「不超过 2 个字、不少于 10 次」 | `SHORT_MIN_TIMES = 6` | 夹具里冲突起点的「嗯」只出现 6 次，而 C4.1 验收明确要求 `shortReplies` 含「嗯」；6 次同一句短回复已足够算一种习惯。测试按 n=6 断言。 |
-| 276 | C3.7 | 见面清单被拿出来的两个时刻：见面那天、重新联系上那天（C5.4 的那一页） | 只做了见面那天（聊天页顶部一行）；C5.4 的入口等 WP13 | C5.4 是后面的工作包，`settings.lastReunion` 还没有页面可以挂。 |
+| 276 | C3.7 | 见面清单被拿出来的两个时刻：见面那天、重新联系上那天（C5.4 的那一页） | 先只做了见面那天（聊天页顶部一行）；2026-11-21 核对：C5.4 的 `ReunionSummary` 第一块 `reunion.todos` 已经把这段时间的清单做进重新联系页，两个时刻都有了 | 当时 C5.4 是后面的工作包，`settings.lastReunion` 还没有页面可以挂；WP13 的 C5.4 落地后补齐。 |
 | 277 | C4.2 | 「三次更难受」是毕业判定里的一条 | 放在 `checkGraduationEligibility` 最前面，作为否决；其余条件与原因不变 | 人的自述优先于应用的推断：三条更难受时不该建议告别，原因文案也最先说这一条。 |
 | 278 | C4.3 | `analytics.wellbeing` 未给参数；四条曲线按周 | 固定最近 8 周、无输入参数；最近四周 vs 之前四周的合计由服务端算 | 手册要求「比较最近四周和再往前四周」，服务端算好两边，页面无法拿不同窗口比较；也不需要用户选范围。 |
 | 279 | C3.2 | 命中「替对方承诺」时「带一句追加的指令重生成一次」 | 第二次 `planTurn` 把指令放在 `sceneOverlay`（现有给生成路径的附加指令字段） | 不改提示词结构；`sceneOverlay` 是应用自己的指令、不是材料，重生成只带这一句。 |
@@ -2619,3 +2619,13 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 - `Lobby.test.tsx` 18 通过（新增一条：封存与毕业两张卡片各一个展开区、仍能聊天的没有）；闸门 `579 passed | 16 skipped (595)` 文件、`4701 passed | 64 skipped (4765)` 用例、`all six steps passed`。
 - 偏差 339；未验证清单与待用户决定没有新增。
 - WP13 剩余：C7.4 的第 5 步等 C1.8（WP14），其余条目已做完。
+
+### WP13 · 实现会话 · 2026-11-21 · 复验（无新增可做条目）
+
+- 开工核对：`git branch --show-current` → `exec/v6`；`git status --porcelain` 空；HEAD `9d7c7a2`。WP13 的 15 条里 C5.1–C5.5、C6.1–C6.6、C7.1–C7.3 已完成，C7.4 只差第 5 步（依赖 C1.8，而 C1.8 仍是 ⬜，属于 WP14）；本轮没有能接着做的实现条目，不越过工作包。
+- 完整闸门（无 `--fast`、无 `DATABASE_URL`，Node v24.14.1）：`corepack pnpm gate` 退出码 0，`Test Files 579 passed | 16 skipped (595)`、`Tests 4702 passed | 64 skipped (4766)`、`all six steps passed`；`audit-cn` 0 条，`fidelity-gate` 7 条 ✓。本轮没有代码改动，与上一会话收尾是同一份代码。
+- 单独重跑 WP13 相关 66 个测试文件：`63 passed | 3 skipped (66)`、`569 passed | 7 skipped (576)`；3 个跳过文件是 `server/db-scheduled.test.ts`、`server/db-sharing.test.ts`、`server/db-oral.test.ts`，不带 `DATABASE_URL` 时跳过。
+- 临时库 `mirrai_v6_wp13_verify`（用完已 `dropdb`，`mirrai_live` 未连接）：`drizzle-kit push --force` 后 `migrate` 应用 `0071_scheduled_items`/`0072_persona_shares`/`0073_oral_accounts`，`--replay` 全部重跑；`--rollback 3` 后 `scheduled_items`、`persona_shares`、`oral_accounts` 与 `personas.sharedFromPersonaId` 全部消失，再 `migrate` 回来；升级路径「DROP `oral_accounts` + 删 `schema_migrations` 的 `0073_oral_accounts`（该表列名是 `version`）+ `migrate`」后表和两个索引回来；三个迁移的 8 个非主键索引都在。带库跑那 3 个文件 7 条全过。
+- 偏差 276 关闭：C3.7 的第二个入口（重新联系上那天的清单）已经由 C5.4 的 `ReunionSummary` 第一块 `reunion.todos` 做进重新联系页，`server/routers.reunion.test.ts` 的「摘要只收时间段内的备忘」一条守着；偏差表 276 那行已注明。其余「等 WP13」的推后项没有了。
+- 偏差表、未验证清单、待用户决定本轮没有新增。批次日志里唯一的 `- [ ]` 是 P0.5 等下一轮独立验收复验，属于验收会话的工作，本轮没有动。
+- 下一个会话：按顺序开 WP14；C1.8 落地后回来补 C7.4 第 5 步（`oral_accounts` 数据层、`shared/oral.ts` 与「来自 {{teller}} 的讲述」已经就位）。
