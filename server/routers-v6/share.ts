@@ -17,8 +17,10 @@ import { copy } from "@shared/copy";
 import {
   publicProcedure,
   protectedProcedure,
+  rateLimit,
   router,
 } from "../_core/trpc";
+import { RATE_LIMITS } from "../_core/rate-limit";
 import {
   acceptPersonaShare,
   createPersonaShare,
@@ -73,8 +75,15 @@ export const shareRouter = router({
       };
     }),
 
-  /** What the invited person sees before accepting. */
+  /**
+   * What the invited person sees before accepting.
+   *
+   * The page is reachable without a login, so the token is a bearer
+   * secret that a stranger may try to guess; the IP bucket makes that
+   * slow (§3.7).
+   */
   preview: publicProcedure
+    .use(rateLimit(RATE_LIMITS.auth))
     .input(z.object({ token: z.string().min(8).max(200) }))
     .query(async ({ ctx, input }) => {
       const share = await getPersonaShareByTokenHash(hashToken(input.token));

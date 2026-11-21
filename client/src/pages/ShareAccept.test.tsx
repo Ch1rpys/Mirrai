@@ -64,6 +64,14 @@ describe("accepting a shared persona (C7.2)", () => {
     expect(navigate).toHaveBeenCalledWith("/chat/9");
   });
 
+  it("asks crawlers not to index the page", () => {
+    authed = true;
+    render(<ShareAccept />);
+    expect(document.head.querySelector('meta[name="robots"]')?.getAttribute("content")).toBe(
+      "noindex",
+    );
+  });
+
   it("asks a visitor to sign in first", () => {
     authed = false;
     render(<ShareAccept />);

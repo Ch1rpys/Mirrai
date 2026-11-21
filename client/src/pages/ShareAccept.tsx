@@ -5,6 +5,7 @@
  * the invitation is accepted. Accepting creates the member's own row;
  * their conversations afterwards are theirs.
  */
+import { useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -20,6 +21,20 @@ export default function ShareAccept() {
   const { t } = useLocale();
   const { isAuthenticated, loading } = useAuth();
   const preview = trpc.share.preview.useQuery({ token }, { enabled: token.length > 0 });
+  /**
+   * The page is read before the invitation is accepted, so it is
+   * reachable without a login and carries a bearer token (§3.7). It must
+   * not end up in a search index.
+   */
+  useEffect(() => {
+    const meta = document.createElement("meta");
+    meta.name = "robots";
+    meta.content = "noindex";
+    document.head.appendChild(meta);
+    return () => {
+      meta.remove();
+    };
+  }, []);
   const accept = trpc.share.accept.useMutation({
     onSuccess: (data: { personaId: number }) => navigate(`/chat/${data.personaId}`),
   });

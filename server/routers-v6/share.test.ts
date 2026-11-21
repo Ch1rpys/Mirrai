@@ -25,6 +25,7 @@ vi.mock("../db", () => ({
   getUserById: (...a: unknown[]) => getUserById(...a),
 }));
 
+import { rateLimiter } from "../_core/rate-limit";
 import { appRouter } from "../routers";
 
 function ctxFor(userId: number): TrpcContext {
@@ -56,6 +57,7 @@ const ownerPersona = { id: 5, userId: 1, name: "小满", sharedFromPersonaId: nu
 describe("family sharing (C7.2)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    rateLimiter.reset?.();
     getPersonaById.mockResolvedValue(ownerPersona);
     createPersonaShare.mockResolvedValue(11);
     getUserById.mockResolvedValue({ id: 1, name: "阿树" });
@@ -111,6 +113,23 @@ describe("family sharing (C7.2)", () => {
     await expect(
       appRouter.createCaller(ctxFor(2)).share.preview({ token: "a".repeat(32) }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("throttles token guessing from one address (C7.2 / §3.7)", async () => {
+    getPersonaShareByTokenHash.mockResolvedValue({
+      id: 11,
+      personaId: 5,
+      ownerUserId: 1,
+      status: "invited",
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    const caller = appRouter.createCaller(ctxFor(2));
+    for (let i = 0; i < 10; i += 1) {
+      await caller.share.preview({ token: "a".repeat(32) });
+    }
+    await expect(
+      caller.share.preview({ token: "a".repeat(32) }),
+    ).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
   });
 
   it("lets the owner revoke, and the member leave", async () => {
