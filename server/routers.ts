@@ -1436,14 +1436,56 @@ export const appRouter = router({
         );
         if (!settings.locked) return persona;
         anyLocked = true;
-        return { ...persona, name: "", avatarUrl: null, locked: true as const };
+        /**
+         * Nothing about *who* it is and nothing it said.
+         *
+         * The name and the face were the first cut, but the same row
+         * also carries the last message, the relationship description
+         * and the persona's rules — and the lobby is what somebody
+         * glancing at the screen sees. The card only needs the id.
+         */
+        return {
+          ...persona,
+          name: "",
+          avatarUrl: null,
+          relationshipDesc: null,
+          personaData: null,
+          styleProfile: null,
+          lastMessage: null,
+          analysisMessage: null,
+          farewellLetter: null,
+          farewellDraft: null,
+          correctionLog: null,
+          emotionalState: null,
+          locked: true as const,
+        };
       });
       return anyLocked ? redacted : rows;
     }),
 
     stats: protectedProcedure.query(async ({ ctx }) => getUserStats(ctx.user.id, ctx.user.timezone)),
 
-    recentActivity: protectedProcedure.query(async ({ ctx }) => getRecentActivity(ctx.user.id)),
+    /**
+     * The lobby's "recent activity" strip.
+     *
+     * A locked persona is left out until this session proves the PIN in
+     * the last five minutes — otherwise the strip would show its name
+     * and the first sixty characters of what it just said, which is
+     * exactly what the card next to it is hiding.
+     */
+    recentActivity: protectedProcedure.query(async ({ ctx }) => {
+      const rows = await getRecentActivity(ctx.user.id);
+      if (rows.length === 0) return rows;
+      if (await hasRecentUnlock(sessionKeyFromRequest(ctx.req))) return rows;
+      const personas = await getPersonasByUserId(ctx.user.id);
+      const hidden = new Set(
+        personas
+          .filter((persona) => normalizePersonaSettings((persona as { settings?: unknown }).settings).locked)
+          .map((persona) => persona.id),
+      );
+      if (hidden.size === 0) return rows;
+      return rows.filter((row) => !hidden.has(row.personaId));
+    }),
 
     dailyActivity: protectedProcedure.query(async ({ ctx }) => getDailyChatCounts(ctx.user.id, 30, ctx.user.timezone)),
 
@@ -2467,6 +2509,7 @@ export const appRouter = router({
             });
 
           const result = await applyPersonaCorrection({
+            userId: ctx.user.id,
             name: persona.name,
             characterFamily: "relationship",
             personaData: persona.personaData as any,
@@ -6231,9 +6274,17 @@ export const appRouter = router({
     inbox: protectedProcedure.query(async ({ ctx }) => {
       const now = new Date();
       const zone = ctx.user.timezone ?? null;
+      /**
+       * The same clock `sealedGuard` uses (C8.2 × C6.2).
+       *
+       * The guard decides with the *user's* timezone. The mailbox used
+       * to decide with the persona's own (LDR) timezone, so for a few
+       * hours around the seal day one of them said "sealed" while the
+       * other said "open" — and the mailbox showed a sealed persona's
+       * letters. One clock for the promise.
+       */
       const personas = (await getPersonasByUserId(ctx.user.id)).filter(
-        (persona) =>
-          sealState(persona, now, persona.timezone ?? zone) !== "sealed",
+        (persona) => sealState(persona, now, zone) !== "sealed",
       );
       const ids = personas.map((persona) => persona.id);
       const [allLetters, allScheduled] = await Promise.all([
@@ -6294,9 +6345,17 @@ export const appRouter = router({
     unreadCount: protectedProcedure.query(async ({ ctx }) => {
       const now = new Date();
       const zone = ctx.user.timezone ?? null;
+      /**
+       * The same clock `sealedGuard` uses (C8.2 × C6.2).
+       *
+       * The guard decides with the *user's* timezone. The mailbox used
+       * to decide with the persona's own (LDR) timezone, so for a few
+       * hours around the seal day one of them said "sealed" while the
+       * other said "open" — and the mailbox showed a sealed persona's
+       * letters. One clock for the promise.
+       */
       const personas = (await getPersonasByUserId(ctx.user.id)).filter(
-        (persona) =>
-          sealState(persona, now, persona.timezone ?? zone) !== "sealed",
+        (persona) => sealState(persona, now, zone) !== "sealed",
       );
       const ids = personas.map((persona) => persona.id);
       const [letters, capsules, repliesByPersona] = await Promise.all([
@@ -7957,17 +8016,15 @@ export const appRouter = router({
         if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
         /**
          * The wording assistant is an extra model call (C8.9), so a
-         * spent budget turns it off. A crisis is still answered — it
-         * does not need the model.
+         * spent budget turns it off. The crisis branch needs no model,
+         * so it runs first: a budget must never swallow the answer to
+         * "I do not want to live any more".
          */
-        if (await budgetExceeded(ctx.user.id, ctx.user.timezone ?? null)) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.budgetOver") });
-        }
-        // The same rule as everywhere else a person writes something:
-        // a crisis is handled before anything else happens, and no model
-        // is called.
         if (detectCrisis(letter.text).crisis) {
           return { suggestions: [], crisis: true, text: letter.text };
+        }
+        if (await budgetExceeded(ctx.user.id, ctx.user.timezone ?? null)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.budgetOver") });
         }
         const request = {
           messages: buildWordingMessages(letter.text, ctx.locale),

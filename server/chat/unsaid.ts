@@ -20,6 +20,7 @@
 import type { Persona } from "../../drizzle/schema";
 import { buildSystemPrompt } from "../_core/persona-utils";
 import { llmService } from "../llm";
+import { invokeAndRecord } from "../llm/recorded";
 import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 import { copy } from "@shared/copy";
 import { asMaterial } from "@shared/material";
@@ -94,12 +95,21 @@ export async function completeUnfinishedLine(
       providerName: persona.llmProvider ?? undefined,
     });
     if (resolved.provider) {
-      const answer = await resolved.provider.invoke(messages, { purpose: "reply" });
+      const answer = await invokeAndRecord(
+        resolved.provider,
+        {
+          messages,
+          options: { purpose: "reply" },
+          usage: { userId, personaId: persona.id },
+        },
+        "reply",
+      );
       text = answer ?? null;
     } else {
       text = await llmService.invoke({
         messages,
         options: { purpose: "reply" },
+        usage: { userId, personaId: persona.id },
       });
     }
   } catch (error) {

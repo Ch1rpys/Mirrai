@@ -88,6 +88,29 @@ describe("a month over its budget", () => {
     ).rejects.toMatchObject(overBudget);
   });
 
+  it("still answers a crisis in the rehearsal room", async () => {
+    // The crisis card needs no model, so the ceiling must not turn it
+    // away — the same rule as the chat path.
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .rehearsal.run({ personaId: 5, line: "我不想活了" });
+    expect(result).toEqual({ mode: "crisis" });
+    expect(budgetExceeded).not.toHaveBeenCalled();
+  });
+
+  it("still answers a crisis in the wording assistant", async () => {
+    getOutboundLetterById.mockResolvedValue({
+      id: 3,
+      userId: 1,
+      text: "我真的不想活了。",
+    });
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .outbound.suggestWording({ id: 3 });
+    expect(result).toMatchObject({ crisis: true, suggestions: [] });
+    expect(budgetExceeded).not.toHaveBeenCalled();
+  });
+
   /** The outcome, whichever way it went. */
   async function settle<T>(work: Promise<T>): Promise<{ error?: unknown }> {
     try {

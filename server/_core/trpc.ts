@@ -443,24 +443,35 @@ export const protectedProcedure = t.procedure
   .use(encryptionGuard)
   .use(sealedGuard);
 
-export const adminProcedure = t.procedure.use(
-  t.middleware(async opts => {
-    const { ctx, next } = opts;
+/**
+ * Admin-only procedures.
+ *
+ * The app lock covers them as well: an admin session behind the lock
+ * screen must not be able to fire a side effect (a notice to the
+ * operator's channels) without the PIN. The role check runs after the
+ * lock, so a locked non-admin still gets `LOCKED` rather than a role
+ * error it could probe.
+ */
+export const adminProcedure = t.procedure
+  .use(appLockGuard)
+  .use(
+    t.middleware(async opts => {
+      const { ctx, next } = opts;
 
-    if (!ctx.user || ctx.user.role !== 'admin') {
-      // The message is replaced by the formatter, in the reader's
-      // language — what is left here is only the code.
-      throw new TRPCError({ code: "FORBIDDEN" });
-    }
+      if (!ctx.user || ctx.user.role !== 'admin') {
+        // The message is replaced by the formatter, in the reader's
+        // language — what is left here is only the code.
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
 
-    return next({
-      ctx: {
-        ...ctx,
-        user: ctx.user,
-      },
-    });
-  }),
-);
+      return next({
+        ctx: {
+          ...ctx,
+          user: ctx.user,
+        },
+      });
+    }),
+  );
 
 /**
  * Restricts how often a procedure may be called.

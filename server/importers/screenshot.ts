@@ -77,6 +77,9 @@ function parsePage(response: string): ScreenshotMessage[] | null {
  * need to be retried, rather than losing the batch.
  */
 export async function readScreenshotPages(params: {
+  /** Whose call this is, so it lands on their usage ledger (C8.9). */
+  userId: number;
+  personaId?: number | null;
   images: ScreenshotImage[];
   provider: LLMProvider;
   name: string;
@@ -101,6 +104,7 @@ export async function readScreenshotPages(params: {
           },
         ],
         options: { purpose: "extract", temperature: 0, maxTokens: 4000 },
+        usage: { userId: params.userId, personaId: params.personaId ?? null },
       });
       const messages = parsePage(response);
       if (!messages || messages.length === 0) {

@@ -23,8 +23,10 @@ import {
   createScheduledItem,
   createUser,
   createJournalEntry,
+  exportUserData,
   getCollectedMessagesForPersona,
   getDb,
+  listInboxScheduled,
   getDiaryEntries,
   getLetters,
   getMemoriesByPersonaId,
@@ -296,6 +298,20 @@ describe.skipIf(!process.env.DATABASE_URL)("the encrypted database", () => {
     );
     expect((await getOutboundLetters(personaId, userId))[0]?.text).toBe(`${SENTINEL}要说的话`);
     expect((await getRoleplaySession(ids.roleplay!, userId))?.transcript).toEqual([]);
+    /**
+     * The two read paths the first pass missed (independent acceptance):
+     * the account export and the mailbox's capsules used to hand the
+     * caller `enc:v1:…`.
+     */
+    const inbox = await listInboxScheduled(userId, [personaId]);
+    expect(inbox.find((row) => row.id === ids.scheduled)?.body).toBe(`${SENTINEL}胶囊`);
+    const exported = await exportUserData(userId);
+    expect(exported?.messages.find((row) => row.id === ids.message)?.content).toBe(
+      `${SENTINEL}晚安`,
+    );
+    expect(exported?.personas.find((row) => row.id === personaId)?.personaData).toEqual({
+      rules: [`${SENTINEL}规则`],
+    });
 
     // Search still works, through the blind index.
     const hit = await searchRecordsLexical(personaId, userId, { q: "喜欢海" });

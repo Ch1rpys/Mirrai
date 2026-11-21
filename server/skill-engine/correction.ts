@@ -17,6 +17,8 @@ import type { LLMProvider } from "../llm/types";
 import type { Locale } from "@shared/copy";
 
 export interface CorrectionRequest {
+  /** Whose call this is, so it lands on their usage ledger (C8.9). */
+  userId: number;
   /** The persona being corrected. */
   name: string;
   /** The family, so the right correction prompt is used. */
@@ -89,6 +91,7 @@ export async function applyPersonaCorrection(
       response = await llmService.invokeWithProvider(request.userProvider, {
         messages,
         options: { ...options, purpose: "distill" },
+        usage: { userId: request.userId },
       });
     }
     if (!response.trim() && !request.providerOwned) {
@@ -97,6 +100,7 @@ export async function applyPersonaCorrection(
       response = await llmService.invoke({
         messages,
         options: { ...options, purpose: "distill" },
+        usage: { userId: request.userId },
       });
     }
 

@@ -13,7 +13,7 @@
  */
 import type { Request, Response, NextFunction } from "express";
 import { authenticateRequest } from "./auth";
-import { isRequestLocked } from "./app-lock";
+import { refreshRequestLock } from "./app-lock";
 import { isPersonaSharedWithMember, userHasMessageWithMediaUrl } from "../db";
 
 /** Prefixes whose second path segment is the owning user's id. */
@@ -124,7 +124,7 @@ export function uploadsAuthGuard(
        * picked up an unlocked browser must not get them by asking for
        * the URL directly. The lock screen is only a screen.
        */
-      if (await isRequestLocked(req, user)) {
+      if (await refreshRequestLock(req, user)) {
         res.status(403).json({ error: "LOCKED" });
         return;
       }

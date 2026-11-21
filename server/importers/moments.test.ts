@@ -62,6 +62,8 @@ describe("the public register", () => {
         JSON.stringify({ posts: [{ text: "今天去看了海。" }, { text: "周末在家。" }] }),
       );
     const result = await readMomentScreenshots({
+      userId: 7,
+      personaId: 9,
       images: [
         { name: "a.jpg", base64: "AAAA" },
         { name: "b.jpg", base64: "BBBB" },
@@ -81,6 +83,8 @@ describe("the public register", () => {
       .mockResolvedValueOnce("not json")
       .mockResolvedValueOnce(JSON.stringify({ posts: [{ text: "在海边" }] }));
     const result = await readMomentScreenshots({
+      userId: 7,
+      personaId: 9,
       images: [
         { name: "a.jpg", base64: "AAAA" },
         { name: "b.jpg", base64: "BBBB" },

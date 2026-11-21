@@ -102,9 +102,27 @@ export function parseDescribedStatements(
    * while making those two the same quote.
    */
   const compact = (text: string): string => clean(text).replace(/\s+/g, "");
+  /**
+   * What the person said, without the interviewer's questions.
+   *
+   * An interview transcript is stored as `问：…\n答：…` lines, and the
+   * question is written by the model (and echoed by the client). If the
+   * whole transcript counts as "the original words", a model can tie a
+   * claim to its own question — a statement the person never made passes
+   * the substring check. The answer lines are the evidence; a body with
+   * no interview markers (a general oral account) is used whole, as
+   * before.
+   */
+  const answerOnly = (body: string): string => {
+    const lines = body.split("\n");
+    const answers = lines
+      .filter((line) => /^\s*答[：:]/.test(line))
+      .map((line) => line.replace(/^\s*答[：:]\s*/, ""));
+    return answers.length > 0 ? answers.join("\n") : body;
+  };
   const normalisedAccounts = accounts.map((account) => ({
     account,
-    body: compact(account.body),
+    body: compact(answerOnly(account.body)),
   }));
   let dropped = 0;
 

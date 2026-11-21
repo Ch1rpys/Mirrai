@@ -31,7 +31,7 @@ import { renderExemplars } from "./exemplars";
 import { retrieveExemplarsWithEmbed } from "./embeddings";
 import { retrieveExemplarsFromTable } from "./exemplar-query";
 import type { ReanchorIssue } from "@shared/style-reminder";
-import { preferredClockZone } from "@shared/timezone";
+import { preferredClockZone, zonedDateKey } from "@shared/timezone";
 import { meetCountdown } from "@shared/persona-state";
 import type { Locale } from "@shared/copy";
 
@@ -273,6 +273,14 @@ export async function buildPromptBundleForPersona(
     [periodEnd, deathdayEnd, context.recordRangeEnd ?? null]
       .filter((value): value is Date => Boolean(value))
       .sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
+  /**
+   * The same boundary as the persona's local calendar day.
+   *
+   * A `YYYY-MM-DD` memory date has no zone; comparing it to the instant
+   * makes it UTC midnight, which is the next local day for a persona
+   * behind UTC. The day form is what "after this stretch" means.
+   */
+  const knowledgeDateKey = knowledgeEnd ? zonedDateKey(knowledgeEnd, clockZone) : null;
 
   const memories = context.memories ?? await retrieveMemories({
     personaId: persona.id,
@@ -290,7 +298,7 @@ export async function buildPromptBundleForPersona(
     markRecalled: context.markRecalled,
   }).catch(() => []);
   const recordTimes = await recordTimesFor(memories, userId);
-  const knownMemories = memories.filter((row) => memoryKnownBy(row, knowledgeEnd, recordTimes));
+  const knownMemories = memories.filter((row) => memoryKnownBy(row, knowledgeEnd, recordTimes, knowledgeDateKey));
   const { anchors, ordinary } = splitMemorySections(knownMemories);
 
   const summary = knowledgeEnd
@@ -397,7 +405,7 @@ export async function buildPromptBundleForPersona(
           : await contrastSectionFor(context, locale),
     memoryConflictSection: memoryConflictSectionFor(
       (await optionalCall(() => db.getMemoriesByPersonaId(persona.id, userId), [])).filter((row) =>
-        memoryKnownBy(row, knowledgeEnd, recordTimes),
+        memoryKnownBy(row, knowledgeEnd, recordTimes, knowledgeDateKey),
       ),
       locale,
     ),

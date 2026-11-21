@@ -24,6 +24,7 @@ import {
 } from "@shared/oral";
 import { extractJsonArray } from "../_core/json";
 import { llmService } from "../llm";
+import { invokeAndRecord } from "../llm/recorded";
 import type { LLMMessage } from "../llm/types";
 import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 import * as db from "../db";
@@ -130,11 +131,20 @@ export async function extractOralMemories(
       providerName: persona.llmProvider ?? undefined,
     });
     if (resolved.provider) {
-      answer = await resolved.provider.invoke(messages, { purpose: "extract" });
+      answer = await invokeAndRecord(
+        resolved.provider,
+        {
+          messages,
+          options: { purpose: "extract" },
+          usage: { userId, personaId: persona.id },
+        },
+        "extract",
+      );
     } else {
       answer = await llmService.invoke({
         messages,
         options: { purpose: "extract" },
+        usage: { userId, personaId: persona.id },
       });
     }
   } catch (error) {

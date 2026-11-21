@@ -4,6 +4,8 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { eq } from "drizzle-orm";
 import {
+  addMessageMark,
+  clearMessagesByPersonaId,
   countMemories,
   createMemory,
   createMessage,
@@ -606,5 +608,62 @@ describe.skipIf(!DATABASE_URL)("undo and the recycle bin, in the database", () =
       await db!.select({ id: memories.id }).from(memories).where(eq(memories.personaId, personaId)),
     ).toEqual([]);
     await deleteUserAccount(userId);
+  });
+});
+
+describe.skipIf(!DATABASE_URL)("pins on messages that are gone", () => {
+  it("stop holding a slot while the message is in the bin, and come back with the undo", async () => {
+    const userId = uniqueBase();
+    await createUser({ username: `pin-bin-${userId}`, passwordHash: "x", name: "阿树" });
+    const personaId = await createPersona({ userId, name: "小满", analysisStatus: "ready" });
+    try {
+      const ids: number[] = [];
+      for (let i = 0; i < 3; i++) {
+        const id = await createMessage({ personaId, userId, role: "user", content: `第${i}句` });
+        ids.push(id);
+        await addMessageMark({ userId, personaId, messageId: id, kind: "pin", label: null });
+      }
+      const fourth = await createMessage({ personaId, userId, role: "user", content: "第四句" });
+      const caller = appRouter.createCaller(ctxFor(userId));
+
+      // Three pins are the limit.
+      await expect(
+        caller.mark.add({ personaId, messageId: fourth, kind: "pin" }),
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+      // Deleting one pinned message takes its pin out of the count, so a
+      // fourth pin is possible again — the pin row is only hidden until
+      // the undo.
+      await softDeleteMessage(ids[0]!, userId, personaId);
+      await caller.mark.add({ personaId, messageId: fourth, kind: "pin" });
+      const visible = await caller.mark.list({ personaId, kind: "pin" });
+      expect(visible.marks).toHaveLength(3);
+
+      // The undo brings the old pin back.
+      await restoreMessage(ids[0]!, userId, personaId);
+      const afterUndo = await caller.mark.list({ personaId, kind: "pin" });
+      // The restored pin joins the three that were visible.
+      expect(afterUndo.marks.map((row) => row.messageId).sort()).toEqual(
+        [...ids, fourth].sort(),
+      );
+    } finally {
+      await deleteUserAccount(userId).catch(() => undefined);
+    }
+  });
+
+  it("does not leave marks behind when a conversation is cleared", async () => {
+    const userId = uniqueBase();
+    await createUser({ username: `pin-clear-${userId}`, passwordHash: "x", name: "阿树" });
+    const personaId = await createPersona({ userId, name: "小满", analysisStatus: "ready" });
+    try {
+      const id = await createMessage({ personaId, userId, role: "user", content: "一句" });
+      await addMessageMark({ userId, personaId, messageId: id, kind: "star" });
+      await clearMessagesByPersonaId(personaId, userId);
+      const caller = appRouter.createCaller(ctxFor(userId));
+      const list = await caller.mark.list({ personaId });
+      expect(list.marks).toEqual([]);
+    } finally {
+      await deleteUserAccount(userId).catch(() => undefined);
+    }
   });
 });

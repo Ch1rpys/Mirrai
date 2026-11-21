@@ -105,3 +105,47 @@ describe("described statements (C1.8)", () => {
     expect(DESCRIBED_FIELDS).not.toContain("not-a-field");
   });
 });
+
+describe("interview transcripts as evidence", () => {
+  /**
+   * The interview stores `问：…\n答：…` lines in the oral account. The
+   * question is written by the model; only the answer is something the
+   * person said.
+   */
+  const interviewAccounts = [
+    {
+      id: 21,
+      tellerName: "阿树",
+      body: "问：他喜欢吃什么？\n答：他喜欢吃面。\n问：他生气时什么样？\n答：他生气的时候一句话都不说。",
+    },
+  ];
+
+  it("does not accept the interviewer's question as a quote", () => {
+    const parsed = parseDescribedStatements(
+      [{ field: "likes", text: "我不知道他喜欢吃什么。", quote: "他喜欢吃什么" }],
+      interviewAccounts,
+    );
+    expect(parsed.statements).toHaveLength(0);
+    expect(parsed.dropped).toBe(1);
+  });
+
+  it("still accepts a quote from an answer", () => {
+    const parsed = parseDescribedStatements(
+      [
+        { field: "likes", text: "喜欢吃面。", quote: "他喜欢吃面" },
+        { field: "personality", text: "生气时先沉默。", quote: "生气的时候一句话都不说" },
+      ],
+      interviewAccounts,
+    );
+    expect(parsed.statements).toHaveLength(2);
+    expect(parsed.statements.every((row) => row.teller === "阿树")).toBe(true);
+  });
+
+  it("uses the whole body when it is not an interview transcript", () => {
+    const parsed = parseDescribedStatements(
+      [{ field: "likes", text: "讨厌香菜。", quote: "他讨厌香菜" }],
+      accounts,
+    );
+    expect(parsed.statements).toHaveLength(1);
+  });
+});

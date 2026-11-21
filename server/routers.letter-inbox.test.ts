@@ -33,7 +33,7 @@ vi.mock("./db", async (importOriginal) => ({
 
 import { appRouter } from "./routers";
 
-function ctxFor(userId: number): TrpcContext {
+function ctxFor(userId: number, timezone = "Asia/Shanghai"): TrpcContext {
   return {
     user: {
       id: userId,
@@ -48,7 +48,7 @@ function ctxFor(userId: number): TrpcContext {
       updatedAt: new Date(),
       lastSignedIn: new Date(),
       name: "阿树",
-      timezone: "Asia/Shanghai",
+      timezone,
       locale: "zh",
     },
     locale: "zh",
@@ -105,8 +105,10 @@ describe("letter.inbox", () => {
 
   it("puts each thing in its group and leaves the sealed persona out", async () => {
     listInboxLetters.mockResolvedValue([
-      letter({ id: 1, status: "answered", readAt: null }),
-      letter({ id: 2, status: "answered", readAt: new Date("2026-03-03T00:00:00Z") }),
+      // Deliberately out of order: the read one arrived later, but the
+      // unread one must come first.
+      letter({ id: 1, status: "answered", readAt: null, repliedAt: new Date("2026-03-05T00:00:00Z") }),
+      letter({ id: 2, status: "answered", readAt: new Date("2026-03-06T00:00:00Z"), repliedAt: new Date("2026-03-01T00:00:00Z") }),
       letter({ id: 3, status: "waiting", replyAt: new Date("2026-03-05T00:00:00Z") }),
       letter({ id: 4, status: "private" }),
       letter({ id: 9, status: "answered", personaId: 6, personaName: "封着的" }),
@@ -132,6 +134,38 @@ describe("letter.inbox", () => {
     // one that has not come due is in the other group.
     expect(inbox.capsules.map((row: any) => row.id)).toEqual([11]);
     expect(inbox.upcoming.map((row: any) => row.id)).toEqual([14, 12]);
+  });
+
+  it("seals on the user's clock, not the persona's", async () => {
+    vi.useFakeTimers();
+    try {
+      // 2026-03-19T20:00Z is 2026-03-19 13:00 in Los Angeles: the seal
+      // until 2026-03-20 still holds. The persona's own clock
+      // (Asia/Shanghai) has already passed midnight and would call it
+      // open — the mailbox must agree with `sealedGuard`, which uses
+      // the user's timezone.
+      vi.setSystemTime(new Date("2026-03-19T20:00:00Z"));
+      getPersonasByUserId.mockResolvedValue([
+        {
+          id: 5,
+          userId: 1,
+          name: "小满",
+          timezone: "Asia/Shanghai",
+          settings: { seal: { until: "2026-03-20", earlyOpen: "never" } },
+        },
+        { id: 6, userId: 1, name: "小林", settings: {} },
+      ]);
+      listInboxLetters.mockResolvedValue([
+        letter({ id: 21, personaId: 5 }),
+        letter({ id: 22, personaId: 6, personaName: "小林" }),
+      ]);
+      const inbox = await appRouter
+        .createCaller(ctxFor(1, "America/Los_Angeles"))
+        .letter.inbox();
+      expect(inbox.received.map((row: any) => row.personaId)).toEqual([6]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("is empty when the user has no personas", async () => {
@@ -173,6 +207,15 @@ describe("letter.unreadCount", () => {
     expect(countUnreadAutoRepliesByPersona).toHaveBeenCalledWith(1, [
       { id: 5, lastReadAt: null },
     ]);
+  });
+
+  it("goes down by one after a reply is marked read", async () => {
+    const caller = appRouter.createCaller(ctxFor(1));
+    expect((await caller.letter.unreadCount()).letters).toBe(2);
+    markLetterRead.mockImplementation(async () => true);
+    countUnreadLetters.mockImplementation(async () => 1);
+    await caller.letter.markRead({ id: 3 });
+    expect((await caller.letter.unreadCount()).letters).toBe(1);
   });
 
   it("is zero when nothing is waiting", async () => {

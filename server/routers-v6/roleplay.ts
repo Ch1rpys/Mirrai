@@ -139,6 +139,7 @@ export const roleplayRouter = router({
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       }
       const reply = await llmService.invokeWithProvider(provider, {
+        usage: { userId: ctx.user.id, personaId: session.personaId },
         messages: [
           { role: "system" as const, content: system },
           ...transcript.map((turn) => ({

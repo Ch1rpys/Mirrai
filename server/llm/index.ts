@@ -426,6 +426,16 @@ export class LLMService {
       let collected = "";
       const attempt_ = attemptSignal(params.options);
       try {
+        /**
+         * Forget what the last call reported (C8.9).
+         *
+         * `lastUsage` is written by the non-streaming `invoke` and was
+         * never cleared, so a streamed reply could inherit the token
+         * count of an unrelated earlier call and be recorded as
+         * provider-reported fact. A stream usually reports nothing; the
+         * ledger should estimate it.
+         */
+        provider.lastUsage = null;
         for await (const chunk of provider.stream(params.messages, {
           ...params.options,
           purpose: params.options?.purpose ?? "other",

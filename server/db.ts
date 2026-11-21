@@ -1066,7 +1066,7 @@ export async function countUnreadLetters(
 export async function listInboxScheduled(userId: number, personaIds: number[]) {
   const db = await getDb();
   if (!db || personaIds.length === 0) return [];
-  return db.select({
+  const rows = await db.select({
     id: scheduledItems.id,
     userId: scheduledItems.userId,
     personaId: scheduledItems.personaId,
@@ -1088,6 +1088,11 @@ export async function listInboxScheduled(userId: number, personaIds: number[]) {
     ))
     .orderBy(asc(scheduledItems.dueAt))
     .limit(500);
+  /**
+   * `scheduled_items.body` is an encrypted column (C8.5), and the
+   * mailbox shows it — decrypt every row before it leaves this layer.
+   */
+  return decryptRows("scheduled_items", rows);
 }
 
 /** How many due capsules have not been opened (C8.2). */
@@ -1819,7 +1824,18 @@ export async function exportUserData(userId: number) {
   const messageList = await db.select().from(messages)
     .where(and(isNull(messages.deletedAt), eq(messages.userId, userId)))
     .orderBy(messages.createdAt).limit(50_000);
-  return { user, personas: personaList, messages: messageList };
+  /**
+   * The export is a read like any other (C8.5).
+   *
+   * It used to return the raw columns, so an encrypted account's export
+   * was base64 — the one place the transparent layer was bypassed. Both
+   * lists are decrypted with the owner's key here.
+   */
+  return {
+    user,
+    personas: decryptRows("personas", personaList),
+    messages: decryptRows("messages", messageList),
+  };
 }
 
 // ─── Persona helpers ────────────────────────────────────────────────────────
@@ -2210,14 +2226,28 @@ export async function getActiveShareForMemberPersona(
 ) {
   const db = await getDb();
   if (!db) return undefined;
-  const [row] = await db.select().from(personaShares)
+  const [row] = await db.select({ share: personaShares })
+    .from(personaShares)
+    .innerJoin(personas, and(
+      eq(personas.id, personaShares.personaId),
+      isNull(personas.deletedAt),
+    ))
     .where(and(
       eq(personaShares.memberPersonaId, memberPersonaId),
       eq(personaShares.memberUserId, userId),
       eq(personaShares.status, "active"),
     ))
     .limit(1);
-  return row;
+  /**
+   * A soft-deleted owner's persona closes the door (C8.11 × C7.2).
+   *
+   * The share row survives the recycle-bin window so undo can bring the
+   * conversation back, but a member must not keep talking to somebody
+   * the owner just deleted. Joining the owner's row and requiring
+   * `deletedAt IS NULL` gives that for free — and restores it when the
+   * owner undoes the deletion.
+   */
+  return row?.share;
 }
 
 /**
@@ -2284,6 +2314,10 @@ export async function isPersonaSharedWithMember(
   const [row] = await db
     .select({ id: personaShares.id })
     .from(personaShares)
+    .innerJoin(personas, and(
+      eq(personas.id, personaShares.personaId),
+      isNull(personas.deletedAt),
+    ))
     .where(and(
       eq(personaShares.ownerUserId, ownerUserId),
       eq(personaShares.personaId, ownerPersonaId),
@@ -3915,6 +3949,10 @@ export async function clearMessagesByPersonaId(personaId: number, userId: number
   await db.transaction(async (tx) => {
     await tx.delete(messages)
       .where(and(eq(messages.personaId, personaId), eq(messages.userId, userId)));
+    // The marks point at messages that no longer exist; they would
+    // otherwise stay as invisible rows (C8.10 × C8.11).
+    await tx.delete(messageMarks)
+      .where(and(eq(messageMarks.personaId, personaId), eq(messageMarks.userId, userId)));
     await tx.update(personas)
       .set({ chatCount: 0 })
       .where(and(eq(personas.id, personaId), eq(personas.userId, userId)));
@@ -6778,11 +6816,26 @@ export async function countMessageMarks(
 ): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
-  const [row] = await db.select({ c: count() }).from(messageMarks).where(and(
-    eq(messageMarks.personaId, personaId),
-    eq(messageMarks.userId, userId),
-    eq(messageMarks.kind, kind),
-  ));
+  /**
+   * Only marks whose message is still visible count (C8.10 × C8.11).
+   *
+   * A soft-deleted message keeps its marks so the undo can bring the
+   * pin back. Counting the raw rows would let a message the user threw
+   * away keep a pin slot for ever — invisible in `list`, impossible to
+   * remove, and still counted against the three-pin limit.
+   */
+  const [row] = await db
+    .select({ c: count() })
+    .from(messageMarks)
+    .innerJoin(messages, and(
+      eq(messages.id, messageMarks.messageId),
+      isNull(messages.deletedAt),
+    ))
+    .where(and(
+      eq(messageMarks.personaId, personaId),
+      eq(messageMarks.userId, userId),
+      eq(messageMarks.kind, kind),
+    ));
   return Number(row?.c ?? 0);
 }
 
@@ -6941,14 +6994,22 @@ export async function deleteMessagesFrom(
   // The ids are a sequence, so "this message and everything after it" is
   // `id >= this one`. Cutting by time instead would take the messages
   // that share the millisecond with it as well.
-  const deleted = await db.delete(messages)
-    .where(and(
-      eq(messages.personaId, personaId),
-      eq(messages.userId, userId),
-      gte(messages.id, target[0].id),
-    ))
-    .returning({ id: messages.id });
-  return deleted.length;
+  return db.transaction(async (tx) => {
+    const deleted = await tx.delete(messages)
+      .where(and(
+        eq(messages.personaId, personaId),
+        eq(messages.userId, userId),
+        gte(messages.id, target[0].id),
+      ))
+      .returning({ id: messages.id });
+    // The marks of the removed tail go with it (C8.10 × C8.11).
+    await tx.delete(messageMarks).where(and(
+      eq(messageMarks.personaId, personaId),
+      eq(messageMarks.userId, userId),
+      gte(messageMarks.messageId, target[0].id),
+    ));
+    return deleted.length;
+  });
 }
 
 /** The message before the given one, for "regenerate the last reply". */

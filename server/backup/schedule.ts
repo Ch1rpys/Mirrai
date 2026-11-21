@@ -197,8 +197,16 @@ export async function runScheduledBackups(
           console.warn(`[Backup] Could not delete the old backup ${name}:`, error);
         }
       }
+      /**
+       * A successful run clears the previous failure (C8.3).
+       *
+       * `lastError` was only ever written, never removed, so the
+       * settings page kept saying "the last scheduled backup failed"
+       * after several successful ones.
+       */
+      const { lastError: _previousError, ...clean } = settings;
       await saveSettings(user.id, {
-        ...settings,
+        ...clean,
         lastRunAt: startedAt.toISOString(),
         lastFileName: fileName,
         history,

@@ -69,11 +69,12 @@ export const rehearsalRouter = router({
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
       assertPersonaWritable(persona, ctx.locale);
       /**
-       * The room is three generation calls (C8.9); a spent budget turns
-       * it off the way it turns off the other optional extras.
+       * A crisis is answered before anything that could turn the room
+       * off (C8.9): it needs no model, so neither the budget, the
+       * user's step-down, nor the daily limit may swallow it.
        */
-      if (await budgetExceeded(ctx.user.id, ctx.user.timezone ?? null)) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.budgetOver") });
+      if (detectCrisis(input.line).crisis) {
+        return { mode: "crisis" as const };
       }
       /**
        * The user's own step-down closes the rehearsal room too (C6.1).
@@ -116,8 +117,8 @@ export const rehearsalRouter = router({
         });
       }
 
-      if (detectCrisis(input.line).crisis) {
-        return { mode: "crisis" as const };
+      if (await budgetExceeded(ctx.user.id, ctx.user.timezone ?? null)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.budgetOver") });
       }
 
       if (isCommitmentQuestion(input.line)) {

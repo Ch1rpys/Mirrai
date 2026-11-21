@@ -120,9 +120,10 @@ export async function deliverBackupFile(options: {
 
   if (target.kind === "webdav") {
     if (!target.passwordSecret && !options.credentials?.password) {
-      // Some WebDAV servers allow anonymous PUT; do not refuse those,
-      // but a username with no password is almost always a half-filled
-      // form, and the response would say 401 anyway.
+      // The manual's WebDAV target is basic auth, so there is no
+      // passwordless form: a username with no password is a half-filled
+      // settings form, and refusing it here gives a readable reason
+      // instead of a 401 from the server.
       throw new BackupDeliveryError("missing_credentials");
     }
     const response = await fetchImpl(webdavFileUrl(target.url, options.fileName), {

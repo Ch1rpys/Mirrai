@@ -178,11 +178,17 @@ export const lockRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const current = lockSettingsOf(ctx.user);
-      // These routes are lock-exempt, so the guard cannot have checked.
+      /**
+       * The lock self-service routes are exempt from `appLockGuard`, so
+       * this route checks for itself. A session that is still behind the
+       * lock screen may not change the lock at all — turning it *off*
+       * from there would hand somebody who picked up the browser the
+       * whole app without the PIN. Turning it off is the `disable` route
+       * (account password), and both it and this one work normally once
+       * the session is unlocked.
+       */
       if (await isSessionLocked(current, sessionKeyFromRequest(ctx.req))) {
-        // Turning the lock *off* is safe for someone who can already see
-        // the app; turning it on from a locked screen is not.
-        if (input.enabled !== false) throw lockedError(ctx.locale);
+        throw lockedError(ctx.locale);
       }
       if (input.enabled === true && !ctx.user.lockPinHash) {
         throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.lockPinRequired") });

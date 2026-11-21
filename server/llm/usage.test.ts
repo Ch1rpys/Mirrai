@@ -146,6 +146,28 @@ describe("the usage ledger", () => {
     expect(row.estimated).toBe(true);
     expect(row.completionTokens as number).toBeGreaterThan(0);
   });
+  it("does not reuse the previous call's reported usage for a stream", async () => {
+    // The provider reported these tokens for an earlier, non-streaming
+    // call. A streamed answer usually reports nothing; the ledger must
+    // estimate this turn instead of copying the old numbers.
+    const streamed = new FakeProvider("", { promptTokens: 100, completionTokens: 7 });
+    streamed.capabilities = { streaming: true, vision: false, tools: false, jsonMode: false };
+    streamed.stream = async function* () {
+      yield { text: "嗯" };
+      yield { text: "嗯" };
+    };
+    for await (const _chunk of llmService.streamWithProvider(streamed, {
+      messages,
+      options: { purpose: "reply" },
+      usage: { userId: 7 },
+    })) {
+      // drain
+    }
+    const row = insertLlmUsage.mock.calls[0]![0] as Record<string, number | boolean>;
+    expect(row.estimated).toBe(true);
+    expect(row.promptTokens).not.toBe(100);
+    expect(row.completionTokens).not.toBe(7);
+  });
 });
 
 describe("the money", () => {

@@ -22,7 +22,7 @@ import os from "node:os";
 import path from "node:path";
 import { copy, type CopyKey } from "@shared/copy";
 import { authenticateRequest } from "../_core/auth";
-import { isRequestLocked } from "../_core/app-lock";
+import { refreshRequestLock } from "../_core/app-lock";
 import { readLocale } from "../_core/context";
 import { getClientIp, RATE_LIMITS, rateLimiter } from "../_core/rate-limit";
 import { createBackupForDownload } from "../_core/backup";
@@ -123,7 +123,7 @@ export function registerBackupRoutes(app: Express): void {
     }
     // The app lock covers the backup download too (C8.4): it is the
     // whole database in one file.
-    if (await isRequestLocked(req, user)) {
+    if (await refreshRequestLock(req, user)) {
       res.status(403).json({ error: copy(locale, "errors.locked") });
       return;
     }

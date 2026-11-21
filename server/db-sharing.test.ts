@@ -10,6 +10,8 @@ import {
   createPersonaShare,
   createUser,
   purgePersona,
+  restorePersona,
+  softDeletePersona,
   getActiveShareForMemberPersona,
   getMemoriesByPersonaId,
   getAllPersonasForReminders,
@@ -365,6 +367,46 @@ describe.skipIf(!DATABASE_URL)("sharing a persona with family (C7.2)", () => {
       await purgePersona(ownerPersonaId, ownerId);
       expect(await listPersonaShares(ownerPersonaId, ownerId)).toHaveLength(0);
       expect(await getPersonaById(memberPersonaId, memberId)).toBeTruthy();
+    } finally {
+      if (memberPersonaId) await purgePersona(memberPersonaId, memberId).catch(() => undefined);
+      await purgePersona(ownerPersonaId, ownerId).catch(() => undefined);
+    }
+  });
+});
+
+describe.skipIf(!DATABASE_URL)("a shared persona's owner deletes it", () => {
+  it("closes the member's door while the persona is in the bin, and reopens it on undo", async () => {
+    const stamp = Date.now();
+    const ownerId = await createUser({ username: `share-del-owner-${stamp}`, passwordHash: "x", name: "主人" });
+    const memberId = await createUser({ username: `share-del-member-${stamp}`, passwordHash: "x", name: "家人" });
+    const ownerPersonaId = await createPersona({ userId: ownerId, name: "小满", analysisStatus: "ready" });
+    let memberPersonaId: number | undefined;
+    try {
+      const token = `token-${stamp}`;
+      await createPersonaShare({
+        ownerUserId: ownerId,
+        personaId: ownerPersonaId,
+        tokenHash: hashToken(token),
+        status: "invited",
+        expiresAt: new Date(Date.now() + 86_400_000),
+      } as never);
+      const accepted = await acceptPersonaShare(hashToken(token), memberId);
+      expect(accepted).toBeTruthy();
+      memberPersonaId = accepted!.personaId;
+
+      // Before the delete the door is open.
+      expect(await getActiveShareForMemberPersona(memberPersonaId, memberId)).toBeTruthy();
+      expect(await isPersonaSharedWithMember(ownerId, ownerPersonaId, memberId)).toBe(true);
+
+      // Soft delete: the member's row stays, the chat does not.
+      expect(await softDeletePersona(ownerPersonaId, ownerId)).toBe(true);
+      expect(await getActiveShareForMemberPersona(memberPersonaId, memberId)).toBeUndefined();
+      expect(await isPersonaSharedWithMember(ownerId, ownerPersonaId, memberId)).toBe(false);
+      expect(await getPersonaById(memberPersonaId, memberId)).toBeTruthy();
+
+      // The undo brings the conversation — and the door — back.
+      expect(await restorePersona(ownerPersonaId, ownerId)).toBe(true);
+      expect(await getActiveShareForMemberPersona(memberPersonaId, memberId)).toBeTruthy();
     } finally {
       if (memberPersonaId) await purgePersona(memberPersonaId, memberId).catch(() => undefined);
       await purgePersona(ownerPersonaId, ownerId).catch(() => undefined);

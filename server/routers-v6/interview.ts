@@ -36,6 +36,7 @@ import {
   listSubmittedOralAccounts,
   updatePersona,
 } from "../db";
+import { invokeAndRecord } from "../llm/recorded";
 import { resolveProviderForPurposeWithOwnership, resolveProviderForUser } from "../llm/user-provider";
 import type { LLMMessage } from "../llm/types";
 import {
@@ -82,6 +83,7 @@ function tellerNameFor(user: { name?: string | null; username: string }): string
  */
 async function invokerFor(params: {
   userId: number;
+  personaId?: number | null;
   purpose: "other" | "distill";
   personaProvider?: string | null;
 }): Promise<((messages: LLMMessage[]) => Promise<string | null>) | null> {
@@ -94,7 +96,15 @@ async function invokerFor(params: {
   if (!provider) return null;
   return async (messages: LLMMessage[]) => {
     try {
-      const text = await provider.invoke(messages, { purpose: params.purpose });
+      const text = await invokeAndRecord(
+        provider,
+        {
+          messages,
+          options: { purpose: params.purpose },
+          usage: { userId: params.userId, personaId: params.personaId ?? null },
+        },
+        params.purpose,
+      );
       return typeof text === "string" && text.trim() ? text : null;
     } catch {
       return null;
@@ -297,6 +307,7 @@ export const interviewRouter = router({
         ];
         const invoke = await invokerFor({
           userId: ctx.user.id,
+          personaId: persona.id,
           purpose: "distill",
           personaProvider: persona.llmProvider ?? undefined,
         });
@@ -423,6 +434,7 @@ export const interviewRouter = router({
       }
       const invoke = await invokerFor({
         userId: ctx.user.id,
+        personaId: persona.id,
         purpose: "distill",
         personaProvider: persona.llmProvider ?? undefined,
       });

@@ -165,6 +165,9 @@ describe("roleplay routes", () => {
       .roleplay.say({ sessionId: 11, text: "今天好累" });
     expect((result as any).reply).toBe("我知道，先歇一会儿吧。");
     const request = invokeWithProvider.mock.calls[0][1];
+    // The call is attributed, so the role-play spend lands in the
+    // user's ledger (C8.9).
+    expect(request.usage).toEqual({ userId: 1, personaId: 5 });
     const system = request.messages[0];
     expect(system.role).toBe("system");
     expect(system.content).toContain("我今天有点累");

@@ -776,6 +776,16 @@ describe("fingerprint rerank layer", () => {
       if (event.type === "final") final = event;
     }
     expect(final?.rerank?.scores).toHaveLength(4);
+    /**
+     * The four candidates are what "four-way reranking" costs, and the
+     * usage panel reads them by purpose (C8.9). They used to be labelled
+     * "reply" like the answer itself, so that row could only ever be
+     * zero.
+     */
+    const rerankCalls = invokeWithProvider.mock.calls.filter(
+      (call) => (call[1] as { options?: { purpose?: string } } | undefined)?.options?.purpose === "rerank",
+    );
+    expect(rerankCalls).toHaveLength(4);
   });
 
   it("leaves fingerprintRerank off with --without fingerprintRerank", async () => {

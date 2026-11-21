@@ -19,6 +19,7 @@
 import type { Persona } from "../../drizzle/schema";
 import { buildSystemPrompt } from "../_core/persona-utils";
 import { llmService, type LLMProvider } from "../llm";
+import { invokeAndRecord } from "../llm/recorded";
 import { withTimeout } from "../llm/timeout";
 import { resolveProviderForUserWithOwnership } from "../llm/user-provider";
 import { copy } from "@shared/copy";
@@ -280,7 +281,17 @@ async function writeSinglePassLetter(params: {
 
   if (provider) {
     try {
-      const response = await withTimeout(provider.invoke(messages, { purpose: "letter" }));
+      const response = await withTimeout(
+        invokeAndRecord(
+          provider,
+          {
+            messages,
+            options: { purpose: "letter" },
+            usage: { userId, personaId: persona.id },
+          },
+          "letter",
+        ),
+      );
       if (response?.trim()) return response.trim();
     } catch (e) {
       console.warn(
@@ -295,6 +306,7 @@ async function writeSinglePassLetter(params: {
       const response = await llmService.invoke({
         messages,
         options: { purpose: "letter" },
+        usage: { userId, personaId: persona.id },
       });
       if (response?.trim()) return response.trim();
     } catch (e) {

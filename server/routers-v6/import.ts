@@ -218,6 +218,8 @@ export const importRouter = router({
           });
         }
         const read = await readMomentScreenshots({
+          userId: ctx.user.id,
+          personaId: input.personaId,
           images,
           provider,
           name: persona.name,
@@ -324,6 +326,8 @@ export const importRouter = router({
         }
       }
       const read = await readScreenshotPages({
+        userId: ctx.user.id,
+        personaId: input.personaId,
         images: input.images,
         provider,
         name: persona.name,

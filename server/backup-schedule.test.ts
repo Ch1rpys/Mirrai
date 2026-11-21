@@ -159,3 +159,18 @@ describe("the scheduled backup", () => {
     );
   });
 });
+
+describe("the error token", () => {
+  it("is cleared by a successful run", async () => {
+    const { deps, saved } = harness([
+      {
+        id: 1,
+        backupSettings: folderSettings({ lastError: "backup_failed" }),
+      },
+    ]);
+    const result = await runScheduledBackups(NOW, deps);
+    expect(result).toEqual({ ran: 1, failed: 0 });
+    expect(saved).toHaveLength(1);
+    expect(saved[0].settings.lastError).toBeUndefined();
+  });
+});

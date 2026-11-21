@@ -70,6 +70,7 @@ async function labelWithModel(params: {
   const acts = SPEECH_ACTS.join(", ");
   try {
     const answer = await llmService.invokeWithProvider(provider, {
+      usage: { userId: params.userId },
       messages: [
         {
           role: "system",

@@ -686,6 +686,7 @@ async function invokeFarewellModel(params: {
   const response = await llmService.invokeWithProvider(provider, {
     messages: params.messages,
     options: { ...params.options, purpose: "letter" },
+    usage: { userId: params.userId },
   });
   return response ?? "";
 }

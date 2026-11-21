@@ -634,6 +634,7 @@ export async function mineMicroRules(params: MineMicroRulesParams): Promise<Micr
     params.onProgress?.(copy(locale, "labels.microRules.mining"));
 
     answer = await llmService.invokeWithProvider(provider, {
+      usage: { userId: params.userId },
       messages: [
         { role: "system", content: copy(locale, "prompts.microRuleMining") },
         {

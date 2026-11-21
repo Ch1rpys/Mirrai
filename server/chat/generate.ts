@@ -1317,9 +1317,16 @@ export async function* executePlan(
     let texts = await Promise.all(
       Array.from({ length: 4 }, async () => {
         try {
+          /**
+           * The four candidates are the "rerank" spend (C8.9).
+           *
+           * They used to be labelled `reply` like the final answer, so
+           * the panel's "how much more did four-way reranking cost"
+           * row could never be anything but zero.
+           */
           const answer = await llmService.invokeWithProvider(voiceProvider, {
             messages: replyMessages,
-            options: { ...replyOptions, purpose: "reply" },
+            options: { ...replyOptions, purpose: "rerank" },
             usage,
           });
           return typeof answer === "string" ? answer : "";

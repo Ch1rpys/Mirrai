@@ -110,10 +110,24 @@ export function memoryKnownBy(
   memory: PeriodMemory,
   to: Date | null,
   recordTimes: Map<number, Date> = new Map(),
+  /**
+   * The boundary expressed as a local calendar day.
+   *
+   * A memory's `date` is often just `YYYY-MM-DD`, with no zone. Comparing
+   * it to an instant treats it as UTC midnight — so for a persona in a
+   * timezone behind UTC, the day *after* the cut at local midnight can
+   * compare as "before" the cut instant (the cut is late in the local
+   * day, which is the next UTC day). The caller passes the cut's own
+   * local date and date-only memories compare as days, not instants.
+   */
+  throughDateKey?: string | null,
 ): boolean {
   if (!to) return true;
   if (memory.isPinned) return true;
   const date = String(memory.date ?? "").trim();
+  if (date.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(date) && throughDateKey) {
+    return date <= throughDateKey;
+  }
   if (isCompleteDate(date) && isOnOrBefore(date, to)) return true;
   const recordId = memory.recordId ?? null;
   if (recordId != null) {

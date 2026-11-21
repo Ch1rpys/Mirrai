@@ -347,3 +347,27 @@ export async function isRequestLocked(
   if (!settings.enabled) return false;
   return isSessionLocked(settings, sessionKeyFromRequest(req), now);
 }
+
+/**
+ * Whether a non-tRPC request may go through, sliding the idle window when
+ * it may.
+ *
+ * The manual says every request that passes the check postpones the lock
+ * by `idleMinutes`. A tRPC call gets that from `appLockGuard`; the
+ * non-tRPC routes use this instead of the read-only `isRequestLocked`,
+ * so watching photographs or streaming a reply is not "idle time".
+ * Routes that only *ask* whether the session is locked (the scheduler's
+ * backup sweep) keep using `isRequestLocked`.
+ */
+export async function refreshRequestLock(
+  req: Request,
+  user: { lockSettings?: unknown },
+  now = Date.now(),
+): Promise<boolean> {
+  const settings = lockSettingsOf(user);
+  if (!settings.enabled) return false;
+  const sessionKey = sessionKeyFromRequest(req);
+  if (await isSessionLocked(settings, sessionKey, now)) return true;
+  await touchUnlock(settings, sessionKey, now);
+  return false;
+}

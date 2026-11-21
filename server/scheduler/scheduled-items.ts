@@ -10,7 +10,6 @@ import * as db from "../db";
 import { getEffectivePresence } from "../_core/graduation";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import { mayChatNow } from "@shared/persona-state";
-import { preferredClockZone } from "@shared/timezone";
 import { resolveReplyAt } from "@shared/letters";
 import { detectCrisis } from "../safety/crisis";
 import { pushToUser } from "../_core/push";
@@ -70,11 +69,9 @@ export async function sweepScheduledItems(
       continue;
     }
     const user = await db.getUserById(item.userId).catch(() => null);
-    const zone = preferredClockZone(
-      (persona as { timezone?: string | null }).timezone,
-      user?.timezone,
-    );
-    const chat = mayChatNow(persona, now, zone || "UTC");
+    // The user's day, the same clock `sealedGuard` uses (C8.2/C6.2).
+    const zone = (user?.timezone ?? "").trim() || "UTC";
+    const chat = mayChatNow(persona, now, zone);
     if (!chat.ok) {
       await cancel(chat.reason === "sealed" ? "sealed" : "closed");
       continue;

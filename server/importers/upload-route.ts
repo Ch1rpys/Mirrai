@@ -17,7 +17,7 @@ import { nanoid } from "nanoid";
 import { copy, type Locale } from "@shared/copy";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import { authenticateRequest } from "../_core/auth";
-import { isRequestLocked, personaLocked, sessionKeyFromRequest } from "../_core/app-lock";
+import { personaLocked, refreshRequestLock, sessionKeyFromRequest } from "../_core/app-lock";
 import { ENV } from "../_core/env";
 import {
   checkFileExtension,
@@ -107,7 +107,7 @@ async function handleImportUpload(req: Request, res: Response): Promise<void> {
   }
 
   // The app lock covers the streaming import too (C8.4).
-  if (await isRequestLocked(req, user)) {
+  if (await refreshRequestLock(req, user)) {
     res.status(403).json({ error: copy(locale, "errors.locked") });
     return;
   }

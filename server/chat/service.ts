@@ -1241,9 +1241,15 @@ async function* admitUserMessage(
    * Checked before the message is stored: a closed day must not leave a
    * message in the transcript that the persona then ignores.
    */
-  const clockZone = (persona as { timezone?: string | null }).timezone
-    || (await db.getUserTimezone(userId).catch(() => null))
-    || "UTC";
+  /**
+   * The user's day, not the persona's (C6.1 × C6.2).
+   *
+   * `sealedGuard` already judges with `ctx.user.timezone`; the chat path
+   * used the persona's timezone first, so a persona with its own
+   * (long-distance) timezone could be refused by one entry point and
+   * accepted by the other in the same minute.
+   */
+  const clockZone = (await db.getUserTimezone(userId).catch(() => null)) || "UTC";
   const chat = mayChatNow(persona, now, clockZone);
   if (!chat.ok) {
     const key = chat.reason === "weekend_only"
@@ -1563,10 +1569,17 @@ async function* runConversationTurn(
    * ceiling can never swallow it. What it takes away is only the
    * optional cost: the four-way rerank, two stages and the rewrite.
    */
+  /**
+   * The month is the *user's* month (C8.9 deviation 350).
+   *
+   * It used the persona's timezone first, while the usage panel and the
+   * four paid-feature guards use the user's — so around a month
+   * boundary the chat path could disable the paid layers while the
+   * settings page said there was budget left, or the reverse.
+   */
   const budgetOver = await budgetExceeded(
     userId,
-    (persona as { timezone?: string | null }).timezone
-      || (await db.getUserTimezone(userId).catch(() => null)),
+    await db.getUserTimezone(userId).catch(() => null),
   );
   const turnInput = {
     persona,

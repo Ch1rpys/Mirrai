@@ -57,8 +57,11 @@ export function isInterviewDoneSignal(answer: string): boolean {
     .toLowerCase()
     .replace(/[\s。.!！?？~～,，、'"’]/g, "")
     // Modal particles are how people soften the sentence — the meaning
-    // of 「就这些啦」 is 「就这些」.
-    .replace(/(?:啦|了|呀|吧|哦|噢|啊)+$/g, "");
+    // of 「就这些啦」 is 「就这些」. `了` is deliberately not stripped:
+    // it is part of the signals themselves (「没了」「没有了」
+    // 「说完了」) and stripping it turned them into words the list does
+    // not contain.
+    .replace(/(?:啦|呀|吧|哦|噢|啊)+$/g, "");
   if (!text) return false;
   return DONE_SIGNALS_ZH.includes(text) || DONE_SIGNALS_EN.includes(text);
 }

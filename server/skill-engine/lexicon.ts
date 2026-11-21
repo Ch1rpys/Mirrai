@@ -141,6 +141,7 @@ export async function mineLexicon(params: MineLexiconParams): Promise<LexiconEnt
       });
       if (!provider) return [];
       answer = await llmService.invokeWithProvider(provider, {
+        usage: { userId: params.userId, personaId: params.personaId ?? null },
         messages,
         options: { temperature: 0.2, maxTokens: 1500, purpose: "distill" },
       });

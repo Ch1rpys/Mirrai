@@ -217,10 +217,14 @@ describe("a scene drawn from a stretch of the record", () => {
     expect(outside).not.toContain("我在楼下等你");
   });
 
-  it("does not inject a memory dated after the stretch", async () => {
+  it("does not inject a memory or an event dated after the stretch", async () => {
     retrieveMemories.mockResolvedValue([
       memory("范围之前的事", "2026-02-20"),
       memory("范围之后的事", "2026-03-10"),
+    ]);
+    getRelationshipEvents.mockResolvedValue([
+      { kind: "trip", title: "范围之前的一次旅行", happenedAt: "2026-02-20T04:00:00.000Z" },
+      { kind: "trip", title: "范围之后的一次旅行", happenedAt: "2026-03-10T04:00:00.000Z" },
     ]);
     const prompt = await promptFor();
 
@@ -228,7 +232,26 @@ describe("a scene drawn from a stretch of the record", () => {
     expect(prompt).not.toContain("范围之后的事");
     // The events layer uses the same boundary; a fact that came later is
     // not in the prompt either.
-    expect(getRelationshipEvents).toHaveBeenCalled();
+    expect(prompt).toContain("范围之前的一次旅行");
+    expect(prompt).not.toContain("范围之后的一次旅行");
+  });
+
+  it("treats a date-only memory as a local day for a timezone behind UTC", async () => {
+    // The cut is 2026-03-02 in New York = 2026-03-03T04:59Z; a memory
+    // dated 03-03 (UTC midnight) used to compare as "before the cut".
+    retrieveMemories.mockResolvedValue([
+      memory("范围前一天的事", "2026-03-01"),
+      memory("范围次日的事", "2026-03-03"),
+    ]);
+    const { messages } = await composeMessages({
+      persona: { ...persona, timezone: "America/New_York" },
+      userId: 1,
+      userMessage: "在吗",
+      contextLimit: 20,
+    });
+    const prompt = messages[0]!.content as string;
+    expect(prompt).toContain("范围前一天的事");
+    expect(prompt).not.toContain("范围次日的事");
   });
 
   it("keeps the boundary when the records behind it are gone", async () => {

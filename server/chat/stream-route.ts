@@ -22,7 +22,7 @@ import type { Express, Request, Response } from "express";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { authenticateRequest } from "../_core/auth";
-import { isRequestLocked, personaLocked, sessionKeyFromRequest } from "../_core/app-lock";
+import { personaLocked, refreshRequestLock, sessionKeyFromRequest } from "../_core/app-lock";
 import { RATE_LIMITS, rateLimiter, resolveRateLimitKey } from "../_core/rate-limit";
 import * as db from "../db";
 import { runConversation, PersonaAsleepError, ChatClosedError } from "./service";
@@ -121,7 +121,7 @@ async function handleChatStream(req: Request, res: Response): Promise<void> {
      * This route is not tRPC, so the guard in `protectedProcedure` never
      * runs for it — and it is the route the chat page actually uses.
      */
-    if (await isRequestLocked(req, user)) {
+    if (await refreshRequestLock(req, user)) {
       res.status(403).json({ error: copy(askedLocale, "errors.locked") });
       return;
     }

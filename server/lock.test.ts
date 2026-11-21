@@ -8,6 +8,7 @@ import {
   hasRecentUnlock,
   isRequestLocked,
   noteUnlock,
+  refreshRequestLock,
   resetAppLockStore,
   sessionKeyFromCookieHeader,
 } from "./_core/app-lock";
@@ -32,8 +33,10 @@ import { TRPCError } from "@trpc/server";
  */
 
 const getPersonasWithStats = vi.fn();
+const getPersonasByUserId = vi.fn();
 const getPersonaById = vi.fn();
 const getPersonaStateSettings = vi.fn();
+const getRecentActivity = vi.fn();
 const getUserById = vi.fn();
 const getUserLockRow = vi.fn();
 const setUserLock = vi.fn();
@@ -41,8 +44,10 @@ const setUserLock = vi.fn();
 vi.mock("./db", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getPersonasWithStats: (...a: unknown[]) => getPersonasWithStats(...a),
+  getPersonasByUserId: (...a: unknown[]) => getPersonasByUserId(...a),
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   getPersonaStateSettings: (...a: unknown[]) => getPersonaStateSettings(...a),
+  getRecentActivity: (...a: unknown[]) => getRecentActivity(...a),
   getUserById: (...a: unknown[]) => getUserById(...a),
   getUserLockRow: (...a: unknown[]) => getUserLockRow(...a),
   setUserLock: (...a: unknown[]) => setUserLock(...a),
@@ -78,6 +83,10 @@ beforeEach(async () => {
   getPersonasWithStats.mockResolvedValue([
     { id: 5, name: "小满", avatarUrl: "/uploads/a.png", settings: {} },
     { id: 6, name: "小林", avatarUrl: null, settings: {} },
+  ]);
+  getPersonasByUserId.mockResolvedValue([
+    { id: 5, name: "小满", settings: {} },
+    { id: 6, name: "小林", settings: {} },
   ]);
   getPersonaById.mockResolvedValue({ id: 5, userId: 1, name: "小满", settings: {} });
   getPersonaStateSettings.mockResolvedValue({});
@@ -169,6 +178,30 @@ describe("the app lock at the tRPC edge", () => {
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await caller.lock.verifyPassword({ password: "correct horse" });
     await expect(caller.persona.list()).resolves.toBeTruthy();
+  });
+
+  it("refuses to change the lock from behind the lock screen", async () => {
+    const caller = appRouter.createCaller(ctxFor());
+    // Turning it off from a locked screen would hand the browser to
+    // whoever is holding it — the exploit this test exists for.
+    await expect(
+      caller.lock.updateSettings({ enabled: false }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      caller.lock.updateSettings({ enabled: true }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      caller.lock.updateSettings({ idleMinutes: 12 }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(setUserLock).not.toHaveBeenCalled();
+    // The lock is still on: the data is still refused.
+    await expect(caller.persona.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    // Once the PIN has been proved, the settings are reachable again.
+    await caller.lock.verifyPin({ pin: "4821" });
+    await caller.lock.updateSettings({ idleMinutes: 12 });
+    const [, patch] = setUserLock.mock.calls.at(-1) as [number, Record<string, unknown>];
+    expect(patch.lockSettings).toMatchObject({ enabled: true, idleMinutes: 12 });
   });
 
   it("locks the session again on demand", async () => {
@@ -263,23 +296,53 @@ describe("a locked persona", () => {
     await expect(caller.persona.get({ id: 5 })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
-  it("does not show its name or face in the lobby until unlocked", async () => {
+  it("shows nothing about its content in the lobby until unlocked", async () => {
     getPersonasWithStats.mockResolvedValue([
-      { id: 5, name: "小满", avatarUrl: "/uploads/a.png", settings: { locked: true } },
+      {
+        id: 5,
+        name: "小满",
+        avatarUrl: "/uploads/a.png",
+        relationshipDesc: "前女友",
+        personaData: { rules: ["秘密规则"] },
+        lastMessage: { content: "只有我们知道的一句话", createdAt: NOW },
+        settings: { locked: true },
+      },
       { id: 6, name: "小林", avatarUrl: null, settings: {} },
+    ]);
+    getPersonasByUserId.mockResolvedValue([
+      { id: 5, name: "小满", settings: { locked: true } },
+      { id: 6, name: "小林", settings: {} },
+    ]);
+    getRecentActivity.mockResolvedValue([
+      { id: 1, personaId: 5, role: "assistant", content: "只有我们知道的一句话", personaName: "小满" },
+      { id: 2, personaId: 6, role: "user", content: "别的分身的话", personaName: "小林" },
     ]);
     const caller = appRouter.createCaller(ctxFor({
       lockSettings: { enabled: false, idleMinutes: 5, passkeys: [] },
     }));
 
     const hidden = await caller.persona.list();
-    expect(hidden[0]).toMatchObject({ id: 5, name: "", avatarUrl: null, locked: true });
+    expect(hidden[0]).toMatchObject({
+      id: 5,
+      name: "",
+      avatarUrl: null,
+      locked: true,
+      relationshipDesc: null,
+      personaData: null,
+      lastMessage: null,
+    });
     expect(hidden[1]).toMatchObject({ id: 6, name: "小林" });
+
+    const activity = await caller.persona.recentActivity();
+    expect(activity.map((row: { personaId: number }) => row.personaId)).toEqual([6]);
 
     await caller.lock.verifyPin({ pin: "4821" });
     const shown = await caller.persona.list();
     expect(shown[0]).toMatchObject({ id: 5, name: "小满" });
     expect((shown[0] as { locked?: boolean }).locked).toBeUndefined();
+    expect(shown[0]).toMatchObject({ lastMessage: { content: "只有我们知道的一句话" } });
+    expect((await caller.persona.recentActivity()).map((row: { personaId: number }) => row.personaId))
+      .toEqual([5, 6]);
   });
 });
 
@@ -373,6 +436,21 @@ describe("the routes that are not tRPC", () => {
     expect(await isRequestLocked(request as never, lockedUser)).toBe(false);
   });
 
+  it("slides the idle window on a non-tRPC route that gets through", async () => {
+    const request = { headers: { cookie: "app_session_id=session-d" } } as never;
+    const lockedUser = user();
+    await noteUnlock({ enabled: true, idleMinutes: 5, passkeys: [] }, sessionKeyFromCookieHeader("app_session_id=session-d"));
+    // 4 minutes after the unlock: a file request goes through and slides.
+    vi.setSystemTime(new Date(NOW.getTime() + 4 * 60_000));
+    expect(await refreshRequestLock(request, lockedUser)).toBe(false);
+    // 8 minutes after the unlock, 4 after the file request: still open.
+    vi.setSystemTime(new Date(NOW.getTime() + 8 * 60_000));
+    expect(await refreshRequestLock(request, lockedUser)).toBe(false);
+    // 14 minutes of silence: locked.
+    vi.setSystemTime(new Date(NOW.getTime() + 14 * 60_000));
+    expect(await refreshRequestLock(request, lockedUser)).toBe(true);
+  });
+
   it("keeps the lock checks on the non-tRPC route sources", async () => {
     const { readFileSync } = await import("node:fs");
     const files = [
@@ -384,16 +462,59 @@ describe("the routes that are not tRPC", () => {
     ];
     for (const file of files) {
       const source = readFileSync(file, "utf-8");
-      expect(source, file).toMatch(/isRequestLocked|deps\.locked|personaLocked/);
+      expect(source, file).toMatch(/isRequestLocked|refreshRequestLock|deps\.locked|personaLocked/);
     }
   });
 });
 
 describe("the structure the guard relies on", () => {
-  it("puts the lock guard on every protected procedure", async () => {
-    const { readFileSync } = await import("node:fs");
+  const { readFileSync, readdirSync } = require("node:fs") as typeof import("node:fs");
+  const path = require("node:path") as typeof import("node:path");
+
+  it("puts the lock guard on every protected and admin procedure", () => {
     const source = readFileSync("server/_core/trpc.ts", "utf-8");
     expect(source).toMatch(/export const protectedProcedure = t\.procedure\s*\.use\(requireUser\)\s*\.use\(appLockGuard\)\s*\.use\(encryptionGuard\)\s*\.use\(sealedGuard\)/);
+    // An admin session behind the lock screen must not fire side effects
+    // either (system.notifyOwner).
+    expect(source).toMatch(/export const adminProcedure = t\.procedure\s*\.use\(appLockGuard\)/);
     expect(source).toMatch(/APP_LOCK_EXEMPT_PREFIXES = \["auth\.", "lock\."\]/);
+  });
+
+  /**
+   * Every procedure that is not on `protectedProcedure` is a deliberate
+   * exception. This is the guard against the next user-data route being
+   * added to the wrong chain: adding one means editing this list and
+   * saying why.
+   */
+  it("keeps public and admin procedures to the recorded allowlist", () => {
+    const files = [
+      "server/routers.ts",
+      "server/_core/systemRouter.ts",
+      ...readdirSync(path.join("server", "routers-v6"))
+        .filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"))
+        .map((name) => path.join("server", "routers-v6", name)),
+    ];
+    const found: string[] = [];
+    for (const file of files) {
+      const source = readFileSync(file, "utf-8");
+      for (const match of source.matchAll(/(\w+): (publicProcedure|adminProcedure)/g)) {
+        found.push(`${file}#${match[1]} (${match[2]})`);
+      }
+    }
+    found.sort();
+    expect(found).toEqual([
+      "server/_core/systemRouter.ts#capabilities (publicProcedure)",
+      "server/_core/systemRouter.ts#health (publicProcedure)",
+      "server/_core/systemRouter.ts#notifyOwner (adminProcedure)",
+      "server/routers-v6/blind.ts#guestAnswer (publicProcedure)",
+      "server/routers-v6/blind.ts#guestLoad (publicProcedure)",
+      "server/routers-v6/share.ts#preview (publicProcedure)",
+      "server/routers.ts#logout (publicProcedure)",
+      "server/routers.ts#me (publicProcedure)",
+      "server/routers.ts#resources (publicProcedure)",
+      "server/routers.ts#setLocale (publicProcedure)",
+      "server/routers.ts#setup (publicProcedure)",
+      "server/routers.ts#voices (publicProcedure)",
+    ]);
   });
 });

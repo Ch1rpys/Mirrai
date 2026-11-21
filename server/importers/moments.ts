@@ -73,6 +73,9 @@ function parsePostPage(response: string, date: string | null | undefined, timeZo
 
 /** Reads the posts out of screenshots of a feed, one picture at a time. */
 export async function readMomentScreenshots(params: {
+  /** Whose call this is, so it lands on their usage ledger (C8.9). */
+  userId: number;
+  personaId?: number | null;
   images: ScreenshotImage[];
   provider: LLMProvider;
   name: string;
@@ -102,6 +105,7 @@ export async function readMomentScreenshots(params: {
           },
         ],
         options: { purpose: "extract", temperature: 0, maxTokens: 4000 },
+        usage: { userId: params.userId, personaId: params.personaId ?? null },
       });
       const page = parsePostPage(response, params.date, params.timeZone);
       if (!page || page.length === 0) {

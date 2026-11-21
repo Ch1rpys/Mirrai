@@ -105,7 +105,16 @@ describe("the interview for a person with no records (C1.8)", () => {
 
   it("ends the moment the person says 就这些", async () => {
     const invoke = vi.fn(async () => "问一句");
-    for (const answer of ["就这些", "就这些。", " 就这些啦", "that's all"]) {
+    for (const answer of [
+      "就这些",
+      "就这些。",
+      " 就这些啦",
+      "就这些了",
+      "没了",
+      "没有了",
+      "说完了",
+      "that's all",
+    ]) {
       const result = await nextQuestion({
         transcript: [turn("address", answer)],
         locale: "zh",
@@ -116,7 +125,13 @@ describe("the interview for a person with no records (C1.8)", () => {
       expect(result.aspect).toBeNull();
     }
     expect(isInterviewDoneSignal("就这些")).toBe(true);
+    // The words people actually use; stripping the trailing 了 used to
+    // turn all three into words the list does not contain.
+    expect(isInterviewDoneSignal("没了")).toBe(true);
+    expect(isInterviewDoneSignal("没有了")).toBe(true);
+    expect(isInterviewDoneSignal("说完了")).toBe(true);
     expect(isInterviewDoneSignal("他不太说话")).toBe(false);
+    expect(isInterviewDoneSignal("没有")).toBe(false);
   });
 
   it("ends when every aspect has been talked about twice", async () => {

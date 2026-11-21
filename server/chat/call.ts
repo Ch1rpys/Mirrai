@@ -16,7 +16,7 @@ import { createServer, type Server } from "node:http";
 import { readFile } from "node:fs/promises";
 import { WebSocketServer, type WebSocket } from "ws";
 import { authenticateRequest } from "../_core/auth";
-import { isRequestLocked, personaLocked, sessionKeyFromRequest } from "../_core/app-lock";
+import { personaLocked, refreshRequestLock, sessionKeyFromRequest } from "../_core/app-lock";
 import { ENV } from "../_core/env";
 import { copy } from "@shared/copy";
 import { mergePersonaSettings, normalizePersonaSettings } from "@shared/persona-settings";
@@ -86,7 +86,7 @@ export interface CallDeps {
    * Whether the app lock (C8.4) covers this socket.
    *
    * The socket is not tRPC, so `protectedProcedure`'s guard never runs
-   * for it. The real one asks `isRequestLocked`; a test that does not
+   * for it. The real one asks `refreshRequestLock`; a test that does not
    * care about the lock leaves the default.
    */
   locked: (request: unknown, user: CallUser) => Promise<boolean>;
@@ -120,7 +120,7 @@ const REAL_DEPS: CallDeps = {
   converse: (options) => runConversation(options as never) as AsyncGenerator<Record<string, unknown>>,
   trimReply: defaultTrimReply(),
   now: () => new Date(),
-  locked: async (request, user) => isRequestLocked(request as never, user as never),
+  locked: async (request, user) => refreshRequestLock(request as never, user as never),
 };
 
 /** Splits a reply into spoken sentences. */
