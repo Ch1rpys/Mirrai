@@ -2642,7 +2642,7 @@ WP5 相关 26 个测试文件 399 条全过。B3.3 先红后绿复跑：把 `ser
 
 **发现的问题**
 
-- [ ] C6.1：排练室不受减量（taper）约束。手册「做法」2 要求「网页、通道、电话、排练都受它约束」，但 `server/routers-v6/rehearsal.ts` 的 `run` 只查 `graduationStatus`/`presence`/`settings.locked`，不走 `runConversation` 也不调 `mayChatNow`：阶段 3（只写信）时仍能调 `rehearsal.run` 生成分身的话（代码位置：该路由开头守卫；`mayChatNow` 全仓只在 `service.ts`、`scheduled-items.ts`、`Chat.tsx` 出现）。聊天页「更多操作」里的排练入口在输入区关闭时也仍然显示。
+- [ ] C6.1：排练室不受减量（taper）约束。手册「做法」2 要求「网页、通道、电话、排练都受它约束」，但 `server/routers-v6/rehearsal.ts` 的 `run` 只查 `graduationStatus`/`presence`/`settings.locked`，不走 `runConversation` 也不调 `mayChatNow`：复现（本机没有模型）：阶段 3 的分身调 `rehearsal.run` 返回 `{ mode: "variants" }` 而不是 `ChatClosedError`（有模型时会进 `generateVariant`）；`mayChatNow` 全仓只在 `service.ts`、`scheduled-items.ts`、`Chat.tsx` 出现。聊天页「更多操作」里的排练入口在输入区关闭时也仍然显示。
 - [ ] C6.1：输入区关闭后的整段逻辑写在 `client/src/pages/Chat.tsx` 里（`mayChatNow` 调用、`updateSettings` 变更、约 45 行 JSX 分支），违反 §3.7「这四个文件里只加挂载点」，应抽成 `client/src/components/v6/` 组件。
 - [ ] C6.1 / §3.7：`TaperPicker`、`MemorialSettings`、`RevisitToggle`、`LetterEmailToggle`、`LdrSettings` 没有处理 `getSettings` 的加载中/失败；请求失败时按默认值渲染（如 TaperPicker 失败时仍显示「照常」、RevisitToggle 显示默认勾选），也没有重试。同类组件 `SealSettings`、`KeepThree`、`EmailDelivery` 是写了的，照它们补即可。
 - [ ] C6.5：`server/records/unsaid.test.ts` 没有断言验收清单里写的「模型调用 0 次」（`unsaid.ts` 本身没有 llm import，结构上成立，但测试没按清单断言）；另外「续写是否成立」需要真实模型，本机只有桩，已把该条改 🟡 并在未验证清单加一行。
