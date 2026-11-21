@@ -32,6 +32,9 @@ vi.mock("../db", () => ({
 
 import { registerAuthRoutes, authenticateRequest } from "./auth";
 import { csrfGuard } from "./csrf";
+import { hashPassword } from "./password";
+import { wrapDataKeyForPassword, generateDataKey } from "./content-crypto";
+import { forgetAllDataKeys, hasDataKey } from "./data-keys";
 import { rateLimiter } from "./rate-limit";
 import { COOKIE_NAME } from "@shared/const";
 
@@ -130,6 +133,46 @@ describe("the HTTP boundary", () => {
     // The eleventh is refused because too many attempts were made.
     expect(statuses[10]).toBe(429);
   });
+
+  it("0-I — unwraps an encrypted account's data key at sign-in (C8.5)", async () => {
+    const dataKey = generateDataKey();
+    const wrapped = await wrapDataKeyForPassword(dataKey, "correct horse");
+    getUserByUsername.mockResolvedValue({
+      ...user,
+      passwordHash: await hashPassword("correct horse"),
+      encryption: { enabled: true, ...wrapped },
+    });
+    forgetAllDataKeys();
+
+    const res = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "tester", password: "correct horse" }),
+    });
+    expect(res.status).toBe(200);
+    // The key is in this process's memory — and only there.
+    expect(hasDataKey(7)).toBe(true);
+    expect(JSON.stringify([...Array(0)])).not.toContain(dataKey.toString("base64url"));
+    forgetAllDataKeys();
+  }, 30_000);
+
+  it("0-I — a wrong password leaves the encrypted account locked", async () => {
+    const wrapped = await wrapDataKeyForPassword(generateDataKey(), "correct horse");
+    getUserByUsername.mockResolvedValue({
+      ...user,
+      passwordHash: await hashPassword("correct horse"),
+      encryption: { enabled: true, ...wrapped },
+    });
+    forgetAllDataKeys();
+
+    const res = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "tester", password: "guess" }),
+    });
+    expect(res.status).toBe(401);
+    expect(hasDataKey(7)).toBe(false);
+  }, 30_000);
 
   it("0-G — refuses a mutating request from a foreign origin", async () => {
     const res = await fetch(`${baseUrl}/api/trpc/chat.send`, {

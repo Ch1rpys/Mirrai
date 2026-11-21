@@ -312,6 +312,18 @@ export const RATE_LIMITS = {
     scope: "user",
   } as RateLimitRule,
   /**
+   * Unwrapping an encrypted account's data key (C8.5).
+   *
+   * The password is the account password, so this is a sign-in in all
+   * but name; ten tries a minute is the same budget as signing in.
+   */
+  encryptionUnlock: {
+    name: "encryption-unlock",
+    limit: 10,
+    windowMs: 60_000,
+    scope: "user",
+  } as RateLimitRule,
+  /**
    * Restoring a backup (C8.3).
    *
    * The route only works while the instance is empty — there is no

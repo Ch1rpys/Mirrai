@@ -1891,6 +1891,23 @@ export const V6 = {
     zh: "最多只能保存 10 个通行密钥。",
     en: "At most 10 passkeys can be kept.",
   },
+  // ── Encrypted storage (C8.5) ─────────────────────────────────────
+  "errors.encryptionLocked": {
+    zh: "加密存储还锁着。输入账号密码解锁之后才能读。",
+    en: "The encrypted content is still locked. Enter your account password to unlock it.",
+  },
+  "errors.encryptionNotEnabled": {
+    zh: "这个账号没有开启加密存储。",
+    en: "Encrypted storage is not enabled for this account.",
+  },
+  "errors.encryptionPasswordWrong": {
+    zh: "密码不对，加密存储没有解锁。",
+    en: "That password did not unlock the encrypted content.",
+  },
+  "errors.encryptionKeyFailed": {
+    zh: "加密密钥打不开。请用恢复码或账号密码重试。",
+    en: "The encryption key could not be opened. Try the recovery code or the account password again.",
+  },
   "lock.personaPinNeeded": {
     zh: "这个分身锁着。输入 PIN 解锁。",
     en: "This persona is locked. Enter the PIN to unlock it.",

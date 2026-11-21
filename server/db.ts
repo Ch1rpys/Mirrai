@@ -1374,6 +1374,28 @@ export async function getUserLockRow(userId: number): Promise<UserLockRow | null
   };
 }
 
+/** The encryption half of a user row (C8.5). */
+export async function getUserEncryption(userId: number): Promise<unknown> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select({ encryption: users.encryption })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return rows[0]?.encryption ?? null;
+}
+
+/** Writes the encryption column; null means "plaintext account". */
+export async function setUserEncryption(userId: number, value: unknown): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  await db
+    .update(users)
+    .set({ encryption: value as never, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+}
+
 /** Writes the app lock's stored half. */
 export async function setUserLock(
   userId: number,

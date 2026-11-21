@@ -190,7 +190,7 @@ describe("a sealed persona (C6.2)", () => {
     // guard, and the seal guard still has to be on the protected
     // procedure itself.
     expect(trpc).toMatch(
-      /protectedProcedure = t\.procedure\s*\.use\(requireUser\)\s*\.use\(appLockGuard\)\s*\.use\(sealedGuard\)/,
+      /protectedProcedure = t\.procedure\s*\.use\(requireUser\)\s*\.use\(appLockGuard\)\s*\.use\(encryptionGuard\)\s*\.use\(sealedGuard\)/,
     );
   });
 });

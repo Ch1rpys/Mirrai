@@ -230,6 +230,7 @@ describe("a scene of the user's own", () => {
         backupSettings: null,
         lockPinHash: null,
         lockSettings: null,
+        encryption: null,
     locale: "zh",
         addressStyle: null,
         boundaries: null,

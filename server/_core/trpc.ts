@@ -4,6 +4,8 @@ import type { TrpcContext } from "./context";
 import { rateLimiter, resolveRateLimitKey, type RateLimitRule } from "./rate-limit";
 import { copy, type CopyKey, type Locale } from "@shared/copy";
 import { sealState } from "@shared/persona-state";
+import { dataKeyFor } from "./data-keys";
+import { normalizeUserEncryption } from "@shared/encryption";
 import {
   hasRecentUnlock,
   isSessionLocked,
@@ -335,6 +337,52 @@ export const appLockGuard = t.middleware(async (opts) => {
  * because one read failed. The same failure is "not locked" for the
  * same reason — the app-level lock in `appLockGuard` has already run.
  */
+/**
+ * Paths that stay reachable while an encrypted account is locked (C8.5).
+ *
+ * Signing in, the lock, and the way to unlock the encrypted content
+ * itself. Everything else waits for the data key.
+ */
+const ENCRYPTION_EXEMPT_PREFIXES = ["auth.", "lock.", "encryption."] as const;
+
+/**
+ * Routes that must work while the encrypted content is locked.
+ *
+ * Changing the password and deleting the account both prove the account
+ * password themselves, and both have to be reachable from a server that
+ * has just restarted — otherwise a person who restarted the app could
+ * not rotate a leaked password or get rid of the account at all.
+ */
+const ENCRYPTION_EXEMPT_PATHS = new Set(["user.changePassword", "user.deleteAccount"]);
+
+/**
+ * Refuses every data route while an encrypted account's key is missing.
+ *
+ * The account can be encrypted and still have no key in this process:
+ * the server restarted, or the user locked it. Its rows are ciphertext
+ * then, and returning them would either hand the interface ciphertext
+ * or make it show an empty page — both wrong. So the request is refused
+ * with a name the interface turns into "enter your password".
+ */
+export const encryptionGuard = t.middleware(async (opts) => {
+  const user = opts.ctx.user;
+  if (!user) return opts.next();
+  if (!normalizeUserEncryption(user.encryption)) return opts.next();
+  if (ENCRYPTION_EXEMPT_PREFIXES.some((prefix) => opts.path.startsWith(prefix))) {
+    return opts.next();
+  }
+  if (ENCRYPTION_EXEMPT_PATHS.has(opts.path)) return opts.next();
+  if (!dataKeyFor(user.id)) {
+    const error = new TRPCError({
+      code: "FORBIDDEN",
+      message: copy(opts.ctx.locale, "errors.encryptionLocked"),
+    });
+    (error as { mirraiCode?: string }).mirraiCode = "ENCRYPTION_LOCKED";
+    throw error;
+  }
+  return opts.next();
+});
+
 export const sealedGuard = t.middleware(async (opts) => {
   const user = opts.ctx.user;
   if (!user) return opts.next();
@@ -392,6 +440,7 @@ export const sealedGuard = t.middleware(async (opts) => {
 export const protectedProcedure = t.procedure
   .use(requireUser)
   .use(appLockGuard)
+  .use(encryptionGuard)
   .use(sealedGuard);
 
 export const adminProcedure = t.procedure.use(

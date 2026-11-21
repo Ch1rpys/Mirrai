@@ -10,6 +10,9 @@ import { getSessionCookieOptions } from "./cookies";
 import { hashPassword, needsRehash, verifyPassword } from "./password";
 import { copy, type Locale } from "@shared/copy";
 import { RATE_LIMITS, getClientIp, rateLimiter } from "./rate-limit";
+import { normalizeUserEncryption } from "@shared/encryption";
+import { unwrapDataKeyWithPassword } from "./content-crypto";
+import { rememberDataKey } from "./data-keys";
 
 export type SessionPayload = {
   userId: number;
@@ -228,6 +231,30 @@ export function registerAuthRoutes(app: Express) {
       if (!user || !valid) {
         res.status(401).json({ error: copy(locale, "errors.invalidCredentials") });
         return;
+      }
+
+      /**
+       * The encrypted account's data key is unwrapped while the
+       * password is here (C8.5).
+       *
+       * It stays in this process's memory only; no route returns it. A
+       * failure here is logged and the sign-in still succeeds — the
+       * interface asks for the password again at the unlock screen
+       * instead of pretending the content is readable.
+       */
+      const encryption = normalizeUserEncryption(user.encryption);
+      if (encryption) {
+        try {
+          const dataKey = await unwrapDataKeyWithPassword(
+            encryption.wrappedKey,
+            encryption.salt,
+            password,
+          );
+          if (dataKey) rememberDataKey(user.id, dataKey);
+          else console.warn("[Auth] The stored data key did not unwrap for user", user.id);
+        } catch (error) {
+          console.warn("[Auth] The data key could not be unwrapped:", error);
+        }
       }
 
       // Transparent upgrade: legacy SHA256 hashes are re-hashed with scrypt on login.

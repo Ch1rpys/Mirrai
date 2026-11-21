@@ -147,6 +147,14 @@ export const users = pgTable("users", {
    * `normalizeLockSettings`. Empty means the lock is off.
    */
   lockSettings: jsonb("lockSettings"),
+  /**
+   * The per-account key that encrypts the contents of the database
+   * (C8.5): `{ enabled, wrappedKey, salt, kdf, recoveryWrappedKey? }`.
+   *
+   * The data key itself is never stored — only wrapped forms of it.
+   * Empty means the account's content is plaintext.
+   */
+  encryption: jsonb("encryption"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

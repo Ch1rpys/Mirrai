@@ -393,7 +393,7 @@ describe("the structure the guard relies on", () => {
   it("puts the lock guard on every protected procedure", async () => {
     const { readFileSync } = await import("node:fs");
     const source = readFileSync("server/_core/trpc.ts", "utf-8");
-    expect(source).toMatch(/export const protectedProcedure = t\.procedure\s*\.use\(requireUser\)\s*\.use\(appLockGuard\)\s*\.use\(sealedGuard\)/);
+    expect(source).toMatch(/export const protectedProcedure = t\.procedure\s*\.use\(requireUser\)\s*\.use\(appLockGuard\)\s*\.use\(encryptionGuard\)\s*\.use\(sealedGuard\)/);
     expect(source).toMatch(/APP_LOCK_EXEMPT_PREFIXES = \["auth\.", "lock\."\]/);
   });
 });

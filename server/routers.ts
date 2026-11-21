@@ -6,6 +6,10 @@ import { detectCrisis } from "./safety/crisis";
 import { worseStreakFor } from "./safety/checkins";
 import { withPersonaDataLock } from "./_core/lock";
 import { hasRecentUnlock, sessionKeyFromRequest } from "./_core/app-lock";
+import { normalizeUserEncryption } from "@shared/encryption";
+import { setUserEncryption } from "./db";
+import { unwrapDataKeyWithPassword, wrapDataKeyForPassword } from "./_core/content-crypto";
+import { dataKeyFor, rememberDataKey } from "./_core/data-keys";
 import { requestAbortSignal } from "./_core/context";
 import { QuotedRecordsError } from "./chat/quoted-records";
 import { countSceneRangeLines, loadSceneRangeMaterial, sceneRangeOf, sceneUsableForPersona } from "./chat/scene-range";
@@ -195,6 +199,7 @@ import { usageRouter } from "./routers-v6/usage";
 import { backupRouter } from "./routers-v6/backup";
 import { markRouter } from "./routers-v6/mark";
 import { lockRouter } from "./routers-v6/lock";
+import { encryptionRouter } from "./routers-v6/encryption";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { stateRulesFromTranscript } from "./skill-engine/state-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
@@ -1326,6 +1331,24 @@ export const appRouter = router({
         if (!user || !user.passwordHash) throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.cannotChangePassword") });
         const valid = await verifyPassword(input.currentPassword, user.passwordHash);
         if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: copy(ctx.locale, "errors.currentPasswordWrong") });
+        /**
+         * The data key is wrapped with the password (C8.5).
+         *
+         * So a password change has to wrap it again with the new one,
+         * while the old password is still here. The key itself does not
+         * change — that would mean re-encrypting the whole database.
+         */
+        const encryption = normalizeUserEncryption(user.encryption);
+        if (encryption) {
+          const dataKey = dataKeyFor(ctx.user.id)
+            ?? await unwrapDataKeyWithPassword(encryption.wrappedKey, encryption.salt, input.currentPassword);
+          if (!dataKey) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.encryptionKeyFailed") });
+          }
+          const rewrapped = await wrapDataKeyForPassword(dataKey, input.newPassword);
+          await setUserEncryption(ctx.user.id, { ...encryption, ...rewrapped });
+          rememberDataKey(ctx.user.id, dataKey);
+        }
         await updateUserPassword(ctx.user.id, await hashPassword(input.newPassword));
         /**
          * A password change signs every other device out — and keeps this
@@ -8050,6 +8073,7 @@ export const appRouter = router({
   backup: backupRouter,
   mark: markRouter,
   lock: lockRouter,
+  encryption: encryptionRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {
