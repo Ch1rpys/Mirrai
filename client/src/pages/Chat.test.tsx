@@ -152,7 +152,9 @@ vi.mock("@/lib/trpc", () => ({
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
-  useAuth: () => ({ isAuthenticated: true, user: { timezone: "Asia/Shanghai" } }),
+  // An id matters: the draft is stored per user, and without one the
+  // page wrote `mirrai:draft:anon:1` while the test looked for `:1:1`.
+  useAuth: () => ({ isAuthenticated: true, user: { id: 1, timezone: "Asia/Shanghai" } }),
 }));
 
 vi.mock("wouter", () => ({
@@ -326,6 +328,8 @@ describe("the composer's draft", () => {
     render(<Chat />);
     const again = screen.getByRole("textbox", { name: "对 小A 说点什么..." });
     expect((again as HTMLTextAreaElement).value).toBe("还没说完的话");
+    // It really is this user's draft, not a key that never existed.
+    expect(localStorage.getItem("mirrai:draft:1:1")).toBe("还没说完的话");
 
     await user.click(screen.getByLabelText(translate("zh", "chat.send")));
     expect(localStorage.getItem("mirrai:draft:1:1")).toBeNull();

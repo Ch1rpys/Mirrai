@@ -6,8 +6,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * `/chat/last` — the shortcut's landing page (C8.8).
  *
  * The shortcut is a static URL, so the app has to decide which
- * conversation "last" means: the first persona the list returns (it is
- * sorted by recency) that is not locked.
+ * conversation "last" means. The list arrives ordered by `updatedAt`,
+ * which is the last *edit*, not the last conversation — so the page
+ * sorts by `lastChatAt` itself.
  */
 
 const navigate = vi.fn();
@@ -41,13 +42,15 @@ beforeEach(() => {
 });
 
 describe("the last-chat shortcut", () => {
-  it("opens the most recent unlocked persona", async () => {
+  it("opens the most recently *talked to* unlocked persona, not the last edited", async () => {
     listState.value = {
       isLoading: false,
+      // The list is ordered by updatedAt (last edit). The conversations
+      // happened the other way round: 4 talked most recently.
       data: [
-        { id: 9, locked: true },
-        { id: 4, locked: false },
-        { id: 2, locked: false },
+        { id: 9, locked: true, lastChatAt: new Date("2026-11-21T10:00:00Z") },
+        { id: 2, locked: false, lastChatAt: new Date("2026-11-20T10:00:00Z"), updatedAt: new Date("2026-11-21T09:00:00Z") },
+        { id: 4, locked: false, lastChatAt: new Date("2026-11-21T08:00:00Z"), updatedAt: new Date("2026-11-19T00:00:00Z") },
       ],
     };
     render(<ChatLast />);

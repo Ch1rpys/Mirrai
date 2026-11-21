@@ -210,3 +210,21 @@ describe("the diagnosis panel", () => {
     );
   });
 });
+
+describe("a second run that fails", () => {
+  it("does not leave the old results or the copy button on screen", async () => {
+    mutateAsync.mockResolvedValueOnce({ items: ITEMS });
+    mutateAsync.mockRejectedValueOnce(new Error("network down"));
+    render(<Diagnostics />);
+    fireEvent.click(screen.getByTestId("diagnostics-run"));
+    await screen.findAllByTestId("diagnostics-row");
+
+    fireEvent.click(screen.getByTestId("diagnostics-run"));
+    await screen.findByTestId("diagnostics-error");
+    // The stale rows and the stale copy button are gone: what is on
+    // screen is this run's failure, not the previous run's answer.
+    expect(screen.queryAllByTestId("diagnostics-row")).toHaveLength(0);
+    expect(screen.queryByTestId("diagnostics-copy")).toBeNull();
+    expect(screen.queryByTestId("diagnostics-report-box")).toBeNull();
+  });
+});

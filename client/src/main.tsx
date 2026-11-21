@@ -1,6 +1,7 @@
 import { trpc } from "@/lib/trpc";
 import { markAppLocked } from "@/lib/app-lock";
 import { markEncryptionLocked } from "@/lib/encryption-lock";
+import { handleApiError } from "@/lib/error-handling";
 import { registerServiceWorker } from "@/lib/pwa";
 import { QueryClient, QueryClientProvider, onlineManager } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
@@ -61,53 +62,26 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 };
 
 /**
- * The server's answer when the app lock is closed (C8.4).
- *
- * The transport says `FORBIDDEN` because tRPC's codes are a closed set;
- * the app's own name for it travels in `data.code`. Any answer that says
- * the session is locked puts the lock screen up — the interface already
- * holds the lobby in memory, so a screen is not optional.
+ * Every failed API call goes through one handler (C8.4, C8.5): the lock
+ * screen, the decryption screen, the sign-in page, or a log line.
  */
-const isLockedError = (error: unknown): boolean =>
-  error instanceof TRPCClientError && error.data?.code === "LOCKED";
-
-/**
- * The server's answer when an encrypted account's key is not in memory
- * (C8.5). The content is ciphertext, so the screen asks for the account
- * password instead of showing the lobby it already has.
- */
-const isEncryptionLockedError = (error: unknown): boolean =>
-  error instanceof TRPCClientError && error.data?.code === "ENCRYPTION_LOCKED";
+const handleError = (error: unknown, tag: string) =>
+  handleApiError(error, {
+    markAppLocked,
+    markEncryptionLocked,
+    redirectToLogin: () => redirectToLoginIfUnauthorized(error),
+    report: (value) => console.error(tag, value),
+  });
 
 queryClient.getQueryCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
-    const error = event.query.state.error;
-    if (isLockedError(error)) {
-      markAppLocked();
-      return;
-    }
-    if (isEncryptionLockedError(error)) {
-      markEncryptionLocked();
-      return;
-    }
-    redirectToLoginIfUnauthorized(error);
-    console.error("[API Query Error]", error);
+    handleError(event.query.state.error, "[API Query Error]");
   }
 });
 
 queryClient.getMutationCache().subscribe(event => {
   if (event.type === "updated" && event.action.type === "error") {
-    const error = event.mutation.state.error;
-    if (isLockedError(error)) {
-      markAppLocked();
-      return;
-    }
-    if (isEncryptionLockedError(error)) {
-      markEncryptionLocked();
-      return;
-    }
-    redirectToLoginIfUnauthorized(error);
-    console.error("[API Mutation Error]", error);
+    handleError(event.mutation.state.error, "[API Mutation Error]");
   }
 });
 

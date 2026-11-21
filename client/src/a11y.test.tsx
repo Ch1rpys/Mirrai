@@ -150,9 +150,23 @@ vi.mock("@/lib/trpc", () => ({
     setup: { useQuery: () => ({ data: { hasLlmProvider: true, hasUserProvider: false } }) },
     lock: {
       // The lobby's nav has the "lock now" button (C8.4).
-      status: { useQuery: () => ({ data: { enabled: false } }) },
+      status: {
+        useQuery: () => ({
+          data: { hasPin: false, enabled: false, idleMinutes: 5, passkeys: [], locked: false },
+          isError: false,
+        }),
+      },
       lockNow: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
       verifyPin: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      verifyPassword: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      setPin: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      updateSettings: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      disable: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      passkey: {
+        registerOptions: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+        registerVerify: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+        remove: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      },
     },
     persona: {
       list: {
@@ -195,6 +209,15 @@ vi.mock("@/lib/trpc", () => ({
       reunionSummary: {
         useQuery: () => ({ data: null, isLoading: false, isError: false, refetch: vi.fn() }),
       },
+      listDeleted: {
+        useQuery: () => ({
+          data: { personas: [] },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+      purge: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       evidence: {
         useQuery: () => ({
           data: {
@@ -242,8 +265,110 @@ vi.mock("@/lib/trpc", () => ({
       updateGraduationMode: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       updateTrajectoryAssessment: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       setLocale: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      deleteAccount: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      exportCounselorSummary: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
-    usage: { budget: { useQuery: () => ({ data: { over: false } }) } },
+    usage: {
+      budget: { useQuery: () => ({ data: { over: false } }) },
+      summary: {
+        useQuery: () => ({
+          data: {
+            totals: { calls: 0, promptTokens: 0, completionTokens: 0, costMicros: null },
+            byPurpose: [],
+            byPersona: [],
+            byDay: [],
+            currency: null,
+            rerank: { calls: 0, costMicros: null },
+            lastDistill: null,
+          },
+          isLoading: false,
+          isError: false,
+        }),
+      },
+      setBudget: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      setPrice: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+    },
+    llmConfig: {
+      list: {
+        useQuery: () => ({ data: { configs: [] }, isLoading: false, isError: false }),
+      },
+    },
+    encryption: {
+      status: {
+        useQuery: () => ({
+          data: {
+            enabled: false,
+            unlocked: false,
+            hasRecoveryCode: false,
+            hasFullBackup: false,
+            migrating: false,
+            migration: null,
+            migratedAt: null,
+          },
+          isLoading: false,
+          isError: false,
+        }),
+      },
+      enable: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      disable: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      unlock: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      lock: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      recover: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+    },
+    system: {
+      diagnose: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+    },
+    backup: {
+      getSettings: {
+        useQuery: () => ({
+          data: {
+            enabled: false,
+            frequency: "daily",
+            hasPassphrase: false,
+            hasTargetPassword: false,
+            hasTargetSecretAccessKey: false,
+          },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+      updateSettings: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    email: {
+      getConfig: {
+        useQuery: () => ({
+          data: {
+            configured: false,
+            host: null,
+            port: null,
+            secure: true,
+            user: null,
+            from: null,
+            to: null,
+            subjectWithName: false,
+          },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+      saveConfig: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      test: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      clear: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
+    push: {
+      publicKey: {
+        useQuery: () => ({ data: undefined, isError: false, isLoading: false, refetch: vi.fn() }),
+      },
+      list: {
+        useQuery: () => ({ data: [], isError: false, isLoading: false, refetch: vi.fn() }),
+      },
+      subscribe: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      unsubscribe: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      setPreview: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      test: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     safety: {
       events: {
         useQuery: () => ({
@@ -271,6 +396,7 @@ vi.mock("@/lib/trpc", () => ({
       },
       export: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       tts: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      exportAll: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       voices: { useQuery: () => ({ data: { voices: [] } }) },
       search: { useQuery: () => ({ data: [] }) },
       pendingReply: {
@@ -345,6 +471,9 @@ vi.mock("@/lib/trpc", () => ({
       },
     },
     interview: {
+      next: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      finish: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      transcribe: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       fromOral: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     oral: {
@@ -418,6 +547,11 @@ import { SHARE_INBOX_CACHE } from "./lib/share-inbox";
 import Chat from "./pages/Chat";
 import Settings from "./pages/Settings";
 import PersonaProfile from "./pages/PersonaProfile";
+import { DataManagementTab } from "./pages/Settings";
+import InterviewView from "./components/v6/InterviewView";
+import DescribedStatements from "./components/v6/DescribedStatements";
+import DescribedFidelityNote from "./components/v6/DescribedFidelityNote";
+import LockedPersonaCard from "./components/v6/LockedPersonaCard";
 
 /**
  * Renders a page inside the real theme provider (the accessibility panel
@@ -547,4 +681,60 @@ describe("every control has a name", () => {
     expect(drawnControls()).toBeGreaterThan(0);
     expect(unnamedControls()).toEqual([]);
   });
+
+  /**
+   * The components added later in the stage (C1.8, C8.3–C8.5).
+   *
+   * They are mounted on surfaces the original list did not render — the
+   * data settings tab, the interview page, the described-statements
+   * section and a locked persona's card. Rendering the surface they live
+   * on is what puts them through the same "every control has a name"
+   * rule.
+   */
+  it("in the data settings panel", () => {
+    renderPage(<DataManagementTab />);
+    expect(drawnControls()).toBeGreaterThan(3);
+    expect(unnamedControls()).toEqual([]);
+  });
+
+  it("in the interview page", () => {
+    renderPage(<InterviewView initialName="小满" />);
+    // The opening screen is the intro and one "start" control; the rest
+    // of the conversation is the same component after it.
+    expect(drawnControls()).toBeGreaterThan(0);
+    expect(unnamedControls()).toEqual([]);
+  });
+
+  it("in the described statements and the fidelity note", () => {
+    render(
+      <ThemeProvider defaultTheme="light" switchable>
+        <>
+          <DescribedStatements
+            name="小满"
+            ownName="阿树"
+            statements={[
+              {
+                text: "生气时先沉默。",
+                source: "described",
+                quote: "生气的时候一句话都不说",
+                field: "personality",
+                teller: "琪琪",
+              },
+            ]}
+          />
+          <DescribedFidelityNote name="小满" />
+        </>
+      </ThemeProvider>,
+    );
+    expect(screen.getByTestId("described-statements")).toBeInTheDocument();
+    expect(drawnControls()).toBe(0);
+    expect(unnamedControls()).toEqual([]);
+  });
+
+  it("on a locked persona's card", () => {
+    renderPage(<LockedPersonaCard personaId={7} />);
+    expect(drawnControls()).toBeGreaterThan(0);
+    expect(unnamedControls()).toEqual([]);
+  });
+
 });

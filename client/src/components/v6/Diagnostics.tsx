@@ -152,6 +152,15 @@ export default function Diagnostics() {
   async function run() {
     setRunning(true);
     setError(null);
+    /**
+     * A new run starts from a clean slate (C8.12).
+     *
+     * Keeping the previous rows on screen let a failed re-run show the
+     * old results and the error at the same time — with a "copy report"
+     * button that copied a report from a run that was no longer the
+     * latest one.
+     */
+    setItems(null);
     try {
       const result = await diagnose.mutateAsync();
       /**
@@ -162,7 +171,9 @@ export default function Diagnostics() {
       setItems([...result.items, browserNotificationItem(t)]);
     } catch (cause) {
       // A failed diagnosis is not "nothing here" — it says the check did
-      // not finish, and offers to try again.
+      // not finish, and offers to try again. The old rows are gone, so
+      // nothing on screen can be mistaken for this run's answer.
+      setItems(null);
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
       setRunning(false);
