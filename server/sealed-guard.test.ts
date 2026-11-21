@@ -18,6 +18,7 @@ const pageRecords = vi.fn();
 
 vi.mock("./db", () => ({
   getPersonaSettings: (...args: unknown[]) => getPersonaSettings(...args),
+  getPersonaStateSettings: (...args: unknown[]) => getPersonaSettings(...args),
   getPersonaById: (...args: unknown[]) => getPersonaById(...args),
   getPersonaStyleProfile: (...args: unknown[]) => getPersonaStyleProfile(...args),
   setPersonaSettings: (...args: unknown[]) => setPersonaSettings(...args),

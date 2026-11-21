@@ -45,6 +45,12 @@ export default function Voices() {
   const [playingId, setPlayingId] = useState<number | null>(null);
 
   const persona = trpc.persona.get.useQuery({ id: personaId }, { enabled: personaId > 0 });
+  /**
+   * A family member gets the same recordings, but the favorites are
+   * bookmarks on the owner's records and only the owner can write those
+   * (C7.2), so the member's page does not offer the button.
+   */
+  const shared = Boolean((persona.data as { sharedFromPersonaId?: number | null } | undefined)?.sharedFromPersonaId);
   const voices = trpc.media.listVoices.useQuery(
     {
       personaId,
@@ -80,7 +86,7 @@ export default function Voices() {
    */
   const marks = trpc.record.marks.list.useQuery(
     { personaId },
-    { enabled: personaId > 0 },
+    { enabled: personaId > 0 && !shared },
   );
   const addMark = trpc.record.marks.add.useMutation({
     onSuccess: () => void marks.refetch(),
@@ -193,14 +199,16 @@ export default function Voices() {
           />
           {t("media.voicesOnlyTheirs", { name })}
         </label>
-        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={onlyFavorites}
-            onChange={(event) => setOnlyFavorites(event.target.checked)}
-          />
-          {t("media.voicesOnlyFavorites")}
-        </label>
+        {!shared && (
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={onlyFavorites}
+              onChange={(event) => setOnlyFavorites(event.target.checked)}
+            />
+            {t("media.voicesOnlyFavorites")}
+          </label>
+        )}
       </div>
 
       {playing && (
@@ -231,7 +239,7 @@ export default function Voices() {
        * when no local engine is configured the page says what to set
        * rather than offering a button that cannot run.
        */}
-      {rows.length > 0 && (
+      {rows.length > 0 && !shared && (
         <div className="rounded-lg border border-border/70 bg-muted/20 p-3 space-y-1.5">
           {localEngine ? (
             <>
@@ -310,7 +318,7 @@ export default function Voices() {
                 >
                   <Play className="w-3.5 h-3.5" /> {t("media.voicesPlay")}
                 </Button>
-                {row.recordId != null && (
+                {!shared && row.recordId != null && (
                   <Button
                     size="sm"
                     variant="ghost"

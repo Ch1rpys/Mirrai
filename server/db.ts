@@ -49,6 +49,7 @@ import {
 } from "@shared/persona-settings";
 import { normalizeStyleProfile, type StyleProfile } from "@shared/style-profile";
 import { RELATIONSHIP_PHASE_EVENTS } from "@shared/user-side";
+import { mergeInheritedPersonaState } from "@shared/persona-sharing";
 import { BEHAVIOR_MAX_GAP_SEC, BEHAVIOR_MIN_GAP_SEC } from "@shared/behavior-profile";
 import { DEFAULT_SCENE_BREAK_HOURS } from "@shared/scenes";
 import { PERIOD_SILENCE_DAYS } from "@shared/periods";
@@ -1359,7 +1360,8 @@ export async function createPersona(data: InsertPersona) {
 export async function getPersonasByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(personas).where(eq(personas.userId, userId)).orderBy(desc(personas.updatedAt));
+  const rows = await db.select().from(personas).where(eq(personas.userId, userId)).orderBy(desc(personas.updatedAt));
+  return withInheritedPersonaState(rows);
 }
 
 /**
@@ -1372,8 +1374,9 @@ export async function getPersonasByUserId(userId: number) {
 export async function getPersonasWithStats(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  const list = await db.select().from(personas).where(eq(personas.userId, userId)).orderBy(desc(personas.updatedAt));
-  if (list.length === 0) return [];
+  const rows = await db.select().from(personas).where(eq(personas.userId, userId)).orderBy(desc(personas.updatedAt));
+  if (rows.length === 0) return [];
+  const list = await withInheritedPersonaState(rows);
   const ids = list.map((p) => p.id);
 
   /**
@@ -1640,6 +1643,13 @@ export async function getPersonaById(id: number, userId: number) {
       personaData: owner.personaData,
       styleProfile: owner.styleProfile,
       timezone: owner.timezone,
+      /**
+       * The seal, the taper step and the memorial mode travel with the
+       * persona, not with the member's row (C7.2). The member keeps
+       * their own switches; these four decide whether the chat is open
+       * and in what register it speaks.
+       */
+      settings: mergeInheritedPersonaState(row.settings, owner.settings),
       sharedFromUserId: owner.userId,
     };
   }
@@ -1698,6 +1708,138 @@ export async function getActiveShareForMemberPersona(
     ))
     .limit(1);
   return row;
+}
+
+/**
+ * The settings that apply to a persona right now (C7.2).
+ *
+ * A shared persona's seal, taper step and memorial mode belong to the
+ * owner; the member's row keeps their own switches, conversation and
+ * mood. This reads the owner's row when the share is active and layers
+ * those four values over the member's settings — the same merge the
+ * hydrated persona row carries, for callers that only need the settings
+ * (the seal guard runs before a persona row is read).
+ */
+export async function getPersonaStateSettings(
+  personaId: number,
+  userId: number,
+): Promise<PersonaSettings | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select({
+      settings: personas.settings,
+      sharedFromPersonaId: personas.sharedFromPersonaId,
+    })
+    .from(personas)
+    .where(and(eq(personas.id, personaId), eq(personas.userId, userId)))
+    .limit(1);
+  if (!rows[0]) return null;
+  const row = rows[0];
+  if (!row.sharedFromPersonaId) return normalizePersonaSettings(row.settings);
+  const [share] = await db
+    .select({ id: personaShares.id })
+    .from(personaShares)
+    .where(and(
+      eq(personaShares.memberPersonaId, personaId),
+      eq(personaShares.memberUserId, userId),
+      eq(personaShares.status, "active"),
+    ))
+    .limit(1);
+  if (!share) return normalizePersonaSettings(row.settings);
+  const [owner] = await db
+    .select({ settings: personas.settings })
+    .from(personas)
+    .where(eq(personas.id, row.sharedFromPersonaId))
+    .limit(1);
+  return normalizePersonaSettings(
+    mergeInheritedPersonaState(row.settings, owner?.settings),
+  );
+}
+
+/**
+ * Whether this user is an active family member of that persona (C7.2).
+ *
+ * The owner's user id, the persona id and the reader are all checked, so
+ * an invitation to somebody else, or one that has been revoked, does not
+ * count.
+ */
+export async function isPersonaSharedWithMember(
+  ownerUserId: number,
+  ownerPersonaId: number,
+  memberUserId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const [row] = await db
+    .select({ id: personaShares.id })
+    .from(personaShares)
+    .where(and(
+      eq(personaShares.ownerUserId, ownerUserId),
+      eq(personaShares.personaId, ownerPersonaId),
+      eq(personaShares.memberUserId, memberUserId),
+      eq(personaShares.status, "active"),
+    ))
+    .limit(1);
+  return Boolean(row);
+}
+
+/** The fields the list helpers need to inherit a shared persona's state. */
+interface SharedStateRow {
+  id: number;
+  userId: number;
+  sharedFromPersonaId?: number | null;
+  settings?: unknown;
+}
+
+/**
+ * Lay the owner's state over each shared row's settings.
+ *
+ * Lists (the lobby, reminder candidates) return raw persona rows; a
+ * member's row does not carry the seal or memorial mode the owner set.
+ * One share query and one owner-settings query for the whole page, so a
+ * list with many personas does not turn into one round trip each.
+ */
+async function withInheritedPersonaState<T extends SharedStateRow>(rows: T[]): Promise<T[]> {
+  const shared = rows.filter((row) => row.sharedFromPersonaId);
+  if (shared.length === 0) return rows;
+  const db = await getDb();
+  if (!db) return rows;
+  try {
+    const shares = await db
+      .select({
+        memberPersonaId: personaShares.memberPersonaId,
+        memberUserId: personaShares.memberUserId,
+        ownerPersonaId: personaShares.personaId,
+      })
+      .from(personaShares)
+      .where(and(
+        inArray(personaShares.memberPersonaId, shared.map((row) => row.id)),
+        eq(personaShares.status, "active"),
+      ));
+    if (shares.length === 0) return rows;
+    const ownerIds = [...new Set(shares.map((share) => share.ownerPersonaId))];
+    const owners = await db
+      .select({ id: personas.id, settings: personas.settings })
+      .from(personas)
+      .where(inArray(personas.id, ownerIds));
+    const ownerSettings = new Map(owners.map((owner) => [owner.id, owner.settings]));
+    const ownerByMember = new Map(
+      shares.map((share) => [`${share.memberPersonaId}:${share.memberUserId}`, share.ownerPersonaId]),
+    );
+    return rows.map((row) => {
+      if (!row.sharedFromPersonaId) return row;
+      const ownerPersonaId = ownerByMember.get(`${row.id}:${row.userId}`);
+      if (!ownerPersonaId) return row;
+      return {
+        ...row,
+        settings: mergeInheritedPersonaState(row.settings, ownerSettings.get(ownerPersonaId)),
+      };
+    });
+  } catch (error) {
+    console.warn("[DB] Could not read the shared persona state:", (error as Error).message);
+    return rows;
+  }
 }
 
 /**
@@ -7799,7 +7941,17 @@ export async function getAllPersonasForReminders() {
     // counted the days in the server's calendar, which is not the day the
     // anniversary is.
     timezone: personas.timezone,
-  }).from(personas).where(eq(personas.remindersEnabled, true));
+  }).from(personas).where(and(
+    eq(personas.remindersEnabled, true),
+    /**
+     * A family member's shared row carries the owner's relationship
+     * dates, not their own (C7.2): its anniversaries are the owner's
+     * relationship. Reminders about that relationship belong to the
+     * owner's row, so the member's copy is left out instead of
+     * announcing somebody else's anniversary to them.
+     */
+    isNull(personas.sharedFromPersonaId),
+  ));
 }
 
 /**

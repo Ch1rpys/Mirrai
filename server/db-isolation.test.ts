@@ -265,6 +265,16 @@ const TWO_PARTY_HELPERS = new Set([
   "leavePersonaShare",
 ]);
 
+/**
+ * Lookups that take all three parties of a share at once.
+ *
+ * `isPersonaSharedWithMember(ownerUserId, ownerPersonaId, memberUserId)`
+ * is stricter than the single-user rule: the query binds the owner's
+ * user id, the owner's persona id and the reader together. There is no
+ * `userId` parameter to look for, because the caller is not the owner.
+ */
+const TWO_PARTY_LOOKUPS = new Set(["isPersonaSharedWithMember"]);
+
 function bindsTwoPartyOwnership(fn: DbFunction): boolean {
   return /(?:eq|ne)\(\s*personaShares\.(ownerUserId|memberUserId)\s*,\s*(userId|params\.userId)\s*\)/.test(
     fn.body,
@@ -297,6 +307,7 @@ describe("db helpers enforce ownership", () => {
       .filter((fn) => ID_PARAM.test(fn.params))
       .filter((fn) => !fn.params.includes("userId"))
       .filter((fn) => !isUserScoped(fn))
+      .filter((fn) => !TWO_PARTY_LOOKUPS.has(fn.name))
       // The WeChat login path: a person is looked up by their open id
       // before they have an account here, so there is no owner to
       // check yet — the open id is how the channel says who they are.
@@ -313,6 +324,7 @@ describe("db helpers enforce ownership", () => {
     const withoutUserId = functions
       .filter((fn) => ID_PARAM.test(fn.params))
       .filter((fn) => !fn.params.includes("userId"))
+      .filter((fn) => !TWO_PARTY_LOOKUPS.has(fn.name))
       .map((fn) => fn.name)
       .sort();
 

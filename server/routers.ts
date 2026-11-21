@@ -2386,6 +2386,13 @@ export const appRouter = router({
         const persona = await getPersonaById(input.id, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         /**
+         * A member does not rebuild somebody else's persona (C7.2).
+         *
+         * Re-distilling is the owner's act: it writes the persona the
+         * member can only read.
+         */
+        assertPersonaWritable(persona, ctx.locale);
+        /**
          * There has to be something to read.
          *
          * A run with no material at all — no upload, no collection —
@@ -2648,6 +2655,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        // Importing material into somebody else's persona is the owner's
+        // act (C7.2): the member would be distilling from it next.
+        assertPersonaWritable(persona, ctx.locale);
         const buffer = Buffer.from(input.fileContent, "base64");
         // The declared size is a hint; the decoded bytes are the truth.
         if (buffer.length > MAX_UPLOAD_BYTES) {
@@ -4740,6 +4750,9 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        // The same boundary as the other entry point (C7.2): a family
+        // member may talk to the persona, not rebuild it.
+        assertPersonaWritable(persona, ctx.locale);
 
         /**
          * There has to be something to read.

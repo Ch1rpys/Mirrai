@@ -4,18 +4,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const authenticateRequest = vi.fn();
 const getUserById = vi.fn();
 const userHasMessageWithMediaUrl = vi.fn();
+const isPersonaSharedWithMember = vi.fn();
 
 // The mock path is resolved relative to this test file.
 vi.mock("./db", () => ({
   getUserById: (...args: unknown[]) => getUserById(...args),
   userHasMessageWithMediaUrl: (...args: unknown[]) => userHasMessageWithMediaUrl(...args),
+  isPersonaSharedWithMember: (...args: unknown[]) => isPersonaSharedWithMember(...args),
 }));
 
 vi.mock("./_core/auth", () => ({
   authenticateRequest: (...args: unknown[]) => authenticateRequest(...args),
 }));
 
-import { isOwnedByUser, uploadsAuthGuard } from "./_core/uploads";
+import { isOwnedByUser, sharedPersonaFileBelongsToUser, uploadsAuthGuard } from "./_core/uploads";
 
 function makeUser(id: number) {
   return {
@@ -97,6 +99,31 @@ describe("isOwnedByUser", () => {
   });
 });
 
+describe("sharedPersonaFileBelongsToUser", () => {
+  beforeEach(() => {
+    isPersonaSharedWithMember.mockReset();
+  });
+
+  it("accepts an owner's persona file for an active family member", async () => {
+    isPersonaSharedWithMember.mockResolvedValue(true);
+    await expect(sharedPersonaFileBelongsToUser("personas/7/3/a.ogg", 8)).resolves.toBe(true);
+    expect(isPersonaSharedWithMember).toHaveBeenCalledWith(7, 3, 8);
+  });
+
+  it("refuses it when the share is not active", async () => {
+    isPersonaSharedWithMember.mockResolvedValue(false);
+    await expect(sharedPersonaFileBelongsToUser("personas/7/3/a.ogg", 8)).resolves.toBe(false);
+  });
+
+  it("never claims the owner's own file, another scope, or a malformed key", async () => {
+    await expect(sharedPersonaFileBelongsToUser("personas/8/3/a.ogg", 8)).resolves.toBe(false);
+    await expect(sharedPersonaFileBelongsToUser("chat/7/3/a.ogg", 8)).resolves.toBe(false);
+    await expect(sharedPersonaFileBelongsToUser("personas/x/3/a.ogg", 8)).resolves.toBe(false);
+    await expect(sharedPersonaFileBelongsToUser("personas/7", 8)).resolves.toBe(false);
+    expect(isPersonaSharedWithMember).not.toHaveBeenCalled();
+  });
+});
+
 describe("uploadsAuthGuard", () => {
   beforeEach(() => {
     authenticateRequest.mockReset();
@@ -104,6 +131,8 @@ describe("uploadsAuthGuard", () => {
     getUserById.mockResolvedValue(makeUser(7));
     userHasMessageWithMediaUrl.mockReset();
     userHasMessageWithMediaUrl.mockResolvedValue(false);
+    isPersonaSharedWithMember.mockReset();
+    isPersonaSharedWithMember.mockResolvedValue(false);
   });
 
   it("keeps the files out of the shared caches", async () => {
@@ -133,6 +162,21 @@ describe("uploadsAuthGuard", () => {
     uploadsAuthGuard(req, res, next);
     await flush();
 
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("serves a shared persona's file to an active family member", async () => {
+    authenticateRequest.mockResolvedValue(makeUser(8));
+    isPersonaSharedWithMember.mockResolvedValue(true);
+    const req = createRequest("/personas/7/3/a.ogg");
+    const res = createResponse();
+    const next = vi.fn() as NextFunction;
+
+    uploadsAuthGuard(req, res, next);
+    await flush();
+
+    expect(isPersonaSharedWithMember).toHaveBeenCalledWith(7, 3, 8);
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.status).not.toHaveBeenCalled();
   });

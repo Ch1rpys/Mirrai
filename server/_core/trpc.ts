@@ -289,7 +289,12 @@ export const sealedGuard = t.middleware(async (opts) => {
   let settings: unknown = null;
   try {
     const db = await import("../db");
-    settings = await db.getPersonaSettings(personaId, user.id);
+    /**
+     * The effective settings, not the row's own: a family member's row
+     * does not carry the owner's seal (C7.2), and reading it directly
+     * would let them walk through a sealed persona.
+     */
+    settings = await db.getPersonaStateSettings(personaId, user.id);
   } catch {
     return opts.next();
   }

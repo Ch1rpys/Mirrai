@@ -13,6 +13,8 @@ import { startMediaTranscription, transcriptionStatus } from "../media/transcrib
 import { sttEngine } from "../_core/stt";
 import { measureProsody } from "../_core/prosody";
 import { faceModelsAvailable } from "../_core/face-models";
+import { assertPersonaWritable } from "../_core/persona-access";
+import { resolveRecordScope } from "@shared/persona-sharing";
 
 function urlOf(fileKey: string): string {
   return `/uploads/${fileKey}`;
@@ -32,7 +34,13 @@ export const mediaRouter = router({
     .query(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-      const page = await listVoices(input.personaId, ctx.user.id, {
+      /**
+       * A shared persona's recordings are the owner's (C7.2): the family
+       * member gets the same real voice, not an empty shelf. The uploads
+       * guard lets them fetch those files while the share is active.
+       */
+      const scope = resolveRecordScope(persona);
+      const page = await listVoices(scope.personaId, scope.userId, {
         q: input.q,
         fromThem: input.fromThem,
         cursor: input.cursor,
@@ -84,6 +92,8 @@ export const mediaRouter = router({
     .mutation(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      // The transcriptions land on the owner's recordings (C7.2).
+      assertPersonaWritable(persona, ctx.locale);
       return startMediaTranscription({
         personaId: input.personaId,
         userId: ctx.user.id,
@@ -109,6 +119,8 @@ export const mediaRouter = router({
     .mutation(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      // A measurement writes the owner's style profile (C7.2).
+      assertPersonaWritable(persona, ctx.locale);
       const prosody = await measureProsody({
         personaId: input.personaId,
         userId: ctx.user.id,

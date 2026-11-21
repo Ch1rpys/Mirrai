@@ -47,3 +47,41 @@ export function isSharedPersona(persona: {
 }): boolean {
   return Boolean(persona.sharedFromPersonaId);
 }
+
+/**
+ * The settings that describe the persona itself, not the member's side.
+ *
+ * A shared persona's seal, taper step and memorial mode are the owner's
+ * decisions about the relationship. A family member gets the same
+ * persona, so those decisions have to reach them too — otherwise the
+ * owner could seal the persona, or step it down to letters, and the
+ * family would carry on chatting. Everything else in `settings` (the
+ * generation switches, the letter mailbox, the long-distance date) is
+ * the member's own.
+ */
+export const INHERITED_PERSONA_STATE_KEYS = ["seal", "taper", "mode", "memorial"] as const;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+/**
+ * The member's settings with the owner's state laid over them.
+ *
+ * Pure; both sides are the stored (un-normalised) values. A state key
+ * the owner does not have is removed rather than kept from the member, so
+ * a stale local copy cannot keep a persona sealed or tapered after the
+ * owner lifted it.
+ */
+export function mergeInheritedPersonaState(
+  memberSettings: unknown,
+  ownerSettings: unknown,
+): Record<string, unknown> {
+  const member = isPlainObject(memberSettings) ? { ...memberSettings } : {};
+  const owner = isPlainObject(ownerSettings) ? ownerSettings : {};
+  for (const key of INHERITED_PERSONA_STATE_KEYS) {
+    if (owner[key] === undefined) delete member[key];
+    else member[key] = owner[key];
+  }
+  return member;
+}

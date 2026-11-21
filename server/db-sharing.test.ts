@@ -12,15 +12,24 @@ import {
   deletePersona,
   getActiveShareForMemberPersona,
   getMemoriesByPersonaId,
+  getAllPersonasForReminders,
   getMessagesByPersonaId,
   getPersonaById,
   getPersonaShareByTokenHash,
+  isPersonaSharedWithMember,
+  listJournalEntries,
+  createJournalEntry,
   listPersonaShares,
   revokePersonaShare,
+  setPersonaSettings,
   updatePersona,
+  upsertMedia,
 } from "./db";
 import { resolveRecordScope } from "@shared/persona-sharing";
+import { normalizePersonaSettings } from "@shared/persona-settings";
+import { isMemorial } from "@shared/persona-state";
 import { createPersonaFile, createOutboundLetter, getOutboundLetters } from "./db";
+import { sharedPersonaFileBelongsToUser } from "./_core/uploads";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
@@ -232,9 +241,123 @@ describe.skipIf(!DATABASE_URL)("sharing a persona with family (C7.2)", () => {
       expect(await getOutboundLetters(memberPersonaId, ownerId)).toHaveLength(0);
       expect(await getOutboundLetters(memberPersonaId, memberId)).toHaveLength(1);
 
+      /**
+       * The owner's persona-level state reaches the member (C7.2).
+       *
+       * A seal, a taper step or a memorial mode is the owner's decision
+       * about the shared persona. The member's row stores their own
+       * switches, but not these.
+       */
+      await setPersonaSettings(ownerPersonaId, ownerId, normalizePersonaSettings({
+        seal: { until: "2099-01-01", earlyOpen: "never" },
+      }));
+      const sealedForMember = await getPersonaById(memberPersonaId, memberId);
+      expect(normalizePersonaSettings(sealedForMember?.settings).seal?.until).toBe("2099-01-01");
+      await expect(
+        memberCaller.chat.getHistory({ personaId: memberPersonaId }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(
+        memberCaller.letter.list({ personaId: memberPersonaId }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await setPersonaSettings(ownerPersonaId, ownerId, normalizePersonaSettings({}));
+
+      // A step down to letters-only reaches the member's conversation.
+      await setPersonaSettings(ownerPersonaId, ownerId, normalizePersonaSettings({ taper: { stage: 3 } }));
+      const tapered = await getPersonaById(memberPersonaId, memberId);
+      let closed = "";
+      try {
+        for await (const _event of runConversation({
+          persona: tapered!,
+          userId: memberId,
+          message: "在吗",
+          mode: "once",
+        })) {
+          // Drain the generator; it must refuse before it writes.
+        }
+      } catch (error) {
+        closed = (error as Error).message;
+      }
+      expect(closed).toContain("只写信");
+      await setPersonaSettings(ownerPersonaId, ownerId, normalizePersonaSettings({}));
+
+      // The memorial register is the owner's too.
+      await setPersonaSettings(ownerPersonaId, ownerId, normalizePersonaSettings({ mode: "memorial" }));
+      expect(isMemorial(await getPersonaById(memberPersonaId, memberId))).toBe(true);
+      await setPersonaSettings(ownerPersonaId, ownerId, normalizePersonaSettings({}));
+
+      // Rebuilding the persona and importing into it stay the owner's.
+      await expect(
+        memberCaller.persona.triggerAnalysis({ id: memberPersonaId }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(
+        memberCaller.skillEngine.startPipeline({ personaId: memberPersonaId }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+      await expect(
+        memberCaller.file.upload({
+          personaId: memberPersonaId,
+          fileName: "chat.txt",
+          fileType: "chat_txt",
+          fileSize: 4,
+          fileContent: Buffer.from("abcd").toString("base64"),
+          mimeType: "text/plain",
+        }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+      // The member hears the owner's real recordings (C7.2 + C7.3).
+      await upsertMedia({
+        userId: ownerId,
+        personaId: ownerPersonaId,
+        kind: "voice",
+        fileKey: `personas/${ownerId}/${ownerPersonaId}/a.ogg`,
+        hash: "v".repeat(64),
+        durationSec: 12,
+        fromThem: true,
+        transcript: "刚下课",
+      });
+      const soundtrack = await memberCaller.media.listVoices({ personaId: memberPersonaId });
+      expect(soundtrack.voices.map((row) => row.transcript)).toEqual(["刚下课"]);
+      expect(await isPersonaSharedWithMember(ownerId, ownerPersonaId, memberId)).toBe(true);
+      // The uploads guard answers the same way the soundtrack page does.
+      expect(await sharedPersonaFileBelongsToUser(
+        `personas/${ownerId}/${ownerPersonaId}/a.ogg`,
+        memberId,
+      )).toBe(true);
+
+      // Reminders belong to the relationship the owner has, not to the
+      // member's copy of the persona row.
+      const reminderRows = await getAllPersonasForReminders();
+      expect(reminderRows.some((row) => row.id === memberPersonaId)).toBe(false);
+      expect(reminderRows.some((row) => row.id === ownerPersonaId)).toBe(true);
+
+      // The isolation matrix runs both ways, and the diary is on it.
+      await createJournalEntry({
+        userId: ownerId,
+        personaId: ownerPersonaId,
+        body: "主人的日记",
+        entryDate: "2026-03-01",
+      });
+      await createJournalEntry({
+        userId: memberId,
+        personaId: memberPersonaId,
+        body: "家人的日记",
+        entryDate: "2026-03-01",
+      });
+      const ownerJournal = await listJournalEntries({ userId: ownerId, personaId: ownerPersonaId });
+      const memberJournal = await listJournalEntries({ userId: memberId, personaId: memberPersonaId });
+      expect(ownerJournal.map((row) => row.body)).toEqual(["主人的日记"]);
+      expect(memberJournal.map((row) => row.body)).toEqual(["家人的日记"]);
+      expect(await getMessagesByPersonaId(ownerPersonaId, memberId)).toHaveLength(0);
+      expect(await getMemoriesByPersonaId(ownerPersonaId, memberId)).toHaveLength(0);
+      expect(await getOutboundLetters(ownerPersonaId, memberId)).toHaveLength(0);
+
       // Revoking closes the chat, not the history.
       expect(await revokePersonaShare(shareId, ownerId)).toBe(true);
       expect(await getActiveShareForMemberPersona(memberPersonaId, memberId)).toBeUndefined();
+      expect(await isPersonaSharedWithMember(ownerId, ownerPersonaId, memberId)).toBe(false);
+      expect(await sharedPersonaFileBelongsToUser(
+        `personas/${ownerId}/${ownerPersonaId}/a.ogg`,
+        memberId,
+      )).toBe(false);
       expect((await getMessagesByPersonaId(memberPersonaId, memberId)).length)
         .toBeGreaterThanOrEqual(2);
 

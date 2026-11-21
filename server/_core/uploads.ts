@@ -13,7 +13,7 @@
  */
 import type { Request, Response, NextFunction } from "express";
 import { authenticateRequest } from "./auth";
-import { userHasMessageWithMediaUrl } from "../db";
+import { isPersonaSharedWithMember, userHasMessageWithMediaUrl } from "../db";
 
 /** Prefixes whose second path segment is the owning user's id. */
 const USER_SCOPED = new Set(["personas", "chat", "tts"]);
@@ -65,6 +65,29 @@ export async function legacyFileBelongsToUser(
 }
 
 /**
+ * Whether a persona file belongs to a persona this user is a family
+ * member of (C7.2).
+ *
+ * A shared persona's recordings and avatar live under the owner's
+ * `personas/<ownerUserId>/<ownerPersonaId>/` prefix, so path ownership
+ * alone would refuse them. The member may read them while the share is
+ * active; once it is revoked the files are private again — the same rule
+ * the soundtrack page follows.
+ */
+export async function sharedPersonaFileBelongsToUser(
+  relKey: string,
+  userId: number,
+): Promise<boolean> {
+  const parts = relKey.replace(/^\/+/, "").split("/");
+  if (parts.length < 3 || parts[0] !== "personas") return false;
+  const ownerUserId = Number(parts[1]);
+  const personaId = Number(parts[2]);
+  if (!Number.isInteger(ownerUserId) || !Number.isInteger(personaId)) return false;
+  if (ownerUserId === userId) return false;
+  return isPersonaSharedWithMember(ownerUserId, personaId, userId);
+}
+
+/**
  * Express middleware guarding `/uploads`.
  */
 export function uploadsAuthGuard(
@@ -94,7 +117,8 @@ export function uploadsAuthGuard(
   authenticateRequest(req)
     .then(async (user) => {
       const owned = isOwnedByUser(relKey, user.id) ||
-        (await legacyFileBelongsToUser(relKey, user.id));
+        (await legacyFileBelongsToUser(relKey, user.id)) ||
+        (await sharedPersonaFileBelongsToUser(relKey, user.id));
       if (!owned) {
         // 404 rather than 403: a stranger should not learn that the file
         // exists.

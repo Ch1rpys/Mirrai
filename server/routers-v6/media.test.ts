@@ -89,6 +89,34 @@ describe("the soundtrack routes", () => {
     });
   });
 
+  it("reads the owner's recordings for a family member (C7.2)", async () => {
+    getPersonaById.mockResolvedValue({
+      id: 9,
+      userId: 2,
+      name: "小满",
+      sharedFromPersonaId: 5,
+      sharedFromUserId: 1,
+    });
+    const result = await appRouter.createCaller(ctxFor(2)).media.listVoices({ personaId: 9 });
+    // The media belongs to the owner's pair, not to the member's row.
+    expect(listVoices).toHaveBeenCalledWith(5, 1, expect.objectContaining({ limit: 30 }));
+    expect(result.voices).toHaveLength(1);
+  });
+
+  it("refuses to transcribe the owner's recordings as a family member", async () => {
+    getPersonaById.mockResolvedValue({
+      id: 9,
+      userId: 2,
+      name: "小满",
+      sharedFromPersonaId: 5,
+      sharedFromUserId: 1,
+    });
+    await expect(
+      appRouter.createCaller(ctxFor(2)).media.transcribe({ personaId: 9 }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(startMediaTranscription).not.toHaveBeenCalled();
+  });
+
   it("does not read somebody else's persona", async () => {
     getPersonaById.mockResolvedValue(undefined);
     await expect(
