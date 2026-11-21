@@ -15,8 +15,9 @@ import { pipeline } from "node:stream/promises";
 import type { Express, Request, Response } from "express";
 import { nanoid } from "nanoid";
 import { copy, type Locale } from "@shared/copy";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 import { authenticateRequest } from "../_core/auth";
-import { isRequestLocked } from "../_core/app-lock";
+import { isRequestLocked, personaLocked, sessionKeyFromRequest } from "../_core/app-lock";
 import { ENV } from "../_core/env";
 import {
   checkFileExtension,
@@ -131,6 +132,14 @@ async function handleImportUpload(req: Request, res: Response): Promise<void> {
   const persona = await getPersonaById(personaId, user.id);
   if (!persona) {
     res.status(404).json({ error: copy(locale, "errors.importPersonaNotFound") });
+    return;
+  }
+  // A locked persona does not take new records either (C8.4).
+  if (await personaLocked(
+    normalizePersonaSettings((persona as { settings?: unknown }).settings),
+    sessionKeyFromRequest(req),
+  )) {
+    res.status(403).json({ error: copy(locale, "errors.locked") });
     return;
   }
 
