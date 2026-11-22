@@ -3,7 +3,15 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { sql } from "drizzle-orm";
-import { getDb } from "./db";
+import { normalizeUserEncryption } from "@shared/encryption";
+import {
+  getDb,
+  getLetters,
+  getMessagesByPersonaId,
+  getPersonasByUserId,
+  getUserById,
+  setUserBackupSettings,
+} from "./db";
 import {
   BackupNotEmptyError,
   createBackup,
@@ -12,6 +20,11 @@ import {
 } from "./_core/backup";
 import { backupTables, quoteIdentifier } from "./_core/backup-tables";
 import { serializeBackupRow } from "./_core/backup-format";
+import { unwrapDataKeyWithPassword } from "./_core/content-crypto";
+import { forgetAllDataKeys, rememberDataKey } from "./_core/data-keys";
+import { forgetAllEncryptionStates, setEncryptionEnabled } from "./_core/encrypted-values";
+import { hashPassword } from "./_core/password";
+import { enableEncryptionForUser, runPendingMigrationForTests } from "./encryption/enable";
 
 /**
  * The round trip, against a real database (C8.3).
@@ -161,6 +174,110 @@ describe.skipIf(!process.env.DATABASE_URL)("the backup round trip", () => {
       )[0];
       expect(Number(inserted.id)).toBeGreaterThan(1);
     } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+      await truncateEverything().catch(() => undefined);
+    }
+  }, 120_000);
+
+  it("restores an encrypted instance and reads it back with the same password", async () => {
+    /**
+     * C8.5 acceptance item 8: an encrypted instance's backup, restored
+     * into an empty instance, opens with the original account password and
+     * the content is all there. The instance includes a letter, because
+     * the restore order bug this round fixed only showed up with one.
+     */
+    const db = await getDb();
+    if (!db) throw new Error("no db");
+    await truncateEverything();
+    forgetAllDataKeys();
+    forgetAllEncryptionStates();
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "mirrai-backup-encrypted-"));
+    const uploads = path.join(directory, "uploads");
+    const restoreUploads = path.join(directory, "restored");
+    const password = "correct horse battery";
+    try {
+      const insertedUser = rowsOf(await db.execute(
+        sql`INSERT INTO "users" ("username", "name", "passwordHash") VALUES ('encrypted-restore', '阿树', ${await hashPassword(password)}) RETURNING "id"`,
+      ))[0];
+      const userId = Number(insertedUser.id);
+      const insertedPersona = rowsOf(await db.execute(
+        sql`INSERT INTO "personas" ("userId", "name") VALUES (${userId}, '小满') RETURNING "id"`,
+      ))[0];
+      const personaId = Number(insertedPersona.id);
+      await db.execute(
+        sql`INSERT INTO "messages" ("userId", "personaId", "role", "content") VALUES (${userId}, ${personaId}, 'assistant', ${"哨兵备份XYZ晚安"})`,
+      );
+      await db.execute(
+        sql`INSERT INTO "letters" ("userId", "personaId", "body") VALUES (${userId}, ${personaId}, ${"哨兵备份XYZ信"})`,
+      );
+      await setUserBackupSettings(userId, {
+        enabled: false,
+        frequency: "daily",
+        lastFullBackupAt: new Date().toISOString(),
+      });
+      await enableEncryptionForUser(userId, password, { startInBackground: false });
+      for (let step = 0; step < 50; step += 1) {
+        const progress = await runPendingMigrationForTests(userId, { maxSteps: 3, batchSize: 2 });
+        if (progress.finished) break;
+      }
+      await fs.mkdir(path.join(uploads, "personas", String(userId), String(personaId)), {
+        recursive: true,
+      });
+      await fs.writeFile(
+        path.join(uploads, "personas", String(userId), String(personaId), "a.png"),
+        "PNG-BYTES",
+      );
+
+      const out = path.join(directory, "encrypted.mirrai-backup");
+      await createBackup({
+        scope: "instance",
+        passphrase: "backup pass",
+        out,
+        uploadsDir: uploads,
+      });
+      await truncateEverything();
+      forgetAllDataKeys();
+      forgetAllEncryptionStates();
+
+      await restoreBackup({
+        file: out,
+        passphrase: "backup pass",
+        uploadsDir: restoreUploads,
+      });
+
+      // Raw SQL: no sentinel anywhere, and the content column is ciphertext.
+      const plaintext = rowsOf(
+        await db.execute(
+          sql`SELECT "id" FROM "messages" WHERE "content"::text LIKE ${"%哨兵%"}`,
+        ),
+      );
+      expect(plaintext).toEqual([]);
+      const cipher = rowsOf(
+        await db.execute(sql`SELECT "content"::text AS content FROM "messages" LIMIT 1`),
+      );
+      expect(String(cipher[0]?.content)).toMatch(/^enc:v1:/);
+
+      // Sign in again: the wrapped key in the restored user row opens with
+      // the original password, and every read decrypts.
+      const restoredUser = await getUserById(userId);
+      const encryption = normalizeUserEncryption(restoredUser?.encryption);
+      expect(encryption).toBeTruthy();
+      const key = await unwrapDataKeyWithPassword(
+        encryption!.wrappedKey,
+        encryption!.salt,
+        password,
+      );
+      expect(key).toBeTruthy();
+      rememberDataKey(userId, key!);
+      setEncryptionEnabled(userId, true);
+      expect((await getPersonasByUserId(userId)).map((row) => row.id)).toContain(personaId);
+      expect((await getMessagesByPersonaId(personaId, userId))[0]?.content).toBe(
+        "哨兵备份XYZ晚安",
+      );
+      expect((await getLetters(personaId, userId))[0]?.body).toBe("哨兵备份XYZ信");
+    } finally {
+      forgetAllDataKeys();
+      forgetAllEncryptionStates();
       await fs.rm(directory, { recursive: true, force: true });
       await truncateEverything().catch(() => undefined);
     }

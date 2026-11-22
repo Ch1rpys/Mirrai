@@ -357,22 +357,41 @@ describe.skipIf(!process.env.DATABASE_URL)("the encrypted database", () => {
       "整空元况今集温传土许步群广石记需段研界拉林律叫且究观越织装影算低持音众书布复容儿须际商非验连断深难近" +
       "矿千周委素技备半办青省列习响约支般史感劳便团往酸历市克何除消构府称太准精值号率族维划选标写存候毛亲快" +
       "效斯院查江型眼王按格养易置派层片始却专状育厂京识适属圆包火住调满县局照参红细引听该铁价严龙飞";
+    /**
+     * Find a bigram whose token the parser really does split.
+     *
+     * A regex over the token is not enough: `45e2022375760804` starts
+     * like a number and still comes back as one lexeme, while
+     * `862e6ab5384e50c1` is split into pieces. Which one happens is the
+     * parser's decision, so ask it (`to_tsquery`) rather than guess —
+     * a guess made this test pass or fail depending on the random data
+     * key. Stop at the first token that is actually split.
+     */
+    const db = await getDb();
     const unsafe: Array<{ bigram: string; token: string }> = [];
     for (let i = 0; i + 1 < alphabet.length && unsafe.length < 1; i += 1) {
       const bigram = alphabet.slice(i, i + 2);
-      const token = blindIndexToken(key!, bigram);
-      if (/^\d+[eE]\d/.test(token)) unsafe.push({ bigram, token });
+      const candidate = blindIndexToken(key!, bigram);
+      let parsed: string;
+      try {
+        const rows = (await db!.execute(sql.raw(
+          `SELECT to_tsquery('simple', ${`'${candidate}'`})::text AS t`,
+        ))) as unknown as { rows: Array<{ t: string }> };
+        parsed = rows.rows[0]!.t;
+      } catch {
+        continue; // the parser refuses this token; it cannot be a candidate
+      }
+      if (parsed !== `'${candidate}'`) unsafe.push({ bigram, token: candidate });
     }
-    expect(unsafe.length, "no token in this key starts like a number — increase the sample").toBe(1);
+    expect(unsafe.length, "no token in this key is split by to_tsquery — increase the sample").toBe(1);
 
     const { bigram, token } = unsafe[0]!;
     // The old query form really does split it: this is the failure the
-    // test exists for, not an assumption.
-    const db = await getDb();
-    const parsed = (await db!.execute(sql.raw(
+    // test exists for, now checked against the parser instead of assumed.
+    const parsedAgain = (await db!.execute(sql.raw(
       `SELECT to_tsquery('simple', ${`'${token}'`})::text AS t`,
     ))) as unknown as { rows: Array<{ t: string }> };
-    expect(parsed.rows[0]!.t).not.toBe(`'${token}'`);
+    expect(parsedAgain.rows[0]!.t).not.toBe(`'${token}'`);
 
     await createMessage({
       personaId,
