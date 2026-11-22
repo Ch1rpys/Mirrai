@@ -307,10 +307,14 @@ describe("traditional Chinese", () => {
 
   it("fills the placeholders after converting", () => {
     registerTraditionalConverter(cnToTw);
-    const text = copyKey("zh-Hant", "skipped", { n: 3 } as never);
-    // An unknown key is returned as it is — which is the contract of
-    // copyKey, and shows that the conversion did not swallow it.
-    expect(text).toBe("skipped");
+    // The template is read from zh and converted; the value the caller
+    // passes is inserted afterwards, so it keeps whatever the caller gave
+    // it (here a name, which is not the app's text to convert).
+    const text = copyKey("zh-Hant", "interview.transcriptAsk", { text: "阿樹" });
+    expect(text).toBe("問：阿樹");
+    expect(copyKey("zh-Hant", "interview.transcriptAsk", { text: "阿樹" })).not.toBe(
+      copyKey("zh", "interview.transcriptAsk", { text: "阿樹" }),
+    );
   });
 
   it("does not convert a model instruction", () => {

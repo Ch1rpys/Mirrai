@@ -236,6 +236,15 @@ describe.skipIf(!BASH)("the macOS start script", () => {
     expect(build).toContain("MirraiMenu.swift");
     expect(build).toContain('"$CONTENTS/MacOS/Mirrai"');
     expect(build).toContain("swiftc");
+    /**
+     * `-parse-as-library` is not cosmetic: the manual's plain `swiftc`
+     * command fails on the installed toolchain with "'main' attribute
+     * cannot be used in a module that contains top-level code". Without
+     * the flag the build stops, so the build script must carry it.
+     */
+    // The flag has to be on the command, not only in a comment: match
+    // the compile line itself.
+    expect(build).toMatch(/swiftc\s+-parse-as-library\s+.*MirraiMenu\.swift/);
   }, 30_000);
 });
 

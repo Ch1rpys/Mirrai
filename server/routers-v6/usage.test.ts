@@ -125,7 +125,13 @@ describe("usage.summary", () => {
     });
     expect(result.byPersona[0]?.name).toBe("小满");
     expect(result.currency).toBe("CNY");
-    expect(result.rerank).toEqual({ calls: 1, estimatedCalls: 0, costMicros: 1_000_000 });
+    expect(result.rerank).toEqual({
+      calls: 1,
+      estimatedCalls: 0,
+      costMicros: 1_000_000,
+      promptTokens: 100,
+      completionTokens: 40,
+    });
     expect(result.lastDistill).toMatchObject({ promptTokens: 900, costMicros: 4_200_000 });
     expect(result.from).toBe("2026-10-31T16:00:00.000Z");
   });

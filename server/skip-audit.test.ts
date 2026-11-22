@@ -57,6 +57,7 @@ const DATABASE_TEST_FILES = new Set([
   "server/routers-v6/material.test.ts",
   "server/records/nearest.test.ts",
   "server/encryption/encrypted-db.test.ts",
+  "server/chat/quoted-records-db.test.ts",
 ]);
 
 function testFiles(dir: string): string[] {

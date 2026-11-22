@@ -254,6 +254,25 @@ describe("a scene drawn from a stretch of the record", () => {
     expect(prompt).not.toContain("范围次日的事");
   });
 
+  it("keeps the day-only boundary on UTC when no time zone is known", async () => {
+    // Neither the persona nor the user has a zone: `periodToInstant` reads
+    // the end of 03-02 as UTC. The day key must use the same clock — the
+    // server's local day was a day later here, so 03-03 leaked in.
+    retrieveMemories.mockResolvedValue([
+      memory("范围当天的事", "2026-03-02"),
+      memory("范围次日的事", "2026-03-03"),
+    ]);
+    const { messages } = await composeMessages({
+      persona: { ...persona, timezone: null },
+      userId: 1,
+      userMessage: "在吗",
+      contextLimit: 20,
+    });
+    const prompt = messages[0]!.content as string;
+    expect(prompt).toContain("范围当天的事");
+    expect(prompt).not.toContain("范围次日的事");
+  });
+
   it("keeps the boundary when the records behind it are gone", async () => {
     getRecordsByIds.mockResolvedValue([]);
     const prompt = await promptFor();

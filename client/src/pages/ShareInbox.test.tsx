@@ -35,7 +35,7 @@ vi.mock("@/lib/trpc", () => ({
         useQuery: () => ({
           data: [
             { id: 5, name: "小满" },
-            { id: 6, name: "", locked: true },
+            { id: 6, name: "锁着的小林", locked: true },
           ],
           isLoading: false,
         }),
@@ -44,8 +44,9 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
+const toastError = vi.hoisted(() => vi.fn());
 vi.mock("sonner", () => ({
-  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+  toast: { success: vi.fn(), error: toastError, info: vi.fn() },
 }));
 
 type Store = Map<string, Response>;
@@ -104,7 +105,6 @@ async function seed(stores: ReturnType<typeof installCaches>, files: Array<[stri
 }
 
 import ShareInbox from "./ShareInbox";
-import { clearShareInbox } from "@/lib/share-inbox";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -131,7 +131,9 @@ describe("the share inbox", () => {
     expect(screen.getByText("export.json")).toBeInTheDocument();
     // A locked persona is not offered: importing into it would be refused.
     expect(screen.queryByRole("option", { name: "小满" })).toBeInTheDocument();
-    expect(screen.queryByText("上锁的分身")).toBeNull();
+    // The locked persona is filtered out by name, not hidden behind an
+    // empty fixture.
+    expect(screen.queryByRole("option", { name: "锁着的小林" })).toBeNull();
 
     fireEvent.change(screen.getByLabelText(translate("zh", "shareInbox.pickPersona")), {
       target: { value: "5" },
@@ -142,6 +144,15 @@ describe("the share inbox", () => {
     fireEvent.click(importButtons[0]);
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith("/upload/7"));
+    // The file goes through the same streaming upload as a hand-picked
+    // one: the persona and the original name ride in the query string.
+    const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("/api/import/upload?personaId=5&name=%E8%81%8A%E5%A4%A9%E8%AE%B0%E5%BD%95.csv");
+    expect(init.method).toBe("PUT");
+    expect(init.credentials).toBe("include");
     expect(caches.storeFor(SHARE_INBOX_CACHE).size).toBe(1);
     unmount();
   });
@@ -163,12 +174,40 @@ describe("the share inbox", () => {
     expect(await screen.findByText(translate("zh", "shareInbox.empty"))).toBeInTheDocument();
   });
 
-  it("calls clearShareInbox itself, so the page and the helper agree", async () => {
-    // The helper is what the page uses; this pins the name so a rename
-    // cannot leave the cleanup silently doing nothing.
+  it("offers to create a persona even when some already exist", async () => {
     const caches = installCaches();
-    await seed(caches, [["a.csv", "a"]]);
-    await clearShareInbox();
-    expect(caches.storeFor(SHARE_INBOX_CACHE).size).toBe(0);
+    await seed(caches, [["聊天记录.csv", "a,b"]]);
+    render(<ShareInbox />);
+    expect(await screen.findByText("聊天记录.csv")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: translate("zh", "shareInbox.createPersona") }),
+    );
+    expect(navigate).toHaveBeenCalledWith("/onboarding");
+  });
+
+  it("keeps the file when the upload is refused, and says why", async () => {
+    const caches = installCaches();
+    await seed(caches, [["聊天记录.csv", "a,b"]]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ error: "导入被拒绝" }), {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+    render(<ShareInbox />);
+    expect(await screen.findByText("聊天记录.csv")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(translate("zh", "shareInbox.pickPersona")), {
+      target: { value: "5" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: translate("zh", "shareInbox.import") }),
+    );
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(navigate).not.toHaveBeenCalled();
+    // The cache entry is deleted only after the server accepted it.
+    expect(caches.storeFor(SHARE_INBOX_CACHE).size).toBe(1);
   });
 });

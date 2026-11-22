@@ -398,8 +398,38 @@ export async function restoreBackup(options: {
     if (!completed) {
       // The transaction rolled back; the files it wrote are removed.
       await Promise.allSettled(copied.map((file) => fs.rm(file, { force: true })));
+      /**
+       * And the directories those files needed.
+       *
+       * `mkdir -p` created a skeleton under the uploads directory; the
+       * files are gone, but an empty `personas/1/1` chain would stay
+       * behind and make the operator think something was written.
+       */
+      await Promise.allSettled(
+        copied.map((file) => pruneEmptyDirectories(path.dirname(file), uploadsDir)),
+      );
     }
     await fs.rm(staging, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+/**
+ * Removes the empty directories a failed restore created under `stopAt`.
+ *
+ * Stops at the first directory that still holds something, so a directory
+ * that was there before the restore (with the user's own files) is never
+ * touched.
+ */
+async function pruneEmptyDirectories(from: string, stopAt: string): Promise<void> {
+  const stop = path.resolve(stopAt);
+  let current = path.resolve(from);
+  while (current !== stop && current.startsWith(stop + path.sep)) {
+    try {
+      await fs.rmdir(current);
+    } catch {
+      return;
+    }
+    current = path.dirname(current);
   }
 }
 

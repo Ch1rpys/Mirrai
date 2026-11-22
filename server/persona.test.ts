@@ -85,6 +85,27 @@ describe("persona.list", () => {
     const result = await caller.persona.list();
     expect(Array.isArray(result)).toBe(true);
   });
+
+  it("carries the last-chat time the /chat/last shortcut sorts by", async () => {
+    /**
+     * The shortcut reads `lastChatAt` from this response; if the route
+     * started projecting a narrower row, the page would silently fall
+     * back to `updatedAt` (the last edit) and open the wrong persona.
+     */
+    const { getPersonasWithStats } = await import("./db");
+    vi.mocked(getPersonasWithStats).mockResolvedValueOnce([
+      {
+        id: 1,
+        name: "小满",
+        lastChatAt: new Date("2026-11-21T08:00:00.000Z"),
+        updatedAt: new Date("2026-11-19T00:00:00.000Z"),
+        settings: {},
+      },
+    ] as never);
+    const caller = appRouter.createCaller(makeCtx());
+    const rows = (await caller.persona.list()) as Array<{ lastChatAt?: Date | string | null }>;
+    expect(rows[0]?.lastChatAt).toEqual(new Date("2026-11-21T08:00:00.000Z"));
+  });
 });
 
 describe("auth.logout", () => {

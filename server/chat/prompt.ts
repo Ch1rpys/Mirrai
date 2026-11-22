@@ -280,7 +280,18 @@ export async function buildPromptBundleForPersona(
    * makes it UTC midnight, which is the next local day for a persona
    * behind UTC. The day form is what "after this stretch" means.
    */
-  const knowledgeDateKey = knowledgeEnd ? zonedDateKey(knowledgeEnd, clockZone) : null;
+  /**
+   * The same fallback as `periodToInstant` when no zone is known.
+   *
+   * `periodToInstant` reads a date-only boundary as UTC when the clock
+   * zone is unknown; `zonedDateKey` without a zone reads the server's
+   * own day. On a server east of UTC the two are different days, and a
+   * memory dated the day after the stretch slipped in. Use UTC here so
+   * the instant and the day key come from the same clock.
+   */
+  const knowledgeDateKey = knowledgeEnd
+    ? zonedDateKey(knowledgeEnd, clockZone ?? "UTC")
+    : null;
 
   const memories = context.memories ?? await retrieveMemories({
     personaId: persona.id,

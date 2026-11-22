@@ -17,7 +17,7 @@ import { resolveStageProviders } from "../llm/stage-providers";
 import { sanitizeRoles } from "../llm/roles";
 import { inspectExtraBody } from "../llm/extra-body";
 import { budgetExceeded } from "../llm/budget";
-import { loadQuotedRecordsSection } from "./quoted-records";
+import { loadQuotedRecordsSection, readQuotableRecords } from "./quoted-records";
 import {
   loadSceneRangeMaterial,
   sceneRangeOf,
@@ -1299,6 +1299,24 @@ async function* admitUserMessage(
       .getMessageById(replyToId, userId, persona.id)
       .catch(() => null);
     if (!quoted) replyToId = null;
+  }
+
+  /**
+   * A quotation that cannot be used is refused before the user's own
+   * message is written (C8.10).
+   *
+   * The prompt builder re-reads the lines, but it runs after the message
+   * is stored; a rejected turn used to leave a message with foreign
+   * record ids behind. Nothing may be written for a turn that is going
+   * to be refused.
+   */
+  if (options.quotedRecordIds?.length) {
+    await readQuotableRecords({
+      persona,
+      userId,
+      ids: options.quotedRecordIds,
+      locale,
+    });
   }
 
   let storedUserMessageId: number | null = options.storedUserMessageId ?? null;

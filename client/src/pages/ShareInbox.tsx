@@ -130,14 +130,20 @@ export default function ShareInbox() {
                   ))}
                 </select>
               </div>
-              {available.length === 0 && (
-                <div className="flex items-center gap-3">
+              {/*
+                * Choosing a persona is not the only way in: the handbook
+                * says "pick a persona (or create one)". A person with
+                * personas already who wants a new one for this import
+                * had no entry before.
+                */}
+              <div className="flex items-center gap-3">
+                {available.length === 0 && (
                   <p className="text-xs text-muted-foreground">{t("shareInbox.noPersonas")}</p>
-                  <Button variant="outline" className="rounded-md bg-transparent" onClick={() => navigate("/onboarding")}>
-                    {t("shareInbox.createPersona")}
-                  </Button>
-                </div>
-              )}
+                )}
+                <Button variant="outline" className="rounded-md bg-transparent" onClick={() => navigate("/onboarding")}>
+                  {t("shareInbox.createPersona")}
+                </Button>
+              </div>
               <ul className="space-y-2">
                 {files.map((file) => (
                   <li key={file.key} className="flex items-center justify-between gap-3">

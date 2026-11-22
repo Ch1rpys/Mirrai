@@ -65,16 +65,14 @@ export function buildQuotedRecordsSection(
  * Every id has to be a record of this persona and this user. The total
  * is counted on the rendered text, which is what the prompt pays for.
  */
-export async function loadQuotedRecordsSection(params: {
-  persona: { id: number; name: string };
+export async function readQuotableRecords(params: {
+  persona: { id: number };
   userId: number;
   ids: number[];
   locale: Locale;
-  timeZone?: string | null;
-  meName?: string;
-}): Promise<string> {
+}): Promise<QuotedRecordLine[]> {
   const unique = [...new Set(params.ids)];
-  if (unique.length === 0) return "";
+  if (unique.length === 0) return [];
   if (unique.length > MAX_QUOTED_RECORDS) {
     throw new QuotedRecordsError(copy(params.locale, "errors.quotedRecordsTooLong"));
   }
@@ -89,7 +87,25 @@ export async function loadQuotedRecordsSection(params: {
   if (chars > MAX_QUOTED_CHARS) {
     throw new QuotedRecordsError(copy(params.locale, "errors.quotedRecordsTooLong"));
   }
-  return buildQuotedRecordsSection(rows as QuotedRecordLine[], {
+  return rows as QuotedRecordLine[];
+}
+
+export async function loadQuotedRecordsSection(params: {
+  persona: { id: number; name: string };
+  userId: number;
+  ids: number[];
+  locale: Locale;
+  timeZone?: string | null;
+  meName?: string;
+}): Promise<string> {
+  const rows = await readQuotableRecords({
+    persona: params.persona,
+    userId: params.userId,
+    ids: params.ids,
+    locale: params.locale,
+  });
+  if (rows.length === 0) return "";
+  return buildQuotedRecordsSection(rows, {
     locale: params.locale,
     timeZone: params.timeZone,
     themName: params.persona.name,

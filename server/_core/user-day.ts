@@ -45,8 +45,8 @@ export function userHourColumn(timezone?: string | null) {
    * used and the offset is worked out per row — the same way the day
    * column does it.
    */
-  const userZone = safeZoneName(timezone);
-  const serverZone = safeZoneName(serverZoneName()) ?? "UTC";
+  const userZone = sqlZoneName(timezone);
+  const serverZone = sqlZoneName(serverZoneName()) ?? "UTC";
   if (!userZone) {
     /**
      * The zone is not a name we can write into the SQL.
@@ -90,7 +90,7 @@ function serverZoneName(): string {
  * the shift is used instead), and a name that tries to be something
  * else never reaches the SQL at all.
  */
-function safeZoneName(zone: string | null | undefined): string | null {
+export function sqlZoneName(zone: string | null | undefined): string | null {
   if (!zone || zone.length > 64) return null;
   if (!/^[A-Za-z0-9_+\-/]+$/.test(zone)) return null;
   try {
@@ -121,8 +121,8 @@ function safeZoneName(zone: string | null | undefined): string | null {
  * and the offset is worked out per row.
  */
 export function userDayColumn(timezone?: string | null) {
-  const userZone = safeZoneName(timezone);
-  const serverZone = safeZoneName(serverZoneName()) ?? "UTC";
+  const userZone = sqlZoneName(timezone);
+  const serverZone = sqlZoneName(serverZoneName()) ?? "UTC";
   if (!userZone) {
     /**
      * The zone is not a name we can write into the SQL.

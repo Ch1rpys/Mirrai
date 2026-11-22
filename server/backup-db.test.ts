@@ -166,6 +166,79 @@ describe.skipIf(!process.env.DATABASE_URL)("the backup round trip", () => {
     }
   }, 120_000);
 
+  it("rolls the database back and removes the files when a restore fails midway", async () => {
+    const db = await getDb();
+    if (!db) throw new Error("no db");
+    await truncateEverything();
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "mirrai-backup-rollback-"));
+    const sourceUploads = path.join(directory, "uploads");
+    const targetUploads = path.join(directory, "restored");
+    try {
+      await db.execute(
+        sql`INSERT INTO "users" ("username", "name", "passwordHash") VALUES ('rollback', '回滚', 'hash')`,
+      );
+      await fs.mkdir(path.join(sourceUploads, "personas", "1", "1"), { recursive: true });
+      await fs.writeFile(path.join(sourceUploads, "personas", "1", "1", "a.png"), "PNG");
+      const out = path.join(directory, "rollback.zip");
+      await createBackup({ scope: "instance", out, uploadsDir: sourceUploads });
+      await truncateEverything();
+
+      await expect(
+        restoreBackup({
+          file: out,
+          uploadsDir: targetUploads,
+          afterFiles: async () => {
+            throw new Error("forced failure after the files were written");
+          },
+        }),
+      ).rejects.toThrow(/forced failure/);
+
+      // The transaction rolled back and the files it had copied are gone.
+      const users = rowsOf(await db.execute(sql`SELECT COUNT(*)::int AS count FROM "users"`))[0];
+      expect(Number(users.count)).toBe(0);
+      const left = await fs.readdir(targetUploads).catch(() => [] as string[]);
+      expect(left).toEqual([]);
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+      await truncateEverything().catch(() => undefined);
+    }
+  }, 120_000);
+
+  it("writes no row and no file when the passphrase is wrong", async () => {
+    const db = await getDb();
+    if (!db) throw new Error("no db");
+    await truncateEverything();
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "mirrai-backup-pass-"));
+    const sourceUploads = path.join(directory, "uploads");
+    const targetUploads = path.join(directory, "restored");
+    try {
+      await db.execute(
+        sql`INSERT INTO "users" ("username", "passwordHash") VALUES ('pass', 'hash')`,
+      );
+      await fs.mkdir(path.join(sourceUploads, "personas", "1", "1"), { recursive: true });
+      await fs.writeFile(path.join(sourceUploads, "personas", "1", "1", "a.png"), "PNG");
+      const out = path.join(directory, "encrypted.mirrai-backup");
+      await createBackup({
+        scope: "instance",
+        passphrase: "correct horse battery",
+        out,
+        uploadsDir: sourceUploads,
+      });
+      await truncateEverything();
+
+      await expect(
+        restoreBackup({ file: out, passphrase: "wrong passphrase", uploadsDir: targetUploads }),
+      ).rejects.toThrow();
+      const users = rowsOf(await db.execute(sql`SELECT COUNT(*)::int AS count FROM "users"`))[0];
+      expect(Number(users.count)).toBe(0);
+      const left = await fs.readdir(targetUploads).catch(() => [] as string[]);
+      expect(left).toEqual([]);
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+      await truncateEverything().catch(() => undefined);
+    }
+  }, 120_000);
+
   it("refuses a second restore into the same instance", async () => {
     const db = await getDb();
     if (!db) throw new Error("no db");

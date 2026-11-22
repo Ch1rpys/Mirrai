@@ -114,11 +114,39 @@ export function parseDescribedStatements(
    * before.
    */
   const answerOnly = (body: string): string => {
+    /**
+     * Walk the transcript instead of filtering single lines.
+     *
+     * The interviewer's question is written by the model and may be
+     * quoted back; only the answer lines are the person's own words.
+     * Both the Chinese and the English transcript markers count (the
+     * interview is available in either language). An answer may run
+     * over several lines — pressing Shift+Enter is allowed — so the
+     * lines after a marker belong to that answer until the next
+     * marker, rather than being dropped.
+     */
+    const ASK = /^\s*(?:问|Q)[：:]\s*/i;
+    const ANSWER = /^\s*(?:答|A)[：:]\s*/i;
     const lines = body.split("\n");
-    const answers = lines
-      .filter((line) => /^\s*答[：:]/.test(line))
-      .map((line) => line.replace(/^\s*答[：:]\s*/, ""));
-    return answers.length > 0 ? answers.join("\n") : body;
+    const answers: string[] = [];
+    let open: number | null = null;
+    let sawMarker = false;
+    for (const line of lines) {
+      if (ASK.test(line)) {
+        sawMarker = true;
+        open = null;
+        continue;
+      }
+      if (ANSWER.test(line)) {
+        sawMarker = true;
+        answers.push(line.replace(ANSWER, ""));
+        open = answers.length - 1;
+        continue;
+      }
+      if (open !== null) answers[open] += `\n${line}`;
+    }
+    if (!sawMarker || answers.length === 0) return body;
+    return answers.join("\n");
   };
   const normalisedAccounts = accounts.map((account) => ({
     account,

@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
 const summaryState: { value: any } = { value: undefined };
+const localeState = vi.hoisted(() => ({ value: "zh" as "zh" | "en" }));
 const configsState: { value: any } = { value: undefined };
 const refetch = vi.fn();
 const saveBudget = vi.fn();
@@ -12,9 +13,9 @@ const savePrice = vi.fn();
 
 vi.mock("@/contexts/LocaleContext", () => ({
   useLocale: () => ({
-    t: (key: any, params?: any) => translate("zh", key, params),
-    locale: "zh",
-    localeName: "中文",
+    t: (key: any, params?: any) => translate(localeState.value, key, params),
+    locale: localeState.value,
+    localeName: localeState.value === "en" ? "English" : "中文",
     setLocale: () => {},
   }),
 }));
@@ -72,7 +73,13 @@ function summary(overrides: Record<string, unknown> = {}) {
       budget: { budget: null, over: false, tokens: 940, costMicros: 3_000_000, monthStart: "" },
       prices: [{ provider: "OpenAI", price: { inputPerMTok: 2, outputPerMTok: 8, currency: "CNY" } }],
       currency: "CNY",
-      rerank: { calls: 1, estimatedCalls: 0, costMicros: 1_000_000 },
+      rerank: {
+        calls: 1,
+        estimatedCalls: 0,
+        costMicros: 1_000_000,
+        promptTokens: 100,
+        completionTokens: 40,
+      },
       lastDistill: {
         at: "2026-11-20T10:00:00.000Z",
         promptTokens: 900,
@@ -91,6 +98,7 @@ function summary(overrides: Record<string, unknown> = {}) {
 describe("the usage panel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localeState.value = "zh";
     summaryState.value = summary();
     configsState.value = {
       data: [{ id: 1, providerName: "OpenAI", hasKey: true, extraConfig: {} }],
@@ -105,7 +113,7 @@ describe("the usage panel", () => {
     // 3,000,000 micros = 3.00 CNY.
     expect(screen.getByText("3.00 CNY")).toBeTruthy();
     // The estimated counts are marked as estimates, not measurements.
-    expect(screen.getByText(/1 估算/)).toBeTruthy();
+    expect(screen.getByText(translate("zh", "usage.estimatedCount", { n: 1 }))).toBeTruthy();
   });
 
   it("shows tokens only when no price is filled in", () => {
@@ -116,6 +124,47 @@ describe("the usage panel", () => {
     });
     render(<UsagePanel />);
     expect(screen.getByText(translate("zh", "usage.noPrice"))).toBeTruthy();
+  });
+
+  it("shows the four-way line's tokens, not its call count, when no price is set", () => {
+    summaryState.value = summary({
+      prices: [],
+      currency: null,
+      totals: { ...totals, costMicros: 0 },
+      rerank: {
+        calls: 3,
+        estimatedCalls: 0,
+        costMicros: 0,
+        promptTokens: 100,
+        completionTokens: 40,
+      },
+    });
+    render(<UsagePanel />);
+    expect(
+      screen.getByText(translate("zh", "usage.rerankTokens", { calls: 3, tokens: 140 })),
+    ).toBeTruthy();
+    expect(screen.queryByText(translate("zh", "usage.rerankTokens", { calls: 3, tokens: 3 })))
+      .toBeNull();
+  });
+
+  it("explains a currency mismatch instead of claiming no price was filled in", () => {
+    summaryState.value = summary({
+      prices: [
+        { provider: "OpenAI", price: { inputPerMTok: 2, outputPerMTok: 8, currency: "CNY" } },
+        { provider: "Claude", price: { inputPerMTok: 3, outputPerMTok: 9, currency: "USD" } },
+      ],
+      currency: null,
+    });
+    render(<UsagePanel />);
+    expect(screen.getByText(translate("zh", "usage.mixedCurrency"))).toBeTruthy();
+    expect(screen.queryByText(translate("zh", "usage.noPrice"))).toBeNull();
+  });
+
+  it("uses English parentheses for the estimate marker in English", () => {
+    localeState.value = "en";
+    render(<UsagePanel />);
+    expect(screen.getByText("(1 estimated)")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("（1");
   });
 
   it("says so when the month is over its budget", () => {

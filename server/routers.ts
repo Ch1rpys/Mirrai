@@ -1457,6 +1457,13 @@ export const appRouter = router({
           farewellDraft: null,
           correctionLog: null,
           emotionalState: null,
+          /**
+           * The settings object carries content too: the skin's alias,
+           * the kept quotes, the memorial dates, the LDR city. The
+           * locked card needs none of it — only the `locked` flag the
+           * response already carries.
+           */
+          settings: null,
           locked: true as const,
         };
       });
@@ -3094,15 +3101,21 @@ export const appRouter = router({
           const quotedRecords = (Array.isArray(metadata?.quotedRecordIds) ? metadata.quotedRecordIds : [])
             .map((id: number) => {
               const row = quotedById.get(id);
-              return row
-                ? {
-                    id: row.id,
-                    role: row.role,
-                    content: row.content,
-                    speaker: row.speaker,
-                    timestamp: row.timestamp,
-                  }
-                : null;
+              /**
+               * Only this conversation's records. The ids came back
+               * from the user alone, and a rejected turn used to leave
+               * them behind; showing another persona's line under this
+               * persona's message is a leak between conversations of
+               * the same account.
+               */
+              if (!row || row.personaId !== m.personaId) return null;
+              return {
+                id: row.id,
+                role: row.role,
+                content: row.content,
+                speaker: row.speaker,
+                timestamp: row.timestamp,
+              };
             })
             .filter(Boolean);
           return {

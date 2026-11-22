@@ -14,11 +14,13 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
  * `title` (which is not a name for the accessibility tree on every platform)
  * or a plain `<img>` inside a button with no `alt`.
  *
- * The render list is the four pages of the app — the lobby, the chat, the
- * settings page (its default profile tab and the 外观 tab this stage added)
- * and the persona profile — each rendered with the mocks its own test file
- * uses. They mount these v6 components (Settings' other tabs are not
- * rendered here; each tab is its own page-sized surface):
+ * The render list is the four main pages of the app — the lobby, the chat,
+ * the settings page (its default profile tab and the 外观 tab this stage
+ * added) and the persona profile — plus the surfaces that mount the rest of
+ * this stage's new components: the data settings tab, the cost panel, the
+ * first-run restore panel, the mailbox page, the interview page, the
+ * described-statements section and a locked persona's card. Each is rendered
+ * with the mocks its own test file uses.
  *
  *   Lobby:   OnThisDay, Milestones, MailboxEntry, PersonaUnreadNote, UndoToast
  *   Chat:    TimeBar, MemoryReview, ChoiceBubble, PendingReply, OutboundEntry,
@@ -32,8 +34,8 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
  *            OurDictionary, FingerprintView, VoicesEntry, ReunionSummary,
  *            OralAccounts
  *
- * The new component this stage added — `AccessibilitySettings` — is on the
- * render list (the 外观 tab), so it goes through the same rule as the rest.
+ * Every component this stage added and that can be mounted on its own is on
+ * the list, so the "every control has a name" rule covers the whole stage.
  */
 
 const nav = vi.hoisted(() => ({
@@ -211,7 +213,18 @@ vi.mock("@/lib/trpc", () => ({
       },
       listDeleted: {
         useQuery: () => ({
-          data: { personas: [] },
+          data: {
+            personas: [
+              {
+                id: 9,
+                name: "回收站里的",
+                avatarUrl: null,
+                relationshipDesc: null,
+                chatCount: 3,
+                deletedAt: "2026-03-01T10:00:00.000Z",
+              },
+            ],
+          },
           isLoading: false,
           isError: false,
           refetch: vi.fn(),
@@ -239,6 +252,85 @@ vi.mock("@/lib/trpc", () => ({
     letter: {
       unreadCount: { useQuery: () => ({ data: { total: 0 } }) },
       todos: { useQuery: () => ({ data: { todos: [] } }) },
+      inbox: {
+        useQuery: () => ({
+          data: {
+            received: [
+              {
+                id: 1,
+                personaId: 1,
+                body: "写下来的话",
+                status: "answered",
+                mood: null,
+                replyAt: null,
+                repliedAt: "2026-03-02T10:00:00.000Z",
+                replyText: "回信",
+                readAt: null,
+                createdAt: "2026-03-01T10:00:00.000Z",
+                personaName: "小A",
+              },
+            ],
+            waiting: [
+              {
+                id: 2,
+                personaId: 1,
+                body: "还没有回音的话",
+                status: "waiting",
+                mood: null,
+                replyAt: "2026-03-05T10:00:00.000Z",
+                repliedAt: null,
+                replyText: null,
+                readAt: null,
+                createdAt: "2026-03-02T10:00:00.000Z",
+                personaName: "小A",
+              },
+            ],
+            kept: [
+              {
+                id: 3,
+                personaId: 1,
+                body: "写了没寄的",
+                status: "private",
+                mood: null,
+                replyAt: null,
+                repliedAt: null,
+                replyText: null,
+                readAt: null,
+                createdAt: "2026-03-03T10:00:00.000Z",
+                personaName: "小A",
+              },
+            ],
+            capsules: [
+              {
+                id: 4,
+                personaId: 1,
+                kind: "capsule",
+                body: "到日子的胶囊",
+                dueAt: "2026-03-01T10:00:00.000Z",
+                status: "delivered",
+                openedAt: null,
+                personaName: "小A",
+              },
+            ],
+            upcoming: [
+              {
+                id: 5,
+                personaId: 1,
+                kind: "capsule",
+                body: "还没到日子",
+                dueAt: "2999-01-01T10:00:00.000Z",
+                status: "scheduled",
+                openedAt: null,
+                personaName: "小A",
+              },
+            ],
+          },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+      markRead: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     reminder: {
       list: { useQuery: () => ({ data: [] }) },
@@ -273,12 +365,17 @@ vi.mock("@/lib/trpc", () => ({
       summary: {
         useQuery: () => ({
           data: {
-            totals: { calls: 0, promptTokens: 0, completionTokens: 0, costMicros: null },
-            byPurpose: [],
+            totals: { calls: 4, promptTokens: 700, completionTokens: 240, estimatedCalls: 1, costMicros: null },
+            byPurpose: [
+              { purpose: "reply", promptTokens: 600, completionTokens: 200, calls: 3, estimatedCalls: 1, costMicros: 0 },
+              { purpose: "rerank", promptTokens: 100, completionTokens: 40, calls: 1, estimatedCalls: 0, costMicros: 0 },
+            ],
             byPersona: [],
             byDay: [],
+            budget: { budget: null, over: false, tokens: 940, costMicros: 0, monthStart: "" },
+            prices: [],
             currency: null,
-            rerank: { calls: 0, costMicros: null },
+            rerank: { calls: 1, estimatedCalls: 0, costMicros: 0, promptTokens: 100, completionTokens: 40 },
             lastDistill: null,
           },
           isLoading: false,
@@ -290,7 +387,7 @@ vi.mock("@/lib/trpc", () => ({
     },
     llmConfig: {
       list: {
-        useQuery: () => ({ data: { configs: [] }, isLoading: false, isError: false }),
+        useQuery: () => ({ data: [], isLoading: false, isError: false }),
       },
     },
     encryption: {
@@ -442,6 +539,7 @@ vi.mock("@/lib/trpc", () => ({
     scheduled: {
       list: { useQuery: () => ({ data: { items: [] }, isError: false }) },
       create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      markOpened: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     mark: {
       list: { useQuery: () => ({ data: { marks: [], maxPins: 3 } }) },
@@ -552,6 +650,9 @@ import InterviewView from "./components/v6/InterviewView";
 import DescribedStatements from "./components/v6/DescribedStatements";
 import DescribedFidelityNote from "./components/v6/DescribedFidelityNote";
 import LockedPersonaCard from "./components/v6/LockedPersonaCard";
+import UsagePanel from "./components/v6/UsagePanel";
+import RestoreBackupPanel from "./components/v6/RestoreBackupPanel";
+import Letters from "./pages/Letters";
 
 /**
  * Renders a page inside the real theme provider (the accessibility panel
@@ -734,6 +835,41 @@ describe("every control has a name", () => {
   it("on a locked persona's card", () => {
     renderPage(<LockedPersonaCard personaId={7} />);
     expect(drawnControls()).toBeGreaterThan(0);
+    expect(unnamedControls()).toEqual([]);
+  });
+
+  it("in the cost panel", () => {
+    renderPage(<UsagePanel />);
+    // The three ranges, the two saves, and the price line.
+    expect(drawnControls()).toBeGreaterThan(3);
+    expect(unnamedControls()).toEqual([]);
+  });
+
+  it("on the first-run restore panel", async () => {
+    /**
+     * The panel asks the server whether a restore is possible before it
+     * draws anything. Answer "yes" so the form (and its controls) is on
+     * the screen; the fetch is put back afterwards.
+     */
+    const originalFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ available: true }),
+    })));
+    try {
+      renderPage(<RestoreBackupPanel />);
+      expect(await screen.findByTestId("restore-backup-panel")).toBeInTheDocument();
+      expect(drawnControls()).toBeGreaterThan(0);
+      expect(unnamedControls()).toEqual([]);
+    } finally {
+      vi.stubGlobal("fetch", originalFetch);
+    }
+  });
+
+  it("in the mailbox page", () => {
+    renderPage(<Letters />);
+    // The back control and the rows' own actions.
+    expect(drawnControls()).toBeGreaterThan(2);
     expect(unnamedControls()).toEqual([]);
   });
 

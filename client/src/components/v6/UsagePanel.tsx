@@ -173,14 +173,23 @@ export default function UsagePanel() {
           <span className="ml-3 text-muted-foreground font-normal">
             {t("usage.calls", { n: totals.calls })} · {t("usage.tokens", { n: tokens })}
             {totals.estimatedCalls > 0 && (
-              <span className="ml-1 text-[0.6875rem]">（{totals.estimatedCalls} {t("usage.estimated")}）</span>
+              <span className="ml-1 text-[0.6875rem]">
+                {t("usage.estimatedCount", { n: totals.estimatedCalls })}
+              </span>
             )}
           </span>
         </p>
         {totalMoney ? (
           <p className="text-sm text-foreground">{totalMoney}</p>
         ) : (
-          <p className="text-xs text-muted-foreground">{t("usage.noPrice")}</p>
+          <p className="text-xs text-muted-foreground">
+            {/**
+             * Prices that exist but disagree on the currency cannot be
+             * added into one number. Saying "no price is filled in"
+             * would then be wrong.
+             */}
+            {(data?.prices.length ?? 0) > 0 ? t("usage.mixedCurrency") : t("usage.noPrice")}
+          </p>
         )}
       </div>
 
@@ -232,7 +241,10 @@ export default function UsagePanel() {
                   calls: data.rerank.calls,
                   cost: money(data.rerank.costMicros) ?? "",
                 })
-              : t("usage.rerankTokens", { n: data.rerank.calls })}
+              : t("usage.rerankTokens", {
+                  calls: data.rerank.calls,
+                  tokens: data.rerank.promptTokens + data.rerank.completionTokens,
+                })}
           </span>
         </div>
       )}

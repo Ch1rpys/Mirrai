@@ -8,6 +8,7 @@ import {
   getDb,
   insertLlmUsage,
   llmUsageRowsForUser,
+  sumLlmUsageByDay,
 } from "./db";
 import { llmUsage } from "../drizzle/schema";
 
@@ -122,5 +123,58 @@ describe.skipIf(!DATABASE_URL)("the usage ledger, in the database (C8.9)", () =>
     expect(await rowCountFor(userId)).toBe(1);
     await deleteUserAccount(userId);
     expect(await rowCountFor(userId)).toBe(0);
+  });
+
+  it("groups the by-day series in the user's own days on a real database", async () => {
+    /**
+     * The select and the group by used to be two different parameters
+     * holding the same zone, which Postgres rejects outright — the
+     * settings panel's summary route answered 500 and the panel showed
+     * nothing. This is the query that runs there, against real SQL.
+     */
+    const stamp = Date.now() + Math.floor(Math.random() * 100_000);
+    const userId = await createUser({ username: `usage-day-${stamp}`, passwordHash: "x", name: "阿树" });
+    try {
+      const rows: Array<[string, number]> = [
+        // 03-01 15:00 in New York, 03-02 04:00 in Shanghai.
+        ["2026-03-01T20:00:00.000Z", 10],
+        // 03-01 21:00 in New York, 03-02 10:00 in Shanghai.
+        ["2026-03-02T02:00:00.000Z", 20],
+        // 03-02 16:00 in New York, 03-03 04:00 in Shanghai.
+        ["2026-03-02T21:00:00.000Z", 30],
+      ];
+      for (const [createdAt, promptTokens] of rows) {
+        await insertLlmUsage({
+          userId,
+          personaId: null,
+          provider: "OpenAI",
+          model: "gpt-4o",
+          purpose: "reply",
+          promptTokens,
+          completionTokens: 1,
+          estimated: true,
+          costMicros: null,
+          jobId: null,
+          createdAt: new Date(createdAt),
+        });
+      }
+      const from = new Date("2026-03-01T00:00:00.000Z");
+
+      const shanghai = await sumLlmUsageByDay(userId, from, "Asia/Shanghai");
+      expect(shanghai.map((row) => row.day)).toEqual(["2026-03-02", "2026-03-03"]);
+      expect(shanghai.map((row) => row.promptTokens)).toEqual([30, 30]);
+      expect(shanghai.map((row) => row.calls)).toEqual([2, 1]);
+
+      const newYork = await sumLlmUsageByDay(userId, from, "America/New_York");
+      expect(newYork.map((row) => row.day)).toEqual(["2026-03-01", "2026-03-02"]);
+      expect(newYork.map((row) => row.promptTokens)).toEqual([30, 30]);
+
+      // A zone the runtime does not know falls back to UTC instead of
+      // reaching the SQL.
+      const utc = await sumLlmUsageByDay(userId, from, "Not/AZone");
+      expect(utc.map((row) => row.day)).toEqual(["2026-03-01", "2026-03-02"]);
+    } finally {
+      await deleteUserAccount(userId);
+    }
   });
 });

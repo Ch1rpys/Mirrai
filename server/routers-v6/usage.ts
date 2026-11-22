@@ -109,6 +109,14 @@ export const usageRouter = router({
           calls: rerank?.calls ?? 0,
           estimatedCalls: rerank?.estimatedCalls ?? 0,
           costMicros: rerank?.costMicros ?? 0,
+          /**
+           * The tokens the four candidates used. The panel showed the
+           * *call count* under the word "tokens" when no price was set;
+           * the real total was already in `byPurpose` and was never
+           * passed along.
+           */
+          promptTokens: rerank?.promptTokens ?? 0,
+          completionTokens: rerank?.completionTokens ?? 0,
         },
         lastDistill: lastDistillRow
           ? {

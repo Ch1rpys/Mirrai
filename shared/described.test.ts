@@ -148,4 +148,49 @@ describe("interview transcripts as evidence", () => {
     );
     expect(parsed.statements).toHaveLength(1);
   });
+
+  it("does not accept the question in an English transcript either", () => {
+    // The interview is available in English; its markers are `Q:`/`A:`.
+    const parsed = parseDescribedStatements(
+      [{ field: "personality", text: "made up", quote: "What is she like when happy?" }],
+      [
+        {
+          id: 22,
+          tellerName: "Ash",
+          body: "Q: What is she like when happy?\nA: She hums to herself.",
+        },
+      ],
+    );
+    expect(parsed.statements).toHaveLength(0);
+    expect(parsed.dropped).toBe(1);
+
+    const kept = parseDescribedStatements(
+      [{ field: "personality", text: "hums when happy", quote: "She hums to herself." }],
+      [
+        {
+          id: 23,
+          tellerName: "Ash",
+          body: "Q: What is she like when happy?\nA: She hums to herself.",
+        },
+      ],
+    );
+    expect(kept.statements).toHaveLength(1);
+  });
+
+  it("keeps a quote that runs over several lines of one answer", () => {
+    // Shift+Enter is allowed in the composer: the continuation lines are
+    // still the person's own words and were being dropped entirely.
+    const parsed = parseDescribedStatements(
+      [{ field: "personality", text: "quietly hums", quote: "声音很轻，只在我们两个人的时候" }],
+      [
+        {
+          id: 24,
+          tellerName: "阿树",
+          body: "问：高兴的时候是什么样？\n答：她会哼歌\n声音很轻，只在我们两个人的时候\n问：生气的时候呢？\n答：她会沉默。",
+        },
+      ],
+    );
+    expect(parsed.statements).toHaveLength(1);
+    expect(parsed.statements[0]?.quote).toBe("声音很轻，只在我们两个人的时候");
+  });
 });

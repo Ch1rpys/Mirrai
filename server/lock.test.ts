@@ -305,7 +305,11 @@ describe("a locked persona", () => {
         relationshipDesc: "前女友",
         personaData: { rules: ["秘密规则"] },
         lastMessage: { content: "只有我们知道的一句话", createdAt: NOW },
-        settings: { locked: true },
+        settings: {
+          locked: true,
+          skin: { theme: "im-green", alias: "只有我知道的昵称" },
+          keptQuotes: [{ recordId: 1, text: "只有我们知道的一句话" }],
+        },
       },
       { id: 6, name: "小林", avatarUrl: null, settings: {} },
     ]);
@@ -330,6 +334,11 @@ describe("a locked persona", () => {
       relationshipDesc: null,
       personaData: null,
       lastMessage: null,
+      /**
+       * The settings carry the alias, the kept quotes and the dates; the
+       * locked card needs only the `locked` flag.
+       */
+      settings: null,
     });
     expect(hidden[1]).toMatchObject({ id: 6, name: "小林" });
 

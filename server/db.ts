@@ -45,7 +45,7 @@ import {
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
 import { localDateKey, previousDateKey, zonedDateKey, zonedDayKeyWindowStart } from "@shared/timezone";
-import { userDayColumn, userHourColumn } from "./_core/user-day";
+import { sqlZoneName, userDayColumn, userHourColumn } from "./_core/user-day";
 import { dayShiftMinutes, zonedDayStart } from "@shared/timezone";
 import {
   normalizePersonaSettings,
@@ -3981,7 +3981,7 @@ export async function searchMessages(personaId: number, userId: number, query: s
         isNull(messages.deletedAt),
         eq(messages.personaId, personaId),
         eq(messages.userId, userId),
-        sql`${messages.searchTokens} @@ to_tsquery('simple', ${tsQuery})`,
+        sql`${messages.searchTokens} @@ (${tsQuery})::tsquery`,
       ))
       .orderBy(desc(messages.createdAt))
       .limit(limit * 3);
@@ -4063,7 +4063,7 @@ export async function searchAllMessages(
             .where(and(
               isNull(messages.deletedAt),
               eq(messages.userId, userId),
-              sql`${messages.searchTokens} @@ to_tsquery('simple', ${messageTsQuery})`,
+              sql`${messages.searchTokens} @@ (${messageTsQuery})::tsquery`,
             ))
             .orderBy(desc(messages.createdAt))
             .limit(limit * 3)
@@ -5131,8 +5131,19 @@ export async function sumLlmUsageByDay(
 ) {
   const db = await getDb();
   if (!db) return [];
-  const zone = timeZone || "UTC";
-  const day = sql<string>`to_char(${llmUsage.createdAt} AT TIME ZONE ${zone}, 'YYYY-MM-DD')`;
+  /**
+   * The zone name is written into the SQL, not bound as a parameter.
+   *
+   * Postgres compares the select, the group by and the order by
+   * literally: two placeholders holding the same value are still two
+   * different expressions, so the query is rejected with
+   * `column "llm_usage.createdAt" must appear in the GROUP BY clause`.
+   * `sqlZoneName` only lets through a name the runtime knows, so
+   * writing it in is safe — the same rule, and the same reason, as
+   * `server/_core/user-day.ts`.
+   */
+  const zone = sqlZoneName(timeZone) ?? "UTC";
+  const day = sql<string>`to_char(${llmUsage.createdAt} AT TIME ZONE ${sql.raw(`'${zone}'`)}, 'YYYY-MM-DD')`;
   const rows = await db.select({
     day,
     promptTokens: sum(llmUsage.promptTokens),
@@ -7980,7 +7991,7 @@ export async function searchRecordsLexical(
     const tokens = indexable.length > 0 ? queryTokensFor(userId, indexable) : [];
     if (tokens.length === 0) return [];
     const tsQuery = toTsQuery(tokens, "&");
-    const rank = sql<number>`ts_rank(${collectedMessages.searchTokens}, to_tsquery('simple', ${tsQuery}))`;
+    const rank = sql<number>`ts_rank(${collectedMessages.searchTokens}, (${tsQuery})::tsquery)`;
     const candidates = await db
       .select({
         id: collectedMessages.id,
@@ -7998,7 +8009,7 @@ export async function searchRecordsLexical(
         ...(role ? [eq(collectedMessages.role, role)] : []),
         ...(params.from ? [gte(collectedMessages.timestamp, params.from)] : []),
         ...(params.to ? [lte(collectedMessages.timestamp, params.to)] : []),
-        sql`${collectedMessages.searchTokens} @@ to_tsquery('simple', ${tsQuery})`,
+        sql`${collectedMessages.searchTokens} @@ (${tsQuery})::tsquery`,
       ))
       .orderBy(
         desc(sql`COALESCE(${rank}, -1)`),
@@ -8124,7 +8135,7 @@ export async function candidateRecordsByOverlap(
     const tokens = indexable.length > 0 ? queryTokensFor(userId, indexable) : [];
     if (tokens.length === 0) return [];
     const tsQuery = toTsQuery(tokens, "|");
-    const rank = sql<number>`ts_rank(${collectedMessages.searchTokens}, to_tsquery('simple', ${tsQuery}))`;
+    const rank = sql<number>`ts_rank(${collectedMessages.searchTokens}, (${tsQuery})::tsquery)`;
     const rows = await db
       .select({
         id: collectedMessages.id,
@@ -8142,7 +8153,7 @@ export async function candidateRecordsByOverlap(
         ...(role ? [eq(collectedMessages.role, role)] : []),
         ...(params.from ? [gte(collectedMessages.timestamp, params.from)] : []),
         ...(params.to ? [lte(collectedMessages.timestamp, params.to)] : []),
-        sql`${collectedMessages.searchTokens} @@ to_tsquery('simple', ${tsQuery})`,
+        sql`${collectedMessages.searchTokens} @@ (${tsQuery})::tsquery`,
       ))
       .orderBy(
         desc(sql`COALESCE(${rank}, -1)`),
