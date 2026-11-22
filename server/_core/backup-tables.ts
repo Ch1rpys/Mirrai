@@ -4,7 +4,7 @@
  * The list is derived from `drizzle/schema.ts` rather than written down
  * here: a new table that is not in the list and not in the exclusion
  * list would silently be missing from every backup, and nobody would
- * find out until a restore. `server/backup-tables.test.ts` is what
+ * find out until a restore. `server/_core/backup-tables.test.ts` is what
  * turns that "nobody would find out" into a failing test.
  *
  * Rows are moved as NDJSON through a staging directory. Dumping uses
@@ -15,7 +15,7 @@
  */
 import { and, sql, type SQL } from "drizzle-orm";
 import { getTableColumns, getTableName, is } from "drizzle-orm";
-import { PgTable } from "drizzle-orm/pg-core";
+import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import * as schema from "../../drizzle/schema";
 import { decodeByteaValue } from "./backup-format";
 
@@ -70,24 +70,97 @@ export function schemaTables(): BackupTableInfo[] {
   return out;
 }
 
+/** One foreign-key edge between two tables that are both in a list. */
+export interface BackupTableDependency {
+  child: string;
+  parent: string;
+}
+
+/**
+ * The references between a list of tables, as child → parent edges.
+ *
+ * Postgres checks a foreign key on the statement that inserts the child
+ * row, so the parent has to have been restored first. This is read from
+ * the schema itself — a new `.references()` appears here without anyone
+ * having to remember to update an ordering list by hand.
+ */
+export function backupTableDependencies(
+  tables: BackupTableInfo[],
+): BackupTableDependency[] {
+  const names = new Set(tables.map((table) => table.name));
+  const edges: BackupTableDependency[] = [];
+  for (const info of tables) {
+    for (const foreignKey of getTableConfig(info.table).foreignKeys) {
+      const parent = getTableName(foreignKey.reference().foreignTable);
+      // References to a table that is not in this list (an excluded
+      // table, or a one-user backup that leaves it out) cannot be
+      // ordered against anything here.
+      if (parent === info.name || !names.has(parent)) continue;
+      edges.push({ child: info.name, parent });
+    }
+  }
+  return edges;
+}
+
+/** A stable name order, used as the tie-break inside a dependency order. */
+function byName(a: BackupTableInfo, b: BackupTableInfo): number {
+  return a.name.localeCompare(b.name);
+}
+
+/**
+ * Orders tables so that every referenced table comes before the tables
+ * that reference it, with `users` first and ties in name order.
+ *
+ * The input order is deliberately not used for anything but membership:
+ * `Object.values(schema)` yields a different order in different module
+ * systems (a namespace object is sorted by export name; a bundled object
+ * literal keeps the declaration order), and the restore has to be
+ * correct under whichever one the process happened to get.
+ *
+ * A cycle would mean two tables that cannot both be inserted first; the
+ * remaining tables are then appended by name rather than lost, so the
+ * restore still attempts every table and reports the real problem.
+ */
+export function orderBackupTables(tables: BackupTableInfo[]): BackupTableInfo[] {
+  const parents = new Map<string, string[]>();
+  for (const table of tables) parents.set(table.name, []);
+  for (const edge of backupTableDependencies(tables)) parents.get(edge.child)!.push(edge.parent);
+
+  const pending = new Map(tables.map((table) => [table.name, table]));
+  const ordered: BackupTableInfo[] = [];
+  while (pending.size > 0) {
+    const ready = [...pending.values()].filter((table) =>
+      parents.get(table.name)!.every((parent) => !pending.has(parent)),
+    );
+    if (ready.length === 0) {
+      ordered.push(...[...pending.values()].sort(byName));
+      break;
+    }
+    ready.sort((a, b) => {
+      if (a.name === "users") return -1;
+      if (b.name === "users") return 1;
+      return byName(a, b);
+    });
+    const next = ready[0]!;
+    ordered.push(next);
+    pending.delete(next.name);
+  }
+  return ordered;
+}
+
 /**
  * The tables a backup writes, in the order they are written.
  *
- * There are no foreign keys in this schema, so the declaration order is
- * the order the tables were added in over the project's life; the one
- * ordering that matters is that `users` comes first, so an operator
- * reading the archive sees the people before the things that belong to
- * them.
+ * The order is a dependency order (see `orderBackupTables`) rather than
+ * the order the tables appear in `drizzle/schema.ts`: `letters` is
+ * declared before `personas`, and the restore used to insert it first,
+ * which fails on any instance that has a letter. `users` still comes
+ * first so an operator reading the archive sees the people before the
+ * things that belong to them.
  */
 export function backupTables(): BackupTableInfo[] {
   const excluded = new Set(BACKUP_EXCLUDED_TABLES.map((entry) => entry.table));
-  const tables = schemaTables().filter((entry) => !excluded.has(entry.name));
-  tables.sort((a, b) => {
-    if (a.name === "users") return -1;
-    if (b.name === "users") return 1;
-    return 0;
-  });
-  return tables;
+  return orderBackupTables(schemaTables().filter((entry) => !excluded.has(entry.name)));
 }
 
 /** The tables and the reason each one is not in this backup. */

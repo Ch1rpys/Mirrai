@@ -44,6 +44,7 @@ import {
   dumpTableRows,
   instanceIsEmpty,
   insertRowsBatch,
+  orderBackupTables,
   resetSequences,
   schemaTables,
   type BackupExecutor,
@@ -352,6 +353,18 @@ export async function restoreBackup(options: {
       if (!table) continue;
       restoreTables.push(table);
     }
+    /**
+     * The manifest order is not trusted (C8.3).
+     *
+     * A backup written by an older build stored the tables in the schema
+     * declaration order, which puts `letters` before `personas` — and
+     * `letters.personaId` is a real foreign key, so the restore failed
+     * at that table. Re-sort the list by the current schema's references
+     * instead, so an old archive restores too.
+     */
+    const orderedTables = orderBackupTables(restoreTables);
+    restoreTables.length = 0;
+    restoreTables.push(...orderedTables);
 
     let inserted = 0;
     const migrations = await db.transaction(async (tx) => {
