@@ -2102,4 +2102,45 @@ export const V6 = {
     zh: "这个账号的内容加密锁着，先在应用里解锁再导入。",
     en: "This account's encrypted content is locked. Unlock it in the app before importing.",
   },
+
+  /**
+   * Group chat (C9.8).
+   *
+   * The overlay is an instruction, not material: it says what this room
+   * is. The speaker line renders one line of the room as material, with
+   * the name the line is written under.
+   */
+  "prompt.groupOverlay": {
+    zh: "这是一个群。群里有：{{members}}。{{user}} 是真人；其他成员和你一样，是按记录重建的分身，他们说的话不代表真人。只替你自己说话。",
+    en: "This is a group chat. In it: {{members}}. {{user}} is a real person; the other members are rebuilt personas like you, and their words are not the real people's. Speak only for yourself.",
+  },
+  "prompt.groupSpeakerLine": {
+    zh: "{{name}}：{{content}}",
+    en: "{{name}}: {{content}}",
+  },
+  "prompt.groupUnknownSpeaker": {
+    zh: "某个成员",
+    en: "someone",
+  },
+
+  "errors.groupDisabled": {
+    zh: "群聊还没有打开。先到设置 → 个人资料 → 实验功能里打开。",
+    en: "Group chat is not on yet. Turn it on under Settings → Profile → Experimental features.",
+  },
+  "errors.groupNotFound": {
+    zh: "没有这个群。",
+    en: "There is no such group.",
+  },
+  "errors.groupMemberRange": {
+    zh: "一个群要有 2 到 5 个分身。",
+    en: "A group has 2 to 5 personas.",
+  },
+  "errors.groupPersonaUnavailable": {
+    zh: "这个分身现在不能进群：休眠、封存，或者还在分析中。",
+    en: "This persona cannot join a group now: it is asleep, sealed, or still being analysed.",
+  },
+  "errors.groupDuplicateMember": {
+    zh: "这个分身已经在群里了。",
+    en: "That persona is already in the group.",
+  },
 } as const satisfies CopyTable;

@@ -110,6 +110,33 @@ export interface TurnInput {
   periodId?: string | null;
   quotedSection?: string;
   sceneOverlay?: string | null;
+  /**
+   * The group-chat instruction (C9.8).
+   *
+   * The room says who is in it and that only the user is a real person.
+   * Built by `server/group/turns.ts`; a turn outside a group leaves it
+   * unset and the prompt is unchanged.
+   */
+  groupOverlay?: string | null;
+  /**
+   * Use exactly the provided history.
+   *
+   * A group turn's context is the room's own recent lines, not the
+   * pair's conversation. This makes the planner use `history` as given
+   * instead of reading `messages` from the database.
+   */
+  providedHistoryOnly?: boolean;
+  /**
+   * The group surface's style sources (C9.8).
+   *
+   * Projection uses `fingerprint` (the public/public-surface one when a
+   * measurement exists); the length cap uses `maxChars`, derived from the
+   * group's own median line length.
+   */
+  groupStyle?: {
+    fingerprint?: StyleFingerprintCore | null;
+    maxChars?: number | null;
+  };
   sceneEmotion?: string | null;
   summarySection?: string;
   memories?: ScoredMemory[];
@@ -280,7 +307,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     ? { ...configuredLayers, twoStage: false, rerank: false, factRewrite: false }
     : configuredLayers;
   let layersUsed = layersInEffect(layers, input.persona);
-  if (layersUsed.includes("rerank") && !input.exclude) {
+  if (layersUsed.includes("rerank") && !input.exclude && !input.providedHistoryOnly) {
     const scope = resolveRecordScope(input.persona);
     const model = await getRerankModel(scope.personaId, scope.userId);
     if (!model) layersUsed = layersUsed.filter((id) => id !== "rerank");
@@ -289,7 +316,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   const timingEnabled =
     Boolean((input.persona as { timingEnabled?: boolean }).timingEnabled) &&
     Boolean(loadBehaviorProfile(input.persona));
-  const dropSilence = Boolean(input.exclude) || !timingEnabled;
+  const dropSilence = Boolean(input.exclude) || Boolean(input.providedHistoryOnly) || !timingEnabled;
   const userAct = labelUserActByRule(input.userMessage) ?? "other";
   const actProfile = layers.act
     ? normalizeActProfile(actProfileForTurn(input.persona, input.periodId ?? null))
@@ -431,7 +458,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
         conflictTurn.forceRepair),
   );
 
-  if (input.exclude) {
+  if (input.exclude || input.providedHistoryOnly) {
     const built = await buildPromptBundleForPersona({
       persona: input.persona,
       userId: input.userId,
@@ -442,6 +469,7 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       periodId: input.periodId ?? null,
       quotedSection: input.quotedSection,
       sceneOverlay: input.sceneOverlay ?? null,
+      groupOverlay: input.groupOverlay ?? null,
       summarySection: input.summarySection,
       memories: input.memories as never,
       microRules: layers.rules ? undefined : null,
@@ -459,8 +487,8 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       closing: closingTurn.closing,
       closerLines: closingTurn.closerLines,
       inSessionShare,
-      excludeExemplarIds: [...(input.exclude.recordIds ?? []), ...seeds.excludeIds],
-      excludeExemplarTexts: [...(input.exclude.texts ?? []), ...seeds.excludeTexts],
+      excludeExemplarIds: [...(input.exclude?.recordIds ?? []), ...seeds.excludeIds],
+      excludeExemplarTexts: [...(input.exclude?.texts ?? []), ...seeds.excludeTexts],
       seedTurnsNote: seeds.note,
       styleReminderLines: reminder.lines,
       reanchorIssues: reminder.issues,
@@ -688,6 +716,19 @@ function lengthCapForTurn(
   input: TurnInput,
 ): { maxTokens?: number; stop?: string[]; maxChars?: number } {
   if (!enabled) return {};
+  /**
+   * A group's lines are their own length (C9.8).
+   *
+   * The pair's fingerprint describes one-to-one replies; what someone
+   * writes in a room with several people is shorter and flatter. The
+   * measured median is the only length source the group profile has, so
+   * the cap is a little above it.
+   */
+  const groupMax = input.groupStyle?.maxChars;
+  if (typeof groupMax === "number" && Number.isFinite(groupMax) && groupMax > 0) {
+    const maxChars = Math.max(12, Math.min(400, Math.round(groupMax)));
+    return { maxTokens: Math.ceil(maxChars * 2), maxChars };
+  }
   const fingerprint = effectiveStyleProfile(input.persona).fingerprint ?? null;
   const behavior = loadBehaviorProfile(input.persona);
   const burstMax = behavior ? Math.max(0, ...behavior.burstSizes) : 0;
@@ -1104,6 +1145,16 @@ function actClusterLinesForTurn(
 }
 
 function fingerprintCoreForTurn(input: TurnInput): StyleFingerprintCore | null {
+  /**
+   * A group turn projects from the public surface when there is one
+   * (C9.8): how the person writes in a room is not how they write to one
+   * person. Missing means the stored fingerprint stands.
+   */
+  const groupFp = input.groupStyle?.fingerprint ?? null;
+  if (groupFp) {
+    if (groupFp.samples < 1 || !groupFp.endings) return null;
+    return groupFp;
+  }
   const fp = effectiveStyleProfile(input.persona).fingerprint ?? null;
   if (!fp || fp.samples < 1 || !fp.endings) return null;
   const emotion = input.actCondition?.emotion ?? input.persona.emotionalState;

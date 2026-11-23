@@ -182,6 +182,14 @@ export interface SystemPromptOptions {
   /** Overlay describing the active scene. */
   sceneOverlay?: string | null;
   /**
+   * The group-chat instruction (C9.8).
+   *
+   * It is an application instruction, not material: it says what this
+   * room is and who is in it. Built by `server/group/turns.ts` from the
+   * room's own members, with their names flattened to one line each.
+   */
+  groupOverlay?: string | null;
+  /**
    * The lines the two of them said in the stretch of the record this
    * scene came from (C8.13). Material: fenced, under its own heading.
    */
@@ -692,6 +700,7 @@ export function buildSystemPromptParts(
     { kind: "stable", text: hardRules },
     { kind: "stable", text: memorialGuard },
     { kind: "stable", text: options.guardInstruction || "" },
+    { kind: "stable", text: options.groupOverlay || "" },
     { kind: "stable", text: harmInstruction },
     { kind: "volatile", text: options.seedTurnsNote || "" },
     { kind: "stable", text: copy(locale, "prompt.materialIsData") },

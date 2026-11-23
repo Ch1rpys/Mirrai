@@ -108,6 +108,8 @@ export interface PromptContext {
   now?: Date;
   /** The scene overlay, when a scene is active. */
   sceneOverlay?: string | null;
+  /** The group-chat instruction, when this turn is inside a group (C9.8). */
+  groupOverlay?: string | null;
   /**
    * The lines the scene's stretch of the record carries (C8.13).
    *
@@ -342,6 +344,7 @@ export async function buildPromptBundleForPersona(
 
   const parts = buildSystemPromptParts(persona, {
     sceneOverlay: context.sceneOverlay ?? null,
+    groupOverlay: context.groupOverlay ?? null,
     emotionalDesc: context.emotionalDesc,
     emotionalState: context.emotionalState ?? null,
     anchorSection: formatAnchorsForPrompt(anchors, locale),

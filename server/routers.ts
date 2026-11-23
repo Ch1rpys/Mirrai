@@ -46,6 +46,7 @@ import {
   getResearchProfilesByPersonaId,
   updateUserProfile, updateUserPassword, deleteUserAccount, getAccountStats, exportUserData,
   getUserById, bumpUserTokenVersion, updateUserGraduationMode, updateUserTrajectoryAssessment,
+  setUserFeatures, getUserFeatures,
   getUserTimezone,
   createMemory, getMemoriesByPersonaId, getMemoriesFromPersona, getMemoryById, countMemories, getMemoryTitles, softDeleteMemory, restoreMemory, updateMemory,
   createFidelityFeedback, listFidelityFeedbackForMessage, listFidelityFeedbackForPersona,
@@ -169,6 +170,7 @@ import { loadBehaviorProfile, measureAndSaveBehaviorProfile } from "./_core/beha
 import { mergePersonaSettings, normalizePersonaSettings } from "@shared/persona-settings";
 import { isMemorial, sealState } from "@shared/persona-state";
 import { buildWordingMessages, selectWordingSuggestions } from "@shared/wording";
+import { normalizeUserFeatures } from "@shared/user-features";
 import { personaSettingsPatchSchema } from "./routers-v6/persona-settings-patch";
 import { assertPersonaWritable } from "./_core/persona-access";
 import { styleRouter } from "./routers-v6/style";
@@ -201,6 +203,7 @@ import { apiKeyRouter } from "./routers-v6/api-keys";
 import { lockRouter } from "./routers-v6/lock";
 import { encryptionRouter } from "./routers-v6/encryption";
 import { pluginsRouter } from "./routers-v6/plugins";
+import { groupRouter } from "./routers-v6/group";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { stateRulesFromTranscript } from "./skill-engine/state-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
@@ -997,6 +1000,9 @@ export const appRouter = router({
         // The user's own clock, so the client can keep it in step with the
         // browser's.
         timezone: ctx.user.timezone,
+        // What the account has turned on (C9.8). The lobby and the
+        // settings page read this to decide whether to show the entry.
+        features: normalizeUserFeatures(ctx.user.features),
       };
     }),
     logout: publicProcedure.mutation(async ({ ctx }) => {
@@ -1326,6 +1332,21 @@ export const appRouter = router({
         }
         await updateUserProfile(ctx.user.id, input);
         return { success: true };
+      }),
+
+    /**
+     * Turns an experimental feature on or off (C9.8).
+     *
+     * The group-chat routes themselves refuse when the feature is off —
+     * this is the one switch that has to work *before* it is on.
+     */
+    updateFeatures: protectedProcedure
+      .input(z.object({
+        patch: z.object({ groupChat: z.boolean().optional() }),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const features = await setUserFeatures(ctx.user.id, input.patch);
+        return { features };
       }),
 
     changePassword: protectedProcedure
@@ -8179,6 +8200,7 @@ export const appRouter = router({
   lock: lockRouter,
   encryption: encryptionRouter,
   plugins: pluginsRouter,
+  group: groupRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {

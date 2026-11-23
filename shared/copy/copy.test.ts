@@ -81,6 +81,10 @@ describe("the server's copy", () => {
       // The MCP server names the other person's side of a quote line; the
       // app's own word for it is "TA" in both languages.
       "mcp.roleThem",
+      // A group line is "名字：" plus what they said. The Chinese half
+      // uses the full-width colon and has no Chinese word of its own; the
+      // name and the line are the only text in it.
+      "prompt.groupSpeakerLine",
     ]);
     const offenders = Object.entries(COPY)
       .filter(([key, entry]) => !/[一-鿿]/.test(entry.zh) && !sameInBoth.has(key))
