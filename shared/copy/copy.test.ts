@@ -78,6 +78,9 @@ describe("the server's copy", () => {
       "collectors.slack",
       "prompt.materialFenceHeader",
       "prompt.materialFenceEnd",
+      // The MCP server names the other person's side of a quote line; the
+      // app's own word for it is "TA" in both languages.
+      "mcp.roleThem",
     ]);
     const offenders = Object.entries(COPY)
       .filter(([key, entry]) => !/[一-鿿]/.test(entry.zh) && !sameInBoth.has(key))
