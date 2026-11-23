@@ -22,8 +22,21 @@ vi.mock("../db", () => ({
   listFidelityPairs: (...a: unknown[]) => listFidelityPairs(...a),
 }));
 
-import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
+import { buildGroupFixture, buildXiaomanRecords, GROUP_FIXTURE_TRUTH } from "../test-fixtures/xiaoman";
 import { afterRecordsChanged, afterRecordsRemoved, measureStyleProfile } from "./style-profile";
+
+/** Forty of the persona's chat lines, enough for a private fingerprint. */
+function privateChatRows(count = 40) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: i + 1,
+    role: "assistant",
+    content: "在的呀",
+    timestamp: new Date(Date.parse("2022-03-01T12:00:00.000Z") + i * 120_000),
+    kind: "text",
+    speaker: "小满",
+    meta: null,
+  }));
+}
 
 describe("measureStyleProfile", () => {
   beforeEach(() => {
@@ -576,6 +589,91 @@ describe("measureStyleProfile", () => {
       | { userSide?: { samples?: number } }
       | undefined;
     expect(written?.userSide?.samples).toBe(40);
+  });
+
+  it("measures the group register and stores it without touching the chat voice (C9.8)", async () => {
+    getRecordsVersion.mockResolvedValue("3500:3500");
+    getPersonaStyleProfile.mockResolvedValue(null);
+    getPersonaById.mockResolvedValue({ id: 5, userId: 1, name: "小满", personaData: {} });
+    getUserById.mockResolvedValue({ id: 1, name: "阿树" });
+    const privateRows = privateChatRows();
+    let groupRows: ReturnType<typeof buildGroupFixture> = [];
+    iterateRecords.mockImplementation(async function* (
+      _personaId: number,
+      _userId: number,
+      options?: { register?: string },
+    ) {
+      const source = options?.register === "group" ? groupRows : options?.register ? [] : privateRows;
+      for (const row of source) yield row;
+    });
+
+    const before = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    // No group rows imported: the field is absent, not zeroed.
+    expect(before.group).toBeUndefined();
+    expect(before.fingerprint?.samples).toBe(40);
+
+    groupRows = buildGroupFixture();
+    const withGroup = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    expect(iterateRecords).toHaveBeenCalledWith(5, 1, { register: "group" });
+    expect(withGroup.group?.samples).toBe(GROUP_FIXTURE_TRUTH.samples);
+    expect(withGroup.group?.afterMeRate).toBeCloseTo(0.6, 10);
+    expect(withGroup.group?.afterOthersRate).toBeCloseTo(0.2, 10);
+    expect(withGroup.group?.lengthMedian).toBe(5);
+    expect(withGroup.group?.gapMedianMessages).toBe(5);
+    // The group rows are read in their own register: the chat fingerprint
+    // and everything measured from it stay exactly the same.
+    expect(withGroup.fingerprint).toEqual(before.fingerprint);
+    expect(withGroup.userSide).toEqual(before.userSide);
+    expect(withGroup.samplePool).toEqual(before.samplePool);
+    const written = setPersonaStyleProfile.mock.calls.at(-1)?.[2] as
+      | { group?: { samples?: number } }
+      | undefined;
+    expect(written?.group?.samples).toBe(GROUP_FIXTURE_TRUTH.samples);
+  });
+
+  it("does not invent a group measurement below the floor (C9.8)", async () => {
+    getRecordsVersion.mockResolvedValue("3500:3500");
+    getPersonaStyleProfile.mockResolvedValue(null);
+    getPersonaById.mockResolvedValue({ id: 5, userId: 1, name: "小满", personaData: {} });
+    getUserById.mockResolvedValue({ id: 1, name: "阿树" });
+    const privateRows = privateChatRows();
+    const belowFloor = Array.from({ length: 39 }, (_, i) => ({
+      id: 30_000 + i,
+      role: "assistant",
+      content: "我也想去呀",
+      timestamp: new Date(Date.parse("2024-01-08T11:00:00.000Z") + i * 30_000),
+      kind: "text",
+      speaker: "小满",
+      meta: { register: "group" },
+    }));
+    iterateRecords.mockImplementation(async function* (
+      _personaId: number,
+      _userId: number,
+      options?: { register?: string },
+    ) {
+      const source = options?.register === "group" ? belowFloor : options?.register ? [] : privateRows;
+      for (const row of source) yield row;
+    });
+    const measured = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+    });
+    expect(measured.group).toBeUndefined();
+    expect(measured.fingerprint?.samples).toBe(40);
+    const written = setPersonaStyleProfile.mock.calls.at(-1)?.[2] as
+      | Record<string, unknown>
+      | undefined;
+    expect(written).toBeDefined();
+    expect(written).not.toHaveProperty("group");
   });
 });
 

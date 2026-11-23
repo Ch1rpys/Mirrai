@@ -33,6 +33,7 @@ import type { StyleFingerprint } from "./style-fingerprint";
 import type { ImperfectionDrafts } from "./imperfection-draft";
 import { normalizeRituals, type RitualEntry } from "./ritual-table";
 import type { UserSideProfile } from "./user-side-profile";
+import { normalizeGroupStats, type GroupStats } from "./group-stats";
 
 export const STYLE_PROFILE_KEYS = [
   "fingerprint",
@@ -105,7 +106,7 @@ export interface StyleProfile {
    * how they chat.
    */
   writtenFingerprint?: StyleFingerprint;
-  group?: unknown; // 由 C9.8 填
+  group?: GroupStats;
   mirror?: MirrorProfile;
   rerankWeights?: unknown; // 由 B8.8 填
 }
@@ -221,6 +222,11 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
       if (key === "photos") {
         const photos = normalizePhotoStats(source.photos);
         if (photos) profile.photos = photos;
+        continue;
+      }
+      if (key === "group") {
+        const group = normalizeGroupStats(source.group);
+        if (group) profile.group = group;
         continue;
       }
       (profile as unknown as Record<string, unknown>)[key] = source[key];

@@ -84,6 +84,15 @@ export interface StartImportInput {
   chatId?: string;
   columnMap?: ColumnMap;
   redaction?: Omit<RedactionOptions, "keepNames">;
+  /**
+   * A group chat export (C9.8).
+   *
+   * The wizard names me, TA, and leaves everyone else as `other`. Group
+   * rows are stamped with `meta.register = "group"` so they never reach
+   * the private one-to-one measurements. Without this the rows are the
+   * ordinary private ones, byte for byte.
+   */
+  mode?: "private" | "group";
 }
 
 export interface StartImportResult {
@@ -423,7 +432,24 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
   const redacted = isRedactionActive(input.redaction)
     ? redactRecords(assigned, redactionOptions)
     : { records: assigned, counts: undefined };
-  const toWrite = redacted.records;
+  /**
+   * Group rows say so on the row (C9.8).
+   *
+   * A group export names me and TA, and every other speaker becomes
+   * `other`. Stamping the register here keeps those rows out of the
+   * one-to-one voice: `iterateRecords` and the measurements read only
+   * the private register. Redaction has already run, so a redacted row
+   * keeps both its redacted text and its register.
+   *
+   * Any other mode is the ordinary import, unchanged — no register key
+   * is added.
+   */
+  const toWrite = input.mode === "group"
+    ? redacted.records.map((row) => ({
+        ...row,
+        meta: { ...row.meta, register: "group" as const },
+      }))
+    : redacted.records;
   const redactionReport = redacted.counts
     ? redactionReportOf(redactionOptions, redacted.counts)
     : undefined;
@@ -597,6 +623,10 @@ function previewRowsOf(records: Array<{ timestamp: Date | null; speaker: string;
 /**
  * Parses a file the way startImport does, without writing records or
  * touching parseStatus.
+ *
+ * `mode` changes only what startImport writes: the preview shows the
+ * rows as they were parsed, because the person is checking speakers and
+ * text, not the register they will be stored under (C9.8).
  */
 export async function previewImport(input: StartImportInput): Promise<PreviewResult | null> {
   const locale: Locale = input.locale === "en" ? "en" : "zh";

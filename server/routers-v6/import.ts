@@ -65,6 +65,14 @@ const redaction = z.object({
   names: z.array(z.string()).optional(),
 });
 
+/**
+ * A group chat export names me, TA, and leaves everyone else as
+ * `other` (C9.8). Group rows are written in their own register so they
+ * cannot change the one-to-one voice. Omitting the field is an ordinary
+ * private import.
+ */
+const importMode = z.enum(["private", "group"]).optional();
+
 export const importRouter = router({
   /**
    * The formats the wizard may offer. A format is listed only when it
@@ -94,6 +102,7 @@ export const importRouter = router({
       chatId: z.string().optional(),
       me: z.array(z.string()).optional(),
       them: z.array(z.string()).optional(),
+      mode: importMode,
     }))
     .query(async ({ ctx, input }) => {
       const result = await previewImport({
@@ -105,6 +114,7 @@ export const importRouter = router({
         chatId: input.chatId,
         me: input.me,
         them: input.them,
+        mode: input.mode,
       });
       if (!result) throw new TRPCError({ code: "NOT_FOUND" });
       return result;
@@ -120,6 +130,7 @@ export const importRouter = router({
       chatId: z.string().optional(),
       columnMap: columnMap.optional(),
       redaction: redaction.optional(),
+      mode: importMode,
     }))
     .mutation(async ({ ctx, input }) => {
       const file = await getPersonaFileById(input.fileId, ctx.user.id);
@@ -153,6 +164,7 @@ export const importRouter = router({
         chatId: input.chatId,
         columnMap: input.columnMap,
         redaction: input.redaction,
+        mode: input.mode,
       });
     }),
 

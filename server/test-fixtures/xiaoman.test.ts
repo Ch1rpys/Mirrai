@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { measureGroup } from "@shared/group-stats";
 import { parseTranscriptMessages } from "../skill-engine/micro-rules";
 import { renderFixture } from "./render";
 import {
@@ -7,10 +8,12 @@ import {
   charCount,
   deriveXiaomanTruth,
   formatShanghai,
+  GROUP_FIXTURE_TRUTH,
   wallClock,
   XIAOMAN_DEFAULT_SEED,
   XIAOMAN_NAME,
   XIAOMAN_TRUTH,
+  XIAOMAN_USER_NAME,
   type FixtureRecord,
   type FixtureSlot,
   type FixtureState,
@@ -853,11 +856,63 @@ describe("the design constants", () => {
   });
 });
 
-describe("group fixture stub", () => {
-  it("has three speakers and about 300 lines", () => {
-    const group = buildGroupFixture();
+describe("group fixture", () => {
+  const group = buildGroupFixture();
+  const stats = measureGroup(group);
+
+  it("measures to the designed group numbers", () => {
+    expect(stats).not.toBeNull();
+    expect(stats!.samples).toBe(GROUP_FIXTURE_TRUTH.samples);
+    expect(stats!.samples).toBeGreaterThanOrEqual(40);
+    expect(Math.abs(stats!.afterMeRate - GROUP_FIXTURE_TRUTH.afterMeRate)).toBeLessThanOrEqual(0.1);
+    expect(Math.abs(stats!.afterOthersRate - GROUP_FIXTURE_TRUTH.afterOthersRate)).toBeLessThanOrEqual(
+      0.1,
+    );
+    expect(Math.abs(stats!.lengthMedian - GROUP_FIXTURE_TRUTH.lengthMedian)).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(stats!.gapMedianMessages - GROUP_FIXTURE_TRUTH.gapMedianMessages),
+    ).toBeLessThanOrEqual(1);
+    // The log is built so these are exact, not merely inside the tolerance.
+    expect(stats!.afterMeRate).toBeCloseTo(0.6, 10);
+    expect(stats!.afterOthersRate).toBeCloseTo(0.2, 10);
+    expect(stats!.lengthMedian).toBe(5);
+    expect(stats!.gapMedianMessages).toBe(5);
+  });
+
+  it("is deterministic across two builds", () => {
+    const again = buildGroupFixture();
+    expect(again.map((row) => row.id)).toEqual(group.map((row) => row.id));
+    expect(again.map((row) => row.role)).toEqual(group.map((row) => row.role));
+    expect(again.map((row) => row.speaker)).toEqual(group.map((row) => row.speaker));
+    expect(again.map((row) => row.content)).toEqual(group.map((row) => row.content));
+    expect(again.map((row) => row.timestamp.getTime())).toEqual(
+      group.map((row) => row.timestamp.getTime()),
+    );
+  });
+
+  it("has three speakers and about three hundred lines", () => {
     expect(group.length).toBeGreaterThanOrEqual(280);
     expect(group.length).toBeLessThanOrEqual(320);
-    expect(new Set(group.map((row) => row.speaker)).size).toBe(3);
+    const speakers = new Set(group.map((row) => row.speaker));
+    expect(speakers.size).toBe(3);
+    expect(speakers).toEqual(new Set([XIAOMAN_USER_NAME, XIAOMAN_NAME, "琪琪"]));
+    expect(group.every((row) => row.kind === "text")).toBe(true);
+    // The clock is the Shanghai wall clock, and the log moves forward.
+    expect(wallClock(group[0]!.timestamp)).toMatchObject({ year: 2024, month: 1, day: 8, hour: 19 });
+    for (let index = 1; index < group.length; index += 1) {
+      expect(group[index]!.timestamp.getTime()).toBeGreaterThan(group[index - 1]!.timestamp.getTime());
+    }
+  });
+
+  it("returns null at thirty-nine persona lines", () => {
+    const persona = group.filter((row) => row.role === "assistant");
+    expect(persona.length).toBeGreaterThan(39);
+    expect(measureGroup(persona.slice(0, 39))).toBeNull();
+    const handBuilt = Array.from({ length: 39 }, () => ({
+      role: "assistant",
+      content: "在的呀",
+      kind: "text",
+    }));
+    expect(measureGroup(handBuilt)).toBeNull();
   });
 });

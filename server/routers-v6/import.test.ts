@@ -38,6 +38,7 @@ vi.mock("../db", async (importOriginal) => ({
 }));
 
 import { appRouter } from "../routers";
+import * as importers from "../importers";
 
 function ctxFor(userId: number): TrpcContext {
   return {
@@ -235,6 +236,47 @@ describe("import.status / preview / confirm / cancel", () => {
     });
     expect(result).toMatchObject({ status: "done", written: 2 });
     expect(createCollectedMessages).toHaveBeenCalled();
+  });
+
+  it("passes group mode through preview and confirm (C9.8)", async () => {
+    const startSpy = vi.spyOn(importers, "startImport");
+    const previewSpy = vi.spyOn(importers, "previewImport");
+    try {
+      const caller = appRouter.createCaller(ctxFor(1));
+      await caller.import.preview({
+        fileId: 11,
+        format: "generic-line",
+        me: ["阿树"],
+        them: ["小满"],
+        mode: "group",
+      });
+      expect(previewSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ fileId: 11, mode: "group" }),
+      );
+
+      const result = await caller.import.confirm({
+        fileId: 11,
+        format: "generic-line",
+        me: ["阿树"],
+        them: ["小满"],
+        mode: "group",
+      });
+      expect(result).toMatchObject({ status: "done", written: 2 });
+      expect(startSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ fileId: 11, mode: "group" }),
+      );
+      // The mode reached the writer: both rows are group rows, while
+      // the roles still name me and TA.
+      const rows = createCollectedMessages.mock.calls[0][0] as Array<{
+        role: string;
+        meta?: { register?: string } | null;
+      }>;
+      expect(rows.map((row) => row.role)).toEqual(["assistant", "user"]);
+      expect(rows.map((row) => row.meta?.register)).toEqual(["group", "group"]);
+    } finally {
+      startSpy.mockRestore();
+      previewSpy.mockRestore();
+    }
   });
 
   it("writes redacted content when confirm asks to hide phones", async () => {

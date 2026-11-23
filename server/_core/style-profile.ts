@@ -56,6 +56,7 @@ import { measureVoice } from "@shared/voice-stats";
 import { measureCalls } from "@shared/call-stats";
 import { measurePhotos } from "@shared/photo-stats";
 import { measureDoubleText } from "@shared/double-text";
+import { measureGroup } from "@shared/group-stats";
 import { toTurns } from "@shared/scenes";
 import { splitScenes } from "@shared/scenes";
 import { schedulePersonaEmbeddings } from "../chat/embeddings";
@@ -144,6 +145,18 @@ export async function measureStyleProfile(params: {
           : null,
     });
   }
+  /**
+   * The group register (C9.8).
+   *
+   * A group is a different room, and how often they step in there says
+   * nothing about how they talk to one person. Read from its own rows
+   * and stored under its own key; it never touches the chat voice.
+   */
+  const groupRows = [];
+  for await (const row of iterateRecords(personaId, userId, { register: "group" })) {
+    groupRows.push(row);
+  }
+  const group = measureGroup(groupRows);
   const persona = await getPersonaById(personaId, userId);
   const user = await getUserById(userId);
   const rawData =
@@ -275,6 +288,9 @@ export async function measureStyleProfile(params: {
     multiPoint,
     inSession,
     mirror: mirror ?? undefined,
+    // Only when measured: a group log below the floor leaves the field
+    // absent rather than filling it with a default.
+    ...(group ? { group } : {}),
   });
   const next = normalizeStyleProfile(nextRaw);
   return applyRerankWeightsFromPairs(personaId, userId, next, { persistAlways: true });

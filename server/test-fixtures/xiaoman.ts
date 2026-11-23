@@ -1855,26 +1855,136 @@ function retargetMedian(rows: Draft[], target: number, rng: Rng): void {
   }
 }
 
-// i18n:allow-identifier — a stub group log for C9.8, in the same voice.
+// i18n:allow-identifier — designed lines from the synthetic group log.
+const GROUP_LINES = {
+  /** Five code points each, so the median persona line is five long. */
+  five: [
+    "我也想去呀",
+    "几点集合呀",
+    "那家店不错",
+    "我马上到啦",
+    "你们定就好",
+    "周末有空吗",
+    "先到先得哦",
+    "我都可以的",
+    "听你的安排",
+    "明天见啦哈",
+  ],
+  /** Four code points each. */
+  four: ["我到了呀", "好的好的", "收到收到", "马上就到", "可以可以", "哈哈好啊", "我也想去", "等会儿见", "那就这样"],
+  /** Six code points each. */
+  six: [
+    "晚上一起吃饭",
+    "那就说定了哈",
+    "我大概七点到",
+    "你们先聊着呀",
+    "我晚点再过去",
+    "那家店要排队",
+    "记得带伞出门",
+    "我先去洗个澡",
+    "等我一会儿啊",
+  ],
+  me: [
+    "到了没",
+    "几点到呀",
+    "我先去占座",
+    "你们想吃啥",
+    "我马上出门",
+    "今天人好多",
+    "先点菜吧",
+    "我这边刚下班",
+    "路上堵车了",
+    "你们先吃吧",
+  ],
+  other: ["我在呢", "我也到了", "这家我来过", "你们决定就好", "我晚一点到", "我先看看菜单", "今天降温了", "那我也去"],
+};
+
+// i18n:allow-identifier — the third person in the synthetic group log.
+const GROUP_OTHER_NAME = "琪琪";
+
+/** The measurements `buildGroupFixture()` is designed to produce (C9.8). */
+export const GROUP_FIXTURE_TRUTH = {
+  samples: 48,
+  afterMeRate: 0.6,
+  afterOthersRate: 0.2,
+  lengthMedian: 5,
+  gapMedianMessages: 5,
+} as const;
+
+/**
+ * A three-person group log whose every statistic is designed (C9.8).
+ *
+ * The roles are built, not drawn. Every message between two persona
+ * lines is either inside the next-three window that can count as
+ * "joining in" or outside it; the two buckets are then filled with the
+ * exact counts the designed rates need, and only *which* line a speaker
+ * says is left to the seeded draw. Two calls therefore produce the same
+ * log, and the measured rates are exact rather than close.
+ */
 export function buildGroupFixture(): FixtureRecord[] {
   const rng = seededRandom("xiaoman-group");
-  const speakers: Array<{ name: string; role: FixtureRecord["role"] }> = [
-    { name: XIAOMAN_USER_NAME, role: "user" },
-    { name: XIAOMAN_NAME, role: "assistant" },
-    { name: "琪琪", role: "other" },
-  ];
+  const taCount = GROUP_FIXTURE_TRUTH.samples;
+  const gapCount = taCount - 1;
+  /** Five messages before the first persona line, so no line starts cold. */
+  const leadCount = 5;
+  /**
+   * Ten of the gaps hold one message more than the rest. Forty-seven
+   * gaps, thirty-seven fives and ten sixes: the median is still five.
+   */
+  const gapLength = (index: number) => (index % 5 === 0 ? 6 : 5);
+
+  // Which non-persona slots fall inside one of the follow windows.
+  const blocks = [leadCount, ...Array.from({ length: gapCount }, (_, index) => gapLength(index))];
+  const slots: boolean[] = [];
+  const windowSlots: number[] = [];
+  const quietSlots: number[] = [];
+  for (const length of blocks) {
+    const inWindow = Math.min(3, length);
+    for (let offset = 0; offset < length; offset += 1) {
+      const hit = offset >= length - inWindow;
+      if (hit) windowSlots.push(slots.length);
+      else quietSlots.push(slots.length);
+      slots.push(hit);
+    }
+  }
+
+  // The mix of "me" and "others" that makes both rates exact: every slot
+  // inside a window is filled by a line that counts, so the two totals
+  // have to line up with the two designed rates.
+  const groupMessages = slots.length;
+  const meLines = Math.round(2.5 * windowSlots.length - 0.5 * groupMessages);
+  const otherLines = groupMessages - meLines;
+  const meInWindow = Math.round(meLines * GROUP_FIXTURE_TRUTH.afterMeRate);
+  const otherInWindow = Math.round(otherLines * GROUP_FIXTURE_TRUTH.afterOthersRate);
+  const windowRoles = shuffle(rng, [
+    ...Array.from({ length: meInWindow }, () => "user" as const),
+    ...Array.from({ length: otherInWindow }, () => "other" as const),
+  ]);
+  const quietRoles = shuffle(rng, [
+    ...Array.from({ length: meLines - meInWindow }, () => "user" as const),
+    ...Array.from({ length: otherLines - otherInWindow }, () => "other" as const),
+  ]);
+  if (windowRoles.length !== windowSlots.length || quietRoles.length !== quietSlots.length) {
+    throw new Error("group fixture: the designed speaker mix does not add up");
+  }
+  let windowCursor = 0;
+  let quietCursor = 0;
+  const roleBySlot = slots.map((hit) =>
+    hit ? windowRoles[windowCursor++]! : quietRoles[quietCursor++]!,
+  );
+
   const records: FixtureRecord[] = [];
-  let t = shanghaiDate(2024, 1, 8, 19, 0, 0);
-  for (let i = 0; i < 300; i++) {
-    const who = speakers[i % 3]!;
-    t = addMs(t, 20_000 + Math.floor(rng() * 15_000));
+  let timestamp = shanghaiDate(2024, 1, 8, 19, 0, 0);
+  const pushRow = (role: FixtureRecord["role"], speaker: string, content: string) => {
+    timestamp = addMs(timestamp, 20_000 + Math.floor(rng() * 15_000));
     records.push({
-      id: i + 1,
-      role: who.role,
-      speaker: who.name,
-      content: who.role === "other" ? "我在呢" : who.role === "assistant" ? "晚上一起呀" : "到了没",
-      timestamp: t,
+      id: records.length + 1,
+      role,
+      speaker,
+      content,
+      timestamp,
       kind: "text",
+      meta: { register: "group" },
       truth: {
         sceneId: 1,
         period: "p2",
@@ -1882,6 +1992,27 @@ export function buildGroupFixture(): FixtureRecord[] {
         slot: "evening",
       },
     });
+  };
+  const pushGroupLine = (slot: number) => {
+    const role = roleBySlot[slot]!;
+    if (role === "user") pushRow("user", XIAOMAN_USER_NAME, pick(rng, GROUP_LINES.me));
+    else pushRow("other", GROUP_OTHER_NAME, pick(rng, GROUP_LINES.other));
+  };
+  // Three lines of five code points and one each of four and six in every
+  // five persona lines: 30/48 are five long, and the median is five.
+  const pushPersonaLine = (index: number) => {
+    const phase = index % 5;
+    const pool =
+      phase < 3 ? GROUP_LINES.five : phase === 3 ? GROUP_LINES.four : GROUP_LINES.six;
+    pushRow("assistant", XIAOMAN_NAME, pick(rng, pool));
+  };
+
+  let slotCursor = 0;
+  for (let index = 0; index < blocks[0]!; index += 1) pushGroupLine(slotCursor++);
+  for (let index = 0; index < taCount; index += 1) {
+    pushPersonaLine(index);
+    if (index >= gapCount) break;
+    for (let n = 0; n < blocks[index + 1]!; n += 1) pushGroupLine(slotCursor++);
   }
   return records;
 }
