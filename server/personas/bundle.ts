@@ -127,6 +127,13 @@ async function readNdjson(dir: string, file: string): Promise<unknown[]> {
   return rows;
 }
 
+/** The uploads key behind a `/uploads/…` URL, or null. */
+function keyFromMediaUrl(url: string | null): string | null {
+  if (!url) return null;
+  const match = /^\/uploads\/(.+)$/.exec(url);
+  return match ? match[1] : null;
+}
+
 /** A file entry, read from the uploads directory. */
 function fileEntry(absPath: string, name: string): PersonaBundleEntry {
   return {
@@ -140,7 +147,7 @@ function fileEntry(absPath: string, name: string): PersonaBundleEntry {
 export function importedRelKey(
   userId: number,
   personaId: number,
-  kind: "stickers" | "media",
+  kind: "stickers" | "media" | "messages",
   fileName: string,
 ): string {
   return `personas/${userId}/${personaId}/bundle-${kind}/${safeBundleFileName(fileName, "file")}`;
@@ -211,9 +218,19 @@ export async function exportPersonaBundle(
     mentionCount: memory.mentionCount,
     entities: memory.entities ?? null,
   }));
-  const messageRows = messages.map((message) => ({
+  const messageFiles: Array<{ index: number; name: string }> = [];
+  for (const [index, message] of messages.entries()) {
+    const key = keyFromMediaUrl(message.mediaUrl ?? null);
+    const disk = key ? resolveStoredPath(key) : null;
+    if (!disk) continue;
+    const name = `files/messages/${index}-${safeBundleFileName(key!, "message")}`;
+    entries.push(fileEntry(disk, name));
+    messageFiles.push({ index, name: name.slice("files/messages/".length) });
+  }
+  const messageRows = messages.map((message, index) => ({
     oldId: message.id,
     oldReplyToId: message.replyToId ?? null,
+    mediaFileName: messageFiles.find((row) => row.index === index)?.name ?? null,
     role: message.role,
     content: message.content,
     messageType: message.messageType,
@@ -537,13 +554,27 @@ export async function importPersonaBundle(options: {
         const data = row as Record<string, unknown>;
         const oldId = typeof data.oldId === "number" ? data.oldId : null;
         const oldReplyTo = typeof data.oldReplyToId === "number" ? data.oldReplyToId : null;
+        let mediaUrl: string | null = null;
+        if (typeof data.mediaFileName === "string") {
+          const source = path.join(
+            stagingDir,
+            "files/messages",
+            safeBundleFileName(data.mediaFileName, "message"),
+          );
+          const fileKey = importedRelKey(userId, personaId, "messages", String(data.mediaFileName));
+          const target = resolveUploadPath(ENV.uploadDir, fileKey);
+          await fs.mkdir(path.dirname(target), { recursive: true });
+          await fs.copyFile(source, target);
+          writtenFiles.push(fileKey);
+          mediaUrl = `/uploads/${fileKey}`;
+        }
         const id = await db.createMessage({
           userId,
           personaId: personaId!,
           role: String(data.role ?? "assistant") as never,
           content: String(data.content ?? ""),
           messageType: (data.messageType ?? "text") as never,
-          mediaUrl: typeof data.mediaUrl === "string" ? data.mediaUrl : null,
+          mediaUrl,
           mediaDuration: typeof data.mediaDuration === "number" ? data.mediaDuration : null,
           emotionalState: typeof data.emotionalState === "string" ? data.emotionalState : null,
           channel: (data.channel ?? "web") as never,

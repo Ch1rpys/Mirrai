@@ -446,12 +446,18 @@ describe.skipIf(!DATABASE_URL)("a persona bundle, against the database (C9.5)", 
       messageType: "text",
       channel: "web",
     } as never);
+    const photoBytes = Buffer.from([7, 7, 7, 7]);
+    const photoKey = writeFile(
+      `personas/${userA}/${seeded.personaId}/tests/chat-photo.png`,
+      photoBytes,
+    );
     await createMessage({
       userId: userA,
       personaId: seeded.personaId,
       role: "assistant",
-      content: "在的呀",
-      messageType: "text",
+      content: "[image]",
+      messageType: "image",
+      mediaUrl: `/uploads/${photoKey}`,
       channel: "web",
       replyToId: first,
     } as never);
@@ -468,6 +474,12 @@ describe.skipIf(!DATABASE_URL)("a persona bundle, against the database (C9.5)", 
     expect(messages).toHaveLength(2);
     expect(messages[1].replyToId).toBe(messages[0].id);
     expect(messages[1].replyToId).not.toBe(first);
+    // The picture travelled too, under this persona's own path.
+    expect(messages[1].mediaUrl).toMatch(/^\/uploads\/personas\//);
+    const importedPhotoKey = String(messages[1].mediaUrl).replace(/^\/uploads\//, "");
+    expect(sha256OfFile(importedPhotoKey)).toBe(
+      createHash("sha256").update(photoBytes).digest("hex"),
+    );
   });
 
   it("is still readable as a bundle after a plain round trip of the format", async () => {
