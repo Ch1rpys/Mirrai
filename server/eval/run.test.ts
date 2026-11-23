@@ -189,6 +189,21 @@ describe("running the cases", () => {
     expect(context.imperfectionProfile).toBeNull();
   });
 
+  it("never offers a tool to an evaluation turn (C9.4)", async () => {
+    await runEval({
+      persona,
+      userId: 1,
+      cases: cases(),
+      trainingTexts: ["嗯嗯"],
+    });
+    expect(invokeWithProvider.mock.calls.length).toBeGreaterThan(0);
+    for (const call of invokeWithProvider.mock.calls) {
+      const params = call[1] as { options?: { tools?: unknown; toolChoice?: unknown } } | undefined;
+      expect(params?.options?.tools).toBeUndefined();
+      expect(params?.options?.toolChoice).toBeUndefined();
+    }
+  });
+
   it("does not stop at the first line the provider fails on", async () => {
     invokeWithProvider
       .mockRejectedValueOnce(new Error("provider exploded"))
