@@ -3505,5 +3505,26 @@ export const zhHant = {
     "unlock": "解鎖",
     "unlockFailed": "沒有解開。再試一次。",
     "note": "數據是密文，解鎖之後才讀得出來。"
+  },
+  "apiKeys": {
+    "title": "OpenAI 兼容端點",
+    "note": "別的程序可以用這裡創建的密鑰，把某個分身穿成 OpenAI 的模型來用。對話歷史以這裡為準：請求裡更早的消息和 system 消息會被忽略。",
+    "nameLabel": "密鑰的名字",
+    "namePlaceholder": "名字（例如 我的編輯器）",
+    "scopeChat": "對話",
+    "scopeRead": "只讀",
+    "create": "創建密鑰",
+    "createdOnce": "這個密鑰只顯示這一次，現在複製走：",
+    "copy": "複製",
+    "copied": "已複製",
+    "copyFailed": "沒能複製，手動選中再複製。",
+    "lockNote": "應用鎖不管這個端點：密鑰本身就是憑據，誰能拿到它誰就能對話。不想用了就吊銷。",
+    "loadFailed": "密鑰列表讀不出來。",
+    "empty": "還沒有密鑰。沒有密鑰時這個端點不會響應任何請求。",
+    "lastUsed": "上次使用：{{date}}",
+    "neverUsed": "還沒用過",
+    "revoked": "已吊銷",
+    "revoke": "吊銷",
+    "revokeConfirm": "確認吊銷"
   }
 } as const;

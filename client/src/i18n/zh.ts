@@ -3622,6 +3622,30 @@ export const zh = {
     unlockFailed: "没有解开。再试一次。",
     note: "数据是密文，解锁之后才读得出来。",
   },
+  /**
+   * The OpenAI-compatible endpoint (C9.2).
+   */
+  apiKeys: {
+    title: "OpenAI 兼容端点",
+    note: "别的程序可以用这里创建的密钥，把某个分身穿成 OpenAI 的模型来用。对话历史以这里为准：请求里更早的消息和 system 消息会被忽略。",
+    nameLabel: "密钥的名字",
+    namePlaceholder: "名字（例如 我的编辑器）",
+    scopeChat: "对话",
+    scopeRead: "只读",
+    create: "创建密钥",
+    createdOnce: "这个密钥只显示这一次，现在复制走：",
+    copy: "复制",
+    copied: "已复制",
+    copyFailed: "没能复制，手动选中再复制。",
+    lockNote: "应用锁不管这个端点：密钥本身就是凭据，谁能拿到它谁就能对话。不想用了就吊销。",
+    loadFailed: "密钥列表读不出来。",
+    empty: "还没有密钥。没有密钥时这个端点不会响应任何请求。",
+    lastUsed: "上次使用：{{date}}",
+    neverUsed: "还没用过",
+    revoked: "已吊销",
+    revoke: "吊销",
+    revokeConfirm: "确认吊销",
+  },
 } as const;
 
 export type ZhDictionary = typeof zh;

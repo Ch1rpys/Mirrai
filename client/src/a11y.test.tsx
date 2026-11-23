@@ -150,6 +150,33 @@ function utilsSpy(): any {
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     setup: { useQuery: () => ({ data: { hasLlmProvider: true, hasUserProvider: false } }) },
+    /**
+     * The OpenAI-compatible keys (C9.2).
+     *
+     * One key, so the row's own controls are drawn and checked too.
+     */
+    apiKey: {
+      list: {
+        useQuery: () => ({
+          data: {
+            keys: [{
+              id: 3,
+              name: "编辑器",
+              prefix: "mk_abcdef12",
+              scopes: ["chat"],
+              lastUsedAt: null,
+              revokedAt: null,
+              createdAt: new Date("2026-03-01T00:00:00Z"),
+            }],
+          },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+      create: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+      revoke: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+    },
     lock: {
       // The lobby's nav has the "lock now" button (C8.4).
       status: {
@@ -652,6 +679,7 @@ import DescribedFidelityNote from "./components/v6/DescribedFidelityNote";
 import LockedPersonaCard from "./components/v6/LockedPersonaCard";
 import UsagePanel from "./components/v6/UsagePanel";
 import RestoreBackupPanel from "./components/v6/RestoreBackupPanel";
+import ApiKeys from "./components/v6/ApiKeys";
 import Letters from "./pages/Letters";
 
 /**
@@ -841,6 +869,14 @@ describe("every control has a name", () => {
   it("on a locked persona's card", () => {
     renderPage(<LockedPersonaCard personaId={7} />);
     expect(drawnControls()).toBeGreaterThan(0);
+    expect(unnamedControls()).toEqual([]);
+  });
+
+  it("in the API keys panel", () => {
+    renderPage(<ApiKeys />);
+    // Create and the row's revoke. The name field and the two scope boxes
+    // are inputs; this check is about buttons and links.
+    expect(drawnControls()).toBeGreaterThan(1);
     expect(unnamedControls()).toEqual([]);
   });
 

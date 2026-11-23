@@ -43,6 +43,7 @@ import EmbedStatus from "@/components/v6/EmbedStatus";
 import ExtraBodyEditor from "@/components/v6/ExtraBodyEditor";
 import LlmRoles from "@/components/v6/LlmRoles";
 import UsagePanel from "@/components/v6/UsagePanel";
+import ApiKeys from "@/components/v6/ApiKeys";
 import RecycleBin from "@/components/v6/RecycleBin";
 import BackupPanel from "@/components/v6/BackupPanel";
 import Diagnostics from "@/components/v6/Diagnostics";
@@ -888,6 +889,7 @@ function AISettingsTab() {
       <ExtraBodyEditor />
       <EmbedStatus />
       <UsagePanel />
+      <ApiKeys />
     </div>
   );
 }

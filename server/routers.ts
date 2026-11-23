@@ -197,6 +197,7 @@ import { interviewRouter } from "./routers-v6/interview";
 import { usageRouter } from "./routers-v6/usage";
 import { backupRouter } from "./routers-v6/backup";
 import { markRouter } from "./routers-v6/mark";
+import { apiKeyRouter } from "./routers-v6/api-keys";
 import { lockRouter } from "./routers-v6/lock";
 import { encryptionRouter } from "./routers-v6/encryption";
 import { mineMicroRules } from "./skill-engine/micro-rules";
@@ -8141,6 +8142,7 @@ export const appRouter = router({
   usage: usageRouter,
   backup: backupRouter,
   mark: markRouter,
+  apiKey: apiKeyRouter,
   lock: lockRouter,
   encryption: encryptionRouter,
 

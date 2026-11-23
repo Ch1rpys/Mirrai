@@ -12,7 +12,7 @@ import {
   collectionJobs,
   distillationChunks, distillationCards, personaVersions,
   evalCases, evalRuns, outboundLetters, fidelityFeedback, fidelityPairs, blindSessions,
-  recordEmbeddings, pushSubscriptions, recordMarks, recordReports,
+  recordEmbeddings, pushSubscriptions, apiKeys, ApiKey, InsertApiKey, recordMarks, recordReports,
   InsertRecordMark, RecordMark,
   InsertPersona, InsertPersonaFile, InsertMessage,
   InsertWechatBinding, InsertSkillJob, InsertLlmConfig,
@@ -1710,6 +1710,7 @@ export async function deleteUserAccount(id: number) {
   const storedFiles = await collectStoredFiles(id);
 
   await withTransaction(async (tx) => {
+    await tx.delete(apiKeys).where(eq(apiKeys.userId, id));
     await tx.delete(channelBindings).where(eq(channelBindings.userId, id));
     await tx.delete(channelDefaultPersonas).where(eq(channelDefaultPersonas.userId, id));
     await tx.delete(channelStates).where(eq(channelStates.userId, id));
@@ -3327,6 +3328,78 @@ export async function countFidelityPairs(personaId: number, userId: number): Pro
     .from(fidelityPairs)
     .where(and(eq(fidelityPairs.personaId, personaId), eq(fidelityPairs.userId, userId)));
   return Number(row?.n ?? 0);
+}
+
+/**
+ * The keys of the OpenAI-compatible endpoint (C9.2).
+ *
+ * The key itself is never stored: only its sha256 hash and the first
+ * characters, which is enough for the list and useless to an attacker who
+ * reads the database.
+ */
+export async function createApiKey(data: InsertApiKey): Promise<ApiKey> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const [row] = await db.insert(apiKeys).values(data).returning();
+  if (!row) throw new Error("DB not available");
+  return row;
+}
+
+/** This account's keys, newest first. Revoked ones are included. */
+export async function listApiKeys(userId: number): Promise<ApiKey[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(apiKeys)
+    .where(eq(apiKeys.userId, userId))
+    .orderBy(desc(apiKeys.createdAt));
+}
+
+/** Revokes one of this account's keys. A second call is a no-op. */
+export async function revokeApiKey(id: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .update(apiKeys)
+    .set({ revokedAt: new Date() })
+    .where(and(
+      eq(apiKeys.id, id),
+      eq(apiKeys.userId, userId),
+      isNull(apiKeys.revokedAt),
+    ))
+    .returning({ id: apiKeys.id });
+  return rows.length > 0;
+}
+
+/**
+ * The account behind a presented key, or null.
+ *
+ * The lookup is by hash, before anybody is known: a key *is* the
+ * credential, so there is no user id to filter by yet. A revoked key is
+ * not a key.
+ */
+export async function findActiveApiKeyByHash(keyHash: string): Promise<ApiKey | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .select()
+    .from(apiKeys)
+    .where(and(eq(apiKeys.keyHash, keyHash), isNull(apiKeys.revokedAt)))
+    .limit(1);
+  return row ?? null;
+}
+
+/** Records that a key was used, so the list can show when. */
+export async function touchApiKeyLastUsed(id: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .update(apiKeys)
+    .set({ lastUsedAt: new Date() })
+    .where(and(eq(apiKeys.id, id), eq(apiKeys.userId, userId)))
+    .returning({ id: apiKeys.id });
+  return rows.length > 0;
 }
 
 export async function listPushSubscriptions(userId: number) {

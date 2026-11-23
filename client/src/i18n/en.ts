@@ -3602,6 +3602,30 @@ export const en = {
     unlockFailed: "That did not unlock it. Try again.",
     note: "The content is ciphertext until it is unlocked.",
   },
+  /**
+   * The OpenAI-compatible endpoint (C9.2).
+   */
+  apiKeys: {
+    title: "OpenAI-compatible endpoint",
+    note: "Another program can use a key created here to talk to a persona as if it were an OpenAI model. The conversation here is the record: earlier messages and system messages in the request are ignored.",
+    nameLabel: "Key name",
+    namePlaceholder: "A name (for example, my editor)",
+    scopeChat: "Chat",
+    scopeRead: "Read only",
+    create: "Create key",
+    createdOnce: "This key is shown once. Copy it now:",
+    copy: "Copy",
+    copied: "Copied",
+    copyFailed: "Could not copy. Select it and copy by hand.",
+    lockNote: "The app lock does not cover this endpoint: the key is the credential, and whoever has it can chat. Revoke it when you are done.",
+    loadFailed: "The keys could not be read.",
+    empty: "No keys yet. Until one exists, the endpoint answers nothing.",
+    lastUsed: "Last used: {{date}}",
+    neverUsed: "Never used",
+    revoked: "Revoked",
+    revoke: "Revoke",
+    revokeConfirm: "Revoke it",
+  },
 } as const;
 
 export type EnDictionary = typeof en;

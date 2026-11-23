@@ -1947,4 +1947,52 @@ export const V6 = {
     zh: "到点了。你之前答应过要问一句。只问这一件事，一句话，四十五个字以内。不要解释你为什么记得。",
     en: "It is time. You promised to ask about something. Ask about that one thing, in one short line, and do not explain why you remembered.",
   },
+
+  /**
+   * The OpenAI-compatible endpoint (C9.2).
+   *
+   * Its errors are read by a program, but a person configures the client
+   * and reads the message when it fails — so they are sentences, like
+   * every other error the app has.
+   */
+  "errors.apiKeyMissing": {
+    zh: "没有密钥。请求要带 Authorization: Bearer <密钥>。",
+    en: "No key. The request needs an Authorization: Bearer <key> header.",
+  },
+  "errors.apiKeyInvalid": {
+    zh: "这个密钥无效，或者已经被吊销。",
+    en: "That key is not valid, or it has been revoked.",
+  },
+  "errors.apiKeyNoChat": {
+    zh: "这个密钥没有对话权限。",
+    en: "This key does not allow chatting.",
+  },
+  "errors.apiCompatDisabled": {
+    zh: "OpenAI 兼容端点关着。",
+    en: "The OpenAI-compatible endpoint is turned off.",
+  },
+  "errors.apiEncryptionLocked": {
+    zh: "这个账号的内容加密锁着。先在应用里解锁，再让别的程序调用。",
+    en: "This account's encrypted content is locked. Unlock it in the app before another program uses it.",
+  },
+  "errors.apiPersonaLocked": {
+    zh: "这个分身锁着，别处也不能访问。先在应用里解锁它。",
+    en: "This persona is locked, so it cannot be reached from here either. Unlock it in the app first.",
+  },
+  "errors.apiModelUnknown": {
+    zh: "没有这个模型。可用的模型是 persona-<分身 id>，用 GET /v1/models 查。",
+    en: "There is no such model. The models are persona-<id>; list them with GET /v1/models.",
+  },
+  "errors.apiMessageMissing": {
+    zh: "请求里没有可用的用户消息。",
+    en: "The request carried no user message.",
+  },
+  "errors.apiMessageTooLong": {
+    zh: "这句话太长了：最多 {{max}} 个字符。",
+    en: "That message is too long: {{max}} characters at most.",
+  },
+  "errors.apiKeyNotFound": {
+    zh: "没有这个密钥。",
+    en: "There is no such key.",
+  },
 } as const satisfies CopyTable;

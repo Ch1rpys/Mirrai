@@ -28,7 +28,14 @@ export const emotionalStateEnum = pgEnum("emotional_state", ["warm", "playful", 
 export const fileTypeEnum = pgEnum("file_type", ["chat_txt", "chat_csv", "image", "video", "collected", "chat_export", "archive"]);
 export const processStatusEnum = pgEnum("process_status", ["uploaded", "processing", "done", "failed"]);
 export const messageRoleEnum = pgEnum("message_role", ["user", "assistant"]);
-export const channelEnum = pgEnum("channel", ["web", "wechat", "feishu"]);
+export const channelEnum = pgEnum("channel", [
+  "web",
+  "wechat",
+  "feishu",
+  // An OpenAI-compatible client (C9.2). PostgreSQL cannot remove an enum
+  // value, so this one only ever gets added.
+  "api",
+]);
 export const characterFamilyEnum = pgEnum("character_family", ["colleague", "relationship", "celebrity"]);
 export const pipelineStageEnum = pgEnum("pipeline_stage", [
   "intake", "collecting", "analyzing_persona", "analyzing_work",
@@ -2413,3 +2420,31 @@ export const messageMarks = pgTable("message_marks", {
 
 export type MessageMark = typeof messageMarks.$inferSelect;
 export type InsertMessageMark = typeof messageMarks.$inferInsert;
+
+/**
+ * An API key for the OpenAI-compatible endpoint (C9.2).
+ *
+ * Only the hash of the key is stored — the key itself is shown once, when
+ * it is created, and never again. `prefix` is the first characters, which
+ * is enough for the settings page to name the key without knowing it.
+ */
+export const apiKeys = pgTable("api_keys", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  name: varchar("name", { length: 64 }).notNull(),
+  /** sha256 of the whole key, hexadecimal. */
+  keyHash: varchar("keyHash", { length: 64 }).notNull(),
+  /** The first characters, for the list. */
+  prefix: varchar("prefix", { length: 12 }).notNull(),
+  /** `["chat"]`, `["read"]` or both. */
+  scopes: jsonb("scopes").default(["chat"]).notNull(),
+  lastUsedAt: timestamp("lastUsedAt"),
+  revokedAt: timestamp("revokedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  hashIdx: uniqueIndex("api_keys_hash_idx").on(table.keyHash),
+  userIdx: index("api_keys_user_idx").on(table.userId),
+}));
+
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type InsertApiKey = typeof apiKeys.$inferInsert;

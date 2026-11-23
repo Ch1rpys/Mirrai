@@ -306,6 +306,15 @@ export const ENV = {
   reminderQuietHours: process.env.REMINDER_QUIET_HOURS ?? "23:00-08:00",
 
   /**
+   * Whether the OpenAI-compatible endpoint answers at all (C9.2).
+   *
+   * On by default, but with no keys created it is unusable — the endpoint
+   * is switched off by having no credentials, and this switch is a second
+   * lock for an operator who wants it gone completely.
+   */
+  openaiCompatEnabled: (process.env.OPENAI_COMPAT_ENABLED ?? "true").toLowerCase() !== "false",
+
+  /**
    * Whether the read-aloud button may be used.
    *
    * The default voice is Microsoft's *online* Edge read-aloud service,
