@@ -92,7 +92,15 @@ async function searchOpenMeteo(name: string, locale: Locale) {
   });
 }
 
-async function fetchWeather(
+/**
+ * The forecast for one place (C5.2).
+ *
+ * Exported because the `get_weather` tool (C9.4) asks the same
+ * endpoint for the same persona: the switch, the coordinates and the
+ * cache are shared, so the tool cannot quietly become a second
+ * outbound call with its own rules.
+ */
+export async function fetchWeather(
   city: { name: string; lat: number; lng: number; timezone?: string },
 ): Promise<WeatherPayload | null> {
   const key = cityKey(city.lat, city.lng);

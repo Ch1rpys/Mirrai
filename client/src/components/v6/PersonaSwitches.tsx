@@ -38,6 +38,7 @@ export default function PersonaSwitches(props: { personaId: number; name: string
   const factRewrite = Boolean(settings.data?.layers?.factRewrite);
   const voiceNotes = Boolean(settings.data?.layers?.voiceNotes);
   const callMode = Boolean(settings.data?.layers?.callMode);
+  const tools = Boolean(settings.data?.layers?.tools);
   const asyncDelivery = Boolean(settings.data?.timing?.asyncDelivery);
   const maxDelayMinutes = settings.data?.timing?.maxDelayMinutes ?? 30;
   const asleep = Boolean(settings.data?.timing?.sleep);
@@ -288,6 +289,26 @@ export default function PersonaSwitches(props: { personaId: number; name: string
           <span className="block">{t("personaEdit.factAnnotate")}</span>
           <span className="block text-xs text-muted-foreground leading-relaxed">
             {t("personaEdit.factAnnotateNote")}
+          </span>
+        </span>
+      </label>
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={tools}
+          disabled={busy}
+          onChange={(event) =>
+            update.mutate({
+              id: props.personaId,
+              patch: { layers: { tools: event.target.checked } },
+            })
+          }
+          className="mt-0.5"
+        />
+        <span>
+          <span className="block">{t("personaEdit.tools", { name: props.name })}</span>
+          <span className="block text-xs text-muted-foreground leading-relaxed">
+            {t("personaEdit.toolsNote", { name: props.name })}
           </span>
         </span>
       </label>

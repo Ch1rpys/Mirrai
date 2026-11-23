@@ -43,6 +43,7 @@ import { resolveRecordScope } from "@shared/persona-sharing";
 import { mayReachOut } from "@shared/graduation-mode";
 import { copy, localizeScene } from "@shared/copy";
 import { normalizePersonaSettings } from "@shared/persona-settings";
+import type { ToolPhoto } from "./persona-tools";
 import { renderRecordContent } from "@shared/records";
 import { pickStickerForTurn } from "./sticker-turn";
 import { pickPhotoForTurn } from "./photo-turn";
@@ -1871,6 +1872,22 @@ async function* runConversationTurn(
     }
   }
 
+  /**
+   * The persona's tools (C9.4).
+   *
+   * They exist only on the web, only when the user turned them on, and
+   * never for a memorial persona or an evaluation. A photo the model
+   * sends is collected here and stored after the words, in the same
+   * place the photo layer's photos go.
+   */
+  const toolPhotos: ToolPhoto[] = [];
+  const toolsEnabled =
+    provider != null &&
+    provider.capabilities.tools === true &&
+    (options.channel ?? "web") === "web" &&
+    !isMemorial(persona) &&
+    normalizePersonaSettings(persona.settings).layers.tools === true;
+
   try {
     if (plan.kind === "ritual") {
       // The reply was already taken from the table. The model is not called.
@@ -1885,6 +1902,9 @@ async function* runConversationTurn(
       signal: options.signal,
       options: invokeOptions,
       emitDeltas: !timingEnabled && !deferReplyForRecall && !voiceNoteDecision,
+      tools: toolsEnabled
+        ? { enabled: true, onPhoto: (photo) => toolPhotos.push(photo) }
+        : undefined,
     })) {
       if (event.type === "thinking") yield { type: "thinking" };
       if (event.type === "delta") {
@@ -2444,6 +2464,39 @@ async function* runConversationTurn(
   }> = [];
 
   /**
+   * The photograph the model asked to send (C9.4).
+   *
+   * It is already a real photo attached to a real memory — the tool
+   * checked that — so it is stored as its own assistant message, the
+   * way a photo arrives in a real conversation.
+   */
+  for (const photo of toolPhotos) {
+    try {
+      const photoAt = photo.at ? photo.at.toISOString() : null;
+      const photoMessageId = await db.createMessage({
+        personaId: persona.id,
+        userId,
+        role: "assistant",
+        content: "[image]",
+        messageType: "image",
+        emotionalState: newEmotionalState,
+        channel: "web",
+        mediaUrl: photo.url,
+        metadata: { kind: "photo", mediaId: photo.mediaId, photoAt, via: "tool", memoryId: photo.memoryId },
+      });
+      extra.push({
+        messageId: photoMessageId,
+        kind: "photo",
+        content: "[image]",
+        mediaUrl: photo.url,
+        photoAt,
+      });
+    } catch (error) {
+      console.warn("[Chat] The tool's photo could not be stored:", error);
+    }
+  }
+
+  /**
    * A real photo after the words, when this reply recalled a memory
    * with one attached (B7.9).
    *
@@ -2451,7 +2504,7 @@ async function* runConversationTurn(
    * attached, nothing is sent — this layer does not generate images.
    */
   const photosEnabled = normalizePersonaSettings(persona.settings).layers.photos === true;
-  if (photosEnabled && !immediate) {
+  if (photosEnabled && !immediate && toolPhotos.length === 0) {
     const photo = await pickPhotoForTurn({
       personaId: persona.id,
       userId,

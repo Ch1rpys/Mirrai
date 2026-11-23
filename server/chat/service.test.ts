@@ -2751,6 +2751,84 @@ describe("runConversation", () => {
       vi.useRealTimers();
     }
   });
+
+describe("the persona's tools (C9.4)", () => {
+  // The generator below runs inside the same `runConversation` describe,
+  // so the mocks are already wired; the call history is per test.
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function toolProvider() {
+    return {
+      name: "Test",
+      isConfigured: () => true,
+      capabilities: { streaming: true, vision: true, tools: true, jsonMode: false },
+      invoke,
+      lastToolCalls: null,
+      stream: async function* () {
+        yield { text: "" };
+      },
+    };
+  }
+
+  async function collect(options: Record<string, unknown> = {}) {
+    const events: any[] = [];
+    for await (const event of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      ...options,
+    } as any)) {
+      events.push(event);
+    }
+    return events;
+  }
+
+  it("sends no tools at all when the switch is off", async () => {
+    await collect();
+    const options = (invokeWithProvider.mock.calls[0]?.[1] as any)?.options;
+    expect(options?.tools).toBeUndefined();
+    expect(options?.toolChoice).toBeUndefined();
+  });
+
+  it("offers the tools and stops streaming when the switch is on", async () => {
+    resolveProviderForUser.mockResolvedValue(toolProvider());
+    const events = await collect({
+      persona: persona({ settings: { layers: { tools: true } } }),
+      mode: "stream",
+    });
+    expect(streamWithProvider).not.toHaveBeenCalled();
+    const options = (invokeWithProvider.mock.calls[0]?.[1] as any)?.options;
+    expect(Array.isArray(options?.tools)).toBe(true);
+    expect(options.tools.map((tool: any) => tool.name)).toEqual([
+      "set_reminder",
+      "send_photo",
+    ]);
+    expect(options.toolChoice).toBe("auto");
+    expect(events.some((event: any) => event.type === "done")).toBe(true);
+  });
+
+  it("has no tools for a memorial persona", async () => {
+    resolveProviderForUser.mockResolvedValue(toolProvider());
+    await collect({
+      persona: persona({ settings: { mode: "memorial", layers: { tools: true } } }),
+    });
+    const options = (invokeWithProvider.mock.calls[0]?.[1] as any)?.options;
+    expect(options?.tools).toBeUndefined();
+  });
+
+  it("has no tools on a channel", async () => {
+    resolveProviderForUser.mockResolvedValue(toolProvider());
+    await collect({
+      persona: persona({ settings: { layers: { tools: true } } }),
+      channel: "wechat",
+    });
+    const options = (invokeWithProvider.mock.calls[0]?.[1] as any)?.options;
+    expect(options?.tools).toBeUndefined();
+  });
+});
 });
 
 describe("composeMessages", () => {

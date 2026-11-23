@@ -10,6 +10,9 @@ const createLetterWithMessage = vi.fn();
 const createSafetyEvent = vi.fn();
 const pushToUser = vi.fn();
 const runConversation = vi.fn();
+const getLastUserMessageAt = vi.fn();
+const createMessage = vi.fn();
+const composeCheckInMessage = vi.fn();
 
 vi.mock("../db", () => ({
   listDueScheduledItems: (...args: unknown[]) => listDueScheduledItems(...args),
@@ -20,10 +23,16 @@ vi.mock("../db", () => ({
   getUserById: (...args: unknown[]) => getUserById(...args),
   createLetterWithMessage: (...args: unknown[]) => createLetterWithMessage(...args),
   createSafetyEvent: (...args: unknown[]) => createSafetyEvent(...args),
+  getLastUserMessageAt: (...args: unknown[]) => getLastUserMessageAt(...args),
+  createMessage: (...args: unknown[]) => createMessage(...args),
 }));
 
 vi.mock("../chat/service", () => ({
   runConversation: (...args: unknown[]) => runConversation(...args),
+}));
+
+vi.mock("../chat/checkin", () => ({
+  composeCheckInMessage: (...args: unknown[]) => composeCheckInMessage(...args),
 }));
 
 vi.mock("../_core/push", () => ({
@@ -87,6 +96,9 @@ describe("delivering what was scheduled (C5.3)", () => {
     runConversation.mockImplementation(async function* () {
       yield* events(["在的"]);
     });
+    getLastUserMessageAt.mockResolvedValue(null);
+    createMessage.mockResolvedValue(41);
+    composeCheckInMessage.mockResolvedValue("到家了吗");
   });
 
   it("opens a capsule on its day without a model call", async () => {
@@ -188,6 +200,102 @@ describe("delivering what was scheduled (C5.3)", () => {
     });
     const result = await sweepScheduledItems(NOW);
     expect(result.delivered).toBe(0);
+    expect(releaseScheduledItem).toHaveBeenCalledWith(7, 1);
+    expect(finishScheduledItem).not.toHaveBeenCalled();
+  });
+});
+
+describe("the reminder the persona agreed to bring up (C9.4)", () => {
+  function checkIn(overrides: Record<string, unknown> = {}) {
+    return item({
+      kind: "check_in",
+      body: "到家了跟我说",
+      createdAt: new Date("2026-03-01T10:00:00Z"),
+      ...overrides,
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    listDueScheduledItems.mockResolvedValue([checkIn()]);
+    claimScheduledItem.mockResolvedValue(true);
+    finishScheduledItem.mockResolvedValue(true);
+    releaseScheduledItem.mockResolvedValue(true);
+    getPersonaById.mockResolvedValue(persona());
+    getUserById.mockResolvedValue({ id: 1, locale: "zh", timezone: "Asia/Shanghai" });
+    createSafetyEvent.mockResolvedValue(1);
+    pushToUser.mockResolvedValue(1);
+    getLastUserMessageAt.mockResolvedValue(null);
+    createMessage.mockResolvedValue(41);
+    composeCheckInMessage.mockResolvedValue("到家了吗");
+  });
+
+  it("asks one line and marks it as a check-in", async () => {
+    const result = await sweepScheduledItems(NOW);
+    expect(result).toEqual({ delivered: 1, cancelled: 0 });
+    expect(composeCheckInMessage).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 1,
+      reminderText: "到家了跟我说",
+      locale: "zh",
+      now: NOW,
+    }));
+    expect(createMessage).toHaveBeenCalledWith(expect.objectContaining({
+      personaId: 1,
+      userId: 1,
+      role: "assistant",
+      content: "到家了吗",
+      channel: "web",
+      metadata: { kind: "check_in", reminderText: "到家了跟我说" },
+    }));
+    expect(finishScheduledItem).toHaveBeenCalledWith(7, 1, "delivered", { at: NOW });
+    expect(pushToUser).toHaveBeenCalledWith(1, expect.objectContaining({ text: "到家了吗" }));
+  });
+
+  it("cancels it without a word when the user wrote in the meantime", async () => {
+    getLastUserMessageAt.mockResolvedValue(new Date("2026-03-01T11:30:00Z"));
+    const result = await sweepScheduledItems(NOW);
+    expect(result).toEqual({ delivered: 0, cancelled: 1 });
+    expect(composeCheckInMessage).not.toHaveBeenCalled();
+    expect(createMessage).not.toHaveBeenCalled();
+    expect(finishScheduledItem).toHaveBeenCalledWith(7, 1, "cancelled", { reason: "closed" });
+  });
+
+  it("delivers when the last thing the user said was before the reminder", async () => {
+    getLastUserMessageAt.mockResolvedValue(new Date("2026-03-01T09:00:00Z"));
+    const result = await sweepScheduledItems(NOW);
+    expect(result).toEqual({ delivered: 1, cancelled: 0 });
+  });
+
+  it("waits out the quiet hours instead of waking the user", async () => {
+    // 16:30 UTC is 00:30 in Shanghai, inside the default 23:00-08:00.
+    const lateNight = new Date("2026-03-01T16:30:00Z");
+    const result = await sweepScheduledItems(lateNight);
+    expect(result).toEqual({ delivered: 0, cancelled: 0 });
+    expect(releaseScheduledItem).toHaveBeenCalledWith(7, 1);
+    expect(composeCheckInMessage).not.toHaveBeenCalled();
+    expect(createMessage).not.toHaveBeenCalled();
+  });
+
+  it("is cancelled in a memorial persona", async () => {
+    getPersonaById.mockResolvedValue(persona({ settings: { mode: "memorial" } }));
+    const result = await sweepScheduledItems(NOW);
+    expect(result).toEqual({ delivered: 0, cancelled: 1 });
+    expect(composeCheckInMessage).not.toHaveBeenCalled();
+  });
+
+  it("records that a crisis line was saved as a reminder, and does not send it", async () => {
+    listDueScheduledItems.mockResolvedValue([checkIn({ body: "我不想活了" })]);
+    const result = await sweepScheduledItems(NOW);
+    expect(result).toEqual({ delivered: 0, cancelled: 1 });
+    expect(createSafetyEvent).toHaveBeenCalled();
+    expect(composeCheckInMessage).not.toHaveBeenCalled();
+    expect(createMessage).not.toHaveBeenCalled();
+  });
+
+  it("gives it back when no provider could write the line", async () => {
+    composeCheckInMessage.mockResolvedValue(null);
+    const result = await sweepScheduledItems(NOW);
+    expect(result).toEqual({ delivered: 0, cancelled: 0 });
     expect(releaseScheduledItem).toHaveBeenCalledWith(7, 1);
     expect(finishScheduledItem).not.toHaveBeenCalled();
   });

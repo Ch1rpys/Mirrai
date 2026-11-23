@@ -797,3 +797,22 @@ describe("a message that quotes the record", () => {
     expect(screen.queryByTestId("quoted-records")).toBeNull();
   });
 });
+
+describe("the check-in marker (C9.4)", () => {
+  it("says the persona was asked to remember to ask", () => {
+    render(
+      <MessageBubble
+        msg={makeMessage({ kind: "check_in", content: "到家了吗" })}
+        personaName="小满"
+        showMood={false}
+        {...callbacks()}
+      />,
+    );
+    expect(screen.getByText(translate("zh", "chat.checkInMarker", { name: "小满" }))).toBeTruthy();
+  });
+
+  it("is not on an ordinary message", () => {
+    render(<MessageBubble msg={makeMessage()} personaName="小满" showMood={false} {...callbacks()} />);
+    expect(screen.queryByText(/记着问的/)).toBeNull();
+  });
+});

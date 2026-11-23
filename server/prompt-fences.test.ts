@@ -577,3 +577,24 @@ describe("what the user described about a person (C1.8)", () => {
     expect(prompt).not.toContain(copy("zh", "prompt.describedHeading"));
   });
 });
+
+describe("the reminder sentence a check-in asks about (C9.4)", () => {
+  it("reaches the model only inside the material fence", async () => {
+    const { buildCheckInMessages } = await import("./chat/checkin");
+    const messages = buildCheckInMessages({
+      persona: persona(),
+      reminderText: HOSTILE_NOTE,
+      locale: "zh",
+      now: new Date("2026-03-01T12:00:00Z"),
+    });
+    const user = messages.find((message) => message.role === "user")!;
+    expect(String(user.content)).toContain(HOSTILE_NOTE);
+    const unfencedUser = String(user.content).replace(
+      /MATERIAL>>>:[0-9a-f]+\n[\s\S]*?<<<END MATERIAL>>>:[0-9a-f]+/g,
+      "",
+    );
+    expect(unfencedUser).not.toContain(HOSTILE_NOTE);
+    // The instruction itself is not material.
+    expect(unfencedUser).toContain(copy("zh", "prompts.checkInInstruction"));
+  });
+});

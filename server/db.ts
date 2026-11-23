@@ -11374,6 +11374,31 @@ export async function listScheduledItems(
   return decryptRows("scheduled_items", rows);
 }
 
+/**
+ * How many check-ins this persona is still holding (C9.4).
+ *
+ * The `set_reminder` tool allows one at a time; the count is what the
+ * tool checks before it writes. A delivered or cancelled row does not
+ * count — the reminder is over.
+ */
+export async function countPendingCheckIns(
+  personaId: number,
+  userId: number,
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(scheduledItems)
+    .where(and(
+      eq(scheduledItems.userId, userId),
+      eq(scheduledItems.personaId, personaId),
+      eq(scheduledItems.kind, "check_in"),
+      eq(scheduledItems.status, "scheduled"),
+    ));
+  return row?.count ?? 0;
+}
+
 export async function getScheduledItem(
   id: number,
   userId: number,

@@ -819,6 +819,11 @@ export function MessageBubble({
             renderContent()
           )}
         </div>
+        {!isUser && msg.kind === "check_in" && (
+          <span className="text-[11px] text-muted-subtle">
+            {t("chat.checkInMarker", { name: personaName })}
+          </span>
+        )}
         {msg.createdAt && !msg.isStreaming && (
           <span className="text-[11px] text-muted-subtle px-1 flex items-center gap-1.5">
             {/**

@@ -8,12 +8,15 @@
  */
 import * as db from "../db";
 import { getEffectivePresence } from "../_core/graduation";
+import { ENV } from "../_core/env";
 import { normalizePersonaSettings } from "@shared/persona-settings";
-import { mayChatNow } from "@shared/persona-state";
+import { isMemorial, mayChatNow } from "@shared/persona-state";
 import { resolveReplyAt } from "@shared/letters";
 import { detectCrisis } from "../safety/crisis";
 import { pushToUser } from "../_core/push";
 import { withoutEncryptionLocked } from "../encryption/lock";
+import { composeCheckInMessage } from "../chat/checkin";
+import { isQuietHour } from "./reminders";
 
 /** Why an item was called off, in the words the interface uses. */
 export type CancelReason = "asleep" | "sealed" | "closed" | "deleted";
@@ -74,6 +77,88 @@ export async function sweepScheduledItems(
     const chat = mayChatNow(persona, now, zone);
     if (!chat.ok) {
       await cancel(chat.reason === "sealed" ? "sealed" : "closed");
+      continue;
+    }
+
+    /**
+      * The reminder the persona agreed to bring up (C9.4).
+      *
+      * A check-in is not a message the user scheduled to send: it is a
+      * question the user asked the persona to ask. So it is cancelled
+      * rather than delivered when they have already written — the
+      * conversation happened without it. Quiet hours and the memorial
+      * mode are respected at the moment of delivery, not only when the
+      * tool was called.
+      */
+    if (item.kind === "check_in") {
+      const lastUser = await db.getLastUserMessageAt(persona.id, item.userId);
+      const setAt = item.createdAt ? new Date(item.createdAt).getTime() : 0;
+      if (lastUser && new Date(lastUser).getTime() >= setAt) {
+        await cancel("closed");
+        continue;
+      }
+      if (isMemorial(persona)) {
+        await cancel("closed");
+        continue;
+      }
+      if (isQuietHour(now, ENV.reminderQuietHours, zone)) {
+        // Do not wake them. The item stays due and the next tick after
+        // the quiet hours tries again.
+        await db.releaseScheduledItem(item.id, item.userId);
+        continue;
+      }
+      if (detectCrisis(item.body).crisis) {
+        await db.createSafetyEvent({
+          userId: item.userId,
+          personaId: persona.id,
+          type: "crisis",
+          severity: "critical",
+        }).catch((error: unknown) =>
+          console.warn("[Safety] Failed to record the crisis event:", error));
+        await cancel("closed");
+        continue;
+      }
+      const locale = user?.locale === "en" ? "en" : user?.locale === "zh-Hant" ? "zh-Hant" : "zh";
+      let line: string | null = null;
+      try {
+        line = await composeCheckInMessage({
+          persona,
+          userId: item.userId,
+          reminderText: item.body,
+          locale,
+          now,
+        });
+      } catch (error) {
+        console.warn("[Scheduler] A check-in could not be written:", error);
+        line = null;
+      }
+      if (!line) {
+        await db.releaseScheduledItem(item.id, item.userId);
+        continue;
+      }
+      try {
+        await db.createMessage({
+          personaId: persona.id,
+          userId: item.userId,
+          role: "assistant",
+          content: line,
+          channel: "web",
+          metadata: { kind: "check_in", reminderText: item.body },
+        });
+      } catch (error) {
+        console.warn("[Scheduler] A check-in could not be stored:", error);
+        await db.releaseScheduledItem(item.id, item.userId);
+        continue;
+      }
+      await db.finishScheduledItem(item.id, item.userId, "delivered", { at: now });
+      delivered += 1;
+      await pushToUser(item.userId, {
+        kind: "reply",
+        personaId: persona.id,
+        personaName: persona.name,
+        text: line,
+      }).catch((error: unknown) =>
+        console.warn("[Scheduler] The push could not be sent:", error));
       continue;
     }
 

@@ -1936,4 +1936,15 @@ export const V6 = {
     zh: "这个分身锁着。输入 PIN 解锁。",
     en: "This persona is locked. Enter the PIN to unlock it.",
   },
+
+  /**
+   * The line the persona writes when a reminder it set comes due (C9.4).
+   *
+   * The user's own sentence is material and arrives inside a fence, so
+   * it is added separately; this is only the instruction.
+   */
+  "prompts.checkInInstruction": {
+    zh: "到点了。你之前答应过要问一句。只问这一件事，一句话，四十五个字以内。不要解释你为什么记得。",
+    en: "It is time. You promised to ask about something. Ask about that one thing, in one short line, and do not explain why you remembered.",
+  },
 } as const satisfies CopyTable;

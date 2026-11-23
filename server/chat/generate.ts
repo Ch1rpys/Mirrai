@@ -12,6 +12,8 @@
 import type { Persona } from "../../drizzle/schema";
 import type { LLMMessage, LLMOptions, LLMProvider } from "../llm/types";
 import { llmService } from "../llm";
+import { invokeWithTools } from "../llm/tools";
+import { buildPersonaTools, type ToolPhoto } from "./persona-tools";
 import { copy } from "@shared/copy";
 import { dayPartFromHour, normalizeActProfile, sampleAct, type ActDayPart, type ActVia } from "@shared/act-profile";
 import {
@@ -1223,6 +1225,17 @@ export async function* executePlan(
     trainingTexts?: string[];
     /** Chat fills an empty answer with the silence copy. Evaluation leaves it empty so the case is skipped. */
     emptyAsSilence?: boolean;
+    /**
+     * The persona's tools (C9.4).
+     *
+     * The caller decides whether they are allowed this turn — the web
+     * channel, not a memorial persona, not an evaluation — and what to
+     * do with a photograph the model sends. Missing means no tools.
+     */
+    tools?: {
+      enabled: boolean;
+      onPhoto?: (photo: ToolPhoto) => void;
+    };
   },
 ): AsyncGenerator<
   | { type: "thinking" }
@@ -1234,6 +1247,50 @@ export async function* executePlan(
     if (text && io.emitDeltas) yield { type: "delta", text };
     yield { type: "final", text, projection: [] };
     return;
+  }
+
+  /**
+   * The tools turn (C9.4).
+   *
+   * It is non-streaming by definition: each tool round is a request that
+   * has to finish before its result can go back. When the layer is on
+   * the caller says so, and the reply arrives whole.
+   */
+  if (io.tools?.enabled && plan.kind === "model") {
+    const tools = await buildPersonaTools({
+      persona: input.persona,
+      userId: input.userId,
+      now: input.now,
+      onPhoto: io.tools.onPhoto,
+    });
+    if (tools.defs.length > 0) {
+      const usage = { userId: input.userId, personaId: input.persona.id };
+      const voiceProvider = io.voiceProvider ?? io.provider;
+      const result = await invokeWithTools(voiceProvider, {
+        messages: plan.messages,
+        options: {
+          provider: io.options.provider,
+          temperature: io.options.temperature,
+          maxTokens: tighterTokenBudget(plan.maxTokens, io.options.maxTokens),
+          topP: io.options.topP,
+          presencePenalty: io.options.presencePenalty,
+          frequencyPenalty: io.options.frequencyPenalty,
+          extraBody: io.options.extraBody,
+          signal: io.signal,
+          purpose: "reply",
+        },
+        usage,
+        tools: tools.defs,
+        handlers: tools.handlers,
+        locale: input.locale,
+        userId: input.userId,
+      });
+      const text = result.text?.trim() || copy(input.locale, "prompt.silence");
+      const capped = finalizeGenerated(text, plan, input);
+      if (io.emitDeltas) yield { type: "delta", text: capped.text };
+      yield { type: "final", text: capped.text, projection: capped.projection };
+      return;
+    }
   }
 
   /**
