@@ -490,6 +490,26 @@ describe("runConversation", () => {
     expect(createSafetyEvent).toHaveBeenCalled();
   });
 
+  it("answers a crisis on the API channel and records it (C9.2)", async () => {
+    let reply = "";
+    for await (const event of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "我不想活了",
+      mode: "once",
+      channel: "api",
+    })) {
+      if (event.type === "delta") reply += event.text;
+    }
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+    expect(reply).toContain("12356");
+    const assistantCall = createMessage.mock.calls.find(
+      (call: unknown[]) => (call[0] as { role?: string }).role === "assistant",
+    )?.[0] as { content?: string; channel?: string };
+    expect(assistantCall.channel).toBe("api");
+    expect(createSafetyEvent).toHaveBeenCalled();
+  });
+
   it("stops a shared persona whose invitation was revoked (C7.2)", async () => {
     getActiveShareForMemberPersona.mockResolvedValue(undefined);
     let message = "";

@@ -21,6 +21,7 @@ import { registerChatStreamRoute } from "../chat/stream-route";
 import { attachCallServer } from "../chat/call";
 import { registerImportUploadRoute } from "../importers/upload-route";
 import { registerBackupRoutes } from "../backup/route";
+import { registerOpenAiCompatRoutes } from "../openai-compat/route";
 import { bootstrapAdminAccount } from "../bootstrap/bootstrap";
 import { migrateLegacyTTSFiles } from "./tts";
 
@@ -152,6 +153,9 @@ async function startServer() {
   registerImportUploadRoute(app);
   // Full backup download and first-run restore (C8.3).
   registerBackupRoutes(app);
+  // The OpenAI-compatible endpoint (C9.2). Keyed by its own Bearer token,
+  // so it is not behind the cookie-based CSRF guard.
+  registerOpenAiCompatRoutes(app);
 
   app.use(
     "/api/trpc",

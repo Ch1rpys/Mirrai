@@ -344,8 +344,14 @@ export interface ConversationOptions {
    * so the two paths can be compared draw for draw.
    */
   planSeed?: string;
-  /** Channel the message arrived on. */
-  channel?: "web" | "wechat" | "feishu";
+  /**
+   * Channel the message arrived on.
+   *
+   * `api` is the OpenAI-compatible endpoint (C9.2): a program talking to
+   * the persona. It has no typing delay, no split messages and no
+   * stickers — a client is waiting for one answer.
+   */
+  channel?: "web" | "wechat" | "feishu" | "api";
   /** The conversation identifier on that channel. Empty on the web. */
   conversationKey?: string;
   /**
@@ -971,7 +977,16 @@ export async function* runConversation(
       return;
     }
     enter(key, "waiting", controller);
+    /**
+     * The API channel answers at once (C9.2).
+     *
+     * "On their time" is a property of the conversation in the app — the
+     * waiting, the split messages, the follow-up. A client that asked for
+     * a completion is holding the connection open for one answer, so the
+     * timing layers do not run for it.
+     */
     const timingEnabled =
+      (options.channel ?? "web") !== "api" &&
       Boolean((options.persona as { timingEnabled?: boolean }).timingEnabled) &&
       Boolean(loadBehaviorProfile(options.persona));
     const waitMs = options.channel === "wechat" || options.channel === "feishu"
@@ -1069,7 +1084,7 @@ export async function commitPendingChoice(params: {
   locale?: Locale;
   providerName?: string;
   now?: Date;
-  channel?: "web" | "wechat" | "feishu";
+  channel?: "web" | "wechat" | "feishu" | "api";
 }): Promise<{ messageId: number; emotionalState: string }> {
   const locale = params.locale ?? "zh";
   const now = params.now ?? new Date();
