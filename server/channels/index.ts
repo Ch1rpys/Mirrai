@@ -6,6 +6,9 @@
  */
 import { feishuAdapter } from "./feishu";
 import { wechatAdapter } from "./wechat";
+import { telegramAdapter } from "./telegram";
+import { discordAdapter } from "./discord";
+import { matrixAdapter } from "./matrix";
 import { channelLabel } from "./types";
 import type { ChannelAdapter, ChannelId, ChannelStatus } from "./types";
 
@@ -20,6 +23,11 @@ export function registerChannel(adapter: ChannelAdapter): void {
 
 registerChannel(wechatAdapter);
 registerChannel(feishuAdapter);
+// The bot channels (C9.1). They only run once the user has stored their
+// credentials; with none, `start` refuses with a sentence.
+registerChannel(telegramAdapter);
+registerChannel(discordAdapter);
+registerChannel(matrixAdapter);
 
 export function getChannelAdapter(id: ChannelId): ChannelAdapter | undefined {
   return adapters.get(id);

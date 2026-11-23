@@ -3627,6 +3627,28 @@ export const en = {
     revokeConfirm: "Revoke it",
   },
   /**
+   * The bot channels (C9.1).
+   */
+  channelsBot: {
+    note: "Telegram, Discord and Matrix need a bot account. Until it is bound, the bot answers nobody.",
+    saved: "The credentials are saved.",
+    started: "The channel is running.",
+    stopped: "The channel is stopped.",
+    loadFailed: "The status could not be read.",
+    running: "Running",
+    tokenLabel: "Bot token",
+    accessTokenLabel: "Access token",
+    homeserverLabel: "Homeserver",
+    save: "Save credentials",
+    start: "Start",
+    stop: "Stop",
+    bindHeading: "In {{channel}}, send the bot: /bind {{code}}",
+    bindNote: "The code is shown once and stops working when it is used. Three wrong tries also use it up; restart the channel for a new one.",
+    personaLabel: "Default persona",
+    personaSaved: "The default persona is saved.",
+    noPersonas: "There is no persona that has finished analysis yet.",
+  },
+  /**
    * The persona bundle (C9.5).
    */
   bundle: {

@@ -3647,6 +3647,28 @@ export const zh = {
     revokeConfirm: "确认吊销",
   },
   /**
+   * The bot channels (C9.1).
+   */
+  channelsBot: {
+    note: "Telegram、Discord、Matrix 需要一个机器人账号。绑定之前机器人不会回复任何人的消息。",
+    saved: "凭据已保存。",
+    started: "通道已启动。",
+    stopped: "通道已停止。",
+    loadFailed: "状态读不出来。",
+    running: "运行中",
+    tokenLabel: "机器人 token",
+    accessTokenLabel: "访问令牌",
+    homeserverLabel: "服务器地址",
+    save: "保存凭据",
+    start: "启动",
+    stop: "停止",
+    bindHeading: "在 {{channel}} 里给机器人发送：/bind {{code}}",
+    bindNote: "口令只显示一次，绑好就作废。连错三次也作废，重新启动通道会得到新的。",
+    personaLabel: "默认分身",
+    personaSaved: "默认分身已保存。",
+    noPersonas: "还没有解析完成的分身。",
+  },
+  /**
    * The persona bundle (C9.5).
    */
   bundle: {

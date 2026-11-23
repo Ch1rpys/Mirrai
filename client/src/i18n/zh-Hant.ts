@@ -3527,6 +3527,25 @@ export const zhHant = {
     "revoke": "吊銷",
     "revokeConfirm": "確認吊銷"
   },
+  "channelsBot": {
+    "note": "Telegram、Discord、Matrix 需要一個機器人賬號。綁定之前機器人不會回覆任何人的消息。",
+    "saved": "憑據已保存。",
+    "started": "通道已啟動。",
+    "stopped": "通道已停止。",
+    "loadFailed": "狀態讀不出來。",
+    "running": "運行中",
+    "tokenLabel": "機器人 token",
+    "accessTokenLabel": "訪問令牌",
+    "homeserverLabel": "服務器地址",
+    "save": "保存憑據",
+    "start": "啟動",
+    "stop": "停止",
+    "bindHeading": "在 {{channel}} 裡給機器人發送：/bind {{code}}",
+    "bindNote": "口令只顯示一次，綁好就作廢。連錯三次也作廢，重新啟動通道會得到新的。",
+    "personaLabel": "默認分身",
+    "personaSaved": "默認分身已保存。",
+    "noPersonas": "還沒有解析完成的分身。"
+  },
   "bundle": {
     "title": "分身包",
     "note": "把一個分身導出成一個文件，用來換機器、留備份；也可以從文件導入一個新的分身。",

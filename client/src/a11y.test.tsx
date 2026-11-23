@@ -614,6 +614,22 @@ vi.mock("@/lib/trpc", () => ({
       extract: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       transcribe: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    channel: {
+      // The bot channels panel is mounted in the channels tab (C9.1).
+      list: { useQuery: () => ({ data: [], isLoading: false, isError: false, refetch: vi.fn() }) },
+      getStatus: {
+        useQuery: () => ({
+          data: { channel: "telegram", connected: false, status: "stopped", detail: { bindCode: "123456" } },
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+      getChannelDefault: { useQuery: () => ({ data: { personaId: 1 }, refetch: vi.fn() }) },
+      setBotCredentials: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      start: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      stop: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      setChannelDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     useUtils: () => utilsSpy(),
   },
 }));
@@ -681,6 +697,7 @@ import UsagePanel from "./components/v6/UsagePanel";
 import RestoreBackupPanel from "./components/v6/RestoreBackupPanel";
 import ApiKeys from "./components/v6/ApiKeys";
 import PersonaBundle from "./components/v6/PersonaBundle";
+import BotChannels from "./components/v6/BotChannels";
 import Letters from "./pages/Letters";
 
 /**
@@ -878,6 +895,13 @@ describe("every control has a name", () => {
     // Create and the row's revoke. The name field and the two scope boxes
     // are inputs; this check is about buttons and links.
     expect(drawnControls()).toBeGreaterThan(1);
+    expect(unnamedControls()).toEqual([]);
+  });
+
+  it("in the bot channels panel", () => {
+    renderPage(<BotChannels />);
+    // Save, start and stop per channel; the inputs are not buttons.
+    expect(drawnControls()).toBeGreaterThan(3);
     expect(unnamedControls()).toEqual([]);
   });
 

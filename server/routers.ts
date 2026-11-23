@@ -272,6 +272,9 @@ import { getSetupStatus } from "./bootstrap/setup-status";
 import { getChannelAdapter, listChannels, stopChannelsForUser } from "./channels";
 import { channelLabel } from "./channels/types";
 import { feishuAdapter } from "./channels/feishu";
+import { setTelegramCredentials } from "./channels/telegram";
+import { setDiscordCredentials } from "./channels/discord";
+import { setMatrixCredentials } from "./channels/matrix";
 import { getBuiltinTemplates } from "./templates";
 import { normalizeTemplate, validateTemplate, type PersonaTemplate } from "./templates/schema";
 import { buildPersonaFromAnswers } from "./templates/questionnaire";
@@ -4161,7 +4164,7 @@ export const appRouter = router({
     }),
 
     getStatus: protectedProcedure
-      .input(z.object({ channel: z.enum(["wechat", "feishu"]) }))
+      .input(z.object({ channel: z.enum(["wechat", "feishu", "telegram", "discord", "matrix"]) }))
       .query(async ({ ctx, input }) => {
         const adapter = getChannelAdapter(input.channel);
         if (!adapter) throw new TRPCError({ code: "NOT_FOUND" });
@@ -4169,7 +4172,7 @@ export const appRouter = router({
       }),
 
     start: protectedProcedure
-      .input(z.object({ channel: z.enum(["wechat", "feishu"]) }))
+      .input(z.object({ channel: z.enum(["wechat", "feishu", "telegram", "discord", "matrix"]) }))
       .mutation(async ({ ctx, input }) => {
         const adapter = getChannelAdapter(input.channel);
         if (!adapter) throw new TRPCError({ code: "NOT_FOUND" });
@@ -4178,7 +4181,7 @@ export const appRouter = router({
       }),
 
     stop: protectedProcedure
-      .input(z.object({ channel: z.enum(["wechat", "feishu"]) }))
+      .input(z.object({ channel: z.enum(["wechat", "feishu", "telegram", "discord", "matrix"]) }))
       .mutation(async ({ ctx, input }) => {
         const adapter = getChannelAdapter(input.channel);
         if (!adapter) throw new TRPCError({ code: "NOT_FOUND" });
@@ -4189,7 +4192,7 @@ export const appRouter = router({
     /** Stores the credentials a channel needs, encrypted at rest. */
     setCredentials: protectedProcedure
       .input(z.object({
-        channel: z.enum(["wechat", "feishu"]),
+        channel: z.enum(["wechat", "feishu", "telegram", "discord", "matrix"]),
         /**
          * Either half may be left out.
          *
@@ -4212,15 +4215,44 @@ export const appRouter = router({
         return { success: true };
       }),
 
+    /**
+     * Stores a bot channel's credentials (C9.1).
+     *
+     * The three bot channels take a token (Telegram, Discord) or a
+     * homeserver and a token (Matrix). They are encrypted at rest like the
+     * Feishu app secret.
+     */
+    setBotCredentials: protectedProcedure
+      .input(z.object({
+        channel: z.enum(["telegram", "discord", "matrix"]),
+        credentials: z.record(z.string(), z.string().min(1).max(2048)),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (input.channel === "telegram") {
+          await setTelegramCredentials(ctx.user.id, {
+            botToken: input.credentials.botToken,
+            botUsername: input.credentials.botUsername,
+          });
+        } else if (input.channel === "discord") {
+          await setDiscordCredentials(ctx.user.id, { botToken: input.credentials.botToken });
+        } else {
+          await setMatrixCredentials(ctx.user.id, {
+            homeserverUrl: input.credentials.homeserverUrl,
+            accessToken: input.credentials.accessToken,
+          });
+        }
+        return { success: true };
+      }),
+
     listBindings: protectedProcedure
-      .input(z.object({ channel: z.enum(["wechat", "feishu"]).optional() }))
+      .input(z.object({ channel: z.enum(["wechat", "feishu", "telegram", "discord", "matrix"]).optional() }))
       .query(async ({ ctx, input }) =>
         getChannelBindingsByUserId(ctx.user.id, input.channel)
       ),
 
     setDefaultPersona: protectedProcedure
       .input(z.object({
-        channel: z.enum(["wechat", "feishu"]),
+        channel: z.enum(["wechat", "feishu", "telegram", "discord", "matrix"]),
         targetId: z.string().min(1).max(255),
         personaId: z.number(),
         targetName: z.string().max(255).optional(),
@@ -4263,7 +4295,7 @@ export const appRouter = router({
      */
     setChannelDefault: protectedProcedure
       .input(z.object({
-        channel: z.enum(["wechat", "feishu"]),
+        channel: z.enum(["wechat", "feishu", "telegram", "discord", "matrix"]),
         personaId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -4279,7 +4311,7 @@ export const appRouter = router({
 
     /** The persona a channel talks to, if one has been chosen. */
     getChannelDefault: protectedProcedure
-      .input(z.object({ channel: z.enum(["wechat", "feishu"]) }))
+      .input(z.object({ channel: z.enum(["wechat", "feishu", "telegram", "discord", "matrix"]) }))
       .query(async ({ ctx, input }) => {
         const row = await getChannelDefaultPersona(ctx.user.id, input.channel);
         return { personaId: row?.personaId ?? null };

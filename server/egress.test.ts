@@ -27,6 +27,9 @@ const CALL_SITES: Array<{ file: string; purpose: string }> = [
   { file: "server/routers-v6/ldr.ts", purpose: "Open-Meteo geocoding and forecast (C5.2)" },
   { file: "server/_core/mail.ts", purpose: "The user's own SMTP server for letter replies (C5.5)" },
   { file: "server/backup/targets.ts", purpose: "The user's own WebDAV or S3-compatible backup destination (C8.3)" },
+  { file: "server/channels/telegram.ts", purpose: "The Telegram Bot API, long polling and sends (C9.1)" },
+  { file: "server/channels/discord.ts", purpose: "The Discord Gateway and REST API (C9.1)" },
+  { file: "server/channels/matrix.ts", purpose: "The user's own Matrix homeserver (C9.1)" },
 ];
 
 function walk(dir: string, files: string[] = []): string[] {

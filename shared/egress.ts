@@ -507,4 +507,67 @@ export const EGRESS_ITEMS: EgressItem[] = [
       en: "Turn off “send replies to my email”, or clear the mail server in Settings",
     },
   },
+  {
+    id: "channel-telegram",
+    side: "server",
+    destination: {
+      zh: "Telegram Bot API（api.telegram.org）",
+      en: "The Telegram Bot API (api.telegram.org)",
+    },
+    payload: {
+      zh: "长轮询的更新请求（没有内容）；发出的回复文本；机器人 token 在 URL 路径里",
+      en: "The long-poll update requests (no content); the replies being sent; the bot token in the URL path",
+    },
+    when: {
+      zh: "用户自己启动 Telegram 通道之后，持续发生",
+      en: "Continuously, after the user starts the Telegram channel",
+    },
+    defaultOn: false,
+    offHow: {
+      zh: "在设置里停止这个通道，或清掉它的机器人 token",
+      en: "Stop the channel in Settings, or remove its bot token",
+    },
+  },
+  {
+    id: "channel-discord",
+    side: "server",
+    destination: {
+      zh: "Discord Gateway（wss://gateway.discord.gg）与 Discord REST API（discord.com/api）",
+      en: "The Discord Gateway (wss://gateway.discord.gg) and the Discord REST API (discord.com/api)",
+    },
+    payload: {
+      zh: "Gateway 的长连接（心跳与事件）；收到和发出的私信文本；机器人 token 在 Authorization 头与 identify 负载里",
+      en: "The Gateway connection (heartbeats and events); the direct messages received and sent; the bot token in the Authorization header and the identify payload",
+    },
+    when: {
+      zh: "用户自己启动 Discord 通道之后，持续发生",
+      en: "Continuously, after the user starts the Discord channel",
+    },
+    defaultOn: false,
+    offHow: {
+      zh: "在设置里停止这个通道，或清掉它的机器人 token",
+      en: "Stop the channel in Settings, or remove its bot token",
+    },
+  },
+  {
+    id: "channel-matrix",
+    side: "server",
+    destination: {
+      zh: "用户自己填的 Matrix homeserver",
+      en: "The Matrix homeserver the user entered",
+    },
+    payload: {
+      zh: "/sync 长轮询与发出的 m.room.message；私信文本；访问令牌在 Authorization 头里",
+      en: "The /sync long poll and the m.room.message sends; the direct message text; the access token in the Authorization header",
+    },
+    when: {
+      zh: "用户自己启动 Matrix 通道之后，持续发生",
+      en: "Continuously, after the user starts the Matrix channel",
+    },
+    defaultOn: false,
+    offHow: {
+      zh: "在设置里停止这个通道，或清掉它的访问令牌",
+      en: "Stop the channel in Settings, or remove its access token",
+    },
+  },
 ];

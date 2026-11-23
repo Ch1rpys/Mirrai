@@ -47,6 +47,7 @@ import ApiKeys from "@/components/v6/ApiKeys";
 import RecycleBin from "@/components/v6/RecycleBin";
 import BackupPanel from "@/components/v6/BackupPanel";
 import PersonaBundle from "@/components/v6/PersonaBundle";
+import BotChannels from "@/components/v6/BotChannels";
 import Diagnostics from "@/components/v6/Diagnostics";
 import AccessibilitySettings from "@/components/v6/AccessibilitySettings";
 import type { GraduationMode } from "@shared/graduation-mode";
@@ -1667,6 +1668,8 @@ function ChannelsTab({ onOpenTab }: { onOpenTab: (key: TabKey) => void }) {
       </section>
 
       <FeishuSection />
+
+      <BotChannels />
     </div>
   );
 }
