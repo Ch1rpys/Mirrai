@@ -45,6 +45,7 @@
     "i18n:hant": "tsx scripts/gen-zh-hant.ts",
     "eval": "tsx scripts/eval-run.ts",
     "mcp": "tsx scripts/mcp-server.ts",
+    "mirrai": "tsx scripts/mirrai.ts",
     "fidelity:gate": "tsx scripts/fidelity-gate.ts",
     "gate": "node scripts/gate-all.mjs",
     "setup:redis": "tsx scripts/setup-redis.ts"

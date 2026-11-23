@@ -52,6 +52,11 @@ export default defineConfig({
             // They deserve tests that actually run.
             "shared/**/*.test.ts",
             "shared/**/*.spec.ts",
+            // The command line's own test (C9.6): the manual names
+            // `scripts/mirrai.test.ts`, and the script is not inside the
+            // three app directories.
+            "scripts/**/*.test.ts",
+            "scripts/**/*.spec.ts",
           ],
         },
       },
