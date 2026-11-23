@@ -20,6 +20,7 @@ import {
   previewImport,
   startImport,
   type ImportFormatId,
+  type PluginFormatId,
 } from "../importers";
 import { resolveStoredPath } from "../storage";
 import { resolveProviderForPurpose } from "../llm/user-provider";
@@ -34,7 +35,19 @@ import {
 } from "../importers/moments";
 
 const formatIds = IMPORTERS.map((row) => row.id) as [ImportFormatId, ...ImportFormatId[]];
-const formatId = z.enum(formatIds);
+/**
+ * A built-in format, or one a local plugin registered (C9.7).
+ *
+ * The registry of plugin formats only exists after boot, so the enum is
+ * fixed at load time and the plugin branch is its own shape. An unknown
+ * plugin id falls through to the same `needs_format` answer an unknown
+ * built-in id would get.
+ */
+const pluginFormatId = z.custom<PluginFormatId>(
+  (value) => typeof value === "string" && value.startsWith("plugin:"),
+  { message: "not a plugin format id" },
+);
+const formatId = z.union([z.enum(formatIds), pluginFormatId]);
 
 const columnMap = z.object({
   time: z.number().int().optional(),

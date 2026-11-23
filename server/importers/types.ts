@@ -1,6 +1,9 @@
 import type { ParsedRecord, RecordKind } from "@shared/records";
 import type { RedactionReport } from "@shared/redact";
 
+/** The id a plugin's importer is registered under, prefixed by the loader (C9.7). */
+export type PluginFormatId = `plugin:${string}`;
+
 export type ImportFormatId =
   | "generic-line"
   | "wechat-txt-2line"
@@ -18,7 +21,10 @@ export type ImportFormatId =
   | "sms-xml"
   | "imessage-db"
   | "column-map"
-  | "monologue";
+  | "monologue"
+  // A format a local importer plugin contributes (C9.7). The loader
+  // prefixes the id with `plugin:<name>:` so two plugins cannot collide.
+  | PluginFormatId;
 
 export type ImportSourceName =
   | "wechat_export"
@@ -32,7 +38,10 @@ export type ImportSourceName =
   | "sms"
   | "imessage"
   | "generic"
-  | "monologue";
+  | "monologue"
+  // A plugin's own source name. The database column is `varchar(32)`,
+  // so the loader checks the length.
+  | `plugin:${string}`;
 
 export interface ImportSource {
   fileName: string;

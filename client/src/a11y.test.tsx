@@ -177,6 +177,17 @@ vi.mock("@/lib/trpc", () => ({
       create: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
       revoke: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
     },
+    plugins: {
+      // The loaded-plugins panel is mounted in the data tab (C9.7).
+      list: {
+        useQuery: () => ({
+          data: { enabled: true, plugins: [] },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+    },
     lock: {
       // The lobby's nav has the "lock now" button (C8.4).
       status: {

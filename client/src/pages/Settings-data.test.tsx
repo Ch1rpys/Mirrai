@@ -55,6 +55,18 @@ vi.mock("@/lib/trpc", () => ({
       lock: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
       recover: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
     },
+    plugins: {
+      // The loaded-plugins panel is mounted in this tab (C9.7); the tests
+      // here are about the deletion dialog, not about it.
+      list: {
+        useQuery: () => ({
+          data: { enabled: false, plugins: [] },
+          isError: false,
+          isLoading: false,
+          refetch: vi.fn(),
+        }),
+      },
+    },
     system: {
       // The one-click diagnosis panel is mounted in this tab (C8.12); the
       // tests here are about the deletion dialog, not about it.

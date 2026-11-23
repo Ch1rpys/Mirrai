@@ -200,6 +200,7 @@ import { markRouter } from "./routers-v6/mark";
 import { apiKeyRouter } from "./routers-v6/api-keys";
 import { lockRouter } from "./routers-v6/lock";
 import { encryptionRouter } from "./routers-v6/encryption";
+import { pluginsRouter } from "./routers-v6/plugins";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { stateRulesFromTranscript } from "./skill-engine/state-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
@@ -8177,6 +8178,7 @@ export const appRouter = router({
   apiKey: apiKeyRouter,
   lock: lockRouter,
   encryption: encryptionRouter,
+  plugins: pluginsRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {

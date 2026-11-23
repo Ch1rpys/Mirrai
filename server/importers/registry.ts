@@ -46,3 +46,19 @@ export const IMPORTERS: Importer[] = [
 export function importerById(id: ImportFormatId | string): Importer | undefined {
   return IMPORTERS.find((row) => row.id === id);
 }
+
+/**
+ * Adds an importer contributed by a local plugin (C9.7).
+ *
+ * The importers list used to be built at module load and never change.
+ * The plugin loader registers into the same list, so detection, the
+ * wizard's format list and the parsers all see the plugin's format.
+ *
+ * A duplicate id is refused rather than replacing the existing parser:
+ * a plugin must not quietly take over a built-in format.
+ */
+export function registerImporter(importer: Importer): boolean {
+  if (IMPORTERS.some((row) => row.id === importer.id)) return false;
+  IMPORTERS.push(importer);
+  return true;
+}

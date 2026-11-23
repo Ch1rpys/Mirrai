@@ -34,6 +34,7 @@ import { useLocale } from "@/contexts/LocaleContext";
 import CounselorExport from "@/components/v6/CounselorExport";
 import SafetyTransparency from "@/components/SafetyTransparency";
 import EgressList from "@/components/v6/EgressList";
+import Plugins from "@/components/v6/Plugins";
 import TtsNote from "@/components/v6/TtsNote";
 import PushSettings from "@/components/v6/PushSettings";
 import AppLockSettings from "@/components/v6/AppLockSettings";
@@ -1491,6 +1492,8 @@ export function DataManagementTab() {
       <EncryptionSettings />
 
       <EgressList />
+
+      <Plugins />
 
       <Diagnostics />
 

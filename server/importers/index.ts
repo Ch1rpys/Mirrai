@@ -65,7 +65,7 @@ export { parseGenericLine } from "./formats/generic-line";
 export { detectFormat, pickDetectedFormat } from "./detect";
 export { IMPORTERS, importerById } from "./registry";
 export { assignRoles, guessRoles } from "./roles";
-export type { ParseResult, ParseReport, ImportFormatId, ColumnMap } from "./types";
+export type { ParseResult, ParseReport, ImportFormatId, PluginFormatId, ColumnMap } from "./types";
 
 export { CHAT_IMPORT_FILE_TYPES, isChatImportFileType };
 export type { ChatImportFileType };

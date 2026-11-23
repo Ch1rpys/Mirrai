@@ -259,6 +259,23 @@ async function startServer() {
     console.warn("[Scheduler] Failed to start:", e);
   }
 
+  /**
+   * Local plugins (C9.7).
+   *
+   * Only when the operator set `MIRRAI_PLUGINS=on`. They run inside
+   * this process with its full permissions, so a plugin that will not
+   * load is logged and skipped rather than allowed to stop the boot.
+   */
+  try {
+    const { loadPlugins } = await import("../plugins");
+    const plugins = await loadPlugins();
+    for (const failed of plugins.failed) {
+      console.warn(`[Plugins] One plugin was skipped: ${failed.reason}`);
+    }
+  } catch (e) {
+    console.warn("[Plugins] The plugin loader could not run:", e);
+  }
+
   // Restore the channels that were connected before the last restart — the
   // WeChat ClawBot long-poll loop and the Feishu long connection both keep
   // their state in the database, so a restart does not need a fresh scan.

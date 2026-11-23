@@ -10,12 +10,12 @@ import { telegramAdapter } from "./telegram";
 import { discordAdapter } from "./discord";
 import { matrixAdapter } from "./matrix";
 import { channelLabel } from "./types";
-import type { ChannelAdapter, ChannelId, ChannelStatus } from "./types";
+import type { ChannelAdapter, ChannelId, ChannelStatus, PluginChannelId } from "./types";
 
-export type { ChannelAdapter, ChannelId, ChannelStatus };
+export type { ChannelAdapter, ChannelId, ChannelStatus, PluginChannelId };
 export { channelLabel };
 
-const adapters = new Map<ChannelId, ChannelAdapter>();
+const adapters = new Map<ChannelId | PluginChannelId, ChannelAdapter>();
 
 export function registerChannel(adapter: ChannelAdapter): void {
   adapters.set(adapter.id, adapter);
@@ -29,8 +29,8 @@ registerChannel(telegramAdapter);
 registerChannel(discordAdapter);
 registerChannel(matrixAdapter);
 
-export function getChannelAdapter(id: ChannelId): ChannelAdapter | undefined {
-  return adapters.get(id);
+export function getChannelAdapter(id: ChannelId | string): ChannelAdapter | undefined {
+  return adapters.get(id as ChannelId | PluginChannelId);
 }
 
 export function listChannels(): ChannelAdapter[] {

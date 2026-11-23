@@ -11,9 +11,19 @@ import type { Locale } from "@shared/copy";
 
 export type { ChannelId };
 
+/**
+ * The id a local channel plugin is registered under (C9.7).
+ *
+ * The loader prefixes the plugin's own id with `plugin:<name>:`, and the
+ * registry is keyed by the full string. The closed `ChannelId` stays what
+ * a message can be stored as — a plugin's conversations are its own
+ * business until a message column learns its name.
+ */
+export type PluginChannelId = `plugin:${string}`;
+
 export interface ChannelStatus {
   /** The channel this status describes. */
-  channel: ChannelId;
+  channel: ChannelId | PluginChannelId;
   /** True when the channel is connected and able to deliver messages. */
   connected: boolean;
   /** Channel-specific status word, e.g. "stopped" or "logged_in". */
@@ -23,7 +33,7 @@ export interface ChannelStatus {
 }
 
 export interface ChannelAdapter {
-  id: ChannelId;
+  id: ChannelId | PluginChannelId;
   /** Display name shown in the settings UI. */
   label: string;
   /**
