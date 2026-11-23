@@ -23,3 +23,9 @@ __pycache__/
 
 # The installers that are built for a release.
 build-artifacts/
+
+# The documentation site's build output and cache (C9.7). Built locally,
+# never deployed; the pages are the docs/*.md files themselves.
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+docs/.vitepress/.temp/

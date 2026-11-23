@@ -48,7 +48,10 @@
     "mirrai": "tsx scripts/mirrai.ts",
     "fidelity:gate": "tsx scripts/fidelity-gate.ts",
     "gate": "node scripts/gate-all.mjs",
-    "setup:redis": "tsx scripts/setup-redis.ts"
+    "setup:redis": "tsx scripts/setup-redis.ts",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.2",
