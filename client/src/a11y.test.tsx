@@ -397,6 +397,8 @@ vi.mock("@/lib/trpc", () => ({
       setLocale: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       deleteAccount: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       exportCounselorSummary: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      // The group-chat switch in the profile tab (C9.8).
+      updateFeatures: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     usage: {
       budget: { useQuery: () => ({ data: { over: false } }) },
@@ -641,6 +643,70 @@ vi.mock("@/lib/trpc", () => ({
       stop: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       setChannelDefault: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
+    group: {
+      // The group chat page and the lobby's rooms dialog (C9.8).
+      list: {
+        useQuery: () => ({
+          data: {
+            rooms: [
+              {
+                id: 3,
+                name: "周末的群",
+                createdAt: "2026-03-01T10:00:00.000Z",
+                members: [
+                  { personaId: 1, name: "小A", avatarUrl: null, hasGroupData: true, available: true },
+                  { personaId: 2, name: "小B", avatarUrl: null, hasGroupData: false, available: false },
+                ],
+                lastMessage: null,
+              },
+            ],
+          },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+      history: {
+        useQuery: () => ({
+          data: {
+            room: {
+              id: 3,
+              name: "周末的群",
+              members: [
+                { personaId: 1, name: "小A", avatarUrl: null, hasGroupData: true, available: true },
+                { personaId: 2, name: "小B", avatarUrl: null, hasGroupData: false, available: false },
+              ],
+            },
+            messages: [
+              {
+                id: 1,
+                role: "user",
+                personaId: null,
+                personaName: null,
+                content: "在吗",
+                createdAt: "2026-03-01T10:00:00.000Z",
+              },
+              {
+                id: 2,
+                role: "assistant",
+                personaId: 1,
+                personaName: "小A",
+                content: "在的",
+                createdAt: "2026-03-01T10:01:00.000Z",
+              },
+            ],
+            nextCursor: null,
+          },
+          isLoading: false,
+          isError: false,
+          error: null,
+          refetch: vi.fn(),
+        }),
+      },
+      create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      delete: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      send: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+    },
     useUtils: () => utilsSpy(),
   },
 }));
@@ -652,10 +718,18 @@ vi.mock("@/lib/chat-stream", () => ({
 
 vi.mock("@/_core/hooks/useAuth", () => ({
   useAuth: () => ({
-    user: { id: 1, username: "测试", name: "测试", timezone: "Asia/Shanghai" },
+    user: {
+      id: 1,
+      username: "测试",
+      name: "测试",
+      timezone: "Asia/Shanghai",
+      // The lobby's group-chat door is on the render list (C9.8).
+      features: { groupChat: true },
+    },
     isAuthenticated: true,
     loading: false,
     logout: vi.fn(),
+    refresh: vi.fn(),
   }),
 }));
 
@@ -710,6 +784,9 @@ import ApiKeys from "./components/v6/ApiKeys";
 import PersonaBundle from "./components/v6/PersonaBundle";
 import BotChannels from "./components/v6/BotChannels";
 import Letters from "./pages/Letters";
+import Group from "./pages/Group";
+import { GroupRooms } from "./components/v6/GroupRooms";
+import GroupChatSetting from "./components/v6/GroupChatSetting";
 
 /**
  * Renders a page inside the real theme provider (the accessibility panel
@@ -955,6 +1032,33 @@ describe("every control has a name", () => {
     renderPage(<Letters />);
     // The back control and the rows' own actions.
     expect(drawnControls()).toBeGreaterThan(2);
+    expect(unnamedControls()).toEqual([]);
+  });
+
+  it("in the group page", () => {
+    nav.location = "/group/3";
+    nav.params = { id: "3" };
+    renderPage(<Group />);
+    // The back control, the dissolve button and the send button; the
+    // input and the checkboxes are not buttons.
+    expect(drawnControls()).toBeGreaterThan(2);
+    expect(unnamedControls()).toEqual([]);
+  });
+
+  it("in the group rooms dialog", () => {
+    renderPage(<GroupRooms open onOpenChange={() => {}} onOpenRoom={() => {}} />);
+    // Open, dissolve, cancel, create and the dialog's own close.
+    expect(drawnControls()).toBeGreaterThan(3);
+    expect(unnamedControls()).toEqual([]);
+  });
+
+  it("in the group-chat setting", () => {
+    renderPage(<GroupChatSetting />);
+    // The switch has its own role, so the button check above would not
+    // see it; it is named by the visible label.
+    expect(screen.getByRole("switch")).toHaveAccessibleName(
+      translate("zh", "settings.profile.groupChatSwitch"),
+    );
     expect(unnamedControls()).toEqual([]);
   });
 

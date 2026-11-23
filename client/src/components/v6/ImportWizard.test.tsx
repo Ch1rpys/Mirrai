@@ -26,6 +26,8 @@ let preview: {
   report: Record<string, unknown>;
 } | undefined;
 let statusError: { message: string } | null = null;
+/** Every input the preview query was rendered with, newest last. */
+let previewInputs: Array<Record<string, unknown>> = [];
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -44,7 +46,10 @@ vi.mock("@/lib/trpc", () => ({
         }),
       },
       preview: {
-        useQuery: () => ({ data: preview }),
+        useQuery: (input: Record<string, unknown>) => {
+          previewInputs.push(input);
+          return { data: preview };
+        },
       },
       confirm: {
         useMutation: () => ({ mutateAsync: confirm, isPending: false }),
@@ -89,6 +94,7 @@ function fileStatus(parseStatus: string, parseReport: Record<string, unknown> | 
 describe("the import wizard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    previewInputs = [];
     statusError = null;
     preview = undefined;
     status = fileStatus("detecting", { progress: 12, written: 4 });
@@ -228,6 +234,74 @@ describe("the import wizard", () => {
       them: ["小满"],
     }));
     expect(apply).not.toHaveBeenCalled();
+  });
+
+  it("sends group mode with the preview and the confirm only while the group box is ticked", async () => {
+    const user = userEvent.setup();
+    status = fileStatus("needs_roles", {
+      format: "generic-line",
+      speakers: [
+        { name: "小满", count: 2 },
+        { name: "阿树", count: 2 },
+        { name: "琪琪", count: 2 },
+      ],
+    });
+    preview = {
+      status: "ok",
+      total: 6,
+      records: [
+        { timestamp: "2022-03-01T12:00:00.000Z", speaker: "琪琪", content: "我在呢", kind: "text", lineNo: 1 },
+      ],
+      report: { format: "generic-line", roleCounts: { user: 2, assistant: 2, other: 2 } },
+    };
+    render(<ImportWizard fileId={11} personaName="小满" timezone="Asia/Shanghai" />);
+
+    const them = screen.getByRole("group", { name: /小满/ });
+    const me = screen.getByRole("group", { name: /阿树/ });
+    await user.click(within(them).getByRole("radio", { name: translate("zh", "importWizard.role.them") }));
+    await user.click(within(me).getByRole("radio", { name: translate("zh", "importWizard.role.me") }));
+
+    // The third speaker is still a choice, and stays "other".
+    const other = screen.getByRole("group", { name: /琪琪/ });
+    expect(
+      within(other).getByRole("radio", { name: translate("zh", "importWizard.role.other") }),
+    ).not.toBeChecked();
+
+    const groupBox = screen.getByRole("checkbox", {
+      name: translate("zh", "importWizard.groupImport"),
+    });
+    expect(screen.getByText(translate("zh", "importWizard.groupImportNote"))).toBeTruthy();
+    expect(groupBox).not.toBeChecked();
+
+    const continueButton = screen.getByRole("button", { name: translate("zh", "importWizard.continue") });
+
+    // Unticked: neither the preview request nor the confirm payload has
+    // a mode, so the ordinary private import is untouched.
+    await user.click(continueButton);
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm.mock.calls[0][0]).not.toHaveProperty("mode");
+    expect(previewInputs[previewInputs.length - 1]).not.toHaveProperty("mode");
+
+    // Ticked: the checkbox asks the server for a group import, and the
+    // roles themselves do not change.
+    await user.click(groupBox);
+    expect(groupBox).toBeChecked();
+    expect(previewInputs[previewInputs.length - 1]).toMatchObject({
+      fileId: 11,
+      mode: "group",
+      me: ["阿树"],
+      them: ["小满"],
+    });
+
+    await user.click(continueButton);
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(confirm.mock.calls[1][0]).toMatchObject({
+      fileId: 11,
+      format: "generic-line",
+      me: ["阿树"],
+      them: ["小满"],
+      mode: "group",
+    });
   });
 
   it("replaces a phone number in the preview table when that box is ticked", async () => {

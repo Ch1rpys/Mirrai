@@ -19,6 +19,9 @@ import { previousDateKey, zonedDateKey } from "@shared/timezone";
 const update = vi.fn();
 const listRefetch = vi.fn();
 
+/** What the account has turned on (C9.8). */
+const authState = vi.hoisted(() => ({ groupChat: false }));
+
 /**
  * The personas the server sends back.
  *
@@ -111,10 +114,15 @@ vi.mock("@/lib/trpc", () => ({
 vi.mock("@/_core/hooks/useAuth", () => ({
   useAuth: () => ({
     // The user's own zone — the page reads the clock in it.
-    user: { username: "测试", timezone: "Asia/Shanghai" },
+    user: {
+      username: "测试",
+      timezone: "Asia/Shanghai",
+      features: { groupChat: authState.groupChat },
+    },
     isAuthenticated: true,
     loading: false,
     logout: vi.fn(),
+    refresh: vi.fn(),
   }),
 }));
 
@@ -173,6 +181,7 @@ describe("the lobby", () => {
     personasLoading = false;
     personasFailed = false;
     dailyActivity = [];
+    authState.groupChat = false;
   });
 
   it("does not say the user has no personas while the list is on its way", () => {
@@ -586,5 +595,20 @@ describe("the lobby", () => {
     expect(screen.queryByText(/连续对话/)).toBeNull();
     expect(screen.queryByText("成就徽章")).toBeNull();
     expect(screen.queryByText("对话排行")).toBeNull();
+  });
+
+  it("shows the group-chat door only once the experimental feature is on (C9.8)", () => {
+    const label = translate("zh", "group.roomsTitle");
+
+    // Off — the default — means there is no entry at all.
+    authState.groupChat = false;
+    const off = render(<Lobby />);
+    expect(screen.queryByRole("button", { name: label })).toBeNull();
+    off.unmount();
+
+    // On: the entry is on the top bar, and it opens the rooms dialog.
+    authState.groupChat = true;
+    render(<Lobby />);
+    expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
   });
 });

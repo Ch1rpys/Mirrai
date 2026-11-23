@@ -46,6 +46,7 @@ import LlmRoles from "@/components/v6/LlmRoles";
 import UsagePanel from "@/components/v6/UsagePanel";
 import ApiKeys from "@/components/v6/ApiKeys";
 import RecycleBin from "@/components/v6/RecycleBin";
+import GroupChatSetting from "@/components/v6/GroupChatSetting";
 import BackupPanel from "@/components/v6/BackupPanel";
 import PersonaBundle from "@/components/v6/PersonaBundle";
 import BotChannels from "@/components/v6/BotChannels";
@@ -646,6 +647,9 @@ function ProfileTab() {
           )}
         </div>
       </section>
+
+      {/* The experimental features (C9.8): the group-chat switch. */}
+      <GroupChatSetting />
 
       {/* Change Password Dialog */}
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>

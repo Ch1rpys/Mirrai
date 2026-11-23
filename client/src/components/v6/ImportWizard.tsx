@@ -90,6 +90,15 @@ export default function ImportWizard(props: {
   const [hideCards, setHideCards] = useState(false);
   const [hideNames, setHideNames] = useState<string[]>([]);
   const [keepHint, setKeepHint] = useState("");
+  /**
+   * A group chat export (C9.8).
+   *
+   * Off by default: most uploads are one-to-one chats. When it is
+   * ticked, the side roles still mean me / TA, and whoever is left as
+   * `other` is written as a group member in the `group` register, so
+   * those lines never change the one-to-one voice.
+   */
+  const [groupImport, setGroupImport] = useState(false);
 
   const statusQuery = trpc.import.status.useQuery(
     { fileId: props.fileId },
@@ -141,6 +150,9 @@ export default function ImportWizard(props: {
       me: hasMe ? meNames : undefined,
       them: hasThem ? themNames : undefined,
       columnMap: showColumnMap ? columnPayload : undefined,
+      // Left out entirely for a private chat, so the request is what it
+      // was before the group flag existed.
+      ...(groupImport ? { mode: "group" as const } : {}),
     },
     { enabled: previewEnabled },
   );
@@ -214,6 +226,7 @@ export default function ImportWizard(props: {
             names: hideNames,
           }
         : undefined,
+      ...(groupImport ? { mode: "group" as const } : {}),
     });
   };
 
@@ -378,6 +391,25 @@ export default function ImportWizard(props: {
           <p className="text-foreground leading-relaxed">
             {t("importWizard.rolesPrompt", { count: speakers.length, name: props.personaName })}
           </p>
+          {/**
+            * A group chat is still named me / TA. The difference is what
+            * happens to the rest: `other` speakers become group members,
+            * and the rows are written in the group register so they do
+            * not change the one-to-one voice.
+            */}
+          <div className="space-y-1">
+            <label className="inline-flex items-center gap-1.5 text-sm">
+              <input
+                type="checkbox"
+                checked={groupImport}
+                onChange={(e) => setGroupImport(e.target.checked)}
+              />
+              {t("importWizard.groupImport")}
+            </label>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {t("importWizard.groupImportNote")}
+            </p>
+          </div>
           <div className="space-y-3">
             {speakers.map((speaker) => (
               <fieldset key={speaker.name} className="rounded-md border border-border/70 p-3">

@@ -35,6 +35,7 @@ import MoodCheckIn from "@/components/MoodCheckIn";
 import OnThisDay from "@/components/v6/OnThisDay";
 import Milestones from "@/components/v6/Milestones";
 import MailboxEntry from "@/components/v6/MailboxEntry";
+import { GroupRoomsEntry } from "@/components/v6/GroupRooms";
 import { LockNowButton } from "@/components/v6/AppLock";
 import LockedPersonaCard from "@/components/v6/LockedPersonaCard";
 import PersonaUnreadNote from "@/components/v6/PersonaUnreadNote";
@@ -1994,6 +1995,8 @@ export default function Lobby() {
           <div className="app-nav-actions">
             <LockNowButton />
             <MailboxEntry />
+            {/* The group-chat door appears only once the feature is on (C9.8). */}
+            <GroupRoomsEntry />
             {user?.username && (
               <div className="app-nav-icon !bg-muted !cursor-default mr-0.5">
                 <span className="text-[0.6875rem] font-semibold text-foreground">{user.username.charAt(0).toUpperCase()}</span>
