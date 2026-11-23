@@ -7754,6 +7754,49 @@ export async function createCollectedMessage(data: InsertCollectedMessage) {
  * job settled as "completed" with a count that did not match what was
  * stored. Now either all of it is there or none of it is.
  */
+/**
+ * Every record of one persona, in insertion order (C9.5).
+ *
+ * The persona bundle has to be able to tell which new row is which old
+ * row after an import. Records are exported in id order and inserted in
+ * that same order, so the ids line up one to one — but only if the read
+ * is by id, not by the time the line was spoken.
+ */
+export async function listRecordsForBundle(
+  personaId: number,
+  userId: number,
+): Promise<CollectedMessage[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select()
+    .from(collectedMessages)
+    .where(and(
+      eq(collectedMessages.personaId, personaId),
+      eq(collectedMessages.userId, userId),
+    ))
+    .orderBy(asc(collectedMessages.id));
+  return decryptRows("collected_messages", rows);
+}
+
+/** The ids of a persona's records in insertion order — the import's pairing. */
+export async function listCollectedRecordIds(
+  personaId: number,
+  userId: number,
+): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({ id: collectedMessages.id })
+    .from(collectedMessages)
+    .where(and(
+      eq(collectedMessages.personaId, personaId),
+      eq(collectedMessages.userId, userId),
+    ))
+    .orderBy(asc(collectedMessages.id));
+  return rows.map((row) => row.id);
+}
+
 export async function createCollectedMessages(
   rows: InsertCollectedMessage[],
 ): Promise<number> {
