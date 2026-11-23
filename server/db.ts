@@ -41,6 +41,8 @@ import {
   oralAccounts, InsertOralAccount, OralAccount,
   llmUsage, InsertLlmUsage,
   messageMarks, InsertMessageMark, MessageMark,
+  groupRooms, groupRoomMembers, groupMessages,
+  type GroupRoom, type GroupRoomMember, type GroupMessage,
   schemaMigrations,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
@@ -64,6 +66,7 @@ import { charBigrams } from "@shared/act-clusters";
 import { queryLexemes, searchTokens, toTsQuery } from "@shared/search-tokens";
 import { MAX_EMBEDDED_TURNS } from "@shared/records";
 import { normalizeLockSettings, type LockSettings } from "@shared/lock";
+import { mergeUserFeatures, normalizeUserFeatures, type UserFeatures } from "@shared/user-features";
 import { normalizeUserEncryption } from "@shared/encryption";
 import {
   decryptJsonForRead,
@@ -1737,6 +1740,14 @@ export async function deleteUserAccount(id: number) {
      */
     await tx.delete(llmUsage).where(eq(llmUsage.userId, id));
     await tx.delete(messageMarks).where(eq(messageMarks.userId, id));
+    /**
+     * The group rooms and everything said in them (C9.8). The room rows
+     * are the user's; the members and messages are keyed by user too, so
+     * both go with the account.
+     */
+    await tx.delete(groupMessages).where(eq(groupMessages.userId, id));
+    await tx.delete(groupRoomMembers).where(eq(groupRoomMembers.userId, id));
+    await tx.delete(groupRooms).where(eq(groupRooms.userId, id));
     await tx.delete(letters).where(eq(letters.userId, id));
     await tx.delete(memories).where(eq(memories.userId, id));
     await tx.delete(memoryExtractions).where(eq(memoryExtractions.userId, id));
@@ -2762,6 +2773,13 @@ export async function purgePersona(id: number, userId: number) {
      */
     await tx.delete(llmUsage).where(and(eq(llmUsage.personaId, id), eq(llmUsage.userId, userId)));
     await tx.delete(messageMarks).where(and(eq(messageMarks.personaId, id), eq(messageMarks.userId, userId)));
+    /**
+     * A persona's group-chat life (C9.8): its membership rows go, and so
+     * do the lines it said. The room and the other members stay — the
+     * group is the user's, not one persona's.
+     */
+    await tx.delete(groupRoomMembers).where(and(eq(groupRoomMembers.personaId, id), eq(groupRoomMembers.userId, userId)));
+    await tx.delete(groupMessages).where(and(eq(groupMessages.personaId, id), eq(groupMessages.userId, userId)));
     await tx.delete(memories).where(and(eq(memories.personaId, id), eq(memories.userId, userId)));
     /**
      * Every account of the persona, whoever told it.
@@ -11625,4 +11643,253 @@ export async function releaseScheduledItem(id: number, userId: number): Promise<
     ))
     .returning({ id: scheduledItems.id });
   return rows.length > 0;
+}
+
+// ─── Group chat (C9.8) ───────────────────────────────────────────────────
+//
+// A room is the user's; the personas in it are their own. Everything
+// here is filtered by `userId`, so one account's rooms, members and
+// messages can never be read through another account's id.
+
+/**
+ * The experimental features this account has turned on.
+ *
+ * The column is jsonb and may be empty or half-written; the normaliser
+ * is the single place that decides what "on" means.
+ */
+export async function getUserFeatures(userId: number): Promise<UserFeatures> {
+  const db = await getDb();
+  if (!db) return normalizeUserFeatures(null);
+  const [row] = await db
+    .select({ features: users.features })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return normalizeUserFeatures(row?.features);
+}
+
+/** Merges a patch into the stored flags and returns the complete object. */
+export async function setUserFeatures(userId: number, patch: unknown): Promise<UserFeatures> {
+  const db = await getDb();
+  if (!db) return normalizeUserFeatures(null);
+  return withTransaction(async (tx) => {
+    const [row] = await tx
+      .select({ features: users.features })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!row) return normalizeUserFeatures(null);
+    const next = mergeUserFeatures(row.features, patch);
+    await tx.update(users).set({ features: next }).where(eq(users.id, userId));
+    return next;
+  });
+}
+
+export async function listGroupRooms(userId: number): Promise<GroupRoom[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(groupRooms)
+    .where(eq(groupRooms.userId, userId))
+    .orderBy(desc(groupRooms.createdAt), desc(groupRooms.id));
+}
+
+export async function getGroupRoom(roomId: number, userId: number): Promise<GroupRoom | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .select()
+    .from(groupRooms)
+    .where(and(eq(groupRooms.id, roomId), eq(groupRooms.userId, userId)))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function createGroupRoom(userId: number, name: string): Promise<GroupRoom | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .insert(groupRooms)
+    .values({ userId, name })
+    .returning();
+  return row ?? null;
+}
+
+export async function renameGroupRoom(
+  roomId: number,
+  userId: number,
+  name: string,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .update(groupRooms)
+    .set({ name })
+    .where(and(eq(groupRooms.id, roomId), eq(groupRooms.userId, userId)))
+    .returning({ id: groupRooms.id });
+  return rows.length > 0;
+}
+
+/** Deletes a room and everything said in it. */
+export async function deleteGroupRoom(roomId: number, userId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  return withTransaction(async (tx) => {
+    const room = await tx
+      .select({ id: groupRooms.id })
+      .from(groupRooms)
+      .where(and(eq(groupRooms.id, roomId), eq(groupRooms.userId, userId)))
+      .limit(1);
+    if (room.length === 0) return false;
+    await tx.delete(groupMessages).where(and(eq(groupMessages.roomId, roomId), eq(groupMessages.userId, userId)));
+    await tx.delete(groupRoomMembers).where(and(eq(groupRoomMembers.roomId, roomId), eq(groupRoomMembers.userId, userId)));
+    await tx.delete(groupRooms).where(and(eq(groupRooms.id, roomId), eq(groupRooms.userId, userId)));
+    return true;
+  });
+}
+
+export async function listGroupRoomMembers(
+  roomId: number,
+  userId: number,
+): Promise<GroupRoomMember[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(groupRoomMembers)
+    .where(and(eq(groupRoomMembers.roomId, roomId), eq(groupRoomMembers.userId, userId)))
+    .orderBy(asc(groupRoomMembers.joinedAt), asc(groupRoomMembers.id));
+}
+
+export async function getGroupRoomMember(
+  roomId: number,
+  personaId: number,
+  userId: number,
+): Promise<GroupRoomMember | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .select()
+    .from(groupRoomMembers)
+    .where(and(
+      eq(groupRoomMembers.roomId, roomId),
+      eq(groupRoomMembers.personaId, personaId),
+      eq(groupRoomMembers.userId, userId),
+    ))
+    .limit(1);
+  return row ?? null;
+}
+
+/** Adds a persona to a room. False when it is already there. */
+export async function addGroupRoomMember(
+  roomId: number,
+  userId: number,
+  personaId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .insert(groupRoomMembers)
+    .values({ roomId, userId, personaId })
+    .onConflictDoNothing()
+    .returning({ id: groupRoomMembers.id });
+  return rows.length > 0;
+}
+
+export async function removeGroupRoomMember(
+  roomId: number,
+  userId: number,
+  personaId: number,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db
+    .delete(groupRoomMembers)
+    .where(and(
+      eq(groupRoomMembers.roomId, roomId),
+      eq(groupRoomMembers.personaId, personaId),
+      eq(groupRoomMembers.userId, userId),
+    ))
+    .returning({ id: groupRoomMembers.id });
+  return rows.length > 0;
+}
+
+export async function countGroupRoomMembers(
+  roomId: number,
+  userId: number,
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [row] = await db
+    .select({ n: count() })
+    .from(groupRoomMembers)
+    .where(and(eq(groupRoomMembers.roomId, roomId), eq(groupRoomMembers.userId, userId)));
+  return Number(row?.n ?? 0);
+}
+
+/**
+ * The newest messages of one room, newest first.
+ *
+ * `beforeId` is the page cursor: the id below which the next page starts.
+ * The caller reverses the page before showing it, so the screen reads
+ * oldest to newest.
+ */
+export async function listGroupMessages(
+  roomId: number,
+  userId: number,
+  options: { limit?: number; beforeId?: number | null } = {},
+): Promise<GroupMessage[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const limit = Math.min(Math.max(1, options.limit ?? 40), 200);
+  const where = [eq(groupMessages.roomId, roomId), eq(groupMessages.userId, userId)];
+  if (typeof options.beforeId === "number" && options.beforeId > 0) {
+    where.push(lt(groupMessages.id, options.beforeId));
+  }
+  return db
+    .select()
+    .from(groupMessages)
+    .where(and(...where))
+    .orderBy(desc(groupMessages.id))
+    .limit(limit);
+}
+
+export async function getLastGroupMessage(
+  roomId: number,
+  userId: number,
+): Promise<GroupMessage | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .select()
+    .from(groupMessages)
+    .where(and(eq(groupMessages.roomId, roomId), eq(groupMessages.userId, userId)))
+    .orderBy(desc(groupMessages.id))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function createGroupMessage(input: {
+  roomId: number;
+  userId: number;
+  role: "user" | "assistant";
+  personaId?: number | null;
+  content: string;
+  metadata?: unknown;
+}): Promise<GroupMessage | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db
+    .insert(groupMessages)
+    .values({
+      roomId: input.roomId,
+      userId: input.userId,
+      role: input.role,
+      personaId: input.personaId ?? null,
+      content: input.content,
+      metadata: (input.metadata ?? null) as never,
+    })
+    .returning();
+  return row ?? null;
 }

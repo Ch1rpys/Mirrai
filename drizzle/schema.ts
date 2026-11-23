@@ -166,6 +166,14 @@ export const users = pgTable("users", {
    * Empty means the account's content is plaintext.
    */
   encryption: jsonb("encryption"),
+  /**
+   * The experimental features this account has turned on (C9.8).
+   *
+   * `{ groupChat: boolean }`. They are per-account because they are the
+   * person's own choice about their own app; defaults are "off", and the
+   * whole column empty means nothing has been turned on.
+   */
+  features: jsonb("features"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -2452,3 +2460,76 @@ export const apiKeys = pgTable("api_keys", {
 
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type InsertApiKey = typeof apiKeys.$inferInsert;
+
+
+// ─── Group chat (C9.8) ─────────────────────────────────────────────────────
+//
+// The user unlocks group chat themselves (users.features). A room holds
+// two to five of their own personas; the personas only speak after the
+// user does, and their words stay here — they never enter `messages`, the
+// pair's memories, the mood, the intimacy or the graduation mechanism.
+
+/** One group room: a name and the user it belongs to. */
+export const groupRooms = pgTable("group_rooms", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  name: varchar("name", { length: 60 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("group_rooms_user_idx").on(table.userId),
+}));
+
+export type GroupRoom = typeof groupRooms.$inferSelect;
+export type InsertGroupRoom = typeof groupRooms.$inferInsert;
+
+/**
+ * One persona in one room.
+ *
+ * `(roomId, personaId)` is unique: a persona can be in a room once. The
+ * `userId` is on the row as well, so every read can filter by owner
+ * without a join.
+ */
+export const groupRoomMembers = pgTable("group_room_members", {
+  id: serial("id").primaryKey(),
+  roomId: integer("roomId").notNull(),
+  userId: integer("userId").notNull(),
+  personaId: integer("personaId").notNull(),
+  joinedAt: timestamp("joinedAt").defaultNow().notNull(),
+}, (table) => ({
+  onePerRoom: uniqueIndex("group_room_members_room_persona_idx").on(
+    table.roomId,
+    table.personaId,
+  ),
+  roomIdx: index("group_room_members_room_idx").on(table.roomId, table.userId),
+  personaIdx: index("group_room_members_persona_idx").on(table.personaId, table.userId),
+}));
+
+export type GroupRoomMember = typeof groupRoomMembers.$inferSelect;
+export type InsertGroupRoomMember = typeof groupRoomMembers.$inferInsert;
+
+/**
+ * One line in a group room.
+ *
+ * `role` is the same two values the pair's conversation uses: `user` is
+ * the person, `assistant` is a persona (named by `personaId`). The room's
+ * history is the only place these rows go.
+ */
+export const groupMessages = pgTable("group_messages", {
+  id: serial("id").primaryKey(),
+  roomId: integer("roomId").notNull(),
+  userId: integer("userId").notNull(),
+  role: messageRoleEnum().notNull(),
+  /** The persona that said it; empty for the user's own lines. */
+  personaId: integer("personaId"),
+  content: text("content").notNull(),
+  /** Which personas were named, and the reply's timing, when relevant. */
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  roomTimeIdx: index("group_messages_room_time_idx").on(table.roomId, table.createdAt),
+  userIdx: index("group_messages_user_idx").on(table.userId),
+  personaIdx: index("group_messages_persona_idx").on(table.personaId, table.userId),
+}));
+
+export type GroupMessage = typeof groupMessages.$inferSelect;
+export type InsertGroupMessage = typeof groupMessages.$inferInsert;

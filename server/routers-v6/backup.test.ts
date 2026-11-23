@@ -36,6 +36,7 @@ function ctxFor(userId: number, locale: "zh" | "en" = "zh"): TrpcContext {
       lockPinHash: null,
       lockSettings: null,
       encryption: null,
+      features: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       lastSignedIn: new Date(),

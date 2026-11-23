@@ -138,6 +138,7 @@ function makeCtx(userId = 1): TrpcContext {
       lockPinHash: null,
       lockSettings: null,
       encryption: null,
+      features: null,
     locale: "zh",
       addressStyle: null,
       boundaries: null,
