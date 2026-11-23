@@ -351,7 +351,7 @@ export interface ConversationOptions {
    * the persona. It has no typing delay, no split messages and no
    * stickers — a client is waiting for one answer.
    */
-  channel?: "web" | "wechat" | "feishu" | "api";
+  channel?: "web" | "wechat" | "feishu" | "api" | "telegram" | "discord" | "matrix";
   /** The conversation identifier on that channel. Empty on the web. */
   conversationKey?: string;
   /**
@@ -1084,7 +1084,7 @@ export async function commitPendingChoice(params: {
   locale?: Locale;
   providerName?: string;
   now?: Date;
-  channel?: "web" | "wechat" | "feishu" | "api";
+  channel?: "web" | "wechat" | "feishu" | "api" | "telegram" | "discord" | "matrix";
 }): Promise<{ messageId: number; emotionalState: string }> {
   const locale = params.locale ?? "zh";
   const now = params.now ?? new Date();

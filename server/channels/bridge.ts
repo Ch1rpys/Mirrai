@@ -16,7 +16,14 @@ import { claimSilenceNotice } from "../chat/silence-notice";
 import { zonedDateKey, localDateKey } from "@shared/timezone";
 import type { Locale } from "@shared/copy";
 
-export type ChannelId = "wechat" | "feishu";
+/**
+ * Every channel a conversation can arrive on.
+ *
+ * `telegram`, `discord` and `matrix` are the C9.1 channels: bots the user
+ * points at their own account. They are bound before they answer — see
+ * `server/channels/binding.ts`.
+ */
+export type ChannelId = "wechat" | "feishu" | "telegram" | "discord" | "matrix";
 
 export interface ChannelChatParams {
   userId: number;

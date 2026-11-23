@@ -35,6 +35,10 @@ export const channelEnum = pgEnum("channel", [
   // An OpenAI-compatible client (C9.2). PostgreSQL cannot remove an enum
   // value, so this one only ever gets added.
   "api",
+  // The bot channels of C9.1.
+  "telegram",
+  "discord",
+  "matrix",
 ]);
 export const characterFamilyEnum = pgEnum("character_family", ["colleague", "relationship", "celebrity"]);
 export const pipelineStageEnum = pgEnum("pipeline_stage", [

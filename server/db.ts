@@ -452,7 +452,7 @@ export async function createLetterWithMessage(
     personaId: number;
     userId: number;
     content: string;
-    channel?: "web" | "wechat" | "feishu";
+    channel?: "web" | "wechat" | "feishu" | "api" | "telegram" | "discord" | "matrix";
     origin?: string;
   },
 ): Promise<typeof letters.$inferSelect> {
@@ -794,7 +794,7 @@ export async function answerLetterWithMessage(
     personaId: number;
     content: string;
     emotionalState: string | null;
-    channel?: "web" | "wechat" | "feishu";
+    channel?: "web" | "wechat" | "feishu" | "api" | "telegram" | "discord" | "matrix";
   },
 ): Promise<boolean> {
   return withTransaction(async (tx) => {
@@ -3855,7 +3855,7 @@ export async function clearMessagePendingChoice(
 export async function updateMessageChannel(
   id: number,
   userId: number,
-  channel: "web" | "wechat" | "feishu",
+  channel: "web" | "wechat" | "feishu" | "api" | "telegram" | "discord" | "matrix",
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;

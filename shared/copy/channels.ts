@@ -206,6 +206,38 @@ export const CHANNELS = {
     zh: "已达到毕业条件",
     en: "the conditions for a graduation are met",
   },
+
+  /**
+   * Binding a bot channel (C9.1).
+   *
+   * A bot account can be found by anybody, so nothing is answered until
+   * the person has proved they own the conversation with a one-time code
+   * shown in the app.
+   */
+  "channels.boundNotice": {
+    zh: "绑定好了。我是用聊天记录重建的数字分身，不是本人。直接说话就行。",
+    en: "Bound. I am a digital persona rebuilt from chat records, not the person. Just talk to me.",
+  },
+  "channels.bindWrongCode": {
+    zh: "口令不对。还有 {{left}} 次机会。",
+    en: "That code is wrong. {{left}} tries left.",
+  },
+  "channels.bindInvalidated": {
+    zh: "口令作废了。回到网页端的设置里重新开始这个通道，会拿到新的口令。",
+    en: "The code has been used up. Restart the channel in the app's settings to get a new one.",
+  },
+  "channels.bindNoPersona": {
+    zh: "这个通道还没有选分身。先在网页端的设置里选一个，再发口令。",
+    en: "This channel has no persona yet. Choose one in the app's settings, then send the code again.",
+  },
+  "channels.bindCodeNote": {
+    zh: "口令只显示一次，绑好就作废。连错三次同样作废，重新开始通道会得到新的。",
+    en: "The code is shown once and stops working when it is used. Three wrong tries also use it up; restarting the channel makes a new one.",
+  },
+  "channels.boundTo": {
+    zh: "这个通道的对话已经和你的账号绑定：{{name}}。",
+    en: "This conversation is bound to your account: {{name}}.",
+  },
 } satisfies CopyTable;
 
 /**

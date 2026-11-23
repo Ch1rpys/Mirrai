@@ -33,7 +33,7 @@ async function deliverProactive(params: {
   emotionalState: string | null;
   /** The user's language, if the sweep has already read it. */
   locale?: Locale;
-}): Promise<"web" | "wechat" | "feishu"> {
+}): Promise<"web" | "wechat" | "feishu" | "telegram" | "discord" | "matrix"> {
   const bindings = await db
     .getChannelBindingsByUserId(params.userId)
     .catch(() => []);
@@ -65,7 +65,7 @@ async function deliverProactive(params: {
 
     try {
       await adapter.send(params.userId, binding.targetId, params.text, locale);
-      return binding.channel as "wechat" | "feishu";
+      return binding.channel as "wechat" | "feishu" | "telegram" | "discord" | "matrix";
     } catch (e) {
       console.warn(
         `[Proactive] Could not deliver on ${binding.channel}:`,

@@ -610,4 +610,11 @@ export const ERRORS = {
     zh: "安装器没有返回安装路径：{{host}}",
     en: "The installer did not report an install path: {{host}}",
   },
+  /**
+   * A bot channel was started without its credentials (C9.1).
+   */
+  "errors.channelCredentialsMissing": {
+    zh: "这个通道还没有填凭据。先把机器人凭据填上，再启动。",
+    en: "This channel has no credentials yet. Fill in the bot's credentials, then start it.",
+  },
 } satisfies CopyTable;
