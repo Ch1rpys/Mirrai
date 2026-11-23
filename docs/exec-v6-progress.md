@@ -871,6 +871,14 @@
 
 ## 批次日志
 
+### WP15 · 实现会话 · 2026-11-24 · 会话收尾（本会话到此）
+
+- 本会话从 HEAD `fc1e77f` 开始，在 `exec/v6` 上一共 23 个提交（`git log --oneline fc1e77f..HEAD`），全部在 `git add <具体文件>` 之后提交，没有 push、没有合并、没有改写历史、没有动 `main`。
+- 完成情况：WP14 遗留 `- [ ]` 逐条复核（33 条回勾，1 条仍等独立验收）；C9.4 ✅、C9.2 ✅、C9.3 ✅、C9.5 ✅、C9.6 ✅、C9.1 🟡。**未开始**：C9.7 插件系统与文档站、C9.8 群聊（两条仍是 ⬜，进度表里没有半成品；下个会话从 C9.7 接着做）。
+- 最后一次完整闸门（在最后一个代码提交 `8301db7` 之后、本段之前的进度提交之前跑的，此后只改了本进度文件）：`corepack pnpm gate` 退出码 0，`667 passed | 23 skipped (690)` 文件、`5587 passed | 111 skipped (5698)` 用例、`all six steps passed`。与本会话开工基线（WP14 收尾记录 649/21/670、5376/100/5476）相比：通过文件 +18、通过用例 +211；跳过文件 +2、跳过用例 +11（新增两个带库测试文件 `server/db-api-keys.test.ts` 4 条、`server/personas/bundle-db.test.ts` 7 条，均已在 `skip-audit` 登记）。测试文件没有删除，已有测试的断言没有放宽，黄金快照未改。
+- 数据库：本会话新建并删除的临时库有 `mirrai_v6_wp15_verify`、`mirrai_v6_wp15_c92`、`mirrai_v6_wp15_c93`、`mirrai_v6_wp15_c95`、`mirrai_v6_wp15_c95b`、`mirrai_v6_wp15_c96`、`mirrai_v6_wp15_c91`（每个都 `createdb` → `drizzle-kit push --force` → 用完 `dropdb`）；全程没有连接 `mirrai_live`。本会话新增的迁移只有两条：`0083_api_keys.sql`（C9.2）、`0084_more_channels.sql`（C9.1），两条都跑过 `migrate`/`--replay`/`--rollback 1`/再 `migrate`/升级路径。
+- 下一会话的入口：读 `docs/exec-v6.md` 的 WP15 一节，从 **C9.7** 开始（依赖 C1.1 与 C9.1 都已完成）；C9.8 依赖 B7.12 与 WP7，也都已完成。开工前先看本工作包的未验证清单（真实机器人账号、真实第三方 OpenAI 客户端、换机器导入分身包、真实 AI 客户端里的 MCP 配置、真实模型是否调工具）与「待用户决定」新增的 QQ/企业微信一条。
+
 ### WP15 · 实现会话 · 2026-11-24 · C9.1 更多通道
 
 - 开工核对：`git branch --show-current` → `exec/v6`；`git status --porcelain` 空；HEAD `a8bd07c`（C9.6 收尾）。依赖 B5.8（节奏/连发/追一句）与 C10.4 都已完成。
