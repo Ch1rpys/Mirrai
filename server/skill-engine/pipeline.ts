@@ -1452,12 +1452,16 @@ async function runSkillPipelineOnce(
     );
     await setPersonaProgress(stageProgress.analyzing_persona, copy(locale, "skill.analyzingPersona"));
 
-    const invokeForDistill = (messages: LLMMessage[]) =>
+    const invokeForDistill = (messages: LLMMessage[], extra?: LLMOptions) =>
       invokePipeline({
         userId,
         providerName: input.provider,
         messages,
-        options: { provider: input.provider, temperature: preset.analysisTemperature },
+        options: {
+          provider: input.provider,
+          temperature: preset.analysisTemperature,
+          ...extra,
+        },
       });
 
     let analysisResult = "";

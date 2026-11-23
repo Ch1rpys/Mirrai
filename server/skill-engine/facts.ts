@@ -15,7 +15,7 @@ import { factKeyFromTitle, normalizeMemoryTitle } from "../chat/memory-extract";
 import { sanitizeEntities, type MemoryEntities } from "@shared/memory-entities";
 import { recordText } from "@shared/records";
 import { keywordCoverage, tokenize } from "../chat/retrieval";
-import type { LLMMessage } from "../llm/types";
+import type { LLMMessage, LLMOptions } from "../llm/types";
 import { renderChunkForModel, type RecordChunk, type RecordLine } from "./chunks";
 import * as db from "../db";
 
@@ -242,7 +242,7 @@ function mentionCountFor(title: string, rows: RecordLine[]): number {
 }
 
 async function invokeOnce(
-  invoke: (messages: LLMMessage[]) => Promise<string>,
+  invoke: (messages: LLMMessage[], options?: LLMOptions) => Promise<string>,
   messages: LLMMessage[],
 ): Promise<string> {
   try {
@@ -291,7 +291,7 @@ export interface ExtractFactsInput {
    * is not presented as something said in a one-to-one conversation.
    */
   source?: "records" | "moments" | "written";
-  invoke: (messages: LLMMessage[]) => Promise<string>;
+  invoke: (messages: LLMMessage[], options?: LLMOptions) => Promise<string>;
   onProgress?: (message: string) => void;
 }
 

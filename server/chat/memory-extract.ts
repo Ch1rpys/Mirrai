@@ -370,7 +370,9 @@ async function runExtraction(params: {
           { role: "system", content: extractionInstructions(locale, fromUpload) },
           { role: "user", content: chatText },
         ],
-        options: { purpose: "extract" },
+        // A native JSON mode where the provider has one (C9.4); the
+        // tolerant extraction below still handles the rest.
+        options: { purpose: "extract", responseFormat: "json" },
         usage: { userId, personaId: persona.id },
       });
     }
@@ -384,7 +386,9 @@ async function runExtraction(params: {
           { role: "system", content: extractionInstructions(locale, fromUpload) },
           { role: "user", content: chatText },
         ],
-        options: { purpose: "extract" },
+        // A native JSON mode where the provider has one (C9.4); the
+        // tolerant extraction below still handles the rest.
+        options: { purpose: "extract", responseFormat: "json" },
         usage: { userId, personaId: persona.id },
       });
     } catch (e) {

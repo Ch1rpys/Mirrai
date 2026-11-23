@@ -5,7 +5,7 @@
 import { extractJsonObject } from "../_core/json";
 import { copy, type Locale } from "@shared/copy";
 import { getDistillationPreset, type DistillationMode } from "@shared/distillation-modes";
-import type { LLMMessage } from "../llm/types";
+import type { LLMMessage, LLMOptions } from "../llm/types";
 import {
   distillChunkSeed,
   renderChunkForModel,
@@ -198,7 +198,12 @@ export interface MapObservationsInput {
   meName?: string;
   themName?: string;
   mode?: DistillationMode | null;
-  invoke: (messages: LLMMessage[]) => Promise<string>;
+  /**
+   * The call. The second argument is the provider options this stage
+   * needs — the observation cards are JSON, so it asks for the native
+   * JSON mode where there is one (C9.4).
+   */
+  invoke: (messages: LLMMessage[], options?: LLMOptions) => Promise<string>;
   onProgress?: (message: string, done: number, total: number) => void;
   store?: ObservationStore;
   concurrency?: number;
@@ -208,10 +213,11 @@ async function invokeOnce(
   invoke: MapObservationsInput["invoke"],
   messages: LLMMessage[],
 ): Promise<string> {
+  const options = { responseFormat: "json" as const };
   try {
-    return await invoke(messages);
+    return await invoke(messages, options);
   } catch {
-    return invoke(messages);
+    return invoke(messages, options);
   }
 }
 

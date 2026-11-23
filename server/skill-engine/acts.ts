@@ -81,7 +81,9 @@ async function labelWithModel(params: {
           content: asMaterial(JSON.stringify(payload)),
         },
       ],
-      options: { temperature: 0, maxTokens: 1200, purpose: "extract" },
+      // The reply is a JSON array of labels (C9.4): ask for JSON natively
+      // where the provider can, and keep the tolerant parser otherwise.
+      options: { temperature: 0, maxTokens: 1200, purpose: "extract", responseFormat: "json" },
     });
     const parsed = extractJsonArray(typeof answer === "string" ? answer : "");
     if (!Array.isArray(parsed)) return out;
