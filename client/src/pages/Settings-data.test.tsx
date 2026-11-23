@@ -96,6 +96,11 @@ vi.mock("@/lib/trpc", () => ({
       updateSettings: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     persona: {
+      // The persona bundle panel is mounted in this tab (C9.5); these
+      // tests are about the deletion dialog, not about it.
+      list: {
+        useQuery: () => ({ data: [], isLoading: false, isError: false, refetch: vi.fn() }),
+      },
       listDeleted: {
         useQuery: () => ({
           data: { personas: [] },

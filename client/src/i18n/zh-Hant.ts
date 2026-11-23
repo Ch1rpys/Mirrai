@@ -3526,5 +3526,32 @@ export const zhHant = {
     "revoked": "已吊銷",
     "revoke": "吊銷",
     "revokeConfirm": "確認吊銷"
+  },
+  "bundle": {
+    "title": "分身包",
+    "note": "把一個分身導出成一個文件，用來換機器、留備份；也可以從文件導入一個新的分身。",
+    "loadFailed": "分身列表讀不出來。",
+    "personaLabel": "分身",
+    "includeMemories": "帶上記憶",
+    "includeRecords": "帶上記錄",
+    "includeConversation": "帶上和它的對話",
+    "passphraseLabel": "口令（可選）",
+    "passphrasePlaceholder": "至少 8 個字符",
+    "passphraseNote": "設了口令，文件裡的一切都加密，打開時要用同一個口令。不設也可以，但那就等於把原話放在一個 zip 裡。",
+    "exportButton": "導出成一個文件",
+    "exporting": "正在導出…",
+    "exported": "導出好了。",
+    "exportFailed": "導出沒有成功。",
+    "exportFailedWith": "導出沒有成功：{{message}}",
+    "importHeading": "從文件導入一個分身",
+    "importNote": "導入永遠是新建一個分身，不會覆蓋已有的。文件裡有真人的聊天記錄——只交給你信得過的人。",
+    "fileLabel": "要導入的文件",
+    "importPassphraseLabel": "文件的口令",
+    "importPassphrasePlaceholder": "沒設口令就留空",
+    "importButton": "導入",
+    "importing": "正在導入…",
+    "imported": "導入好了：{{name}}（{{records}} 條記錄、{{memories}} 條記憶）。",
+    "importFailed": "導入沒有成功，沒有留下半個分身。",
+    "importFailedWith": "導入沒有成功：{{message}}"
   }
 } as const;

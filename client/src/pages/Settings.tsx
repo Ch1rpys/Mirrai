@@ -46,6 +46,7 @@ import UsagePanel from "@/components/v6/UsagePanel";
 import ApiKeys from "@/components/v6/ApiKeys";
 import RecycleBin from "@/components/v6/RecycleBin";
 import BackupPanel from "@/components/v6/BackupPanel";
+import PersonaBundle from "@/components/v6/PersonaBundle";
 import Diagnostics from "@/components/v6/Diagnostics";
 import AccessibilitySettings from "@/components/v6/AccessibilitySettings";
 import type { GraduationMode } from "@shared/graduation-mode";
@@ -1517,6 +1518,8 @@ export function DataManagementTab() {
       <RecycleBin />
 
       <BackupPanel />
+
+      <PersonaBundle />
 
       {/* Install */}
       <InstallAppSection />

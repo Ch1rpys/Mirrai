@@ -3646,6 +3646,36 @@ export const zh = {
     revoke: "吊销",
     revokeConfirm: "确认吊销",
   },
+  /**
+   * The persona bundle (C9.5).
+   */
+  bundle: {
+    title: "分身包",
+    note: "把一个分身导出成一个文件，用来换机器、留备份；也可以从文件导入一个新的分身。",
+    loadFailed: "分身列表读不出来。",
+    personaLabel: "分身",
+    includeMemories: "带上记忆",
+    includeRecords: "带上记录",
+    includeConversation: "带上和它的对话",
+    passphraseLabel: "口令（可选）",
+    passphrasePlaceholder: "至少 8 个字符",
+    passphraseNote: "设了口令，文件里的一切都加密，打开时要用同一个口令。不设也可以，但那就等于把原话放在一个 zip 里。",
+    exportButton: "导出成一个文件",
+    exporting: "正在导出…",
+    exported: "导出好了。",
+    exportFailed: "导出没有成功。",
+    exportFailedWith: "导出没有成功：{{message}}",
+    importHeading: "从文件导入一个分身",
+    importNote: "导入永远是新建一个分身，不会覆盖已有的。文件里有真人的聊天记录——只交给你信得过的人。",
+    fileLabel: "要导入的文件",
+    importPassphraseLabel: "文件的口令",
+    importPassphrasePlaceholder: "没设口令就留空",
+    importButton: "导入",
+    importing: "正在导入…",
+    imported: "导入好了：{{name}}（{{records}} 条记录、{{memories}} 条记忆）。",
+    importFailed: "导入没有成功，没有留下半个分身。",
+    importFailedWith: "导入没有成功：{{message}}",
+  },
 } as const;
 
 export type ZhDictionary = typeof zh;

@@ -2066,4 +2066,40 @@ export const V6 = {
     zh: "覆盖的年份：{{years}}。",
     en: "Years covered: {{years}}.",
   },
+
+  /**
+   * The persona bundle (C9.5).
+   */
+  "errors.bundleNoPersona": {
+    zh: "没有这个分身。",
+    en: "There is no such persona.",
+  },
+  "errors.bundleTooLarge": {
+    zh: "文件太大了。一个分身包最大 2 GB。",
+    en: "That file is too large. A persona bundle is at most 2 GB.",
+  },
+  "errors.bundlePassphraseRequired": {
+    zh: "这个包加密了，需要口令。",
+    en: "This bundle is encrypted. It needs its passphrase.",
+  },
+  "errors.bundleWrongPassphrase": {
+    zh: "口令不对，或者文件被改过，打不开。",
+    en: "That passphrase did not open it, or the file has been changed.",
+  },
+  "errors.bundleCorrupt": {
+    zh: "这个文件不是一个能读的分身包。",
+    en: "That file is not a persona bundle this version can read.",
+  },
+  "errors.bundleFailed": {
+    zh: "导出没有成功。",
+    en: "The export did not finish.",
+  },
+  "errors.bundleImportFailed": {
+    zh: "导入没有成功，没有留下半个分身。",
+    en: "The import did not finish, and left no half-made persona behind.",
+  },
+  "errors.bundleEncryptionLocked": {
+    zh: "这个账号的内容加密锁着，先在应用里解锁再导入。",
+    en: "This account's encrypted content is locked. Unlock it in the app before importing.",
+  },
 } as const satisfies CopyTable;

@@ -680,6 +680,7 @@ import LockedPersonaCard from "./components/v6/LockedPersonaCard";
 import UsagePanel from "./components/v6/UsagePanel";
 import RestoreBackupPanel from "./components/v6/RestoreBackupPanel";
 import ApiKeys from "./components/v6/ApiKeys";
+import PersonaBundle from "./components/v6/PersonaBundle";
 import Letters from "./pages/Letters";
 
 /**
@@ -876,6 +877,13 @@ describe("every control has a name", () => {
     renderPage(<ApiKeys />);
     // Create and the row's revoke. The name field and the two scope boxes
     // are inputs; this check is about buttons and links.
+    expect(drawnControls()).toBeGreaterThan(1);
+    expect(unnamedControls()).toEqual([]);
+  });
+
+  it("in the persona bundle panel", () => {
+    renderPage(<PersonaBundle />);
+    // Export and import; the checkboxes and the file picker are inputs.
     expect(drawnControls()).toBeGreaterThan(1);
     expect(unnamedControls()).toEqual([]);
   });

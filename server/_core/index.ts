@@ -22,6 +22,7 @@ import { attachCallServer } from "../chat/call";
 import { registerImportUploadRoute } from "../importers/upload-route";
 import { registerBackupRoutes } from "../backup/route";
 import { registerOpenAiCompatRoutes } from "../openai-compat/route";
+import { registerPersonaBundleRoutes } from "../personas/bundle-route";
 import { bootstrapAdminAccount } from "../bootstrap/bootstrap";
 import { migrateLegacyTTSFiles } from "./tts";
 
@@ -156,6 +157,8 @@ async function startServer() {
   // The OpenAI-compatible endpoint (C9.2). Keyed by its own Bearer token,
   // so it is not behind the cookie-based CSRF guard.
   registerOpenAiCompatRoutes(app);
+  // Persona bundle export and import (C9.5). Both stream a file.
+  registerPersonaBundleRoutes(app);
 
   app.use(
     "/api/trpc",

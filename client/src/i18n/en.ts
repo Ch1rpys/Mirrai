@@ -3626,6 +3626,36 @@ export const en = {
     revoke: "Revoke",
     revokeConfirm: "Revoke it",
   },
+  /**
+   * The persona bundle (C9.5).
+   */
+  bundle: {
+    title: "Persona file",
+    note: "Export one persona as a single file for another machine or a backup, or import a file as a new persona.",
+    loadFailed: "The personas could not be read.",
+    personaLabel: "Persona",
+    includeMemories: "Include memories",
+    includeRecords: "Include records",
+    includeConversation: "Include the conversation",
+    passphraseLabel: "Passphrase (optional)",
+    passphrasePlaceholder: "At least 8 characters",
+    passphraseNote: "With a passphrase, everything in the file is encrypted and the same passphrase opens it. Without one it is a zip of the real chat lines.",
+    exportButton: "Export as one file",
+    exporting: "Exporting…",
+    exported: "Exported.",
+    exportFailed: "The export did not finish.",
+    exportFailedWith: "The export did not finish: {{message}}",
+    importHeading: "Import a persona from a file",
+    importNote: "An import always creates a new persona; nothing existing is overwritten. The file holds real chat records — only give it to somebody you trust.",
+    fileLabel: "File to import",
+    importPassphraseLabel: "The file's passphrase",
+    importPassphrasePlaceholder: "Empty if it has none",
+    importButton: "Import",
+    importing: "Importing…",
+    imported: "Imported: {{name}} ({{records}} records, {{memories}} memories).",
+    importFailed: "The import did not finish, and left no half-made persona behind.",
+    importFailedWith: "The import did not finish: {{message}}",
+  },
 } as const;
 
 export type EnDictionary = typeof en;
