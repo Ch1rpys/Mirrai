@@ -828,6 +828,12 @@ describe("every control has a name", () => {
       </ThemeProvider>,
     );
     expect(screen.getByTestId("described-statements")).toBeInTheDocument();
+    // These two components have no buttons at all, so a zero-control
+    // count proves nothing on its own: the test says the text is really
+    // on the page, then that there is no unnamed control anywhere.
+    expect(screen.getByText(/生气时先沉默/)).toBeInTheDocument();
+    expect(screen.getByText(/生气的时候一句话都不说/)).toBeInTheDocument();
+    expect(screen.getByText(/琪琪/)).toBeInTheDocument();
     expect(drawnControls()).toBe(0);
     expect(unnamedControls()).toEqual([]);
   });
