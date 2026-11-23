@@ -1,4 +1,11 @@
-import type { LLMMessage, LLMOptions, LLMProvider, LLMContentPart } from "../types";
+import type {
+  LLMMessage,
+  LLMOptions,
+  LLMProvider,
+  LLMContentPart,
+  LLMToolCall,
+} from "../types";
+import { getTextContent } from "../types";
 import { parseSSEData } from "../sse";
 import { stripForbiddenExtraBody } from "../extra-body";
 
@@ -8,6 +15,32 @@ function toOpenAIContent(content: string | LLMContentPart[]): any {
     if (p.type === "text") return { type: "text", text: p.text };
     return { type: "image_url", image_url: { url: p.url } };
   });
+}
+
+/**
+ * The OpenAI tool definitions (C9.4).
+ *
+ * The function wrapper is OpenAI's, not ours: `parameters` is the JSON
+ * Schema the caller built.
+ */
+function toOpenAITools(options?: LLMOptions): unknown[] | undefined {
+  if (!options?.tools || options.tools.length === 0) return undefined;
+  return options.tools.map(tool => ({
+    type: "function",
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+    },
+  }));
+}
+
+/** OpenAI's three shapes of `tool_choice` (C9.4). */
+function toOpenAIToolChoice(options?: LLMOptions): unknown {
+  const choice = options?.toolChoice;
+  if (!choice) return undefined;
+  if (choice === "auto" || choice === "none") return choice;
+  return { type: "function", function: { name: choice.name } };
 }
 
 export class OpenAIProvider implements LLMProvider {
@@ -41,19 +74,57 @@ export class OpenAIProvider implements LLMProvider {
     return !!this.apiKey && !!this.baseUrl && !!this.model;
   }
 
+  /**
+   * The tool calls the provider reported on the last call (C9.4).
+   *
+   * `invoke` returns the words; the calls are read from here by
+   * `invokeWithTools`, the same way the token counts are read from
+   * `lastUsage`.
+   */
+  lastToolCalls: LLMToolCall[] | null = null;
+
   private buildMessages(messages: LLMMessage[]): LLMMessage[] {
     return this.systemMessage
       ? [{ role: "system" as const, content: this.systemMessage }, ...messages]
       : messages;
   }
 
+  /**
+   * Turns the shared message shapes into the OpenAI wire shapes (C9.4).
+   *
+   * A tool result is a `role: "tool"` message carrying the id it
+   * answers; an assistant message that asked for tools carries them
+   * back. Everything else is what it always was.
+   */
+  private wireMessages(messages: LLMMessage[]) {
+    return this.buildMessages(messages).map(m => {
+      if (m.role === "tool") {
+        return {
+          role: "tool",
+          tool_call_id: m.toolCallId,
+          content: getTextContent(m.content),
+        };
+      }
+      if (m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0) {
+        const text = getTextContent(m.content);
+        return {
+          role: "assistant",
+          content: text ? text : null,
+          tool_calls: m.toolCalls.map(call => ({
+            id: call.id,
+            type: "function",
+            function: { name: call.name, arguments: call.arguments },
+          })),
+        };
+      }
+      return { role: m.role, content: toOpenAIContent(m.content) };
+    });
+  }
+
   private buildBody(messages: LLMMessage[], options: LLMOptions | undefined, stream: boolean) {
     const body: Record<string, unknown> = {
       model: this.model,
-      messages: this.buildMessages(messages).map(m => ({
-        role: m.role,
-        content: toOpenAIContent(m.content),
-      })),
+      messages: this.wireMessages(messages),
       max_tokens: options?.maxTokens ?? 4096,
       temperature: options?.temperature ?? 0.7,
     };
@@ -61,6 +132,13 @@ export class OpenAIProvider implements LLMProvider {
     if (options?.presencePenalty != null) body.presence_penalty = options.presencePenalty;
     if (options?.frequencyPenalty != null) body.frequency_penalty = options.frequencyPenalty;
     if (options?.stop && options.stop.length > 0) body.stop = options.stop;
+    const tools = toOpenAITools(options);
+    if (tools) body.tools = tools;
+    const toolChoice = toOpenAIToolChoice(options);
+    if (toolChoice !== undefined) body.tool_choice = toolChoice;
+    if (options?.responseFormat === "json") {
+      body.response_format = { type: "json_object" };
+    }
     if (stream) body.stream = true;
     if (options?.extraBody) {
       Object.assign(body, stripForbiddenExtraBody(options.extraBody));
@@ -104,6 +182,8 @@ export class OpenAIProvider implements LLMProvider {
 
   async invoke(messages: LLMMessage[], options?: LLMOptions): Promise<string> {
     const url = `${this.baseUrl.replace(/\/+$/, "")}/chat/completions`;
+    // A failed call must not leave the previous call's tools behind.
+    this.lastToolCalls = null;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -141,6 +221,29 @@ export class OpenAIProvider implements LLMProvider {
       this.lastUsage = null;
     }
     const message = data.choices?.[0]?.message;
+    /**
+     * What the model asked for, if anything (C9.4).
+     *
+     * A tool-call reply usually has no `content` at all, so the calls
+     * are read before the text: an empty string plus a call is a
+     * question, not an empty answer.
+     */
+    const rawCalls = message?.tool_calls;
+    if (Array.isArray(rawCalls)) {
+      const calls: LLMToolCall[] = rawCalls.flatMap((call: any) => {
+        const name = call?.function?.name;
+        if (typeof name !== "string" || !name) return [];
+        const args = call?.function?.arguments;
+        return [{
+          id: typeof call?.id === "string" && call.id ? call.id : `call_${name}`,
+          name,
+          arguments: typeof args === "string" ? args : JSON.stringify(args ?? {}),
+        }];
+      });
+      this.lastToolCalls = calls.length > 0 ? calls : null;
+    } else {
+      this.lastToolCalls = null;
+    }
     // Some providers answer with the reasoning in `reasoning_content` and
     // leave `content` empty. Reading only `content` turned such a reply
     // into an empty one, which the app then stored as "(silence)".
@@ -150,6 +253,7 @@ export class OpenAIProvider implements LLMProvider {
 
   async *stream(messages: LLMMessage[], options?: LLMOptions): AsyncGenerator<{ text: string }> {
     const url = `${this.baseUrl.replace(/\/+$/, "")}/chat/completions`;
+    this.lastToolCalls = null;
     const response = await fetch(url, {
       method: "POST",
       headers: {

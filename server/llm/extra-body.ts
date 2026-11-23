@@ -7,7 +7,16 @@
  * every call.
  */
 export const EXTRA_BODY_MAX_BYTES = 2048;
-export const EXTRA_BODY_FORBIDDEN = ["model", "messages", "stream", "tools"] as const;
+export const EXTRA_BODY_FORBIDDEN = [
+  "model",
+  "messages",
+  "stream",
+  "tools",
+  // The tool layer (C9.4) fills these two itself; a stored body must not
+  // be able to widen or force tool use.
+  "tool_choice",
+  "response_format",
+] as const;
 
 export type ExtraBodyError = "not_object" | "too_large" | "forbidden";
 

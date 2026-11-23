@@ -1,4 +1,4 @@
-import type { LLMMessage, LLMOptions, LLMProvider } from "../types";
+import type { LLMMessage, LLMOptions, LLMProvider, LLMToolCall } from "../types";
 import { getTextContent } from "../types";
 import { parseNDJSON } from "../sse";
 
@@ -19,7 +19,14 @@ export class OllamaProvider implements LLMProvider {
     streaming: true,
     vision: false,
     tools: false,
-    jsonMode: false,
+    /**
+     * Ollama has a native JSON mode: `format: "json"` (C9.4).
+     *
+     * It constrains the sampler to valid JSON, which is what the
+     * extraction and labelling calls parse. Tools are not implemented
+     * on this adapter, so that flag stays false.
+     */
+    jsonMode: true,
   };
 
   isConfigured(): boolean {
@@ -32,6 +39,14 @@ export class OllamaProvider implements LLMProvider {
 
   /** The usage the provider reported on the last call (C8.9). */
   lastUsage: { promptTokens: number; completionTokens: number } | null = null;
+
+  /** This adapter never asks for a tool, so the list is always empty. */
+  lastToolCalls: LLMToolCall[] | null = null;
+
+  /** The native JSON mode, on the body (C9.4). */
+  private formatField(options?: LLMOptions): Record<string, unknown> {
+    return options?.responseFormat === "json" ? { format: "json" } : {};
+  }
 
   /** Sampling fields Ollama accepts on `options`. */
   private samplingOptions(options?: LLMOptions) {
@@ -53,6 +68,7 @@ export class OllamaProvider implements LLMProvider {
         model: this.model,
         messages: messages.map(m => ({ role: m.role, content: getTextContent(m.content) })),
         stream: false,
+        ...this.formatField(options),
         options: this.samplingOptions(options),
       }),
       signal: options?.signal,
@@ -92,6 +108,7 @@ export class OllamaProvider implements LLMProvider {
         model: this.model,
         messages: messages.map(m => ({ role: m.role, content: getTextContent(m.content) })),
         stream: true,
+        ...this.formatField(options),
         options: this.samplingOptions(options),
       }),
       signal: options?.signal,

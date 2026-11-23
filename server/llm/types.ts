@@ -2,8 +2,51 @@ export type LLMContentPart =
   | { type: "text"; text: string }
   | { type: "image_url"; url: string };
 
+/**
+ * A tool the model may call (C9.4).
+ *
+ * `parameters` is a JSON Schema object, which is exactly what the OpenAI
+ * and Claude request bodies want. The adapter that speaks a different
+ * shape converts it; the caller only ever builds one definition.
+ */
+export interface LLMToolDef {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+/** How the model is allowed to use the tools it was given (C9.4). */
+export type LLMToolChoice = "auto" | "none" | { name: string };
+
+/** One call the model asked for (C9.4). */
+export interface LLMToolCall {
+  id: string;
+  name: string;
+  /**
+   * The arguments, as the provider sent them.
+   *
+   * It is the raw JSON string, not a parsed object: a provider that
+   * answered with broken JSON has to be reported as broken, not crash
+   * the turn on a parse.
+   */
+  arguments: string;
+}
+
+/** The answer to a turn, with the tool calls the words came with (C9.4). */
+export interface LLMCompletion {
+  text: string;
+  toolCalls?: LLMToolCall[];
+}
+
 export type LLMMessage = {
-  role: "system" | "user" | "assistant";
+  /**
+   * `tool` is a result going back to the model (C9.4).
+   *
+   * OpenAI and Ollama put it in a `role: "tool"` message; Claude puts it
+   * in a `tool_result` block inside a user message. Both are built from
+   * this one shape.
+   */
+  role: "system" | "user" | "assistant" | "tool";
   content: string | LLMContentPart[];
   /**
    * Character length of the stable prefix of a system prompt.
@@ -13,6 +56,12 @@ export type LLMMessage = {
    * providers ignore it.
    */
   cacheBreak?: number;
+  /** The calls this assistant message asked for (C9.4). */
+  toolCalls?: LLMToolCall[];
+  /** Which call this tool result answers (C9.4). */
+  toolCallId?: string;
+  /** The tool's name, for providers that want it with the result (C9.4). */
+  toolName?: string;
 };
 
 export const LLM_PURPOSES = [
@@ -55,6 +104,22 @@ export type LLMOptions = {
   stop?: string[];
   /** Cancels an in-flight request (used by the streaming route). */
   signal?: AbortSignal;
+  /**
+   * Tools the model may call (C9.4).
+   *
+   * Only a provider whose capabilities declare `tools: true` sends
+   * them; a provider that cannot leaves the field out, so a request
+   * without tools is byte-for-byte what it was before this existed.
+   */
+  tools?: LLMToolDef[];
+  /** Only meaningful together with `tools`. */
+  toolChoice?: LLMToolChoice;
+  /**
+   * Ask for structured JSON output where the provider has a native mode
+   * (C9.4). Providers without one leave the field out and the caller
+   * keeps its tolerant extraction.
+   */
+  responseFormat?: "json";
 };
 
 /**
@@ -132,6 +197,16 @@ export interface LLMProvider {
    * next call overwrites it.
    */
   lastUsage?: LLMUsage | null;
+  /**
+   * The tool calls the provider reported on its last successful call,
+   * or null (C9.4).
+   *
+   * It sits next to `lastUsage` for the same reason: `invoke` returns
+   * the words, and the calls that came with them are not words. A
+   * provider that never asks for a tool leaves this null, and the
+   * non-tool paths never look at it.
+   */
+  lastToolCalls?: LLMToolCall[] | null;
   invoke(messages: LLMMessage[], options?: LLMOptions): Promise<string>;
   /** Optional: yields text incrementally. */
   stream?(messages: LLMMessage[], options?: LLMOptions): AsyncIterable<LLMStreamChunk>;
