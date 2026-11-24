@@ -153,21 +153,32 @@ function messageText(content: unknown): string {
 /**
  * The one thing the user said this turn.
  *
- * Everything before the last assistant message is history the server
- * already has — sending it again would only let the client rewrite it. A
- * burst of consecutive user messages is one message: they were sent
- * together, so they are joined with a newline.
+ * Everything before the last user message is history the server already
+ * has — sending it again would only let the client rewrite it. The
+ * manual's rule is "the last `user` message", so a request that ends with
+ * an assistant message (a client asking the persona to continue) still
+ * has its last user line used; the trailing assistant text is not the
+ * user's turn. A burst of consecutive user messages is one message: they
+ * were sent together, so they are joined with a newline.
  */
 export function turnTextFrom(messages: Array<{ role: string; content?: unknown }>): string {
-  const reversed: string[] = [];
+  let lastUser = -1;
   for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i].role === "user") {
+      lastUser = i;
+      break;
+    }
+  }
+  if (lastUser === -1) return "";
+  const parts: string[] = [];
+  for (let i = lastUser; i >= 0; i -= 1) {
     const message = messages[i];
     if (message.role !== "user") break;
     const text = messageText(message.content).trim();
-    if (text) reversed.push(text);
-    else break;
+    if (!text) break;
+    parts.push(text);
   }
-  return reversed.reverse().join("\n");
+  return parts.reverse().join("\n");
 }
 
 function modelIdOf(personaId: number): string {

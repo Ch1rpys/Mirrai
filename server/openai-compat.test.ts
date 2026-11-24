@@ -284,6 +284,19 @@ describe("the conversation is the server's", () => {
     expect(runConversation).not.toHaveBeenCalled();
   });
 
+  it("still takes the last user line when the request ends on an assistant", async () => {
+    const res = await postChat({
+      model: "persona-1",
+      messages: [
+        { role: "user", content: "在吗" },
+        { role: "assistant", content: "嗯" },
+      ],
+    });
+    expect(res.status).toBe(200);
+    const call = runConversation.mock.calls[0][0] as { message: string };
+    expect(call.message).toBe("在吗");
+  });
+
   it("refuses a model name that is not a persona", async () => {
     const res = await postChat({
       model: "gpt-4o",
