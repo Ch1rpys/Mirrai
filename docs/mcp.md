@@ -90,6 +90,11 @@ search the records page uses (C8.6), so an encrypted account can only be
 searched after it is unlocked in this process — and then only with at least two
 characters, because the blind index is built on pairs of characters.
 
+A persona locked in the app (C8.4) is treated the same way: `list_personas`
+leaves it out and the four per-persona tools answer with an unlock sentence
+instead of its content. The app-level lock, by contrast, does not cover keys —
+the key is the credential (the same rule as the OpenAI-compatible endpoint).
+
 ## Notes
 
 - The MCP server reads as the key's owner. A key is per account; revoke it in

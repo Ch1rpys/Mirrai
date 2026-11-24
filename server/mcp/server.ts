@@ -18,6 +18,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { copy } from "@shared/copy";
 import { normalizePersonaData } from "../_core/persona-schema";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 import { isEncryptionLocked } from "../encryption/lock";
 import type { RecordReport } from "../records/report";
 import * as db from "../db";
@@ -27,6 +28,23 @@ import type { McpIdentity } from "./identity";
 export const MCP_SEARCH_LIMIT = 30;
 /** The most lines on either side of a record. */
 export const MCP_CONTEXT_LINES = 10;
+
+/**
+ * Whether this persona is locked in the app (C8.4).
+ *
+ * A locked persona is hidden until its owner enters the PIN; the read-only
+ * server has no PIN and no session, so it must not read it — the same rule
+ * the OpenAI-compatible endpoint follows (C9.2). This is not the whole-app
+ * lock, which deliberately does not cover keys (a key is the credential).
+ */
+function isLockedPersona(persona: { settings?: unknown } | null | undefined): boolean {
+  return normalizePersonaSettings(persona?.settings).locked === true;
+}
+
+/** The sentence a tool answers a locked persona with, instead of its content. */
+function lockedPersonaText(identity: McpIdentity): string {
+  return copy(identity.locale, "mcp.lockedPersona");
+}
 
 type ToolResult = { content: Array<{ type: "text"; text: string }> };
 
@@ -137,7 +155,9 @@ export function createMirraiMcpServer(identity: McpIdentity): McpServer {
     async () => {
       const gate = await locked(identity);
       if (gate) return gate;
-      const personas = await db.getPersonasByUserId(identity.userId);
+      const personas = (await db.getPersonasByUserId(identity.userId)).filter(
+        (persona) => !isLockedPersona(persona),
+      );
       if (personas.length === 0) {
         return result(withHeader(copy(identity.locale, "mcp.noPersonas"), identity));
       }
@@ -165,6 +185,9 @@ export function createMirraiMcpServer(identity: McpIdentity): McpServer {
       if (gate) return gate;
       const persona = await db.getPersonaById(personaId, identity.userId);
       if (!persona) return result(withHeader(copy(identity.locale, "mcp.noPersona"), identity));
+      if (isLockedPersona(persona)) {
+        return result(withHeader(lockedPersonaText(identity), identity));
+      }
       const data = normalizePersonaData(persona.personaData as Record<string, unknown> | null, {
         name: persona.name,
         locale: identity.locale,
@@ -226,6 +249,9 @@ export function createMirraiMcpServer(identity: McpIdentity): McpServer {
       if (gate) return gate;
       const persona = await db.getPersonaById(personaId, identity.userId);
       if (!persona) return result(withHeader(copy(identity.locale, "mcp.noPersona"), identity));
+      if (isLockedPersona(persona)) {
+        return result(withHeader(lockedPersonaText(identity), identity));
+      }
       const hits = await db.searchRecordsLexical(personaId, identity.userId, {
         q: query,
         role: role ?? "all",
@@ -264,6 +290,13 @@ export function createMirraiMcpServer(identity: McpIdentity): McpServer {
       if (!context.target) {
         return result(withHeader(copy(identity.locale, "mcp.noRecord"), identity));
       }
+      const personaId = (context.target as { personaId?: number | null }).personaId;
+      if (typeof personaId === "number") {
+        const persona = await db.getPersonaById(personaId, identity.userId);
+        if (isLockedPersona(persona)) {
+          return result(withHeader(lockedPersonaText(identity), identity));
+        }
+      }
       const lines = [
         ...context.before.map((row) => recordLine(row, identity)),
         `→ ${recordLine(context.target, identity)}`,
@@ -287,6 +320,9 @@ export function createMirraiMcpServer(identity: McpIdentity): McpServer {
       if (gate) return gate;
       const persona = await db.getPersonaById(personaId, identity.userId);
       if (!persona) return result(withHeader(copy(identity.locale, "mcp.noPersona"), identity));
+      if (isLockedPersona(persona)) {
+        return result(withHeader(lockedPersonaText(identity), identity));
+      }
       const cached = await db.getRecordReportCache(personaId, identity.userId);
       if (!cached) return result(withHeader(copy(identity.locale, "mcp.noReport"), identity));
       return result(withHeader(reportText(cached.report, identity), identity));

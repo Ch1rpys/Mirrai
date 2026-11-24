@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { copy } from "@shared/copy";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
@@ -341,6 +342,63 @@ describe("the tools", () => {
     }
     expect(getPersonasByUserId).not.toHaveBeenCalled();
     expect(searchRecordsLexical).not.toHaveBeenCalled();
+    await client.close();
+  });
+
+  it("hides a locked persona from the list instead of naming it", async () => {
+    getPersonasByUserId.mockResolvedValue([
+      persona(),
+      persona({ id: 2, name: "锁着的小北", relationshipDesc: "室友", settings: { locked: true } }),
+    ]);
+    const { client } = await connect();
+    const text = textOf(await client.callTool({ name: "list_personas", arguments: {} }));
+    expect(text).toContain("小满");
+    expect(text).not.toContain("锁着的小北");
+    expect(text).not.toContain("室友");
+    await client.close();
+  });
+
+  it("refuses to read the portrait of a locked persona", async () => {
+    getPersonaById.mockResolvedValue(persona({ settings: { locked: true } }));
+    const { client } = await connect();
+    const text = textOf(await client.callTool({ name: "read_persona", arguments: { personaId: 1 } }));
+    expect(text).toContain(copy("zh", "mcp.lockedPersona"));
+    // The portrait is not rendered at all, not merely hidden behind the sentence.
+    expect(text).not.toContain("外冷内热");
+    await client.close();
+  });
+
+  it("refuses to search a locked persona's records", async () => {
+    getPersonaById.mockResolvedValue(persona({ settings: { locked: true } }));
+    const { client } = await connect();
+    const text = textOf(
+      await client.callTool({ name: "search_records", arguments: { personaId: 1, query: "在的" } }),
+    );
+    expect(text).toContain(copy("zh", "mcp.lockedPersona"));
+    expect(text).not.toContain("在的呀");
+    expect(searchRecordsLexical).not.toHaveBeenCalled();
+    await client.close();
+  });
+
+  it("refuses to read a locked persona's report", async () => {
+    getPersonaById.mockResolvedValue(persona({ settings: { locked: true } }));
+    const { client } = await connect();
+    const text = textOf(await client.callTool({ name: "read_report", arguments: { personaId: 1 } }));
+    expect(text).toContain(copy("zh", "mcp.lockedPersona"));
+    expect(text).not.toContain("975");
+    expect(getRecordReportCache).not.toHaveBeenCalled();
+    await client.close();
+  });
+
+  it("refuses the lines around a record that belongs to a locked persona", async () => {
+    getPersonaById.mockResolvedValue(persona({ settings: { locked: true } }));
+    const { client } = await connect();
+    const text = textOf(
+      await client.callTool({ name: "get_record_context", arguments: { recordId: 11 } }),
+    );
+    expect(text).toContain(copy("zh", "mcp.lockedPersona"));
+    expect(text).not.toContain("在的呀");
+    expect(getPersonaById).toHaveBeenCalledWith(1, 7);
     await client.close();
   });
 });

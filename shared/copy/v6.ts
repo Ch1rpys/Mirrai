@@ -2010,6 +2010,10 @@ export const V6 = {
     zh: "没有这个分身，或者它不属于这个账号。",
     en: "There is no such persona, or it does not belong to this account.",
   },
+  "mcp.lockedPersona": {
+    zh: "这个分身锁着：在应用里解锁之后再来读它。",
+    en: "That persona is locked. Unlock it in the app before reading it.",
+  },
   "mcp.noRecord": {
     zh: "没有这条记录。",
     en: "There is no such record.",
