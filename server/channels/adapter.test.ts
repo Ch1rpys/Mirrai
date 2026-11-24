@@ -99,6 +99,9 @@ vi.mock("../llm/user-provider", () => ({
 import type { ChannelAdapter } from "./types";
 import { wechatAdapter } from "./wechat";
 import { feishuAdapter } from "./feishu";
+import { telegramAdapter } from "./telegram";
+import { discordAdapter } from "./discord";
+import { matrixAdapter } from "./matrix";
 import { clearAllActivePersonas, getActivePersonaId, handleCommand } from "./commands";
 import { handleCommand as handleWechatCommand } from "../wechat/commands";
 
@@ -168,8 +171,14 @@ beforeEach(() => {
 });
 
 describe("channel adapter interface", () => {
-  it("exposes the same interface on both channels", () => {
-    const adapters: ChannelAdapter[] = [wechatAdapter, feishuAdapter];
+  it("exposes the same interface on every channel", () => {
+    const adapters: ChannelAdapter[] = [
+      wechatAdapter,
+      feishuAdapter,
+      telegramAdapter,
+      discordAdapter,
+      matrixAdapter,
+    ];
 
     for (const adapter of adapters) {
       expect(typeof adapter.id).toBe("string");
@@ -178,6 +187,7 @@ describe("channel adapter interface", () => {
       for (const method of ADAPTER_METHODS) {
         expect(typeof adapter[method]).toBe("function");
       }
+      expect(typeof adapter.restore).toBe("function");
     }
   });
 
@@ -186,6 +196,15 @@ describe("channel adapter interface", () => {
     expect(feishuAdapter.id).toBe("feishu");
     expect(wechatAdapter.requiresCredentials).toBe(false);
     expect(feishuAdapter.requiresCredentials).toBe(true);
+    // The bot channels are all credential-led: no token, no channel (C9.1).
+    for (const [adapter, id] of [
+      [telegramAdapter, "telegram"],
+      [discordAdapter, "discord"],
+      [matrixAdapter, "matrix"],
+    ] as const) {
+      expect(adapter.id).toBe(id);
+      expect(adapter.requiresCredentials).toBe(true);
+    }
   });
 });
 

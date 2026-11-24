@@ -155,6 +155,19 @@ describe("a bound Matrix conversation", () => {
     }));
     expect(sent).toEqual(["在的呀"]);
   });
+
+  it("says the message failed when the send does", async () => {
+    const sent: string[] = [];
+    await handleMatrixMessage({
+      userId: 1,
+      message: message(),
+      sendText: async (_room, text) => {
+        if (text === "在的呀") throw new Error("matrix is down");
+        sent.push(text);
+      },
+    });
+    expect(sent.join("\n")).toContain("消息没有发出去");
+  });
 });
 
 describe("sending", () => {
@@ -229,4 +242,29 @@ describe("the sync loop", () => {
     expect(synced).toEqual(["s2"]);
     expect(urls[1]).toContain("since=s2");
   });
+
+  it("retries after a failed sync", async () => {
+    const controller = new AbortController();
+    const urls: string[] = [];
+    let calls = 0;
+    const fetchMock = vi.fn(async (url: string) => {
+      calls += 1;
+      urls.push(String(url));
+      if (calls === 1) throw new Error("network");
+      controller.abort();
+      return new Response(JSON.stringify({ next_batch: "s2" }), { status: 200 });
+    });
+    const onError = vi.fn();
+    await runMatrixSync({
+      credentials: { homeserverUrl: "https://matrix.example", accessToken: "token" },
+      ownUserId: "@bot:example.org",
+      signal: controller.signal,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      onMessage: async () => undefined,
+      onError,
+    });
+    expect(onError).toHaveBeenCalled();
+    expect(calls).toBe(2);
+    expect(urls[0]).not.toContain("since=");
+  }, 10_000);
 });
