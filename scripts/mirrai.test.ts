@@ -239,6 +239,24 @@ describe("the subcommands call the function behind the route", () => {
     }));
   });
 
+  it("refuses a passphrase given as an argument", async () => {
+    const { base } = deps();
+    const { lines, io } = output();
+    const code = await runMirrai(
+      [
+        "export", "--persona", "3", "--user", "1", "--out", path.join(dir, "arg.mirrai-persona"),
+        // The manual says a passphrase is never read from the argument
+        // list; ignoring it would silently write a plaintext file.
+        "--passphrase", "a long passphrase",
+      ],
+      base,
+      io,
+    );
+    expect(code).not.toBe(0);
+    expect(base.exportPersonaBundle).not.toHaveBeenCalled();
+    expect(lines.join("\n")).toContain("--passphrase-file");
+  });
+
   it("doctor: prints the items, and one JSON line with --json", async () => {
     const { base } = deps();
     const human = output();

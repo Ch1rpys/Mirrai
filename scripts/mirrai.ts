@@ -404,6 +404,15 @@ async function runExport(args: ParsedArgs, deps: MirraiDeps, io: CliIo, userId: 
   const out = flag(args, "out");
   if (!out) return fail(io, "export needs --out <path>.");
   const passphraseFile = flag(args, "passphrase-file");
+  /**
+   * A passphrase must never be read from the argument list: the shell
+   * keeps a command's arguments in its history. Silently ignoring a
+   * `--passphrase` would write a plaintext file while the person
+   * believed it was encrypted, so it is refused by name.
+   */
+  if (args.flags.has("passphrase")) {
+    return fail(io, "A passphrase is never read from an argument; use --passphrase-file <path>.");
+  }
   let passphrase: string | null = null;
   if (passphraseFile) {
     if (!existsSync(passphraseFile)) return fail(io, `No such file: ${passphraseFile}`);
