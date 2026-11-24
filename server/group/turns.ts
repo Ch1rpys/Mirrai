@@ -84,14 +84,17 @@ export function sanitizeMemberName(name: unknown): string {
  *
  * It is an application instruction (it says what this room is), so it is
  * not fenced; the names inside it are flattened by
- * `sanitizeMemberName` so no name can add a line or a heading.
+ * `sanitizeMemberName` so no name can add a line or a heading. The list
+ * separator follows the language: an English sentence reads badly with a
+ * Chinese enumeration comma between names.
  */
 export function groupOverlayText(params: {
   locale: Locale;
   members: string[];
   userName: string;
 }): string {
-  const members = params.members.map(sanitizeMemberName).join("、");
+  const separator = params.locale === "en" ? ", " : "、";
+  const members = params.members.map(sanitizeMemberName).join(separator);
   return copy(params.locale, "prompt.groupOverlay", {
     members,
     user: sanitizeMemberName(params.userName),
