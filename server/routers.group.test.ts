@@ -257,6 +257,20 @@ describe("sending one line", () => {
     expect(result.replies.map((row) => row.personaId)).toEqual([1]);
   });
 
+  it("mutes a member who can no longer join the room", async () => {
+    // Sleeping, sealed and not-ready personas cannot be added to a room;
+    // one that fell into that state after joining must stay quiet too.
+    getPersonas.mockResolvedValue([
+      personaRow(1, "小满"),
+      personaRow(2, "阿凯", { presence: "asleep" }),
+    ]);
+    composeReply.mockResolvedValue("我在");
+    const result = await caller().send({ roomId: 3, text: "@小满 @阿凯 在吗" });
+    expect(result.replies.map((row) => row.personaId)).toEqual([1]);
+    expect(composeReply).toHaveBeenCalledTimes(1);
+    expect((composeReply.mock.calls[0]![0] as { persona: { id: number } }).persona.id).toBe(1);
+  });
+
   it("reports an unknown room as not found", async () => {
     getRoom.mockResolvedValue(null);
     await expect(caller().send({ roomId: 99, text: "在吗" })).rejects.toMatchObject({

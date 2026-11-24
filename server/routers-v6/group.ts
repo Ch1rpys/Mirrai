@@ -302,16 +302,25 @@ export const groupRouter = router({
       const userName = ctx.user.name || ctx.user.username;
       const text = input.text.trim();
 
-      const memberInputs: GroupMember[] = members.map(({ persona }) => {
-        const profile = normalizeStyleProfile(persona.styleProfile);
-        const aliases = (persona.settings as { skin?: { alias?: unknown } } | null)?.skin?.alias;
-        return {
-          personaId: persona.id,
-          name: persona.name,
-          aliases: typeof aliases === "string" && aliases.trim() ? [aliases.trim()] : [],
-          group: (profile.group as GroupMember["group"]) ?? null,
-        };
-      });
+      /**
+       * Only the members who can still be in the room may answer.
+       *
+       * The member list already shows a sleeping, sealed or unready
+       * persona as muted; that member fell into the state after joining,
+       * and speaking for it would be the same mistake as adding it now.
+       */
+      const memberInputs: GroupMember[] = members
+        .filter((row) => row.available)
+        .map(({ persona }) => {
+          const profile = normalizeStyleProfile(persona.styleProfile);
+          const aliases = (persona.settings as { skin?: { alias?: unknown } } | null)?.skin?.alias;
+          return {
+            personaId: persona.id,
+            name: persona.name,
+            aliases: typeof aliases === "string" && aliases.trim() ? [aliases.trim()] : [],
+            group: (profile.group as GroupMember["group"]) ?? null,
+          };
+        });
       const mentionedPersonaIds = memberInputs
         .filter((member) => mentionsPersona(text, member))
         .map((member) => member.personaId);
