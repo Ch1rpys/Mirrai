@@ -24,6 +24,19 @@ export default defineConfig({
   test: {
     environment: "node",
     /**
+     * How long one test may take.
+     *
+     * Some tests are CPU-heavy on purpose: they measure the 5126-line
+     * fixture three times, scan every source file for an unused copy key,
+     * or run a layered distillation over the whole fixture. In isolation
+     * they take one to three seconds; under the full suite's parallelism
+     * the same work can take eight or ten — the default 5s limit then
+     * fails them for being slow, not for being wrong. The limit is only a
+     * ceiling: no assertion is relaxed, and a test that really hangs
+     * still fails after it.
+     */
+    testTimeout: 30_000,
+    /**
      * The component tests need a DOM.
      *
      * The interface had none, because there was nowhere to run them. Now
