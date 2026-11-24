@@ -24,7 +24,13 @@ import path from "node:path";
 import { z } from "zod";
 import * as db from "../db";
 import { ENV } from "../_core/env";
-import { resolveUploadPath } from "../_core/filename";
+import {
+  ALLOWED_EXTENSIONS,
+  fileExtension,
+  IMPORT_MEDIA_EXTENSIONS,
+  resolveUploadPath,
+} from "../_core/filename";
+import { BackupFormatError } from "../_core/backup-format";
 import { resolveStoredPath } from "../storage";
 import {
   extractPersonaBundle,
@@ -132,6 +138,55 @@ function keyFromMediaUrl(url: string | null): string | null {
   if (!url) return null;
   const match = /^\/uploads\/(.+)$/.exec(url);
   return match ? match[1] : null;
+}
+
+/**
+ * The file kinds a bundle may put into the uploads directory (C9.5/C1.1).
+ *
+ * A persona bundle carries stickers, photos, voice notes, video and the
+ * attachments of a conversation. It is an archive from outside the app,
+ * so it follows the import archive's rule: only the extensions the app
+ * actually serves as media. Anything else — an `.html` page, a script, a
+ * file with no extension — would be served from the app's own origin,
+ * and is refused before the persona is created.
+ */
+const BUNDLE_FILE_EXTENSIONS = new Set<string>([
+  ...IMPORT_MEDIA_EXTENSIONS,
+  ...ALLOWED_EXTENSIONS.image,
+  ...ALLOWED_EXTENSIONS.video,
+  ...ALLOWED_EXTENSIONS.audio,
+]);
+
+/** Whether a file named by a bundle is one the uploads directory may hold. */
+export function bundleFileAllowed(fileName: string): boolean {
+  return BUNDLE_FILE_EXTENSIONS.has(fileExtension(fileName));
+}
+
+/**
+ * Refuses a bundle that names a file this app will not store.
+ *
+ * Runs after the archive is unpacked and before anything is written to
+ * the database or the uploads directory, so a rejected bundle leaves no
+ * half-made persona behind.
+ */
+async function assertBundleFilesAreMedia(stagingDir: string): Promise<void> {
+  const parts: Array<{ part: string; field: string }> = [
+    { part: PERSONA_BUNDLE_PARTS.media, field: "fileName" },
+    { part: PERSONA_BUNDLE_PARTS.stickers, field: "fileName" },
+    { part: PERSONA_BUNDLE_PARTS.messages, field: "mediaFileName" },
+  ];
+  for (const { part, field } of parts) {
+    for (const row of await readNdjson(stagingDir, part)) {
+      if (!row || typeof row !== "object") continue;
+      const name = (row as Record<string, unknown>)[field];
+      if (typeof name !== "string" || !name) continue;
+      if (!bundleFileAllowed(name)) {
+        throw new BackupFormatError(
+          `The bundle contains a file this version does not accept: ${name}`,
+        );
+      }
+    }
+  }
 }
 
 /** A file entry, read from the uploads directory. */
@@ -422,6 +477,11 @@ export async function importPersonaBundle(options: {
       throw new Error("The bundle's persona.json is not a persona this version can read.");
     }
     const persona = parsedPersona.data;
+
+    // The archive's file entries are held to C1.1's extension rule before
+    // a persona row exists (C9.5). A bundle that names anything else is
+    // refused whole, so a bad file cannot sit in the uploads directory.
+    await assertBundleFilesAreMedia(stagingDir);
 
     personaId = await db.createPersona({
       userId,
