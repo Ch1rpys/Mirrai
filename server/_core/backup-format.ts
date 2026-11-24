@@ -495,33 +495,66 @@ export async function writeBackupArchive(options: {
   }
 }
 
+/** What one archive extraction left in the staging directory. */
+export interface ExtractedArchive {
+  /** Entries the archive named, directory entries included. */
+  entryCount: number;
+  /** Uncompressed bytes written for the file entries. */
+  bytes: number;
+}
+
 /**
- * Extracts a backup archive into a staging directory.
+ * Unpacks one archive into a staging directory.
  *
- * The staging directory is the boundary: a restore verifies every part
- * here before it writes a single row or moves a single file into the
- * uploads directory. The returned manifest is the one from the archive.
+ * Backups and persona bundles share this: they read the same zip (and,
+ * with a passphrase, the same encrypted frames) and write one file per
+ * entry. The subtle part is that a file entry can span many read chunks
+ * (the reader hands out 64 KiB at a time, and `openBackupChunks` may hand
+ * out one decrypted frame at a time). Waiting for every open file to
+ * finish before pulling the next chunk waits for data that has not been
+ * read yet: imports and restores of any archive bigger than one chunk
+ * hung for ever. This loop waits for `drain` (the stream wants a pause)
+ * and checks that no file is still open only after the last chunk.
+ *
+ * Paths are checked against `stagingDir`; the caller decides what a
+ * failure means.
  */
-export async function extractBackupToStaging(options: {
+export async function extractArchiveToStaging(options: {
   filePath: string;
   passphrase?: string | null;
   stagingDir: string;
-}): Promise<BackupManifest> {
-  const { filePath, passphrase, stagingDir } = options;
+  /** Refuse an archive with more entries than this. */
+  maxEntries?: number;
+  /** Refuse more uncompressed bytes than this. */
+  maxBytes?: number;
+}): Promise<ExtractedArchive> {
+  const { filePath, passphrase, stagingDir, maxEntries, maxBytes } = options;
   await fs.mkdir(stagingDir, { recursive: true });
 
   const pendingWrites: Promise<void>[] = [];
-  let failure: Error | null = null;
+  let failure: BackupFormatError | null = null;
   let entryCount = 0;
+  let totalBytes = 0;
+  /**
+   * A write stream that asked for a pause, and the promise for its drain.
+   *
+   * It is awaited at the next chunk boundary. Waiting for `finish` while
+   * the rest of the archive is still unread would deadlock.
+   */
+  let drain: Promise<void> | null = null;
 
   const unzip = new Unzip();
   unzip.register(UnzipInflate);
   unzip.onfile = (file) => {
     entryCount += 1;
+    if (maxEntries != null && entryCount > maxEntries) {
+      failure = new BackupFormatError("The archive has too many entries.");
+      return;
+    }
     if (failure) return;
     const safe = safeEntryPath(stagingDir, file.name);
     if (!safe) {
-      failure = new BackupFormatError(`The backup contains an unsafe path: ${file.name}`);
+      failure = new BackupFormatError(`The archive contains an unsafe path: ${file.name}`);
       return;
     }
     if (file.name.endsWith("/")) {
@@ -535,13 +568,40 @@ export async function extractBackupToStaging(options: {
         stream.once("finish", () => resolve());
         stream.once("error", reject);
       });
+      /** The entry's last chunk has arrived; later calls are noise. */
+      let stopped = false;
       file.ondata = (error, chunk, final) => {
         if (error) {
+          stopped = true;
           stream.destroy(error);
           return;
         }
-        if (chunk && chunk.length) stream.write(Buffer.from(chunk));
-        if (final) stream.end();
+        if (stopped) return;
+        if (chunk && chunk.length) {
+          totalBytes += chunk.length;
+          if (maxBytes != null && totalBytes > maxBytes) {
+            stopped = true;
+            stream.destroy(new Error("too_large"));
+            return;
+          }
+          if (!stream.write(Buffer.from(chunk))) {
+            drain ??= new Promise<void>((resolve) => {
+              const done = () => {
+                stream.off("drain", done);
+                stream.off("error", done);
+                stream.off("close", done);
+                resolve();
+              };
+              stream.once("drain", done);
+              stream.once("error", done);
+              stream.once("close", done);
+            });
+          }
+        }
+        if (final) {
+          stopped = true;
+          stream.end();
+        }
       };
       file.start();
       await finished;
@@ -552,20 +612,45 @@ export async function extractBackupToStaging(options: {
   try {
     for await (const chunk of openBackupChunks(filePath, passphrase)) {
       unzip.push(chunk, false);
-      await Promise.all(pendingWrites);
+      if (drain) {
+        const waiting = drain;
+        drain = null;
+        await waiting;
+      }
     }
     unzip.push(new Uint8Array(0), true);
     await Promise.all(pendingWrites);
   } catch (error) {
     await Promise.allSettled(pendingWrites);
+    throw error;
+  }
+
+  if (failure) throw failure;
+  if (entryCount === 0) throw new BackupFormatError("The file is not a non-empty zip archive.");
+  return { entryCount, bytes: totalBytes };
+}
+
+/**
+ * Extracts a backup archive into a staging directory.
+ *
+ * The staging directory is the boundary: a restore verifies every part
+ * here before it writes a single row or moves a single file into the
+ * uploads directory. The returned manifest is the one from the archive.
+ */
+export async function extractBackupToStaging(options: {
+  filePath: string;
+  passphrase?: string | null;
+  stagingDir: string;
+}): Promise<BackupManifest> {
+  const { filePath, passphrase, stagingDir } = options;
+  try {
+    await extractArchiveToStaging({ filePath, passphrase, stagingDir });
+  } catch (error) {
     if (error instanceof BackupFormatError || error instanceof BackupPassphraseError) throw error;
     throw new BackupFormatError(
       error instanceof Error ? error.message : "The backup could not be read.",
     );
   }
-
-  if (failure) throw failure;
-  if (entryCount === 0) throw new BackupFormatError("The file is not a non-empty zip archive.");
 
   const manifestPath = path.join(stagingDir, BACKUP_MANIFEST);
   let raw: string;

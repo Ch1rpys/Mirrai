@@ -31,6 +31,27 @@ async function tempDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), "mirrai-backup-format-"));
 }
 
+/**
+ * Bytes that do not compress.
+ *
+ * The reader hands the archive out in 64 KiB chunks; a part this size
+ * makes the archive span more than one chunk, which is the case that used
+ * to deadlock.
+ */
+function incompressible(bytes: number): Buffer {
+  const out = Buffer.alloc(bytes);
+  let state = 0x9e3779b9;
+  for (let index = 0; index < bytes; index += 1) {
+    state ^= state << 13;
+    state >>>= 0;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    state >>>= 0;
+    out[index] = state & 0xff;
+  }
+  return out;
+}
+
 /** Writes one backup with one table part and one upload file. */
 async function writeOne(directory: string, passphrase: string | null) {
   const upload = path.join(directory, "upload.bin");
@@ -115,6 +136,44 @@ describe("the backup archive", () => {
         stagingDir: path.join(directory, "staging"),
       });
       expect(manifest.tables[0].rows).toBe(2);
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
+  }, 20_000);
+
+  it("round-trips an archive whose file is bigger than one read chunk", async () => {
+    // A real instance's backup is far bigger than the 64 KiB chunk the
+    // reader hands out. The reader used to wait for a part to finish
+    // before pulling the next chunk, so restoring such a backup hung for
+    // ever (found while accepting C9.5; the same loop served C8.3).
+    const directory = await tempDir();
+    try {
+      const big = incompressible(120_000);
+      for (const passphrase of [null, "a large backup passphrase"]) {
+        const label = passphrase ? "big-enc" : "big";
+        const out = path.join(directory, `${label}${passphrase ? ".mirrai-backup" : ".zip"}`);
+        const written = await writeBackupArchive({
+          outPath: out,
+          passphrase,
+          manifest: MANIFEST,
+          entries: [{
+            name: "uploads/big.bin",
+            compress: false,
+            chunks: async function* () {
+              yield big;
+            },
+          }],
+        });
+        expect(written.bytes).toBeGreaterThan(64 * 1024);
+        const staging = path.join(directory, `${label}-staging`);
+        const manifest = await extractBackupToStaging({
+          filePath: out,
+          passphrase,
+          stagingDir: staging,
+        });
+        expect(manifest.uploads.map((part) => part.file)).toContain("uploads/big.bin");
+        await expect(fs.readFile(path.join(staging, "uploads", "big.bin"))).resolves.toEqual(big);
+      }
     } finally {
       await fs.rm(directory, { recursive: true, force: true });
     }

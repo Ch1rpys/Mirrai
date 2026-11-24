@@ -8,8 +8,8 @@
  *
  * The container is the backup container: the same zip, the same optional
  * AES-GCM framing, the same header. It is written with `writeEncryptedHeader`
- * and `BackupEncryptor`, read with `openBackupChunks` and `safeEntryPath`, so
- * the two formats cannot drift apart. What differs is the manifest: its
+ * and `BackupEncryptor`, and unpacked by the same `extractArchiveToStaging`
+ * the backup restore uses, so the two formats cannot drift apart. What differs is the manifest: its
  * `kind` is `"persona"`, and it describes persona parts rather than tables.
  *
  * The manifest is written **last**, so a reader can be sure every part it
@@ -20,13 +20,13 @@ import { createWriteStream, promises as fs } from "node:fs";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import type { Writable } from "node:stream";
-import { Unzip, UnzipInflate, Zip, ZipDeflate, ZipPassThrough } from "fflate";
+import { Zip, ZipDeflate, ZipPassThrough } from "fflate";
 import {
   BackupEncryptor,
   BackupFormatError,
   BACKUP_MANIFEST,
   deriveBackupKey,
-  openBackupChunks,
+  extractArchiveToStaging,
   safeEntryPath,
   sha256File,
   writeEncryptedHeader,
@@ -288,73 +288,17 @@ export async function extractPersonaBundle(options: {
   stagingDir: string;
 }): Promise<ExtractedPersonaBundle> {
   const { filePath, passphrase, stagingDir } = options;
-  await fs.mkdir(stagingDir, { recursive: true });
-
-  const pendingWrites: Promise<void>[] = [];
-  let failure: Error | null = null;
-  let entryCount = 0;
-  let totalBytes = 0;
-
-  const unzip = new Unzip();
-  unzip.register(UnzipInflate);
-  unzip.onfile = (file) => {
-    entryCount += 1;
-    if (entryCount > PERSONA_BUNDLE_MAX_ENTRIES) {
-      failure = new BackupFormatError("The bundle has too many entries.");
-      return;
-    }
-    if (failure) return;
-    const safe = safeEntryPath(stagingDir, file.name);
-    if (!safe) {
-      failure = new BackupFormatError(`The bundle contains an unsafe path: ${file.name}`);
-      return;
-    }
-    if (file.name.endsWith("/")) {
-      pendingWrites.push(fs.mkdir(safe, { recursive: true }).then(() => undefined));
-      return;
-    }
-    const write = (async () => {
-      await fs.mkdir(path.dirname(safe), { recursive: true });
-      const stream = createWriteStream(safe);
-      const finished = new Promise<void>((resolve, reject) => {
-        stream.once("finish", () => resolve());
-        stream.once("error", reject);
-      });
-      file.ondata = (error, chunk, final) => {
-        if (error) {
-          stream.destroy(error);
-          return;
-        }
-        if (chunk && chunk.length) {
-          totalBytes += chunk.length;
-          if (totalBytes > PERSONA_BUNDLE_MAX_BYTES) {
-            stream.destroy(new Error("too_large"));
-            return;
-          }
-          stream.write(Buffer.from(chunk));
-        }
-        if (final) stream.end();
-      };
-      file.start();
-      await finished;
-    })();
-    pendingWrites.push(write);
-  };
-
-  try {
-    for await (const chunk of openBackupChunks(filePath, passphrase)) {
-      unzip.push(chunk, false);
-      await Promise.all(pendingWrites);
-    }
-    unzip.push(new Uint8Array(0), true);
-    await Promise.all(pendingWrites);
-  } catch (error) {
-    await Promise.allSettled(pendingWrites);
-    throw error;
-  }
-
-  if (failure) throw failure;
-  if (entryCount === 0) throw new BackupFormatError("The file is not a non-empty zip archive.");
+  // The container is the backup's; so is the unpacking. The limits are
+  // the only persona-shaped part: a bundle may name at most
+  // PERSONA_BUNDLE_MAX_ENTRIES entries and hold at most
+  // PERSONA_BUNDLE_MAX_BYTES uncompressed.
+  await extractArchiveToStaging({
+    filePath,
+    passphrase,
+    stagingDir,
+    maxEntries: PERSONA_BUNDLE_MAX_ENTRIES,
+    maxBytes: PERSONA_BUNDLE_MAX_BYTES,
+  });
 
   const manifestPath = path.join(stagingDir, BACKUP_MANIFEST);
   let raw: string;

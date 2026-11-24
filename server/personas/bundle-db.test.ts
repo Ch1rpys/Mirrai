@@ -45,6 +45,7 @@ import { measureStyleProfile } from "../_core/style-profile";
 import { exportPersonaBundle, importPersonaBundle } from "./bundle";
 import { PERSONA_BUNDLE_PARTS, writePersonaBundle, extractPersonaBundle } from "../_core/bundle";
 import { BackupPassphraseError } from "../_core/backup-format";
+import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -313,6 +314,70 @@ describe.skipIf(!DATABASE_URL)("a persona bundle, against the database (C9.5)", 
     expect(importedPrompt.length).toBeGreaterThan(0);
     expect(mapped).toBe(importedPrompt);
   });
+
+  it("round-trips the fixture-sized persona, whose bundle is bigger than one read chunk", async () => {
+    // The manual's round trip uses the xiaoman fixture. Its records make an
+    // archive bigger than the 64 KiB chunk `createReadStream` hands out; the
+    // importer used to wait for a file to finish before pulling the next
+    // chunk, which never happened, so a real-sized bundle hung for ever.
+    const owner = await createUser({
+      username: `bundle-big-${Date.now()}-${Math.floor(Math.random() * 100_000)}`,
+      passwordHash: "x",
+      name: "阿树",
+    });
+    try {
+      const personaId = await createPersona({
+        userId: owner,
+        name: "小满",
+        relationshipDesc: "恋人",
+        togetherFrom: "2022-03",
+        togetherTo: null,
+        timezone: "Asia/Shanghai",
+        personaData: {},
+        analysisStatus: "ready",
+      } as never);
+      const fixture = buildXiaomanRecords();
+      const rows = fixture.map((record) => ({
+        userId: owner,
+        personaId,
+        source: "test",
+        role: record.role,
+        kind: record.kind,
+        content: record.content,
+        timestamp: record.timestamp,
+        speaker: record.speaker,
+        lineNo: record.id,
+        meta: record.meta ?? null,
+      }));
+      for (let offset = 0; offset < rows.length; offset += 500) {
+        await createCollectedMessages(rows.slice(offset, offset + 500) as never);
+      }
+
+      const outPath = path.join(dir, "fixture.mirrai-persona");
+      const written = await exportPersonaBundle({
+        personaId,
+        userId: owner,
+        include: { memories: false, records: true, conversation: false },
+        passphrase: "a fixture-sized bundle",
+        outPath,
+      });
+      expect(written.bytes).toBeGreaterThan(64 * 1024);
+      expect(written.manifest.counts.records).toBe(fixture.length);
+
+      const imported = await importPersonaBundle({
+        userId: owner,
+        filePath: outPath,
+        passphrase: "a fixture-sized bundle",
+      });
+      expect(await countRecords(imported.personaId, owner, { register: "all" })).toBe(fixture.length);
+      const oldIds = await listCollectedRecordIds(personaId, owner);
+      const newIds = await listCollectedRecordIds(imported.personaId, owner);
+      expect(newIds.filter((id) => oldIds.includes(id))).toEqual([]);
+      await purgePersona(imported.personaId, owner);
+    } finally {
+      await deleteUserAccount(owner).catch(() => undefined);
+    }
+  }, 120_000);
 
   it("imports into another account, and the rows belong to that account", async () => {
     userB = await createUser({ username: `bundle-b-${Date.now()}`, passwordHash: "x", name: "路人" });

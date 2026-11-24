@@ -27,6 +27,27 @@ beforeEach(() => {
   dir = mkdtempSync(path.join(os.tmpdir(), "mirrai-bundle-test-"));
 });
 
+/**
+ * Bytes that do not compress.
+ *
+ * The reader hands the archive out in 64 KiB chunks (`createReadStream`'s
+ * default high-water mark); a part of this size makes the archive span
+ * more than one chunk, which is the case that used to deadlock.
+ */
+function incompressible(bytes: number): Buffer {
+  const out = Buffer.alloc(bytes);
+  let state = 0x9e3779b9;
+  for (let index = 0; index < bytes; index += 1) {
+    state ^= state << 13;
+    state >>>= 0;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    state >>>= 0;
+    out[index] = state & 0xff;
+  }
+  return out;
+}
+
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
@@ -118,6 +139,42 @@ describe("writing and reading a bundle", () => {
         stagingDir: path.join(dir, "wrong-pass"),
       }),
     ).rejects.toBeInstanceOf(BackupPassphraseError);
+  });
+
+  it("round-trips a bundle whose archive is bigger than one read chunk", async () => {
+    // A real persona's records and media make the archive tens or hundreds
+    // of kilobytes. The reader used to wait for a part to finish before
+    // pulling the next chunk, which never happened for an archive bigger
+    // than the 64 KiB chunk — the import hung for ever (C9.5).
+    const big = incompressible(120_000);
+    for (const passphrase of [null, "a large bundle passphrase"]) {
+      const label = passphrase ? "large-enc" : "large";
+      const outPath = path.join(dir, label);
+      const written = await writePersonaBundle({
+        outPath,
+        manifest: manifest(),
+        entries: [
+          ...entries(),
+          {
+            name: "files/media/0-big.bin",
+            compress: false,
+            chunks: async function* () {
+              yield big;
+            },
+          },
+        ],
+        passphrase,
+      });
+      expect(written.bytes).toBeGreaterThan(64 * 1024);
+      const staging = path.join(dir, `${label}-staging`);
+      const { manifest: read } = await extractPersonaBundle({
+        filePath: outPath,
+        passphrase,
+        stagingDir: staging,
+      });
+      expect(read.files.map((part) => part.file)).toContain("files/media/0-big.bin");
+      expect(readFileSync(path.join(staging, "files/media/0-big.bin"))).toEqual(big);
+    }
   });
 
   it("refuses a full backup as the wrong kind of file", async () => {
