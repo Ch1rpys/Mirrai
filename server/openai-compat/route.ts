@@ -338,6 +338,15 @@ async function handleModels(req: Request, res: Response): Promise<void> {
   if (!hasScope(caller.scopes, "chat") && !hasScope(caller.scopes, "read")) {
     throw new ApiError(403, copy(caller.locale, "errors.apiKeyNoChat"), "permission_error", "insufficient_scope");
   }
+  /**
+   * The account's content is encrypted and its key is not in this
+   * process: every read answers 423 with a sentence, listing included
+   * (the persona rows carry names the account asked to encrypt, and the
+   * list would be stale until the owner unlocks).
+   */
+  if (await isEncryptionLocked(caller.userId)) {
+    throw new ApiError(423, copy(caller.locale, "errors.apiEncryptionLocked"), "invalid_request_error", "encryption_locked");
+  }
   const personas = await db.getPersonasByUserId(caller.userId);
   res.status(200).json({
     object: "list",

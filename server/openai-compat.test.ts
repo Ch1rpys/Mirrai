@@ -400,4 +400,12 @@ describe("GET /v1/models", () => {
     const res = await fetch(`${baseUrl}/v1/models`);
     expect(res.status).toBe(401);
   });
+
+  it("answers 423 while an encrypted account is locked", async () => {
+    isEncryptionLocked.mockResolvedValue(true);
+    const res = await fetch(`${baseUrl}/v1/models`, { headers: authHeaders() });
+    expect(res.status).toBe(423);
+    expect((await res.json()).error.code).toBe("encryption_locked");
+    expect(getPersonasByUserId).not.toHaveBeenCalled();
+  });
 });
