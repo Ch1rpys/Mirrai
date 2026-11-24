@@ -299,4 +299,16 @@ describe("extractFactsFromRecords", () => {
     expect(invoke).not.toHaveBeenCalled();
     expect(createMemory).not.toHaveBeenCalled();
   });
+
+  it("asks the provider for native JSON on every fact call (C9.4)", async () => {
+    const invoke = vi.fn(async (_messages: unknown, _options?: unknown) => BIRTHDAY_JSON);
+    await extractFactsFromRecords({
+      ...base,
+      invoke: invoke as unknown as typeof base.invoke,
+    });
+    expect(invoke).toHaveBeenCalled();
+    for (const call of invoke.mock.calls) {
+      expect(call[1]).toMatchObject({ responseFormat: "json" });
+    }
+  });
 });

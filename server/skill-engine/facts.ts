@@ -245,10 +245,16 @@ async function invokeOnce(
   invoke: (messages: LLMMessage[], options?: LLMOptions) => Promise<string>,
   messages: LLMMessage[],
 ): Promise<string> {
+  /**
+   * The fact pass parses JSON out of the answer, so ask the provider for
+   * native JSON when it has one (C9.4). Without it the sentence-level
+   * fallback in `extractJsonObject` still handles the reply.
+   */
+  const options: LLMOptions = { responseFormat: "json" };
   try {
-    return await invoke(messages);
+    return await invoke(messages, options);
   } catch {
-    return invoke(messages);
+    return invoke(messages, options);
   }
 }
 
