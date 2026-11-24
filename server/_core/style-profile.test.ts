@@ -306,7 +306,10 @@ describe("measureStyleProfile", () => {
     });
     expect(short.publicFingerprint).toBeUndefined();
     expect(short.fingerprint).toEqual(privateBefore);
-  });
+    // Three full measurements over the xiaoman fixture are CPU-heavy and
+    // cross the 5s default under the full suite's parallelism. The
+    // assertions are unchanged; only the limit is widened.
+  }, 30_000);
 
   it("measures the written register separately and never mixes it into the chat voice (C1.8)", async () => {
     getRecordsVersion.mockResolvedValue("45:45");
