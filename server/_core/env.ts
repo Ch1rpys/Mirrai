@@ -189,6 +189,10 @@ export const ENV = {
   cheaperInferenceBaseUrl: process.env.CHEAPER_INFERENCE_BASE_URL ?? "https://api.cheaperinference.com/v1",
   cheaperInferenceModel: process.env.CHEAPER_INFERENCE_MODEL ?? "gpt-5.4-mini",
 
+  worldRouterApiKey: process.env.WORLDROUTER_API_KEY ?? "",
+  worldRouterBaseUrl: process.env.WORLDROUTER_BASE_URL ?? "https://inference-api.worldrouter.ai/v1",
+  worldRouterModel: process.env.WORLDROUTER_MODEL ?? "gpt-6.2-astra",
+
   deepseekApiKey: process.env.DEEPSEEK_API_KEY ?? "",
   deepseekBaseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
   deepseekModel: process.env.DEEPSEEK_MODEL ?? "deepseek-chat",
