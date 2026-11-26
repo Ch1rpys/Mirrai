@@ -69,6 +69,23 @@ registry.registerFactory(
 );
 
 registry.registerFactory(
+  "WorldRouter",
+  (cfg) =>
+    new OpenAIProvider(
+      "WorldRouter",
+      cfg.apiKey ?? "",
+      cfg.baseUrl ?? ENV.worldRouterBaseUrl,
+      cfg.model ?? ENV.worldRouterModel,
+      cfg.systemMessage,
+    ),
+  {
+    apiKey: ENV.worldRouterApiKey,
+    baseUrl: ENV.worldRouterBaseUrl,
+    model: ENV.worldRouterModel,
+  },
+);
+
+registry.registerFactory(
   "Kimi",
   (cfg) =>
     new OpenAIProvider(
