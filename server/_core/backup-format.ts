@@ -26,7 +26,7 @@ import {
   randomBytes,
   scrypt as scryptCallback,
 } from "node:crypto";
-import { createReadStream, createWriteStream, promises as fs } from "node:fs";
+import { createReadStream, createWriteStream, mkdirSync, promises as fs } from "node:fs";
 import path from "node:path";
 import type { Writable } from "node:stream";
 import { promisify } from "node:util";
@@ -532,6 +532,16 @@ export async function extractArchiveToStaging(options: {
   await fs.mkdir(stagingDir, { recursive: true });
 
   const pendingWrites: Promise<void>[] = [];
+  /**
+   * Writes that are still open.
+   *
+   * When the archive turns out to be truncated or corrupt, the read loop
+   * stops delivering chunks; a file that has not seen its last chunk
+   * would wait for `finish` for ever, and the import would hang instead
+   * of being refused. So the error path destroys every open stream
+   * first, which settles the matching write promise.
+   */
+  const openEntries: Array<{ done: boolean; abort: (error: Error) => void }> = [];
   let failure: BackupFormatError | null = null;
   let entryCount = 0;
   let totalBytes = 0;
@@ -561,52 +571,94 @@ export async function extractArchiveToStaging(options: {
       pendingWrites.push(fs.mkdir(safe, { recursive: true }).then(() => undefined));
       return;
     }
-    const write = (async () => {
-      await fs.mkdir(path.dirname(safe), { recursive: true });
-      const stream = createWriteStream(safe);
-      const finished = new Promise<void>((resolve, reject) => {
-        stream.once("finish", () => resolve());
-        stream.once("error", reject);
-      });
-      /** The entry's last chunk has arrived; later calls are noise. */
-      let stopped = false;
-      file.ondata = (error, chunk, final) => {
-        if (error) {
+    /**
+     * The stream is set up synchronously.
+     *
+     * fflate hands a file's data to `file.ondata` as soon as the header is
+     * parsed, and only buffers it until `file.start()` is called. Setting
+     * that callback up after an `await` (a directory creation, say) lets
+     * data arrive before there is anywhere to put it — which is exactly
+     * what happened when a truncated archive's last chunk ended inside a
+     * file: the read loop stopped, an open write never finished, and the
+     * import hung instead of being refused.
+     */
+    mkdirSync(path.dirname(safe), { recursive: true });
+    const stream = createWriteStream(safe);
+    const finished = new Promise<void>((resolve, reject) => {
+      stream.once("finish", () => resolve());
+      stream.once("error", reject);
+    });
+    /** The entry's last chunk has arrived; later calls are noise. */
+    let stopped = false;
+    const entry = {
+      /** The entry's last chunk arrived; the write has what it needs. */
+      done: false,
+      abort: (error: Error) => {
+        if (stopped) return;
+        stopped = true;
+        stream.destroy(error);
+      },
+    };
+    openEntries.push(entry);
+    file.ondata = (error, chunk, final) => {
+      if (error) {
+        entry.done = true;
+        stopped = true;
+        stream.destroy(error);
+        return;
+      }
+      if (stopped) return;
+      if (chunk && chunk.length) {
+        totalBytes += chunk.length;
+        if (maxBytes != null && totalBytes > maxBytes) {
+          entry.done = true;
           stopped = true;
-          stream.destroy(error);
+          stream.destroy(new Error("too_large"));
           return;
         }
-        if (stopped) return;
-        if (chunk && chunk.length) {
-          totalBytes += chunk.length;
-          if (maxBytes != null && totalBytes > maxBytes) {
-            stopped = true;
-            stream.destroy(new Error("too_large"));
-            return;
-          }
-          if (!stream.write(Buffer.from(chunk))) {
-            drain ??= new Promise<void>((resolve) => {
-              const done = () => {
-                stream.off("drain", done);
-                stream.off("error", done);
-                stream.off("close", done);
-                resolve();
-              };
-              stream.once("drain", done);
-              stream.once("error", done);
-              stream.once("close", done);
-            });
-          }
+        if (!stream.write(Buffer.from(chunk))) {
+          drain ??= new Promise<void>((resolve) => {
+            const done = () => {
+              stream.off("drain", done);
+              stream.off("error", done);
+              stream.off("close", done);
+              resolve();
+            };
+            stream.once("drain", done);
+            stream.once("error", done);
+            stream.once("close", done);
+          });
         }
-        if (final) {
+      }
+      if (final) {
+        entry.done = true;
+        stopped = true;
+        stream.end();
+      }
+    };
+    file.start();
+    pendingWrites.push(
+      (async () => {
+        try {
+          await finished;
+        } finally {
           stopped = true;
-          stream.end();
+          const index = openEntries.indexOf(entry);
+          if (index >= 0) openEntries.splice(index, 1);
         }
-      };
-      file.start();
-      await finished;
-    })();
-    pendingWrites.push(write);
+      })(),
+    );
+  };
+
+  /**
+   * Fails every write that is still open, so their promises settle.
+   *
+   * A write whose entry never received its last chunk has no other way
+   * to finish: `allSettled` below would wait for ever and the caller
+   * would never get the error.
+   */
+  const abortOpenEntries = (error: Error): void => {
+    for (const entry of openEntries.slice()) entry.abort(error);
   };
 
   try {
@@ -619,14 +671,36 @@ export async function extractArchiveToStaging(options: {
       }
     }
     unzip.push(new Uint8Array(0), true);
+    /**
+     * A truncated archive simply stops. fflate does not always report
+     * that: the parts that were read are just never finished. Any entry
+     * that never saw its last chunk is a broken file, not a slow one.
+     */
+    if (openEntries.some((entry) => !entry.done)) {
+      throw new BackupFormatError("The archive ends before an entry is complete.");
+    }
+    if (failure) throw failure;
+    if (entryCount === 0) throw new BackupFormatError("The file is not a non-empty zip archive.");
     await Promise.all(pendingWrites);
   } catch (error) {
+    const cause = error instanceof Error ? error : new Error(String(error));
+    abortOpenEntries(cause);
     await Promise.allSettled(pendingWrites);
-    throw error;
+    /**
+     * Decompression errors are format errors, not internal failures: the
+     * caller shows "this file is damaged" for them. The size limit keeps
+     * its own signal because the routes answer 413 rather than 400.
+     */
+    if (
+      cause instanceof BackupFormatError
+      || cause instanceof BackupPassphraseError
+      || cause.message === "too_large"
+    ) {
+      throw error;
+    }
+    throw new BackupFormatError(`The archive could not be read: ${cause.message}`);
   }
 
-  if (failure) throw failure;
-  if (entryCount === 0) throw new BackupFormatError("The file is not a non-empty zip archive.");
   return { entryCount, bytes: totalBytes };
 }
 

@@ -177,6 +177,42 @@ describe("writing and reading a bundle", () => {
     }
   });
 
+  it("refuses a truncated bundle instead of waiting for the rest of it", async () => {
+    // A download that stopped in the middle leaves a file whose last
+    // entry never receives its final chunk. The reader used to wait for
+    // that write for ever, so the import neither succeeded nor failed.
+    const big = incompressible(120_000);
+    for (const passphrase of [null, "a truncated bundle passphrase"]) {
+      const label = passphrase ? "cut-enc" : "cut-plain";
+      const outPath = path.join(dir, label);
+      await writePersonaBundle({
+        outPath,
+        manifest: manifest(),
+        entries: [
+          ...entries(),
+          {
+            name: "files/media/0-big.bin",
+            compress: false,
+            chunks: async function* () {
+              yield big;
+            },
+          },
+        ],
+        passphrase,
+      });
+      const complete = readFileSync(outPath);
+      const cutPath = path.join(dir, `${label}-cut`);
+      writeFileSync(cutPath, complete.subarray(0, Math.floor(complete.length * 0.8)));
+      await expect(
+        extractPersonaBundle({
+          filePath: cutPath,
+          passphrase,
+          stagingDir: path.join(dir, `${label}-staging`),
+        }),
+      ).rejects.toBeInstanceOf(Error);
+    }
+  }, 15_000);
+
   it("refuses a full backup as the wrong kind of file", async () => {
     const outPath = path.join(dir, "backup");
     // The backup's manifest has no kind at all.

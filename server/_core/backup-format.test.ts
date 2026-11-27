@@ -179,6 +179,44 @@ describe("the backup archive", () => {
     }
   }, 20_000);
 
+  it("refuses a truncated archive instead of waiting for the rest of it", async () => {
+    // The same truncation case as the persona bundle's test: a download
+    // that stopped in the middle must fail, not hang, for a whole-instance
+    // backup too.
+    const directory = await tempDir();
+    try {
+      const big = incompressible(120_000);
+      for (const passphrase of [null, "a truncated backup passphrase"]) {
+        const label = passphrase ? "cut-enc" : "cut";
+        const out = path.join(directory, `${label}${passphrase ? ".mirrai-backup" : ".zip"}`);
+        await writeBackupArchive({
+          outPath: out,
+          passphrase,
+          manifest: MANIFEST,
+          entries: [{
+            name: "uploads/big.bin",
+            compress: false,
+            chunks: async function* () {
+              yield big;
+            },
+          }],
+        });
+        const complete = await fs.readFile(out);
+        const cutPath = path.join(directory, `${label}-cut`);
+        await fs.writeFile(cutPath, complete.subarray(0, Math.floor(complete.length * 0.8)));
+        await expect(
+          extractBackupToStaging({
+            filePath: cutPath,
+            passphrase,
+            stagingDir: path.join(directory, `${label}-staging`),
+          }),
+        ).rejects.toBeInstanceOf(Error);
+      }
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
+  }, 15_000);
+
   it("refuses a wrong passphrase and a changed byte with the same error kind", async () => {
     const directory = await tempDir();
     try {

@@ -142,13 +142,27 @@ describe("bundle file entries", () => {
     const root = tempRoot();
     const bundlePath = path.join(root, "evil.mirrai-persona");
     await writeBundle(bundlePath, { name: "0-evil.html", fileName: "0-evil.html", part: "stickers" });
-    const error = await importPersonaBundle({ userId: 13, filePath: bundlePath }).catch(
-      (thrown: unknown) => thrown,
-    );
-    expect(error).toBeInstanceOf(BackupFormatError);
-    expect((error as Error).message).toContain("0-evil.html");
-    // Nothing was written to a staging directory that outlives the call.
-    await expect(fs.readdir(root)).resolves.toEqual(["evil.mirrai-persona"]);
+    /**
+     * The importer's staging directory is made with `os.tmpdir()`. Pointing
+     * TMPDIR at a fresh directory for this call is what makes "nothing was
+     * left behind" a real assertion — reading the folder the bundle lives
+     * in never proved anything about staging.
+     */
+    const stagingRoot = mkdtempSync(path.join(os.tmpdir(), "mirrai-staging-check-"));
+    const previousTmpdir = process.env.TMPDIR;
+    process.env.TMPDIR = stagingRoot;
+    try {
+      const error = await importPersonaBundle({ userId: 13, filePath: bundlePath }).catch(
+        (thrown: unknown) => thrown,
+      );
+      expect(error).toBeInstanceOf(BackupFormatError);
+      expect((error as Error).message).toContain("0-evil.html");
+      await expect(fs.readdir(stagingRoot)).resolves.toEqual([]);
+    } finally {
+      if (previousTmpdir === undefined) delete process.env.TMPDIR;
+      else process.env.TMPDIR = previousTmpdir;
+      rmSync(stagingRoot, { recursive: true, force: true });
+    }
   });
 
   it("refuses a bundle whose message attachment is an html page", async () => {
