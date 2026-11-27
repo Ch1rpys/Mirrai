@@ -88,6 +88,25 @@ describe("the suggestions that survive", () => {
     expect(result).toHaveLength(1);
   });
 
+  it("drops a suggestion that invents a number written in Chinese (C3.6)", () => {
+    // The check only read ASCII digits, so 「四点半」 passed as if it
+    // carried no number at all.
+    const original = "明天三点见";
+    const result = selectWordingSuggestions(original, {
+      direct: "明天四点半见",
+      soft: "明天三点见吧",
+    });
+    expect(result.map((entry) => entry.kind)).toEqual(["soft"]);
+  });
+
+  it("reads a number written two ways as the same number (C3.6)", () => {
+    const original = "后天 3 点见";
+    const result = selectWordingSuggestions(original, {
+      direct: "我们后天三点见吧",
+    });
+    expect(result).toHaveLength(1);
+  });
+
   it("returns nothing when the model answered with nonsense", () => {
     expect(selectWordingSuggestions(original, null)).toEqual([]);
     expect(selectWordingSuggestions(original, "not json")).toEqual([]);

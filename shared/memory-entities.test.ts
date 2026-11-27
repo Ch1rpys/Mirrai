@@ -44,4 +44,24 @@ describe("peopleEntitiesInText", () => {
     ]);
     expect(people).toEqual(["琪琪"]);
   });
+
+  it("does not match a one-character alias inside an ordinary word (B6.7)", () => {
+    // 「小」 as a nickname must not turn every 「小米粥」 into a memory
+    // about that person; the router's auto-fill used a plain substring
+    // test while the distilled cards already used the term matcher.
+    const people = peopleEntitiesInText("小米粥很好吃，改天再煮", [
+      {
+        id: "p1",
+        name: "小满",
+        aliases: ["小"],
+        relation: "",
+        side: "them",
+        mentions: 9,
+        evidence: [],
+        source: "manual",
+        verified: true,
+      },
+    ]);
+    expect(people).toEqual([]);
+  });
 });

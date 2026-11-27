@@ -6,6 +6,7 @@
  * was never said.
  */
 import { normalizePeople, type Person } from "./people";
+import { containsTerm } from "./term-match";
 
 export interface MemoryEntities {
   people: string[];
@@ -70,7 +71,13 @@ export function peopleEntitiesInText(text: string, people: Person[]): string[] {
   for (const person of people) {
     if (!person.verified) continue;
     const names = [person.name, ...person.aliases].filter(Boolean);
-    if (!names.some((name) => haystack.includes(name))) continue;
+    /**
+     * The same term matcher the distilled cards use (B6.7).
+     *
+     * A one-character nickname used to match any ordinary word that
+     * contains it — 「小」 turned 「小米粥」 into a memory about 小满.
+     */
+    if (!names.some((name) => containsTerm(haystack, name))) continue;
     if (!out.includes(person.name)) out.push(person.name);
   }
   return out;
