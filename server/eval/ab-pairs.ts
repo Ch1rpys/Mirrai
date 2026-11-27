@@ -14,7 +14,7 @@ import {
   type StyleFingerprint,
   type StyleFingerprintCore,
 } from "@shared/style-fingerprint";
-import { normalizeStyleProfile } from "@shared/style-profile";
+import { effectiveStyleProfile } from "@shared/style-profile";
 import { scoreReal, trainLogistic, type SparseModel } from "./discriminator";
 
 export const CHOICE_MIN_PAIRS = 30;
@@ -134,11 +134,24 @@ export function sparseModelFromUnknown(value: unknown): SparseModel | null {
   return { bias: model.bias, dense, ngrams };
 }
 
-export function fingerprintFromPersona(persona: { styleProfile?: unknown }): {
+/**
+ * The measurements the pair features are scored against.
+ *
+ * C10.6: the user can turn a profile key off with「不用这一项」, and the
+ * generation path must honour that everywhere they read it. The choice
+ * pair is generated on the chat turn, so the fingerprint and the
+ * discriminator come from `effectiveStyleProfile`, exactly like the
+ * rest of the turn — reading `persona.styleProfile` here was the one
+ * place that kept ranking with a measurement the user had disabled.
+ */
+export function fingerprintFromPersona(persona: {
+  styleProfile?: unknown;
+  settings?: unknown;
+}): {
   fingerprint: StyleFingerprint | null;
   discriminator: SparseModel | null;
 } {
-  const profile = normalizeStyleProfile(persona.styleProfile);
+  const profile = effectiveStyleProfile(persona);
   const fingerprint =
     profile.fingerprint && typeof profile.fingerprint === "object"
       ? (profile.fingerprint as StyleFingerprint)

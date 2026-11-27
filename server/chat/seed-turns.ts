@@ -63,9 +63,18 @@ export function selectSeedExchanges(params: {
       params.personaData,
     );
     if (keptThem.length !== them.length) continue;
-    // A user line is context. The harm filter is about what the persona
-    // says; a line the user typed is not a line the replica learns.
-    if (user.some((line) => !isSafeSeedLine(line, { allowHarm: true }))) continue;
+    /*
+     * The cleaning rule is per line, not per role.
+     *
+     * A user line is context rather than something the replica learns,
+     * but seed turns are the one place record text sits outside the
+     * fence as real turns, and the manual requires every line of an
+     * exchange to pass the cleaning. A hurtful sentence recorded in the
+     * user's own words must not come back either — the one exception is
+     * the user's `keep` decision on the harm report, which lets the
+     * assistant side through and is honoured here the same way.
+     */
+    if (user.some((line) => !isSafeSeedLine(line, { allowHarm }))) continue;
     if (them.some((line) => !isSafeSeedLine(line, { allowHarm }))) continue;
     const recordIds = [
       ...(item.previousUserIds ?? []),

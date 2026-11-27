@@ -183,6 +183,19 @@ export async function extractKeyframes(
 }
 
 /**
+ * How close to the end of the file the last `silence_end` has to be for
+ * the silence to count as the tail.
+ *
+ * ffmpeg prints its duration line to a hundredth of a second, and a
+ * container's duration can sit slightly off the decoded audio's end, so
+ * the end timestamp printed when the detector is flushed is allowed to
+ * land a fraction before the duration. A tenth of a second is far too
+ * short to be a final syllable, so a silence that really is followed by
+ * speech is not mistaken for a tail.
+ */
+const TRAILING_SILENCE_SLACK_SEC = 0.1;
+
+/**
  * Measures how much of a recording is silence.
  *
  * B7.5 uses the ratio and the trailing silence to decide how the
@@ -227,21 +240,43 @@ export async function silenceRatio(input: string): Promise<SilenceReport | null>
   }
 
   let openStart: number | null = null;
+  let lastStart: number | null = null;
+  let lastEnd: number | null = null;
   let silentSec = 0;
   let tailSec = 0;
   for (const event of events) {
     const at = Number(event[2]);
     if (event[1] === "start") {
       openStart = at;
+      lastStart = at;
+      lastEnd = null;
     } else if (openStart != null) {
-      silentSec += Math.max(0, at - openStart);
+      // A silence cannot run past the end of the file. Clamping keeps a
+      // rounded `silence_end` from counting silence that is not there.
+      silentSec += Math.max(0, Math.min(at, info.durationSec) - openStart);
+      lastEnd = at;
       openStart = null;
     }
   }
-  // The last silence has no end line when the recording ends in silence.
   if (openStart != null) {
+    // Older ffmpeg builds print no end line for silence that runs to the
+    // end of the file: the last event is a bare `silence_start`.
     tailSec = Math.max(0, info.durationSec - openStart);
     silentSec += tailSec;
+  } else if (
+    lastStart != null &&
+    lastEnd != null &&
+    lastEnd >= info.durationSec - TRAILING_SILENCE_SLACK_SEC
+  ) {
+    /*
+     * Current ffmpeg flushes the detector at end of file and prints an
+     * end line for silence that runs to the end, with a timestamp equal
+     * to the file's duration (a 6.00 s recording whose last 2.5 s are
+     * quiet ends with `silence_end: 6`). That is the tail, not an
+     * interior pause with speech after it — and reading it as the
+     * latter is why `tailSec` used to be zero on every real recording.
+     */
+    tailSec = Math.max(0, info.durationSec - lastStart);
   }
   return {
     ratio: Math.min(1, silentSec / info.durationSec),

@@ -127,4 +127,63 @@ describe("selectSeedExchanges", () => {
     expect(seeds).toHaveLength(1);
     expect(seeds[0]?.them).toContain("你就是个废物");
   });
+
+  it("cleans the user side too: a harmful line said by the user keeps the exchange out", () => {
+    /** The same exchange shape twice; only the user's words differ. */
+    const exchange = (id: number, sceneKey: number, previousUser: string) => ({
+      id,
+      content: "在",
+      turn: ["在"],
+      rawTurn: ["在"],
+      turnIds: [id],
+      score: id === 2 ? 0.9 : 0.8,
+      previousUser,
+      previousUserTurn: [previousUser],
+      previousUserIds: [id + 100],
+      at: null,
+      sceneKey,
+    });
+    const harmful = exchange(2, 1, "你就是个废物");
+    const harmless = exchange(4, 2, "今天好累");
+
+    /*
+     * B2.1's cleaning rule is per line, not per role: the seed turns are
+     * the one place record text sits outside the fence as real turns, so
+     * a hurtful sentence recorded in the user's own words is not allowed
+     * in either. Before the fix the user-side branch passed
+     * `allowHarm: true` unconditionally, so this exchange was selected.
+     */
+    expect(selectSeedExchanges({ exemplars: [harmful] })).toHaveLength(0);
+    expect(
+      selectSeedExchanges({
+        exemplars: [harmful],
+        personaData: {
+          harmReport: {
+            categories: [{ kind: "belittle", count: 2, examples: [2] }],
+            decision: "pending",
+          },
+        },
+      }),
+    ).toHaveLength(0);
+
+    // A harmless user line still gets through, so the drop is the harm
+    // check and not the whole exchange shape.
+    const mixed = selectSeedExchanges({ exemplars: [harmful, harmless] });
+    expect(mixed).toHaveLength(1);
+    expect(mixed[0]?.user).toEqual(["今天好累"]);
+
+    // «keep» is the user's decision to keep those lines; both sides
+    // honour it, so a harmful user line stays when the report says keep.
+    const kept = selectSeedExchanges({
+      exemplars: [harmful],
+      personaData: {
+        harmReport: {
+          categories: [{ kind: "belittle", count: 2, examples: [2] }],
+          decision: "keep",
+        },
+      },
+    });
+    expect(kept).toHaveLength(1);
+    expect(kept[0]?.user).toEqual(["你就是个废物"]);
+  });
 });
