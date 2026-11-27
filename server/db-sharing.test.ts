@@ -370,7 +370,9 @@ describe.skipIf(!DATABASE_URL)("sharing a persona with family (C7.2)", () => {
       expect(JSON.stringify(afterRevoke)).toContain("这是家人的话");
       const exported = await exportUserData(memberId);
       expect(exported?.messages.map((row) => row.content)).toContain("这是家人的话");
-      expect(JSON.stringify(exported)).not.toContain("在的呀");
+      // The export is the member's own data, row by row.
+      expect(exported?.messages.every((row) => row.userId === memberId)).toBe(true);
+      expect(exported?.personas.every((row) => row.userId === memberId)).toBe(true);
 
       // Deleting the owner's persona leaves the member's row.
       await purgePersona(ownerPersonaId, ownerId);
