@@ -16,6 +16,7 @@ const getLetters = vi.fn();
 const countLetters = vi.fn();
 const getMemoriesByPersonaId = vi.fn();
 const pageRecords = vi.fn();
+const getActiveReminders = vi.fn();
 
 vi.mock("./db", () => ({
   getPersonaSettings: (...args: unknown[]) => getPersonaSettings(...args),
@@ -39,6 +40,7 @@ vi.mock("./db", () => ({
   countLetters: (...args: unknown[]) => countLetters(...args),
   getMemoriesByPersonaId: (...args: unknown[]) => getMemoriesByPersonaId(...args),
   pageRecords: (...args: unknown[]) => pageRecords(...args),
+  getActiveReminders: (...args: unknown[]) => getActiveReminders(...args),
 }));
 
 import { appRouter } from "./routers";
@@ -93,6 +95,7 @@ describe("a sealed persona (C6.2)", () => {
     countLetters.mockResolvedValue(0);
     getMemoriesByPersonaId.mockResolvedValue([]);
     pageRecords.mockResolvedValue({ records: [] });
+    getActiveReminders.mockResolvedValue([]);
   });
 
   it("refuses the conversation, the letters, the memories and the record reader", async () => {
@@ -116,6 +119,39 @@ describe("a sealed persona (C6.2)", () => {
     expect(typeof manual.html).toBe("string");
     await expect(caller.persona.delete({ id: 1 })).resolves.toEqual({ success: true });
     expect(softDeletePersona).toHaveBeenCalledWith(1, 1);
+  });
+
+  it("serves the sealed persona's name and seal state to the control surface", async () => {
+    // The edit and graduation pages both read `persona.get` first, and
+    // `persona.get` is refused while the persona is sealed — so without
+    // a exempt status route the user has no reachable way to lift their
+    // own seal. The route exposes only what the seal controls need.
+    const caller = appRouter.createCaller(ctxFor(1));
+    await expect(caller.persona.seal.status({ personaId: 1 })).resolves.toMatchObject({
+      id: 1,
+      name: "小满",
+      sealed: true,
+      until: "2099-01-01",
+    });
+  });
+
+  it("does not show a sealed persona's reminders in the hall", async () => {
+    // A reminder generated before the seal would otherwise sit in the
+    // hall and pull the user back to a persona they just closed.
+    getActiveReminders.mockResolvedValue([
+      { id: 7, personaId: 1, text: "今天是「第一次见面」的日子。", dismissedAt: null },
+    ]);
+    const caller = appRouter.createCaller(ctxFor(1));
+    await expect(caller.reminder.list()).resolves.toEqual([]);
+  });
+
+  it("still shows an open persona's reminders", async () => {
+    getPersonaSettings.mockResolvedValue({});
+    getActiveReminders.mockResolvedValue([
+      { id: 7, personaId: 1, text: "今天是「第一次见面」的日子。", dismissedAt: null },
+    ]);
+    const caller = appRouter.createCaller(ctxFor(1));
+    await expect(caller.reminder.list()).resolves.toHaveLength(1);
   });
 
   it("still lets the user lift the seal", async () => {

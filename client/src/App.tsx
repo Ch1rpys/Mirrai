@@ -21,6 +21,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const Diary = lazy(() => import("./pages/Diary"));
 const PersonaEdit = lazy(() => import("./pages/PersonaEdit"));
+const SealManage = lazy(() => import("./pages/SealManage"));
 const PersonaProfile = lazy(() => import("./pages/PersonaProfile"));
 const Graduation = lazy(() => import("./pages/Graduation"));
 const Upload = lazy(() => import("./pages/Upload"));
@@ -75,6 +76,7 @@ function Router() {
           <Route path="/diary" component={Diary} />
           <Route path="/persona/:id/interview" component={Interview} />
           <Route path="/persona/:id/edit" component={PersonaEdit} />
+          <Route path="/persona/:id/seal" component={SealManage} />
           <Route path="/persona/:id/profile" component={PersonaProfile} />
           <Route path="/persona/:id/blind-test" component={BlindTest} />
           <Route path="/persona/:id/voices" component={Voices} />

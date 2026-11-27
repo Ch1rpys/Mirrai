@@ -12,6 +12,7 @@ import { getChannelAdapter } from "../channels";
 import { zonedDateKey, zonedHour, zonedMinute } from "@shared/timezone";
 import { resolvePresence, mayReachOut } from "@shared/graduation-mode";
 import { normalizePersonaSettings } from "@shared/persona-settings";
+import { sealState } from "@shared/persona-state";
 import { resolveRelationshipPhase } from "@shared/user-side";
 import { copy, type Locale } from "@shared/copy";
 import { pushToUser } from "../_core/push";
@@ -160,6 +161,26 @@ export function collectReminders(params: {
   const reminders: Reminder[] = [];
 
   if (!params.persona.remindersEnabled) return reminders;
+
+  /**
+   * A sealed persona gets nothing at all (C6.2).
+   *
+   * The seal is the user's own agreement that this door stays shut
+   * until the day they picked. An anniversary card, a "one year ago
+   * today" photo or the post-graduation visit card would be the app
+   * knocking on it — and the anniversary would even be pushed to a
+   * bound channel, which the seal is specifically for staying out of.
+   * C8.2's mailbox path already honours the seal; this one did not.
+   */
+  if (
+    sealState(
+      { settings: params.persona.settings },
+      now,
+      params.timezone ?? null,
+    ) === "sealed"
+  ) {
+    return reminders;
+  }
 
   const settings = normalizePersonaSettings(params.persona.settings);
   const dayKey = todayKey(now, timezone);

@@ -268,6 +268,7 @@ const requireUser = t.middleware(async opts => {
  * controls read the stored dates through it.
  */
 const SEAL_EXEMPT_PATHS = new Set([
+  "persona.seal.status",
   "persona.seal.set",
   "persona.seal.requestOpen",
   "persona.seal.cancelRequest",

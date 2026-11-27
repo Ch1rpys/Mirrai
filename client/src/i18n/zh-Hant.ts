@@ -3266,7 +3266,11 @@ export const zhHant = {
     "cancelRequest": "取消申請",
     "dateFirst": "先選一個日子。",
     "enabled": "這個分身現在封存著，到 {{date}}。",
-    "loadFailed": "沒有讀到封存狀態。"
+    "loadFailed": "沒有讀到封存狀態。",
+    "manage": "管理封存",
+    "manageNote": "封存是你和自己的約定。什麼時候解封由你決定；數據始終可以導出或刪除。",
+    "delete": "刪除這個分身",
+    "encryptionHint": "想更保險的話，可以在設置裡打開「加密存在數據庫裡的內容」。封存不依賴它。"
   },
   "taper": {
     "title": "慢慢來",

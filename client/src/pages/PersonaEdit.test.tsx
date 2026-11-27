@@ -33,6 +33,7 @@ let theirsText = 100;
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    encryption: { status: { useQuery: () => ({ data: { enabled: true } }) } },
     persona: {
       get: { useQuery: () => ({ data: persona, refetch: vi.fn() }) },
       getSystemPrompt: { useQuery: () => ({ data: { prompt: "【身份】\n你是 小A" } }) },

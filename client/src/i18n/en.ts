@@ -3317,6 +3317,10 @@ export const en = {
     dateFirst: "Pick a day first.",
     enabled: "This persona is sealed until {{date}}.",
     loadFailed: "The seal state could not be read.",
+    manage: "Manage the seal",
+    manageNote: "The seal is an agreement with yourself. When to lift it is your decision; the data can always be exported or deleted.",
+    delete: "Delete this persona",
+    encryptionHint: "For extra safety you can turn on at-rest encryption in settings. The seal does not depend on it.",
   },
   taper: {
     title: "Take it slowly",

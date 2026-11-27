@@ -87,7 +87,7 @@ import {
   getCollectedMessagesForPersona as getCollectedMessagesForPersonaRows,
   getEvalRuns,
   setPersonaBehaviorProfile, getPersonaBehaviorProfile,
-  getPersonaSettings, setPersonaSettings,
+  getPersonaSettings, getPersonaStateSettings, setPersonaSettings,
   getUserJournal, listCheckinAnswersSince,
   getPersonaStyleProfile, setPersonaStyleProfile,
   setPersonaAvatar,
@@ -2124,6 +2124,34 @@ export const appRouter = router({
      * able to lift their own seal. Nothing here pushes or reminds.
      */
     seal: router({
+      /**
+       * The seal's own state and the name on the closed card (C6.2).
+       *
+       * Every other read of the persona is refused while it is sealed —
+       * including `persona.get`, which was the first query on the two
+       * pages that used to draw the seal controls. So the controls were
+       * unreachable exactly when they were needed. This route is exempt
+       * from the guard and returns only what the control surface needs.
+       */
+      status: protectedProcedure
+        .input(z.object({ personaId: z.number() }))
+        .query(async ({ ctx, input }) => {
+          const persona = await getPersonaById(input.personaId, ctx.user.id);
+          if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+          const settings = normalizePersonaSettings(
+            await getPersonaStateSettings(input.personaId, ctx.user.id),
+          );
+          const seal = settings.seal ?? null;
+          return {
+            id: persona.id,
+            name: persona.name,
+            sealed: sealState({ settings }, new Date(), ctx.user.timezone) === "sealed",
+            until: seal?.until ?? null,
+            earlyOpen: seal?.earlyOpen ?? "never",
+            requestedAt: seal?.requestedAt ?? null,
+          };
+        }),
+
       set: protectedProcedure
         .input(z.object({
           personaId: z.number(),
@@ -4739,9 +4767,35 @@ export const appRouter = router({
    * dismiss one.
    */
   reminder: router({
-    list: protectedProcedure.query(async ({ ctx }) =>
-      getActiveReminders(ctx.user.id)
-    ),
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const active = await getActiveReminders(ctx.user.id);
+      /**
+       * A sealed persona's reminders stay hidden (C6.2).
+       *
+       * The sweep no longer composes them, but a reminder recorded
+       * before the seal would still sit in the hall and pull the user
+       * back to a door they agreed to keep shut. The seal state is
+       * cached per persona: a hall full of reminders is a handful of
+       * personas.
+       */
+      const sealedPersonas = new Map<number, boolean>();
+      const shown: typeof active = [];
+      for (const reminder of active) {
+        let sealed = sealedPersonas.get(reminder.personaId);
+        if (sealed === undefined) {
+          const settings = await getPersonaStateSettings(
+            reminder.personaId,
+            ctx.user.id,
+          ).catch(() => null);
+          sealed = settings
+            ? sealState({ settings }, new Date(), ctx.user.timezone) === "sealed"
+            : false;
+          sealedPersonas.set(reminder.personaId, sealed);
+        }
+        if (!sealed) shown.push(reminder);
+      }
+      return shown;
+    }),
 
     dismiss: protectedProcedure
       .input(z.object({ id: z.number() }))

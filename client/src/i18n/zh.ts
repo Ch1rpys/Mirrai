@@ -3333,6 +3333,10 @@ export const zh = {
     dateFirst: "先选一个日子。",
     enabled: "这个分身现在封存着，到 {{date}}。",
     loadFailed: "没有读到封存状态。",
+    manage: "管理封存",
+    manageNote: "封存是你和自己的约定。什么时候解封由你决定；数据始终可以导出或删除。",
+    delete: "删除这个分身",
+    encryptionHint: "想更保险的话，可以在设置里打开「加密存在数据库里的内容」。封存不依赖它。",
   },
   taper: {
     title: "慢慢来",

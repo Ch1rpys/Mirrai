@@ -129,6 +129,7 @@ vi.mock("@/_core/hooks/useAuth", () => ({
 vi.mock("wouter", () => ({
   useLocation: () => ["/", vi.fn()],
   useParams: () => ({}),
+  Link: ({ href, children, ...rest }: any) => <a href={href} {...rest}>{children}</a>,
 }));
 
 vi.mock("sonner", () => ({
@@ -208,6 +209,28 @@ describe("the lobby", () => {
     // No countdown, no days.
     expect(screen.queryByText(/还有 \d+ 天/)).toBeNull();
     expect(screen.queryByText(/封存到 2099-04-01。还有/)).toBeNull();
+  });
+
+  it("gives the sealed card a way to lift the seal (C6.2)", () => {
+    // Sealing is not a one-way door: the card is where the user comes
+    // back to it, so the card has to carry the way in to the seal
+    // controls. Before this link the only surface rendering them was the
+    // edit page, which read `persona.get` and was itself refused while
+    // sealed.
+    personas = [makePersona({
+      id: 5,
+      name: "小A",
+      settings: { seal: { until: "2099-04-01", earlyOpen: "never" } },
+    })];
+    render(<Lobby />);
+    const manage = screen.getByRole("link", { name: translate("zh", "seal.manage") });
+    expect(manage.getAttribute("href")).toBe("/persona/5/seal");
+  });
+
+  it("does not show the seal controls for a persona that is still open (C6.2)", () => {
+    personas = [makePersona({ id: 5, name: "小A" })];
+    render(<Lobby />);
+    expect(screen.queryByRole("link", { name: translate("zh", "seal.manage") })).toBeNull();
   });
 
   it("opens a closed card's three kept lines, and only on a closed card (C6.4)", () => {

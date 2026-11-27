@@ -161,6 +161,34 @@ describe("collectReminders", () => {
     expect(notYet.some((r) => r.kind === "together_years")).toBe(false);
   });
 
+  it("says nothing at all while the persona is sealed (C6.2)", () => {
+    // Sealing is the user's own agreement that this door stays shut
+    // until the day they picked. An anniversary card, a "one year ago
+    // today" photo or a visit card would be the app knocking on it.
+    const reminders = collectReminders({
+      persona: persona({
+        settings: { seal: { until: "2099-01-01", earlyOpen: "never" } },
+      }),
+      anniversaries: [{ id: 1, title: "第一次见面", date: "05-20" }],
+      photos: [{ id: 2, originalName: "一起吃饭.jpg", createdAt: new Date(2024, 4, 20), dateHint: null }],
+      now,
+    });
+    expect(reminders).toEqual([]);
+  });
+
+  it("reminds again once the seal day has passed (C6.2)", () => {
+    // The seal is until a day, not for ever: on the day itself the
+    // reminders are allowed again.
+    const reminders = collectReminders({
+      persona: persona({
+        settings: { seal: { until: "2024-05-20", earlyOpen: "never" } },
+      }),
+      anniversaries: [{ id: 1, title: "第一次见面", date: "05-20" }],
+      now,
+    });
+    expect(reminders.some((r) => r.kind === "anniversary")).toBe(true);
+  });
+
   it("keeps the anniversaries when they can reach each other", () => {
     const reminders = collectReminders({
       persona: persona({ reachability: "reachable" }),

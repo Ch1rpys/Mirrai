@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef, useId, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { formatInstantInZone } from "@/lib/dates";
@@ -1024,6 +1024,22 @@ function PersonaCard({ persona, onChat, onUpload, onEdit, onDelete, onTogglePin,
         <p className="text-sm text-foreground">
           {t("lobby.card.sealed", { name: persona.name, date: until })}
         </p>
+        {/**
+          * The way back to the seal (C6.2).
+          *
+          * A seal is not a trap: the user agreed to it, and they are the
+          * one who lifts it. The controls live on their own page, which
+          * reads the exempt status route — the edit page reads
+          * `persona.get` and is refused while sealed, so it cannot be
+          * the way in. The card still shows only the name and the day:
+          * the link is the way to the controls, not a countdown.
+          */}
+        <Link
+          href={`/persona/${persona.id}/seal`}
+          className="mt-2 inline-block text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        >
+          {t("seal.manage")}
+        </Link>
         <KeptQuotes persona={persona} />
       </div>
     );

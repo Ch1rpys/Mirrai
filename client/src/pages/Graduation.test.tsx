@@ -19,6 +19,7 @@ const updateSettings = vi.fn();
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    encryption: { status: { useQuery: () => ({ data: { enabled: true } }) } },
     persona: {
       get: { useQuery: () => ({ data: persona }) },
       getSettings: {

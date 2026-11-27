@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { Button } from "@/components/ui/button";
@@ -15,16 +16,31 @@ import { toast } from "sonner";
  */
 export default function SealSettings({ personaId }: { personaId: number }) {
   const { t } = useLocale();
+  const [, navigate] = useLocation();
   const settings = trpc.persona.getSettings.useQuery({ id: personaId });
+  /**
+   * Whether the account has at-rest encryption (C8.5, C6.2 point 6).
+   *
+   * Sealing does not depend on it, but when it is off this is the
+   * moment to mention it: the two are the same wish — "keep this, but
+   * do not let it be read".
+   */
+  const encryption = trpc.encryption.status.useQuery();
   const invalidate = () => {
     settings.refetch();
     utils.persona.get.invalidate();
   };
   const utils = trpc.useUtils();
   const setSeal = trpc.persona.seal.set.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       toast.success(t("seal.saved"));
       invalidate();
+      /**
+       * Once the seal is on, this page is gone: the edit and graduation
+       * pages both read `persona.get`, which the seal refuses. The
+       * controls that are still reachable are on the seal page.
+       */
+      if (variables?.until) navigate(`/persona/${personaId}/seal`);
     },
     onError: (error) => toast.error(error.message),
   });
@@ -109,6 +125,9 @@ export default function SealSettings({ personaId }: { personaId: number }) {
     <div className="space-y-2">
       <p className="text-sm text-foreground">{t("seal.title")}</p>
       <p className="text-xs text-muted-foreground leading-relaxed">{t("seal.note")}</p>
+      {encryption.data?.enabled === false && (
+        <p className="text-xs text-muted-foreground leading-relaxed">{t("seal.encryptionHint")}</p>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <Label htmlFor="seal-until" className="text-xs text-muted-foreground">{t("seal.until")}</Label>
         <Input
