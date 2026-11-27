@@ -29,6 +29,7 @@ import { normalizePeriods } from "../shared/periods";
 import { dayPartFromHour } from "../shared/act-profile";
 import { zoneForRecords, zonedHour } from "../shared/timezone";
 import { labelEvalCases } from "../server/eval/act-labels";
+import { heavyModeLabelsNow } from "../server/eval/heavy-mode";
 import { previewLayersUsed, runEval } from "../server/eval/run";
 import {
   compareMetricCI,
@@ -296,8 +297,19 @@ const stored = casesFromRows(await db.getEvalCases(personaId, userId)).map(withD
 const cut = stored.length
   ? stored
   : buildEvalCases(records, { maxCases, locale, periods, timezone });
-const cases = (await labelEvalCases(cut, { userId, locale })).map(withDayPart);
-if (!stored.length || cut.some((item) => !item.expectedAct)) {
+/**
+ * Labeling the cases is a model call (B8.5).
+ *
+ * `--ablate` and `--tune` without `--yes` only print an estimate, so they
+ * must not label anything: the labeler asks the provider to name the
+ * speech act of every line that has none, and "show me the cost" was
+ * paying for one request before it printed the cost.
+ */
+const labelsNow = heavyModeLabelsNow({ ablate, tune, yes });
+const cases: EvalCaseData[] = labelsNow
+  ? (await labelEvalCases(cut, { userId, locale })).map(withDayPart)
+  : [];
+if (labelsNow && (!stored.length || cut.some((item) => !item.expectedAct))) {
   await db.saveEvalCases(
     personaId,
     userId,
@@ -314,7 +326,7 @@ if (!stored.length || cut.some((item) => !item.expectedAct)) {
   );
 }
 console.log(
-  `[eval] ${records.length} records → ${cases.length} held-out cases` +
+  `[eval] ${records.length} records → ${(labelsNow ? cases : cut).length} held-out cases` +
     (stored.length ? " (the stored ones)" : ""),
 );
 
@@ -473,16 +485,17 @@ if (ablate) {
   const previewLayers = await previewLayersUsed({
     persona,
     userId,
-    cases,
+    cases: labelsNow ? cases : cut,
     locale,
     variant,
     without,
     rerank,
     sampleAct: variant !== "withoutAct",
   });
-  const estimated = ablationCalls(previewLayers.length, cases.length, samplesPerCase);
+  const previewCases = labelsNow ? cases : cut;
+  const estimated = ablationCalls(previewLayers.length, previewCases.length, samplesPerCase);
   console.log(
-    `[eval] ablation would make ${previewLayers.length + 1} runs × ${cases.length} cases × ${samplesPerCase} = ${estimated} calls`,
+    `[eval] ablation would make ${previewLayers.length + 1} runs × ${previewCases.length} cases × ${samplesPerCase} = ${estimated} calls`,
   );
   if (!yes) {
     console.log("[eval] pass --yes to run");
@@ -558,9 +571,10 @@ const TUNE_TOP_P = [0.9, 1] as const;
 
 if (tune) {
   const combos = TUNE_TEMPERATURES.length * TUNE_TOP_P.length;
-  const estimated = combos * cases.length * samplesPerCase;
+  const previewCases = labelsNow ? cases : cut;
+  const estimated = combos * previewCases.length * samplesPerCase;
   console.log(
-    `[eval] tune would make ${combos} grids × ${cases.length} cases × ${samplesPerCase} = ${estimated} calls`,
+    `[eval] tune would make ${combos} grids × ${previewCases.length} cases × ${samplesPerCase} = ${estimated} calls`,
   );
   if (!yes) {
     console.log("[eval] pass --yes to run");
