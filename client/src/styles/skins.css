@@ -18,6 +18,14 @@
   background-color: #edf1f7;
 }
 
+/* The IM layouts use a narrower bubble than the classic one: the
+   conversation sits in the middle of a wide window and the lines are
+   shorter, the way a message looks when it is read on a phone (B7.15). */
+.chat-root[data-skin="im-green"] .message-bubble-column,
+.chat-root[data-skin="im-blue"] .message-bubble-column {
+  max-width: 72%;
+}
+
 .chat-root[data-skin="im-green"] .bubble-user {
   background: #a9e97a;
   color: #14210e;

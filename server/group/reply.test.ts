@@ -152,6 +152,20 @@ describe("the length cap", () => {
 });
 
 describe("composeGroupReply", () => {
+  it("puts the measured public voice into the room instruction (B7.12)", async () => {
+    // C9.8's public mask: a room is a public surface, so the voice read
+    // from public posts belongs here — only the fingerprint was used.
+    const withVoice = persona({
+      personaData: { publicVoice: "短句，爱用「哈哈」，很少问句。" },
+    });
+    await composeGroupReply(params({ persona: withVoice }));
+    const input = planTurn.mock.calls[0]![0] as Record<string, any>;
+    expect(input.groupOverlay).toContain("短句，爱用「哈哈」，很少问句。");
+    expect(input.groupOverlay).toContain("公开场合");
+    const executedInput = executePlan.mock.calls[0]![1] as Record<string, any>;
+    expect(executedInput.groupOverlay).toBe(input.groupOverlay);
+  });
+
   it("plans with the room instruction, the given history and the group surface", async () => {
     const reply = await composeGroupReply(params());
     expect(reply).toBe("累就歇会儿");

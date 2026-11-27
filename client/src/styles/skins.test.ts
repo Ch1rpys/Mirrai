@@ -24,6 +24,20 @@ const BANNED = [
 const ROOT = path.resolve(__dirname, "..", "..");
 
 describe("the chat skins", () => {
+  it("give the two IM layouts their own bubble width (B7.15)", () => {
+    // The manual lists the bubble's maximum width among the things a
+    // skin changes; the stylesheet only changed colours and corners.
+    const css = readFileSync(path.join(ROOT, "src/styles/skins.css"), "utf8");
+    expect(css).toMatch(
+      /\.chat-root\[data-skin="im-green"\] \.message-bubble-column[\s\S]*?max-width:/,
+    );
+    expect(css).toMatch(
+      /\.chat-root\[data-skin="im-blue"\] \.message-bubble-column[\s\S]*?max-width:/,
+    );
+    // The classic layout keeps the width the app has always had.
+    expect(css).not.toMatch(/data-skin="classic"[^}]*message-bubble-column/);
+  });
+
   it("do not name another chat product", () => {
     const sources = [
       readFileSync(path.join(ROOT, "src/styles/skins.css"), "utf8"),

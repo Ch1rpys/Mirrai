@@ -7,7 +7,7 @@ import { normalizeUserEncryption } from "@shared/encryption";
 import { normalizeBackupSettings } from "@shared/backup";
 import { hashPassword, verifyPassword } from "../_core/password";
 import { dataKeyFor, forgetAllDataKeys, forgetDataKey, rememberDataKey } from "../_core/data-keys";
-import { forgetAllEncryptionStates, setEncryptionEnabled } from "../_core/encrypted-values";
+import { ENCRYPTED_TABLES, forgetAllEncryptionStates, setEncryptionEnabled } from "../_core/encrypted-values";
 import {
   createCollectedMessage,
   createDiaryEntry,
@@ -74,28 +74,18 @@ import { inspectBackup } from "../_core/backup";
 const PASSWORD = "correct horse battery";
 const SENTINEL = "哨兵内容XYZ";
 /** Every encrypted column and its storage kind, for the raw-SQL sweep. */
-const COLUMNS: Array<[string, string, "text" | "json"]> = [
-  ["messages", "content", "text"],
-  ["memories", "title", "text"],
-  ["memories", "description", "text"],
-  ["letters", "body", "text"],
-  ["letters", "replyText", "text"],
-  ["outbound_letters", "text", "text"],
-  ["outbound_letters", "outcomeNote", "text"],
-  ["user_journal", "body", "text"],
-  ["diary_entries", "summary", "text"],
-  ["diary_entries", "reflection", "text"],
-  ["collected_messages", "content", "text"],
-  ["collected_messages", "meta", "json"],
-  ["personas", "personaData", "json"],
-  ["personas", "styleProfile", "json"],
-  ["rehearsals", "line", "text"],
-  ["rehearsals", "result", "json"],
-  ["roleplay_sessions", "transcript", "json"],
-  ["scheduled_items", "body", "text"],
-  ["oral_accounts", "body", "text"],
-  ["persona_versions", "personaData", "json"],
-];
+/**
+ * Every encrypted column, from the one list the app encrypts by (C8.5).
+ *
+ * The copy in this test had twenty entries and the code has twenty-four:
+ * the three JSON columns of a diary entry and the `styleProfile` of a
+ * persona version were never scanned, so a leak there would have passed.
+ */
+const COLUMNS: Array<[string, string, "text" | "json"]> = Object.entries(
+  ENCRYPTED_TABLES,
+).flatMap(([table, spec]) =>
+  spec.columns.map(({ column, kind }) => [table, column, kind] as [string, string, "text" | "json"]),
+);
 
 interface Seeded {
   userId: number;
@@ -188,6 +178,24 @@ async function seedUser(tag: string): Promise<Seeded> {
   const db = await getDb();
   await db!.execute(sql`
     UPDATE "letters" SET "replyText" = ${`${SENTINEL}回信`} WHERE "id" = ${ids.letter}
+  `);
+  /**
+   * The JSON columns a diary entry holds besides summary/reflection, and
+   * the snapshot's own style profile. They are encrypted too; the
+   * fixture used to leave them empty, so the raw scan proved nothing
+   * about them.
+   */
+  await db!.execute(sql`
+    UPDATE "diary_entries"
+    SET "highlights" = ${`["${SENTINEL}亮点"]`}::jsonb,
+        "quotes" = ${`["${SENTINEL}引用"]`}::jsonb,
+        "emotionalArc" = ${`{"note":"${SENTINEL}情绪"}`}::jsonb
+    WHERE "id" = ${ids.diary}
+  `);
+  await db!.execute(sql`
+    UPDATE "persona_versions"
+    SET "styleProfile" = ${`{"rules":["${SENTINEL}快照风格"]}`}::jsonb
+    WHERE "id" = ${ids.version}
   `);
   return { userId, personaId, ids };
 }

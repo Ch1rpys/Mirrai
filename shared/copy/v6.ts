@@ -557,6 +557,10 @@ export const V6 = {
     zh: "样本不够（{{n}} / {{need}}）。",
     en: "Not enough samples ({{n}} / {{need}}).",
   },
+  "eval.drift.noTurns": {
+    zh: "每一轮模型都没有给出回答，漂移无法测量",
+    en: "The model gave no answer on any turn, so drift cannot be measured.",
+  },
   "eval.drift.needUserSide": {
     zh: "记录里你这一侧的话不够，模拟不了",
     en: "There are not enough of your own lines in the record to simulate you.",
@@ -2132,6 +2136,10 @@ export const V6 = {
   "prompt.groupOverlay": {
     zh: "这是一个群。群里有：{{members}}。{{user}} 是真人；其他成员和你一样，是按记录重建的分身，他们说的话不代表真人。只替你自己说话。",
     en: "This is a group chat. In it: {{members}}. {{user}} is a real person; the other members are rebuilt personas like you, and their words are not the real people's. Speak only for yourself.",
+  },
+  "prompt.groupPublicVoice": {
+    zh: "在公开场合，你说话是这样的：{{voice}}。群聊里按这个来，但不要提这段描述。",
+    en: "In public you talk like this: {{voice}}. Follow it in this room, but do not mention this description.",
   },
   "prompt.groupSpeakerLine": {
     zh: "{{name}}：{{content}}",

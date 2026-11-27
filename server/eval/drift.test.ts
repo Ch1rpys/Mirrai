@@ -18,6 +18,7 @@ vi.mock("../chat/prompt", () => ({
 }));
 
 import {
+  DriftNoTurnsError,
   DriftNeedUserSideError,
   DRIFT_TURNS_DEFAULT,
   runDrift,
@@ -227,6 +228,45 @@ describe("runDrift", () => {
     expect(Math.abs(report.slope)).toBeLessThan(0.01);
     expect(report.firstWindowOver).toBeNull();
     expectNoWrites();
+  });
+
+  it("says it could not measure drift when every call fails (B8.3)", async () => {
+    // An empty set is 「inside」 every window: the old report printed
+    // "the voice stayed inside the first window" and exited 0.
+    const provider = stubProvider(async () => {
+      throw new Error("the provider is down");
+    });
+    await expect(
+      runDrift({
+        persona: persona(),
+        userId: 1,
+        turns: 5,
+        startCase: startCase(),
+        provider,
+        seed: "drift-down",
+      }),
+    ).rejects.toBeInstanceOf(DriftNoTurnsError);
+    expectNoWrites();
+  });
+
+  it("counts the turns that produced no answer", async () => {
+    let personaCalls = 0;
+    const provider = stubProvider(async (messages) => {
+      if (isSimUserCall(messages)) return "嗯";
+      personaCalls += 1;
+      if (personaCalls % 2 === 1) throw new Error("the provider hiccuped");
+      return typicalTaLine();
+    });
+    const report = await runDrift({
+      persona: persona(),
+      userId: 1,
+      turns: 10,
+      startCase: startCase(),
+      provider,
+      seed: "drift-partial",
+    });
+    expect(report.failedTurns).toBeGreaterThan(0);
+    expect(report.failedTurns).toBeLessThan(report.turns.length);
   });
 
   it("refuses a persona with no user-side lines", async () => {

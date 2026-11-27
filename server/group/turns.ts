@@ -92,13 +92,24 @@ export function groupOverlayText(params: {
   locale: Locale;
   members: string[];
   userName: string;
+  /**
+   * How this persona talks to everyone, measured from public posts
+   * (B7.12). A room is a public surface, so it is the closer voice.
+   */
+  publicVoice?: string | null;
 }): string {
   const separator = params.locale === "en" ? ", " : "、";
   const members = params.members.map(sanitizeMemberName).join(separator);
-  return copy(params.locale, "prompt.groupOverlay", {
+  const room = copy(params.locale, "prompt.groupOverlay", {
     members,
     user: sanitizeMemberName(params.userName),
   });
+  const voice = typeof params.publicVoice === "string" ? params.publicVoice.trim() : "";
+  if (!voice) return room;
+  return [
+    room,
+    copy(params.locale, "prompt.groupPublicVoice", { voice }),
+  ].join("\n");
 }
 
 /**

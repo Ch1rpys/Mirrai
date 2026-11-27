@@ -113,6 +113,12 @@ export async function composeGroupReply(
     locale,
     members: params.members.map((row) => row.name),
     userName: params.userName,
+    // The room is a public surface; the measured public voice is what
+    // the person sounds like when more than one other person is
+    // listening (B7.12, C9.8).
+    publicVoice: typeof (persona.personaData as { publicVoice?: unknown } | null)?.publicVoice === "string"
+      ? ((persona.personaData as { publicVoice?: string }).publicVoice ?? null)
+      : null,
   });
   const context = groupContextMessages(params);
   const lastUser = [...params.history].reverse().find((row) => row.role === "user");

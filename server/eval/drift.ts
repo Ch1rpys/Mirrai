@@ -51,6 +51,22 @@ export interface DriftReport {
   slope: number;
   firstWindowOver: number | null;
   turns: DriftTurn[];
+  /**
+   * Turns whose reply never arrived (B8.3).
+   *
+   * When every call fails the report used to say the voice stayed inside
+   * the first window: an empty set is "in" every set. The caller has to
+   * be able to tell "stayed" from "never measured".
+   */
+  failedTurns: number;
+}
+
+/** The simulated conversation produced no line at all. */
+export class DriftNoTurnsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DriftNoTurnsError";
+  }
 }
 
 export class DriftNeedUserSideError extends Error {
@@ -224,6 +240,11 @@ export async function runDrift(options: DriftOptions): Promise<DriftReport> {
     });
   }
 
+  const failedTurns = recorded.filter((row) => row.text.length === 0).length;
+  if (failedTurns === recorded.length) {
+    throw new DriftNoTurnsError(copy(locale, "eval.drift.noTurns"));
+  }
+
   const windows: DriftWindow[] = [];
   for (let start = 0; start + DRIFT_WINDOW_SIZE <= recorded.length; start += DRIFT_WINDOW_SIZE) {
     const slice = recorded.slice(start, start + DRIFT_WINDOW_SIZE);
@@ -251,5 +272,6 @@ export async function runDrift(options: DriftOptions): Promise<DriftReport> {
     slope: windowSlope(totals),
     firstWindowOver,
     turns: recorded,
+    failedTurns,
   };
 }

@@ -46,7 +46,7 @@ import {
   pairsFromScores,
   trainDiscriminator,
 } from "../server/eval/discriminator";
-import { DriftNeedUserSideError, DRIFT_TURNS_DEFAULT, runDrift } from "../server/eval/drift";
+import { DriftNeedUserSideError, DriftNoTurnsError, DRIFT_TURNS_DEFAULT, runDrift } from "../server/eval/drift";
 import { attachComposite, runAudition, type AuditionResult } from "../server/eval/audition";
 import { ablationCalls, layersFromBaseline, runAblation } from "../server/eval/ablate";
 import { resolveProviderForUser } from "../server/llm/user-provider";
@@ -396,7 +396,7 @@ if (drift) {
       locale,
     });
   } catch (error) {
-    if (error instanceof DriftNeedUserSideError) {
+    if (error instanceof DriftNeedUserSideError || error instanceof DriftNoTurnsError) {
       console.error(error.message);
       process.exit(1);
     }
@@ -411,6 +411,10 @@ if (drift) {
         `  residue=${window.residueRate.toFixed(4)}` +
         `  style=${window.styleDistance.total.toFixed(4)}`,
     );
+  }
+  if (report.failedTurns > 0) {
+    // A turn that failed is not a turn the voice stayed inside.
+    console.log(`[eval] turns with no answer: ${report.failedTurns}/${report.turns.length}`);
   }
   console.log(`[eval] slope: ${report.slope.toFixed(4)}`);
   console.log(

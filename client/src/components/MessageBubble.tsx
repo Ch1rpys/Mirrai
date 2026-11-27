@@ -769,7 +769,7 @@ export function MessageBubble({
           className="message-avatar message-avatar-user hidden w-8 h-8 rounded-full text-sm flex-shrink-0 mt-0.5"
         />
       )}
-      <div className={`max-w-[78%] sm:max-w-[75%] flex flex-col gap-1.5 ${isUser ? "items-end" : "items-start"}`}>
+      <div className={`message-bubble-column max-w-[78%] sm:max-w-[75%] flex flex-col gap-1.5 ${isUser ? "items-end" : "items-start"}`}>
         {!isUser && mood && showMood && (
           <span className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-md border ${mood.chip}`}>
             <span className={`w-1.5 h-1.5 rounded-full ${mood.dot}`} />
