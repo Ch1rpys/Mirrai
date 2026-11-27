@@ -61,6 +61,8 @@ export interface ScheduledBackupDeps {
   deliver: typeof deliverBackupFile;
   remove: typeof deleteBackupFile;
   decrypt: (payload: string | null | undefined) => Promise<string | null>;
+  /** Whether the account's content is encrypted and this process has no key. */
+  locked: (userId: number) => Promise<boolean>;
   now?: () => Date;
   uploadsDir?: string;
   fetchImpl?: typeof fetch;
@@ -122,6 +124,7 @@ export async function runScheduledBackups(
   const deliver = deps?.deliver ?? deliverBackupFile;
   const remove = deps?.remove ?? deleteBackupFile;
   const decrypt = deps?.decrypt ?? decryptIfEncrypted;
+  const locked = deps?.locked ?? isEncryptionLocked;
   const clock = deps?.now ?? (() => now);
   const fetchImpl = deps?.fetchImpl;
 
@@ -146,7 +149,7 @@ export async function runScheduledBackups(
      * bytes nobody can read (C8.5). The run waits for the next
      * sign-in, like the other background jobs.
      */
-    if (await isEncryptionLocked(user.id)) {
+    if (await locked(user.id)) {
       logPostponed(user.id, "backup");
       continue;
     }

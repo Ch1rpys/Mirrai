@@ -38,6 +38,10 @@ function harness(users: ScheduledBackupUser[]) {
     deliver: deliver as never,
     remove: remove as never,
     decrypt: async (_payload: string | null | undefined) => "the-passphrase",
+    // The encryption-lock check reads a real database through the default
+    // dependency. A unit test must not depend on whatever account happens
+    // to have that id in the database the suite is pointed at.
+    locked: async () => false,
     now: () => NOW,
   };
   return { deps, saved, create, deliver, remove };
@@ -139,6 +143,16 @@ describe("the scheduled backup", () => {
     const result = await runScheduledBackups(NOW, deps);
     expect(result).toEqual({ ran: 1, failed: 1 });
     expect(saved.map((row) => row.userId)).toEqual([1, 2]);
+  });
+
+  it("postpones an encrypted account whose key is missing", async () => {
+    const { deps, saved, create } = harness([
+      { id: 1, backupSettings: folderSettings() },
+    ]);
+    deps.locked = async () => true;
+    expect(await runScheduledBackups(NOW, deps)).toEqual({ ran: 0, failed: 0 });
+    expect(create).not.toHaveBeenCalled();
+    expect(saved).toHaveLength(0);
   });
 
   it("passes the decrypted credentials to the destination", async () => {

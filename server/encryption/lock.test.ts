@@ -154,8 +154,11 @@ describe("the sweeps are wired to the lock", () => {
     ["server/scheduler/scheduled-items.ts", "withoutEncryptionLocked("],
     ["server/scheduler/reminders.ts", "withoutEncryptionLocked("],
     // The backup sweep checks each user inside its loop instead of
-    // filtering a due list, so it calls the single-item check.
-    ["server/backup/schedule.ts", "isEncryptionLocked("],
+    // filtering a due list, so it calls the single-item check — through
+    // an injectable dependency (P18.3: a unit test must not read the
+    // database just because DATABASE_URL happens to be set) whose default
+    // is still the real one.
+    ["server/backup/schedule.ts", "const locked = deps?.locked ?? isEncryptionLocked"],
   ];
   const root = path.resolve(__dirname, "..", "..");
   for (const [file, marker] of files) {
