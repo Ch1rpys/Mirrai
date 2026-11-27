@@ -136,6 +136,7 @@ export default defineConfig({
           { text: "v1.1.0", link: "/releases/v1.1.0" },
           { text: "v1.2.0", link: "/releases/v1.2.0" },
           { text: "v1.3.0", link: "/releases/v1.3.0" },
+          { text: "v1.4.0（草稿）", link: "/releases/v1.4.0-draft" },
         ],
       },
       {
