@@ -1267,10 +1267,23 @@ corepack pnpm eval -- --persona <id> --user <id> --audition
 
 **第五批状态**：没有条目改状态（都是 ✅/🟡 条目的中级/低级问题）；计数仍 ✅86 · 🟡87 · ⬜0。闸门 `734` 个文件（`709 passed | 25 skipped`）、`6237` 个用例（`6107 passed | 130 skipped`）、`all seven steps passed`。
 
+**第六批（第四轮修复：截图合并/称呼/探针/子进程/共享邀请/契约测试，`c9123f9f` … `3ba6763e`）**
+
+- **B7.11 居中系统提示不再占一分钟**（`c9123f9f`）：没有时间条时按「实际存下来的行」计分钟，`center` 且读不出时间的提示不再占用；测试先红（旧 04:02）。
+- **B3.8 被提到的人不再是称呼**（`c9123f9f`）：`mineAddressForms` 新增 `excludeForms`，`measureStyleProfile` 把 `personaData.people` 的名字/别名传进去；夹具里「琪琪今天也在」不再被挖成 `them_to_me`（树树/陈树仍挖到），两条测试先红。
+- **C8.12 上传文件上限真算过**（`c9123f9f`）：`measureUploads` 的直接用例（3 文件 6 字节、cap 2 时 `capped:true`）。
+- **C9.6 doctor 失败时退出码非零**（`c9123f9f`）：诊断项含 `fail` 时 `mirrai doctor` 返回 1，测试直接断言。
+- **B7.2 whisper.cpp 子进程环境清洗**（`a08ecc1e`）：`runBinary` 传 `subprocessEnvironment()`，测试断言 `PATH` 在、`OPENAI_API_KEY/DATABASE_URL/JWT_SECRET` 不在。
+- **B7.6 朗读语音清单按引擎**（`a08ecc1e`）：新增 `chat.voices` 服务端用例（Edge 有名字/本地引擎空/`off` 不可用）与组件用例（本地引擎不出现语音选择器，朗读按钮仍在）。
+- **C7.2 过期邀请在 accept 也拒**（`69d0118f`）：`db-sharing` 新增真库用例：过期 token `acceptPersonaShare` 返回 null、家人侧没有半个分身；路由层只测哈希与错误码。
+- **C10.2 漏掉的一句补回 + 不训练分类器进偏差表**（`b88a8eac`、`3ba6763e`）：「我很累，也不想活了」在 `detectCrisisExtended` 下仍 crisis；偏差 628；`crisis-indirect` 11→12。同时订正 C3.1（夹具下午样本 354，原证据误把 mock 的 5 当实测）与 B6.2（`stances.test.ts` 实际 7 条，原写 5）、C8.11 的「83 处读取」旧账（改为断言扫描数 >70）。
+
+**第六批状态**：没有条目改状态（都是 ✅/🟡 条目的中级/低级问题）；计数仍 ✅86 · 🟡87 · ⬜0。闸门 `736` 个文件（`711 passed | 25 skipped`）、`6247` 个用例（`6116 passed | 131 skipped`）、`all seven steps passed`。
+
 **最终验证（修复会话收尾；到本进度文件更新前 `60ffcdf..HEAD` 共 25 个提交、154 个文件）**
 
-- **闸门**：`corepack pnpm gate`（不带 `--fast`、不带 `DATABASE_URL`）退出码 0、`all seven steps passed`；`734` 个文件（`709 passed | 25 skipped`）、`6237` 个用例（`6107 passed | 130 skipped`）。跳过数相对验收基线 122 增加 8，全部是本次新增的**数据库用例**（在已登记的 DB 测试文件里追加：`db-search`、`db-sharing`、`db-soft-delete`、`db-groups`、`db-timeline`、`material`；新增的带库用例都跑过，无库时按既有规则跳过）；没有被新加 skip 的既有测试；`git diff --name-status main..HEAD -- '*.test.ts' '*.test.tsx' | grep '^D'` = 0（没有删测试）。黄金快照仍只有 `e506484` 一个提交、之后未改。
-- **带库测试**：最后一轮在临时库 `mirrai_v6_verify_round3`（`drizzle-kit push --force` 后）重跑：`server/skip-audit.test.ts` 登记的 29 个 DB 测试文件用 `--no-file-parallelism` 顺序跑：`29 passed (29)`、`142 passed (142)`、**0 skipped**；临时库已 `dropdb`，`mirrai_live` 未连接。
+- **闸门**：`corepack pnpm gate`（不带 `--fast`、不带 `DATABASE_URL`）退出码 0、`all seven steps passed`；`736` 个文件（`711 passed | 25 skipped`）、`6247` 个用例（`6116 passed | 131 skipped`）。跳过数相对验收基线 122 增加 9，全部是本次新增的**数据库用例**（在已登记的 DB 测试文件里追加：`db-search`、`db-sharing`、`db-soft-delete`、`db-groups`、`db-timeline`、`material`；新增的带库用例都跑过，无库时按既有规则跳过）；没有被新加 skip 的既有测试；`git diff --name-status main..HEAD -- '*.test.ts' '*.test.tsx' | grep '^D'` = 0（没有删测试）。黄金快照仍只有 `e506484` 一个提交、之后未改。
+- **带库测试**：最后一轮在临时库 `mirrai_v6_verify_round3`（`drizzle-kit push --force` 后）重跑：`server/skip-audit.test.ts` 登记的 29 个 DB 测试文件用 `--no-file-parallelism` 顺序跑：`29 passed (29)`、`143 passed (143)`、**0 skipped**；临时库已 `dropdb`，`mirrai_live` 未连接。
 - **迁移四步 + 整段回滚/装回**：临时库 `mirrai_v6_verify_mig`（`push` → `migrate` 84 条 → `--replay` 84 条 → `--rollback 1` 退 0086 → `migrate` 回来）；再 43 次 `--rollback 1` 退到 0043：表 62→34、索引 171→72、journal 84→41、`file_type` 7 值→5 值；再 43 次 `migrate` 全部装回（表 62 / 索引 171 / journal 84 / 列 651、`file_type` 回 7 值）。另建只 `push` 的库 `mirrai_v6_verify_mig3` 与 push+migrate 库 `mirrai_v6_verify_mig2` 做 information_schema catalog diff（表名/列名/类型/可空）：**0 行差异**。三个临时库都已 `dropdb`；`mirrai_live` 未连接、未写。
 - **静态**：分支 `exec/v6`；`git status --porcelain` 空；`main..HEAD` 无 merge 提交、`Co-Authored-By` 0 条（`core.hooksPath` = `.githooks` 已确认）；`package.json` version 仍 1.3.0；未 push、未合并、未切分支、未改写历史；`main` 仍 `f71e77b`。
 - **仍没修/没量的**：真实模型/真实记录/真实设备才能量的效果类条目按 🟡 留在未验证清单（各自有可执行命令）；本机无法执行的验收项没有硬填数字。低严重度里未逐条处理的有：163 条历史问题行没有提交号（历史记录，不改变行为）、C10.2「引号里任何短语都被当地点」的抽取精度、C10.7 burst 只有最后一条立刻带 provenance、C8.11 30 天真实等待/浏览器整链路、C7.4 真实模型抽取等——都记在未验证清单或问题清单里。
