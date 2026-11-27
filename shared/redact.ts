@@ -11,6 +11,14 @@ export interface RedactionOptions {
   ids?: boolean;
   emails?: boolean;
   cards?: boolean;
+  /**
+   * Street addresses (C6.3).
+   *
+   * Only the keepsake book's share copy asks for this: the import
+   * wizard's four switches are phones, ids, emails and cards, and the
+   * records themselves keep the addresses the user chose to import.
+   */
+  addresses?: boolean;
   names?: string[];
   /** Persona and user names, which must stay so the persona still knows itself. */
   keepNames?: string[];
@@ -22,6 +30,7 @@ export interface RedactionCounts {
   emails: number;
   cards: number;
   names: number;
+  addresses: number;
 }
 
 export interface RedactionReport {
@@ -29,12 +38,13 @@ export interface RedactionReport {
   ids: boolean;
   emails: boolean;
   cards: boolean;
+  addresses: boolean;
   nameCount: number;
   replaced: RedactionCounts;
 }
 
 export function emptyRedactionCounts(): RedactionCounts {
-  return { phones: 0, ids: 0, emails: 0, cards: 0, names: 0 };
+  return { phones: 0, ids: 0, emails: 0, cards: 0, names: 0, addresses: 0 };
 }
 
 export function normalizeName(value: string): string {
@@ -72,9 +82,35 @@ export function redactionReportOf(
     ids: Boolean(options.ids),
     emails: Boolean(options.emails),
     cards: Boolean(options.cards),
+    addresses: Boolean(options.addresses),
     nameCount,
     replaced: { ...counts },
   };
+}
+
+/**
+ * A street address, conservatively.
+ *
+ * "A city and a street with a number" is an address; a sentence that
+ * mentions a city is not. The keepsake book's share version promises to
+ * take the addresses out (C6.3), and a rule that replaced every sentence
+ * containing a city name would take out ordinary conversation too.
+ */
+const CITY_ADDRESS_RE = /(?:[\u4e00-\u9fa5]{2,10}(?:省|自治区))?[\u4e00-\u9fa5]{2,10}市[\u4e00-\u9fa5A-Za-z0-9]{0,40}?(?:\d+\s*(?:号|弄|栋|幢|单元|室|楼)|\d+\s*[路街巷]|小区|花园|公寓|大厦|广场)/gu;
+/** An address without the city: a street and a number. */
+const STREET_ADDRESS_RE = /[\u4e00-\u9fa5]{2,10}(?:路|街|巷|大道|道)\d+\s*号/gu;
+
+function redactAddresses(
+  text: string,
+  counts: RedactionCounts,
+): string {
+  const replace = (match: string) => {
+    counts.addresses += 1;
+    return "[address]";
+  };
+  return text
+    .replace(CITY_ADDRESS_RE, replace)
+    .replace(STREET_ADDRESS_RE, replace);
 }
 
 function escapeRegExp(value: string): string {
@@ -150,6 +186,9 @@ function redactText(
       return "[card]";
     });
   }
+  if (options.addresses) {
+    next = redactAddresses(next, counts);
+  }
   for (const person of people) {
     const re = new RegExp(escapeRegExp(person.pattern), "gi");
     next = next.replace(re, () => {
@@ -190,7 +229,12 @@ export function redactRecords<T extends { content: string; speaker: string; role
   const people = personTokensOf(options.names ?? [], keepNames);
   const tokenByKey = new Map(people.map((row) => [normalizeName(row.pattern), row.token]));
   const active = Boolean(
-    options.phones || options.ids || options.emails || options.cards || people.length > 0,
+    options.phones
+      || options.ids
+      || options.emails
+      || options.cards
+      || options.addresses
+      || people.length > 0,
   );
   if (!active) return { records, counts };
 

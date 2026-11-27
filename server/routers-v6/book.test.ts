@@ -50,7 +50,7 @@ function persona(overrides: Record<string, unknown> = {}) {
     name: "小满",
     togetherFrom: "2022-03-01",
     togetherTo: "2024-10-31",
-    farewellLetter: "小满写给你的信。琪琪那天打了 13800138000。",
+    farewellLetter: "小满写给你的信。琪琪那天打了 13800138000，说要寄到上海市徐汇区淮海中路1234号。",
     personaData: {
       people: [
         { id: "p1", name: "琪琪", relation: "室友", verified: true, source: "manual" },
@@ -143,6 +143,9 @@ describe("the keepsake book (C6.3)", () => {
     const serialized = JSON.stringify(book);
     expect(serialized).not.toContain("琪琪");
     expect(serialized).not.toContain("13800138000");
+    // The address is replaced too (C6.3).
+    expect(serialized).not.toContain("淮海中路1234号");
+    expect(serialized).not.toContain("徐汇区");
     // The persona's full name is not in the share copy either.
     expect(serialized).not.toContain("小满");
     expect(book.cover.name).toBe("小*");

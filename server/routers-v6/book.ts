@@ -50,6 +50,7 @@ function redactOne(
       ids: true,
       emails: true,
       cards: true,
+      addresses: true,
       names,
     },
   ).records[0]?.content ?? value;

@@ -38,6 +38,27 @@ describe("redactRecords", () => {
     expect(contentOf("不是邮箱 not@valid", { emails: true })).toBe("不是邮箱 not@valid");
   });
 
+  it("replaces a street address and leaves an ordinary sentence about a city alone", () => {
+    // The keepsake book's share copy promises to take out the addresses
+    // (C6.3) as well as names and numbers. The rule is conservative: a
+    // city and a street with a number is an address, a sentence that
+    // merely mentions a city is not.
+    const letter = contentOf("寄到上海市徐汇区淮海中路1234号", { addresses: true });
+    expect(letter).toContain("[address]");
+    expect(letter).not.toContain("淮海中路1234号");
+    expect(contentOf("浙江省杭州市西湖区文三路90号", { addresses: true }))
+      .toBe("[address]");
+    const waiting = contentOf("我在文三路90号等你", { addresses: true });
+    expect(waiting).toContain("[address]");
+    expect(waiting).not.toContain("文三路90号");
+    expect(contentOf("上海市很热闹", { addresses: true })).toBe("上海市很热闹");
+    expect(contentOf("我在杭州工作", { addresses: true })).toBe("我在杭州工作");
+    expect(contentOf("那条路很长", { addresses: true })).toBe("那条路很长");
+    // Off by default.
+    expect(contentOf("上海市徐汇区淮海中路1234号", { phones: true }))
+      .toBe("上海市徐汇区淮海中路1234号");
+  });
+
   it("replaces a Luhn-valid card and leaves a long number that fails Luhn", () => {
     expect(contentOf("卡 4111111111111111", { cards: true })).toBe("卡 [card]");
     expect(contentOf("卡 1234567890123", { cards: true })).toBe("卡 1234567890123");
@@ -94,7 +115,8 @@ describe("redactRecords", () => {
       emails: false,
       cards: false,
       nameCount: 1,
-      replaced: { phones: 1, ids: 0, emails: 0, cards: 0, names: 1 },
+      addresses: false,
+      replaced: { phones: 1, ids: 0, emails: 0, cards: 0, names: 1, addresses: 0 },
     });
     expect(JSON.stringify(report)).not.toContain("13800138000");
     expect(JSON.stringify(report)).not.toContain("琪琪");
