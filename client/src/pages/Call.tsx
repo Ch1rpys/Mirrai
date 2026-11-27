@@ -62,6 +62,17 @@ export default function Call() {
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const playingRef = useRef(false);
   const mutedRef = useRef(false);
+  /**
+   * Whether audio frames may still be played.
+   *
+   * Sending `interrupt` means the user stopped this answer. The server
+   * abandons the sentence it was already synthesising, but a frame that
+   * was already on the wire can still arrive after the acknowledgement;
+   * playing it would talk over the person. Frames are dropped until the
+   * next turn begins (`transcript`), which is where the server starts
+   * answering what the user said next.
+   */
+  const suppressAudioRef = useRef(false);
 
   const settings = normalizePersonaSettings(persona?.settings);
   const enabled = settings.layers.callMode;
@@ -82,10 +93,18 @@ export default function Call() {
     wsRef.current = socket;
     socket.onopen = () => {
       setStatus("connecting");
+      suppressAudioRef.current = false;
       socket.send(JSON.stringify({ type: "start" }));
     };
     socket.onmessage = (event) => {
       if (typeof event.data !== "string") {
+        /**
+         * A frame that arrives after the user asked to interrupt belongs
+         * to the answer they stopped. The server no longer sends those
+         * (B7.14); this is the client's half of the promise, for frames
+         * already in flight.
+         */
+        if (suppressAudioRef.current) return;
         const bytes = new Uint8Array(event.data as ArrayBuffer);
         playAudio(bytes);
         return;
@@ -102,6 +121,10 @@ export default function Call() {
         setStatus("declined");
         setSlots(Array.isArray(message.slots) ? message.slots : []);
       } else if (message.type === "transcript") {
+        // A new turn: what the user just said is being answered, so the
+        // old answer's frames can no longer arrive and audio is wanted
+        // again.
+        suppressAudioRef.current = false;
         setLines((current) => [...current, { who: "me", text: String(message.text ?? "") }]);
       } else if (message.type === "reply") {
         setLines((current) => [...current, { who: "them", text: String(message.text ?? "") }]);
@@ -178,6 +201,10 @@ export default function Call() {
            */
           if (!bargedIn && shouldBargeIn(rms, playingRef.current || audioQueue.current.length > 0)) {
             bargedIn = true;
+            // Drop every frame still on its way from the answer being
+            // stopped, including the one the server may have been
+            // synthesising when the interrupt arrives.
+            suppressAudioRef.current = true;
             stopAudio();
             if (wsRef.current?.readyState === WebSocket.OPEN) {
               wsRef.current.send(JSON.stringify({ type: "interrupt" }));

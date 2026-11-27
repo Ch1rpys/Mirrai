@@ -271,12 +271,92 @@ describe("the call protocol", () => {
     await waitFor(messages, (m) => m.type === "reply");
     ws.send(JSON.stringify({ type: "interrupt" }));
     await waitFor(messages, (m) => m.type === "interrupt-ack");
+    const ackIndex = messages.findIndex((m) => m.type === "interrupt-ack");
     release();
     await new Promise((resolve) => setTimeout(resolve, 80));
     expect(messages.filter((m) => m.type === "reply")).toHaveLength(1);
     expect(messages.some((m) => m.type === "turn-end")).toBe(false);
+    /**
+     * The clip was already being made when the interrupt came. It
+     * belongs to the answer the user stopped, so its bytes must not be
+     * sent: nothing binary at all, and in particular nothing after the
+     * acknowledgement.
+     */
+    expect(messages.slice(ackIndex).some((m) => m.binary)).toBe(false);
+    expect(messages.filter((m) => m.binary)).toHaveLength(0);
+    // The synthesiser is told to stop too, not just ignored afterwards.
+    const signal = (synth.mock.calls[0] as unknown[] | undefined)?.[2] as
+      | { signal?: AbortSignal }
+      | undefined;
+    expect(signal?.signal?.aborted).toBe(true);
     expect(getMessagesByPersonaId).toHaveBeenCalledWith(5, 1, 5);
     expect(setMessageContent).toHaveBeenCalledWith(77, 1, "在的。");
+  });
+
+  it("stops waiting for a clip already being synthesised when the interrupt comes", async () => {
+    /**
+     * The engine has no per-clip cancellation of its own: the promise
+     * never settles here, like a slow piper or edge call. The turn must
+     * still unwind on the interrupt instead of waiting for a clip the
+     * user has already said they do not want.
+     */
+    const synth = vi.fn(() => new Promise<Buffer | null>(() => {}));
+    const trimReply = vi.fn(async () => {});
+    const server = createCallOnlyServer(deps({ synthesize: synth, trimReply }));
+    const port = await server.listen();
+    close = () => {
+      server.call.close();
+      server.server.close();
+    };
+    const { ws, messages } = await connect(port);
+    ws.send(JSON.stringify({ type: "start" }));
+    await waitFor(messages, (m) => m.type === "ready");
+    ws.send(Buffer.from("audio"));
+    await waitFor(messages, (m) => m.type === "reply");
+    ws.send(JSON.stringify({ type: "interrupt" }));
+    await waitFor(messages, (m) => m.type === "interrupt-ack");
+    // Reaching the trim means the turn gave up on the pending clip.
+    await vi.waitFor(() => expect(trimReply).toHaveBeenCalled());
+    const ackIndex = messages.findIndex((m) => m.type === "interrupt-ack");
+    expect(messages.slice(ackIndex).some((m) => m.binary)).toBe(false);
+    expect(messages.filter((m) => m.binary)).toHaveLength(0);
+    expect(messages.some((m) => m.type === "turn-end")).toBe(false);
+  });
+
+  it("aborts the generation in flight when an interrupt comes", async () => {
+    /**
+     * The other half of the interrupt: the model is not just ignored
+     * after it finishes, its abort signal is fired, so the conversation
+     * path stops working on an answer nobody will hear.
+     */
+    let captured: AbortSignal | undefined;
+    const converse = vi.fn(async function* (options: { signal?: AbortSignal }) {
+      captured = options.signal;
+      await new Promise<void>((resolve) => {
+        if (options.signal?.aborted) return resolve();
+        options.signal?.addEventListener("abort", () => resolve(), { once: true });
+      });
+      throw Object.assign(new Error("aborted"), { name: "AbortError" });
+    });
+    const server = createCallOnlyServer(deps({ converse }));
+    const port = await server.listen();
+    close = () => {
+      server.call.close();
+      server.server.close();
+    };
+    const { ws, messages } = await connect(port);
+    ws.send(JSON.stringify({ type: "start" }));
+    await waitFor(messages, (m) => m.type === "ready");
+    ws.send(Buffer.from("audio"));
+    // The transcript arrives before the generation starts, so waiting
+    // for it is waiting for `converse` to be running.
+    await waitFor(messages, (m) => m.type === "transcript");
+    ws.send(JSON.stringify({ type: "interrupt" }));
+    await waitFor(messages, (m) => m.type === "interrupt-ack");
+    await vi.waitFor(() => expect(captured?.aborted).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(messages.filter((m) => m.type === "reply")).toHaveLength(0);
+    expect(messages.some((m) => m.type === "turn-end")).toBe(false);
   });
 
   it("declines outside the recorded answer slot, and starts again when forced", async () => {

@@ -69,7 +69,19 @@ export interface CallDeps {
     purpose: "chat";
     provider?: LLMProvider;
   }) => Promise<{ text: string } | null>;
-  synthesize: (text: string, userId: number) => Promise<Buffer | null>;
+  /**
+   * Synthesises one sentence.
+   *
+   * `signal` is the turn's own abort signal: the engines cannot be
+   * stopped halfway, but the clip they are making must not be used once
+   * the user has interrupted. A synthesiser that can check it returns
+   * `null` instead of a clip the call no longer wants.
+   */
+  synthesize: (
+    text: string,
+    userId: number,
+    options?: { signal?: AbortSignal },
+  ) => Promise<Buffer | null>;
   converse: (options: {
     persona: CallPersona;
     userId: number;
@@ -111,8 +123,16 @@ const REAL_DEPS: CallDeps = {
     ((await getPersonaById(personaId, userId)) as unknown as CallPersona | undefined) ?? null,
   resolveProvider: async (input) => (await resolveProviderForUser(input)) ?? null,
   transcribe: (input) => transcribeAudio({ ...input, fileName: input.fileName }),
-  synthesize: async (text, userId) => {
+  synthesize: async (text, userId, options = {}) => {
     const url = await generateTTS(text, DEFAULT_VOICE, userId);
+    /**
+     * The engines run to completion — piper is a subprocess and edge is
+     * an HTTP call — so cancellation happens here, at the boundary: a
+     * clip whose turn was interrupted while it was being made is read
+     * for nobody. It stays cached, so saying the same words again is a
+     * cache hit rather than another synthesis.
+     */
+    if (options.signal?.aborted) return null;
     const path = resolveStoredPath(url);
     if (!path) return null;
     return readFile(path);
@@ -122,6 +142,46 @@ const REAL_DEPS: CallDeps = {
   now: () => new Date(),
   locked: async (request, user) => refreshRequestLock(request as never, user as never),
 };
+
+/**
+ * Waits for a synthesis, but stops waiting the moment the turn is
+ * interrupted.
+ *
+ * The speech engines have no per-clip cancellation: a piper subprocess
+ * and an edge request run to the end whether or not anyone still wants
+ * the bytes. What can be cancelled is the wait — the turn must give up
+ * on the clip at once, so the next thing the user said is heard instead
+ * of queued behind an answer they already stopped. The signal is also
+ * handed to the synthesiser so it can drop the result on its side.
+ *
+ * Resolves `null` on abort, or when the synthesis fails: a sentence
+ * without audio is a text reply, not an error.
+ */
+function synthesizeUntilAborted(
+  synthesize: CallDeps["synthesize"],
+  text: string,
+  userId: number,
+  signal: AbortSignal,
+): Promise<Buffer | null> {
+  if (signal.aborted) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value: Buffer | null) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
+      resolve(value);
+    };
+    const onAbort = () => finish(null);
+    signal.addEventListener("abort", onAbort, { once: true });
+    synthesize(text, userId, { signal }).then(
+      // The clip may have finished in the same tick the interrupt was
+      // processed; then it belongs to the answer the user stopped.
+      (value) => finish(signal.aborted ? null : value),
+      () => finish(null),
+    );
+  });
+}
 
 /** Splits a reply into spoken sentences. */
 export function splitCallSentences(text: string): string[] {
@@ -425,6 +485,9 @@ export function attachCallServer(server: Server, overrides: Partial<CallDeps> = 
           if (event.type === "interrupted") interrupted = true;
         }
       } catch {
+        // Do not leave an interrupt pointing at a turn nobody is
+        // waiting on any more.
+        currentTurn = null;
         if (!controller.signal.aborted) {
           send(ws, { type: "error", message: copy(locale, "call.replyFailed") });
         }
@@ -433,17 +496,35 @@ export function attachCallServer(server: Server, overrides: Partial<CallDeps> = 
       if (crisis) send(ws, { type: "crisis" });
       const sentences = splitCallSentences(reply);
       for (const [seq, sentence] of sentences.entries()) {
-        if (interrupted) break;
+        if (interrupted || controller.signal.aborted) break;
         send(ws, { type: "reply", text: sentence, seq });
-        const voice = await deps.synthesize(sentence, user.id).catch(() => null);
-        if (voice) audio(ws, voice);
+        /**
+         * The words went out with the reply frame. A clip abandoned by
+         * an interrupt still leaves its sentence in the transcript: the
+         * text frame is what was already sent, even when its audio is
+         * not.
+         */
         sentText += sentence;
+        const voice = await synthesizeUntilAborted(
+          deps.synthesize,
+          sentence,
+          user.id,
+          controller.signal,
+        );
+        /**
+         * The clip was already being made when the interrupt came. It
+         * belongs to the answer the user stopped, so its bytes must not
+         * follow the acknowledgement — on the wire or in the ears.
+         */
+        if (interrupted || controller.signal.aborted) break;
+        if (voice) audio(ws, voice);
       }
       currentTurn = null;
       if (interrupted) {
         await deps.trimReply(persona.id, user.id, turnStart, sentText).catch(() => {});
+      } else {
+        send(ws, { type: "turn-end" });
       }
-      if (!interrupted) send(ws, { type: "turn-end" });
     }
 
     async function runQueued(bytes: Buffer) {
@@ -477,9 +558,14 @@ export function attachCallServer(server: Server, overrides: Partial<CallDeps> = 
       if (message.type === "start") {
         void begin(message.force === true);
       } else if (message.type === "interrupt") {
-        // The next sentence is not sent. The model call is not cut in
-        // the middle of a token; the boundary between sentences is where
-        // an interruption is heard anyway.
+        /**
+         * Abort the turn in flight.
+         *
+         * The generation is cut through its abort signal, and any clip
+         * the synthesiser is already making is abandoned: the turn stops
+         * waiting for it, and its bytes never follow this acknowledgement.
+         * Only the clips already sent stay in the answer.
+         */
         currentTurn?.interrupt();
         send(ws, { type: "interrupt-ack" });
       } else if (message.type === "hangup") {
