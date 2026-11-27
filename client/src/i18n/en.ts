@@ -3784,6 +3784,7 @@ export const en = {
     passphrasePlaceholder: "At least 8 characters",
     passphraseNote: "With a passphrase, everything in the file is encrypted and the same passphrase opens it. Without one it is a zip of the real chat lines.",
     exportButton: "Export as one file",
+    exportWarning: "This file contains a real person's chat records. Give it only to someone you trust.",
     exporting: "Exporting…",
     exported: "Exported.",
     exportFailed: "The export did not finish.",

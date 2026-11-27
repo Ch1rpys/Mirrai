@@ -133,7 +133,9 @@ function reportText(report: unknown, identity: McpIdentity): string {
 /** The key's own sentence when the account's encrypted content is locked. */
 async function locked(identity: McpIdentity): Promise<ToolResult | null> {
   if (!(await isEncryptionLocked(identity.userId))) return null;
-  return result(copy(identity.locale, "mcp.encryptionLocked"));
+  // The manual makes every tool's answer open with the same line (C9.3):
+  // the explanation is the answer, and it is still not an instruction.
+  return result(withHeader(copy(identity.locale, "mcp.encryptionLocked"), identity));
 }
 
 /**

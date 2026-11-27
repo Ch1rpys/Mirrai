@@ -242,6 +242,26 @@ describe("the tools", () => {
     await client.close();
   });
 
+  it("passes the role filter through to the search (C9.3)", async () => {
+    const { client } = await connect();
+    await client.callTool({
+      name: "search_records",
+      arguments: { personaId: 1, query: "在的", role: "user" },
+    });
+    expect(searchRecordsLexical).toHaveBeenLastCalledWith(1, 7, expect.objectContaining({
+      role: "user",
+    }));
+    await client.callTool({
+      name: "search_records",
+      arguments: { personaId: 1, query: "在的" },
+    });
+    // No filter means both sides of the conversation.
+    expect(searchRecordsLexical).toHaveBeenLastCalledWith(1, 7, expect.objectContaining({
+      role: "all",
+    }));
+    await client.close();
+  });
+
   it("searches records with dates and roles", async () => {
     const { client } = await connect();
     const text = textOf(await client.callTool({
@@ -364,6 +384,8 @@ describe("the tools", () => {
       { name: "read_report", arguments: { personaId: 1 } },
     ]) {
       const text = textOf(await client.callTool(call));
+      // Every answer opens with the same line, including this one.
+      expect(text.startsWith(copy("zh", "mcp.recordHeader"))).toBe(true);
       expect(text).toContain("加密锁着");
     }
     expect(getPersonasByUserId).not.toHaveBeenCalled();

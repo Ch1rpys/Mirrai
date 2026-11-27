@@ -73,6 +73,11 @@ function exportResponse(): Response {
 }
 
 describe("the persona bundle panel", () => {
+  it("says what the exported file holds (C9.5)", () => {
+    render(<PersonaBundle />);
+    expect(screen.getByText(translate("zh", "bundle.exportWarning"))).toBeInTheDocument();
+  });
+
   it("lists the personas that are not locked", () => {
     render(<PersonaBundle />);
     expect(screen.getByText(translate("zh", "bundle.title"))).toBeInTheDocument();

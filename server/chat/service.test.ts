@@ -3333,6 +3333,22 @@ describe("the persona's tools (C9.4)", () => {
     expect(events.some((event: any) => event.type === "done")).toBe(true);
   });
 
+  it("keeps the ordinary reply when the provider cannot call tools", async () => {
+    // The switch is on but the provider has no tools channel: the turn
+    // has to fall back to a plain reply instead of asking for tools the
+    // endpoint cannot take.
+    resolveProviderForUser.mockResolvedValue({
+      ...toolProvider(),
+      capabilities: { streaming: true, vision: true, tools: false, jsonMode: false },
+    });
+    await collect({
+      persona: persona({ settings: { layers: { tools: true } } }),
+    });
+    const options = (invokeWithProvider.mock.calls[0]?.[1] as any)?.options;
+    expect(options?.tools).toBeUndefined();
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+  });
+
   it("has no tools for a memorial persona", async () => {
     resolveProviderForUser.mockResolvedValue(toolProvider());
     await collect({

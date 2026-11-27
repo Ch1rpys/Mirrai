@@ -3804,6 +3804,7 @@ export const zh = {
     passphrasePlaceholder: "至少 8 个字符",
     passphraseNote: "设了口令，文件里的一切都加密，打开时要用同一个口令。不设也可以，但那就等于把原话放在一个 zip 里。",
     exportButton: "导出成一个文件",
+    exportWarning: "这里面有真人的聊天记录——只交给你信得过的人。",
     exporting: "正在导出…",
     exported: "导出好了。",
     exportFailed: "导出没有成功。",

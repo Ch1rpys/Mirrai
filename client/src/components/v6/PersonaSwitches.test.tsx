@@ -124,6 +124,18 @@ describe("the persona switches section", () => {
     });
   });
 
+  it("turns the three small tools on (C9.4)", async () => {
+    const user = userEvent.setup();
+    render(<PersonaSwitches personaId={5} name="小满" />);
+    await user.click(
+      screen.getByRole("checkbox", { name: /小满 可以做几件小事/ }),
+    );
+    expect(mutate).toHaveBeenCalledWith({
+      id: 5,
+      patch: { layers: { tools: true } },
+    });
+  });
+
   it("turns stickers off", async () => {
     const user = userEvent.setup();
     render(<PersonaSwitches personaId={5} name="小满" />);

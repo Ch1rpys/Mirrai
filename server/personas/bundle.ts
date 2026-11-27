@@ -492,6 +492,20 @@ function remapRecordIds(value: unknown, map: Map<number, number>): unknown {
  * the rows are inserted, and every stored reference is rewritten through
  * them. A failure removes the persona and the files.
  */
+/** Removes now-empty directories up to the uploads root, and no further. */
+async function removeEmptyParents(filePath: string): Promise<void> {
+  const root = path.resolve(ENV.uploadDir);
+  let dir = path.dirname(path.resolve(filePath));
+  while (dir.startsWith(`${root}${path.sep}`)) {
+    try {
+      await fs.rmdir(dir);
+    } catch {
+      return;
+    }
+    dir = path.dirname(dir);
+  }
+}
+
 export async function importPersonaBundle(options: {
   userId: number;
   filePath: string;
@@ -778,7 +792,15 @@ export async function importPersonaBundle(options: {
     }
     for (const key of writtenFiles) {
       const abs = resolveStoredPath(key);
-      if (abs) await fs.rm(abs, { force: true }).catch(() => undefined);
+      if (!abs) continue;
+      await fs.rm(abs, { force: true }).catch(() => undefined);
+      /**
+       * The file was new, so its directories were new too. A failed
+       * import used to leave empty `personas/<user>/<persona>/` folders
+       * behind; they are not rows, but they are litter the next backup
+       * would carry (C9.5).
+       */
+      await removeEmptyParents(abs).catch(() => undefined);
     }
     throw error;
   } finally {

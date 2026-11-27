@@ -222,6 +222,10 @@ export default function PersonaBundle() {
         >
           {exporting ? t("bundle.exporting") : t("bundle.exportButton")}
         </Button>
+        {/* The export dialog has to say what the file holds (C9.5). */}
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          {t("bundle.exportWarning")}
+        </p>
 
         <hr className="border-border/60" />
 

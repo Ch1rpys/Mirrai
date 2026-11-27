@@ -3679,6 +3679,7 @@ export const zhHant = {
     "passphrasePlaceholder": "至少 8 個字符",
     "passphraseNote": "設了口令，文件裡的一切都加密，打開時要用同一個口令。不設也可以，但那就等於把原話放在一個 zip 裡。",
     "exportButton": "導出成一個文件",
+    "exportWarning": "這裡面有真人的聊天記錄——只交給你信得過的人。",
     "exporting": "正在導出…",
     "exported": "導出好了。",
     "exportFailed": "導出沒有成功。",
