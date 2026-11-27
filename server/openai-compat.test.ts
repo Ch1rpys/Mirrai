@@ -148,6 +148,23 @@ afterEach(async () => {
 });
 
 describe("who may call", () => {
+  it("answers a body it cannot parse in OpenAI's error shape (C9.2)", async () => {
+    // express.json() refused the body before the route ran, so the
+    // client got Express's HTML error page where it expected JSON.
+    const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: "{not json",
+    });
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as any;
+    expect(body.error).toMatchObject({
+      type: "invalid_request_error",
+      code: "invalid_json",
+    });
+    expect(typeof body.error.message).toBe("string");
+  });
+
   it("refuses a request with no key", async () => {
     const res = await postChat(
       { model: "persona-1", messages: [{ role: "user", content: "在吗" }] },

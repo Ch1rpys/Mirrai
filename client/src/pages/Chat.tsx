@@ -1071,7 +1071,27 @@ export default function Chat() {
               setMessages((prev) => prev.filter((m) => m.id !== streamId));
             },
             onDone: (info) => {
-              setMessages(prev => [...prev.map(m => m.id === streamId
+              setMessages(prev => {
+                /**
+                 * A burst is several stored bubbles (C10.7).
+                 *
+                 * Only the last one used to get its underline from
+                 * `provenance`; the earlier ones looked rebuilt until
+                 * the history was polled again. The server now sends the
+                 * spans for every stored bubble, in the order they were
+                 * written.
+                 */
+                const burstPrefix = `burst-${streamId}-`;
+                const burstBubbles = prev.filter(
+                  (m) => typeof m.id === "string" && m.id.startsWith(burstPrefix),
+                );
+                const spansById = new Map<string, unknown>();
+                info.provenances?.forEach((entry, index) => {
+                  const bubble = burstBubbles[index];
+                  if (!bubble || entry.spans.length === 0) return;
+                  spansById.set(String(bubble.id), entry.spans);
+                });
+                return [...prev.map(m => m.id === streamId
                 ? {
                     ...m,
                     id: `ai-${info.messageId}`,
@@ -1099,8 +1119,11 @@ export default function Chat() {
                         }
                       : {}),
                   }
-                : m
-              ), ...extraBubbles(info.extra, info.emotionalState)]);
+                : spansById.has(String(m.id))
+                  ? { ...m, provenance: spansById.get(String(m.id)) as typeof m.provenance }
+                  : m
+              ), ...extraBubbles(info.extra, info.emotionalState)];
+              });
               setCurrentState(info.emotionalState);
               if (info.graduationSuggested) setShowGraduation(true);
               if (info.careNote?.showBanner) toast.info(careBannerText(info.careNote, t));

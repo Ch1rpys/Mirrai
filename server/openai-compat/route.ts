@@ -466,9 +466,49 @@ function route(handler: (req: Request, res: Response) => Promise<void>) {
   };
 }
 
+/**
+ * A body the JSON parser refused, in the shape an OpenAI client parses.
+ *
+ * The parser runs before the routes, so its errors used to reach
+ * Express's default handler — an HTML page where every OpenAI client
+ * expects `{"error": …}` (C9.2).
+ */
+export function openAiCompatErrorHandler(
+  error: unknown,
+  req: Request,
+  res: Response,
+  next: (error?: unknown) => void,
+): void {
+  // originalUrl: when mounted under /v1, Express strips the prefix from
+  // `url` and `path`.
+  const path = req.originalUrl ?? req.url ?? "";
+  if (!path.split("?")[0]!.startsWith("/v1")) {
+    next(error);
+    return;
+  }
+  const status = typeof (error as { status?: unknown }).status === "number"
+    ? (error as { status: number }).status
+    : 400;
+  const tooLarge = status === 413;
+  const message = tooLarge
+    ? copy("zh", "errors.apiMessageTooLong", { max: 2000 })
+    : copy("zh", "errors.apiMessageMissing");
+  sendError(
+    res,
+    new ApiError(
+      status,
+      message,
+      "invalid_request_error",
+      tooLarge ? "request_too_large" : "invalid_json",
+    ),
+  );
+}
+
 export function registerOpenAiCompatRoutes(app: Express): void {
   // codeql[js/missing-rate-limiting]
   app.get("/v1/models", route(handleModels));
   // codeql[js/missing-rate-limiting]
   app.post("/v1/chat/completions", route(handleChatCompletions));
+  // After the routes, so it receives what the body parser threw first.
+  app.use("/v1", openAiCompatErrorHandler);
 }

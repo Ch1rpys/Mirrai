@@ -49,6 +49,11 @@ export interface StreamDoneInfo {
   lateNight?: boolean;
   /** Stretches of this reply that were said before (C10.7). */
   provenance?: Array<{ start: number; end: number; recordId: number; at?: string | null }>;
+  /** The same spans, one entry per stored bubble of a burst (C10.7). */
+  provenances?: Array<{
+    messageId: number;
+    spans: Array<{ start: number; end: number; recordId: number; at?: string | null }>;
+  }>;
   /**
    * Messages the reply carried besides its words (B7.1 stickers).
    *

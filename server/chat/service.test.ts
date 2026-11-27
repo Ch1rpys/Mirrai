@@ -3009,6 +3009,43 @@ describe("runConversation", () => {
     return events;
   }
 
+  it("carries the provenance of every bubble in a burst, not only the last (C10.7)", async () => {
+    vi.useFakeTimers();
+    try {
+      invokeWithProvider.mockResolvedValue("我想你了\n晚安\n在的");
+      candidateRecordsByOverlap.mockImplementation(async (
+        _personaId: number,
+        _userId: number,
+        params: { text: string },
+      ) => (["我想你了", "晚安", "在的"].includes(params.text.replace(/。$/, ""))
+        ? [{
+            id: params.text.startsWith("我想") ? 12 : params.text === "晚安。" || params.text === "晚安" ? 13 : 14,
+            content: params.text.replace(/。$/, ""),
+            timestamp: new Date("2023-03-04T12:00:00.000Z"),
+            role: "assistant",
+            speaker: "小满",
+            coverage: 1,
+          }]
+        : []));
+      const events = await collectTimedEvents(timedWithTyping());
+      const done = events.find((event) => event.type === "done") as {
+        provenances?: Array<{ messageId: number; spans: Array<{ start: number; end: number; recordId: number }> }>;
+        provenance?: Array<{ recordId: number }>;
+      };
+      expect(done.provenances).toHaveLength(3);
+      // Each bubble keeps its own line's record, so the underline is
+      // there the moment the bubbles arrive instead of after a reload.
+      expect(done.provenances!.map((row) => row.spans.map((span) => span.recordId))).toEqual([
+        [12],
+        [13],
+        [14],
+      ]);
+      expect(done.provenance?.map((span) => span.recordId)).toEqual([14]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("puts a typing duration on the delay and burst when the three conditions hold", async () => {
     vi.useFakeTimers();
     try {

@@ -256,6 +256,38 @@ describe("Chat", () => {
     ).toBeInTheDocument();
   });
 
+  it("underlines every bubble of a burst, not only the last (C10.7)", async () => {
+    localStorage.setItem("mirrai.provenance", "on");
+    streamChat.mockImplementation(async (options: any) => {
+      options.callbacks.onBurst?.(["我想你了", "晚安"], {});
+      options.callbacks.onDone?.({
+        messageId: 99,
+        emotionalState: "warm",
+        graduationSuggested: false,
+        careNote: null,
+        crisis: false,
+        // The server sends one entry per stored bubble; the last one
+        // also rides on `provenance`.
+        provenances: [
+          { messageId: 97, spans: [{ start: 0, end: 4, recordId: 12 }] },
+          { messageId: 99, spans: [{ start: 0, end: 2, recordId: 13 }] },
+        ],
+        provenance: [{ start: 0, end: 2, recordId: 13 }],
+      });
+    });
+    const user = userEvent.setup();
+    const { container } = render(<Chat />);
+    await user.type(screen.getByRole("textbox", { name: "对 小A 说点什么..." }), "在吗");
+    await user.click(screen.getByRole("button", { name: "发送" }));
+    await waitFor(() => {
+      expect(container.querySelectorAll(".provenance-word")).toHaveLength(2);
+    });
+    const words = Array.from(container.querySelectorAll(".provenance-word")).map(
+      (node) => node.textContent,
+    );
+    expect(words).toEqual(["我想你了", "晚安"]);
+  });
+
   it("turns itself down when the server says it is the middle of the night (C10.5)", async () => {
     streamChat.mockImplementation(async (options: {
       callbacks: {

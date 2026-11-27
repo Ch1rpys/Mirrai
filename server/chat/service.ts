@@ -165,6 +165,14 @@ export type ChatEvent =
        */
       provenance?: ProvenanceSpan[];
       /**
+       * The same spans, per stored bubble (C10.7).
+       *
+       * A burst is stored as several messages; only the last one used
+       * to be reported live, so the earlier bubbles lost their
+       * underline until the history was polled again.
+       */
+      provenances?: Array<{ messageId: number; spans: ProvenanceSpan[] }>;
+      /**
        * Messages the reply carried besides its words: a sticker today,
        * a photograph in B7.9. They are stored after the text, and the
        * client appends them as further bubbles.
@@ -2599,6 +2607,7 @@ async function* runConversationTurn(
    * This runs after the messages are stored and never fails the turn.
    */
   let lastProvenance: ProvenanceSpan[] = [];
+  const provenances: Array<{ messageId: number; spans: ProvenanceSpan[] }> = [];
   for (const stored of storedReplies) {
     const ritualVerbatim = plan.kind === "ritual"
       && Boolean(plan.ritual)
@@ -2611,7 +2620,10 @@ async function* runConversationTurn(
       forcedRecordId: ritualVerbatim ? plan.ritual?.recordId ?? null : null,
       wholeTextIsVerbatim: ritualVerbatim || stored.typoFix,
     });
-    if (spans) lastProvenance = spans;
+    if (spans) {
+      lastProvenance = spans;
+      provenances.push({ messageId: stored.messageId, spans });
+    }
   }
   if (messageId && !immediate) {
     await maybeScheduleFollowUp({
@@ -2962,6 +2974,7 @@ async function* runConversationTurn(
     crisis: false,
     lateNight: signals?.lateNight === true,
     ...(lastProvenance.length > 0 ? { provenance: lastProvenance } : {}),
+    ...(provenances.length > 0 ? { provenances } : {}),
     recalled,
     ...(plan.routine ? { routine: plan.routine } : {}),
     ...(claims && claims.length > 0 ? { claims } : {}),
