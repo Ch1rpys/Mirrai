@@ -616,6 +616,24 @@ describe("queued replies", () => {
     expect(pushToUser).toHaveBeenCalledWith(1, expect.objectContaining({ kind: "reply" }));
   });
 
+  it("computes busy as the window end plus the delay, without the cap in the way", () => {
+    // The capped case was the only one tested; the formula the manual
+    // names is "window end + delay", capped from now.
+    const now = NOW;
+    const busyUntil = new Date(now.getTime() + 10 * 60_000);
+    const due = computeReplyDue({
+      now,
+      delayMs: 20 * 60_000,
+      maxDelayMinutes: 60,
+      sleep: false,
+      asleep: false,
+      wakeAt: null,
+      busyUntil,
+    });
+    expect(due.reason).toBe("busy");
+    expect(due.dueAt.getTime()).toBe(busyUntil.getTime() + 20 * 60_000);
+  });
+
   it("computes busy as the window end plus the delay, capped", () => {
     const now = NOW;
     const busyUntil = new Date(now.getTime() + 40 * 60_000);

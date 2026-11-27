@@ -187,7 +187,7 @@ corepack pnpm eval -- --persona <id> --user <id> --audition
 
 ### 五、偏差表里影响最大的几条
 
-完整偏差表在下面的「偏差表」一节（共 634 条）。这里挑 12 条最可能影响你判断的：
+完整偏差表在下面的「偏差表」一节（共 635 条）。这里挑 12 条最可能影响你判断的：
 
 | 13 | P0.6 | 第 3.6 节 `--compare <层>` | CLI 的 `--compare` 仍是原来的四路对比开关；新增的是 `--without a,b` | P0.6「做法」第 3 步只要求 `--without` 和旧 `--variant` 别名；`compare-cli.test.ts` 不许改。 |
 | 31 | C1.1 | 每种文本类格式走 `renderFixture` 往返 | `imessage-db` 走 `formats/imessage-db.test.ts`，不进 `roundtrip.test.ts` | chat.db 是 SQLite，不是文本。 |
@@ -1042,6 +1042,7 @@ corepack pnpm eval -- --persona <id> --user <id> --audition
 | 632 | C10.6 | 手册「生成路径上所有读 `styleProfile` 的地方改读 `effectiveStyleProfile`」 | TTS 朗读的韵律方向曾直接读 `persona.styleProfile`（`routers.ts` 的 `chat.tts`）；已改读 `effectiveStyleProfile`，但同类函数式间接读没有全仓自动扫描 | 结构测试只扫字面量 `persona.styleProfile`；函数封装的读法（如 `fingerprintFromPersona`）需要逐处人工核对，这一条以已修处 + 代码审查为准 |
 | 633 | 全过程 | 验收报告点名「进度文件里 163 条已修 `- [x]` 问题行没有提交号」 | 这 163 行是 v6 实现阶段的历史记录，其中多数在被引提交之后又改过；本会话无法从只读历史里逐条重建「哪次提交真的修了它」，也不该把猜测写成提交号 | 保留原记录与修复说明，不改写历史；以本批次日志的提交号作为修复会话的证据 |
 | 634 | B2.1 | 手册清洗规则要求种子轮的每一句都过 `filterHarm` | 用户侧种子行用的是 `isSafeSeedLine`（默认全类别伤害检测，比报告类别更保守），不是 `filterHarm`（按报告的类别、且尊重用户 keep 决定） | 语义上用户侧更严格而不是更宽；两处行为在「用户标了 keep」时一致。验收报告说「绕过」，实际是两条检测路径不同，记录口径而不是改行为 |
+| 635 | B5.2 | 手册「超过 5 分钟的认领视为失效」 | `REPLY_JOB_CLAIM_STALE_MS` 与 `LETTER_CLAIM_STALE_MS` 都是 15 分钟 | 生成一轮最多要跑两步模型与重排，慢端点一次就能超过 5 分钟；5 分钟回收会让同一条任务被两个进程同时生成（手册自己另一条验收要求「并发只生成一次」）。15 分钟是折中，代价是崩溃后重试更晚 |
 | 592 | P18.1 | 手册 P18.1 第 2 条：扫描 `server/` 里读到的每个 `process.env.<名字>`，都能在 `.env.example` 里找到 | `server/env-example.test.ts` 把 13 个由操作系统 / 运行时注入的变量放进显式白名单（`APPDATA`、`HOME`、`HTTP(S)_PROXY`、`LOCALAPPDATA`、`NO_PROXY`、`PATH`、`TEMP`、`TMP`、`TMPDIR`、`USERPROFILE`、`NODE_ENV`、`npm_package_version`），其余必须出现在 `.env.example` | 这些不是用户配置，写进 `.env.example` 会误导人；白名单在测试里逐个注明来源，新增的应用配置仍然会被测试抓住 |
 | 593 | P18.1 | 同上，只要求扫字面 `process.env.<名字>` | 另加一条显式断言：附录 B 的 21 个变量都在 `.env.example` 里 | 附录 B 的 `MAX_IMPORT_BYTES` / `MAX_IMPORT_UNPACKED_BYTES` 是通过 `readLimit("名字")` 读的，字面扫描看不到；只守字面读法会漏掉手册点名要的变量 |
 | 594 | P18.1 | 同上，只要求附录 B 的变量进 `.env.example` | 同时补了 6 个此前未登记、但 `server/` 确实在读的配置项：`MAX_DISTILL_CALLS`、`MIRRAI_GRADUATION_RESUGGEST_DAYS`、`OPENAI_SYSTEM_MESSAGE`、`OPENAI_TRANSCRIBE_MODEL`、`REDIS_SERVER_BIN`、`DEV_ALLOWED_HOSTS` | 新测试要求「所有 server/ 读到的配置」都登记，不补测试红；补上之后用户才知道这些旋钮存在 |

@@ -10,6 +10,7 @@ import {
   createPersonaShare,
   createUser,
   purgePersona,
+  exportUserData,
   restorePersona,
   softDeletePersona,
   getActiveShareForMemberPersona,
@@ -363,6 +364,13 @@ describe.skipIf(!DATABASE_URL)("sharing a persona with family (C7.2)", () => {
       )).toBe(false);
       expect((await getMessagesByPersonaId(memberPersonaId, memberId)).length)
         .toBeGreaterThanOrEqual(2);
+      // The history is the member's, and so is the export: revocation
+      // closes the owner's records, not the member's own conversation.
+      const afterRevoke = await memberCaller.chat.getHistory({ personaId: memberPersonaId });
+      expect(JSON.stringify(afterRevoke)).toContain("这是家人的话");
+      const exported = await exportUserData(memberId);
+      expect(exported?.messages.map((row) => row.content)).toContain("这是家人的话");
+      expect(JSON.stringify(exported)).not.toContain("在的呀");
 
       // Deleting the owner's persona leaves the member's row.
       await purgePersona(ownerPersonaId, ownerId);

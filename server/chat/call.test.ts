@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import { createCallOnlyServer, isAnswerSlot, splitCallSentences } from "./call";
+import { ENV } from "../_core/env";
 
 const createMessage = vi.fn();
 const createSafetyEvent = vi.fn();
@@ -138,6 +139,25 @@ describe("the call protocol", () => {
       server.server.close();
     };
     await expect(connect(port, false)).rejects.toThrow(/http 403/);
+  });
+
+  it("accepts an Origin the operator listed for another front end (B7.14)", async () => {
+    // The deployment that serves the app from another origin names it in
+    // ALLOWED_ORIGINS; that branch had no test.
+    const previous = ENV.allowedOrigins;
+    (ENV as { allowedOrigins: string[] }).allowedOrigins = ["https://mirrai.example"];
+    try {
+      const server = createCallOnlyServer(deps());
+      const port = await server.listen();
+      close = () => {
+        server.call.close();
+        server.server.close();
+      };
+      const { ws } = await connect(port, "https://mirrai.example");
+      ws.close();
+    } finally {
+      (ENV as { allowedOrigins: string[] }).allowedOrigins = previous;
+    }
   });
 
   it("refuses a connection without a session cookie", async () => {
