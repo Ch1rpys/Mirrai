@@ -1234,7 +1234,7 @@ corepack pnpm eval -- --persona <id> --user <id> --audition
 - **C5.3 到期危机检查补全 + 取消语义**（`e6495ae`）：`capsule`/`letter` 分支到期也过一次 `detectCrisis` 并记安全事件（信仍投递，回信路径本来就会给求助回答；胶囊等到日子才开）；`scheduled.cancel` 记 reason `"user"`，全局信箱「还没到日子」每行多一个「取消」，显示「你自己取消了」而不是「那天不能聊」。服务端/调度/信箱各先红。
 - **所有页面日期改用户时区**（`47b924d`）：新增 `client/src/lib/day.ts`（`dayKeyInZone` + `useDayKey`），FirstsList、OurDictionary、PlacesSongs、FidelityHistory、WorldEditors/V5FidelityEditors、EvidenceList、RecordSources、UnfinishedWords、Book、Report、RecordSearch、⌘K、SaidBefore 的 UTC `.slice(0,10)` 全部换成用户日历日；上海 00:00–07:59 的记录不再显示早一天。helper 单测 + FirstsList 组件测试锁住（旧代码红）。
 - **B7.15 背景图写权限**（`6941c9e`）：`uploadBackground`/`clearBackground` 补 `assertPersonaWritable`（共享分身只读），先红。
-- **C8.7 重启后第一轮不再全表读**（`6941c9e`）：新增 `recentRecordTexts(personaId,userId,limit)`（有序 + LIMIT + 解密），`rerank-model` 改用它，5 千行上限由查询保证；真库用例断言最新行/上限/角色与 kind 过滤；单测断言不再调 `iterateRecords`。
+- **C8.7 重启后第一轮不再全表读**（`6941c9e`，`50549ad` 收尾）：新增 `recentRecordTexts(personaId,userId,limit)`（有序 + LIMIT + 解密 + 只看 private register + 显式绑定 userId），`rerank-model` 改用它，5 千行上限由查询保证；真库用例断言最新行/上限/角色/kind/register 过滤；单测断言不再调 `iterateRecords`。
 - **C8.9 诊断探针记账**（`c0a4bc7`）：探针调用带 `usage: { userId }`，新单测断言记账上下文。（偏差 621 因此已修，行内已注明。）
 - **C3.7 错误文案本地化**（`c0a4bc7`）：`letter.setDone` 的英文硬编码换成 `errors.onlyNoteCanBeTicked`（中英），路由测试断言译文。
 - **C6.3 分享版清空已勾选照片**（`c0a4bc7`）：切到分享版时清空 `picked`，组件测试断言请求里 `photoIds: []`。
@@ -1248,7 +1248,7 @@ corepack pnpm eval -- --persona <id> --user <id> --audition
 **最终验证（修复会话收尾；到本进度文件更新前 `60ffcdf..HEAD` 共 25 个提交、154 个文件）**
 
 - **闸门**：`corepack pnpm gate`（不带 `--fast`、不带 `DATABASE_URL`）退出码 0、`all seven steps passed`；`734` 个文件（`709 passed | 25 skipped`）、`6223` 个用例（`6093 passed | 130 skipped`）。跳过数相对验收基线 122 增加 8，全部是本次新增的**数据库用例**（在已登记的 DB 测试文件里追加：`db-search`、`db-sharing`、`db-soft-delete`、`db-groups`、`db-timeline`、`material`；新增的带库用例都跑过，无库时按既有规则跳过）；没有被新加 skip 的既有测试；`git diff --name-status main..HEAD -- '*.test.ts' '*.test.tsx' | grep '^D'` = 0（没有删测试）。黄金快照仍只有 `e506484` 一个提交、之后未改。
-- **带库测试**：临时库 `mirrai_v6_verify_final`（`drizzle-kit push --force` 后），`server/skip-audit.test.ts` 登记的 29 个 DB 测试文件用 `--no-file-parallelism` 顺序跑：`29 passed (29)`、`140 passed (140)`、**0 skipped**；库已 `dropdb`。
+- **带库测试**：临时库 `mirrai_v6_verify_final`（`drizzle-kit push --force` 后），`server/skip-audit.test.ts` 登记的 29 个 DB 测试文件用 `--no-file-parallelism` 顺序跑：`29 passed (29)`、`142 passed (142)`、**0 skipped**（第二轮又补了两个带库用例）；临时库已 `dropdb`。
 - **迁移四步 + 整段回滚/装回**：临时库 `mirrai_v6_verify_mig`（`push` → `migrate` 84 条 → `--replay` 84 条 → `--rollback 1` 退 0086 → `migrate` 回来）；再 43 次 `--rollback 1` 退到 0043：表 62→34、索引 171→72、journal 84→41、`file_type` 7 值→5 值；再 43 次 `migrate` 全部装回（表 62 / 索引 171 / journal 84 / 列 651、`file_type` 回 7 值）。另建只 `push` 的库 `mirrai_v6_verify_mig3` 与 push+migrate 库 `mirrai_v6_verify_mig2` 做 information_schema catalog diff（表名/列名/类型/可空）：**0 行差异**。三个临时库都已 `dropdb`；`mirrai_live` 未连接、未写。
 - **静态**：分支 `exec/v6`；`git status --porcelain` 空；`main..HEAD` 无 merge 提交、`Co-Authored-By` 0 条（`core.hooksPath` = `.githooks` 已确认）；`package.json` version 仍 1.3.0；未 push、未合并、未切分支、未改写历史；`main` 仍 `f71e77b`。
 - **仍没修/没量的**：真实模型/真实记录/真实设备才能量的效果类条目按 🟡 留在未验证清单（各自有可执行命令）；本机无法执行的验收项没有硬填数字。低严重度里未逐条处理的有：163 条历史问题行没有提交号（历史记录，不改变行为）、C10.2「引号里任何短语都被当地点」的抽取精度、C10.7 burst 只有最后一条立刻带 provenance、C8.11 30 天真实等待/浏览器整链路、C7.4 真实模型抽取等——都记在未验证清单或问题清单里。
