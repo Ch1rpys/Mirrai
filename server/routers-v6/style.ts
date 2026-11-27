@@ -28,9 +28,20 @@ export const styleRouter = router({
     .mutation(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      /**
+       * An explicit measurement measures again.
+       *
+       * The automatic calls after an import or a distillation skip when
+       * `recordsVersion` has not moved — they are a cache, not a user
+       * request. This route is the user asking "measure it now": skipping
+       * it left an old profile without the fields a newer measurement
+       * knows how to fill (B9.3's `never` is one), silently. It mirrors
+       * `behavior.measure`, which also measures unconditionally.
+       */
       const profile = await measureStyleProfile({
         personaId: input.personaId,
         userId: ctx.user.id,
+        force: true,
       });
       schedulePersonaEmbeddings(input.personaId, ctx.user.id);
       return { profile };

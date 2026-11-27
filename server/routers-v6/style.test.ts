@@ -86,6 +86,28 @@ describe("the style profile routes", () => {
     }
   });
 
+  it("measures again on the explicit route even when the records have not moved", async () => {
+    // An explicit measurement is the user asking "measure it now". The
+    // automatic calls after an import skip when the version has not moved,
+    // which left an old profile without the fields a newer measurement
+    // knows how to fill (B9.3's `never` is one).
+    getPersonaStyleProfile.mockResolvedValue({
+      version: 1,
+      measuredAt: "2026-01-01T00:00:00.000Z",
+      recordsVersion: "3:9",
+    });
+    const now = new Date("2026-01-15T12:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    try {
+      const measured = await appRouter.createCaller(ctxFor(1)).style.measure({ personaId: 5 });
+      expect(measured.profile.measuredAt).toBe(now.toISOString());
+      expect(setPersonaStyleProfile).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("reports when the local embedding model is missing", async () => {
     vi.stubGlobal(
       "fetch",
