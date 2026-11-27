@@ -149,11 +149,14 @@ describe("the read-aloud engine", () => {
   it("treats TTS_ENABLED=false and TTS_ENGINE=off the same way", async () => {
     vi.stubEnv("TTS_ENABLED", "false");
     expect(ttsEngine()).toBe("off");
-    await expect(generateTTS("在吗", DEFAULT_VOICE, 1)).rejects.toThrow(/switched off/);
+    // The whole sentence, not the first words: whoever reads the error
+    // needs to know which two variables to set (B7.6).
+    const offMessage = "The read-aloud is switched off. Set TTS_ENABLED=true and TTS_ENGINE=edge, piper or http to use it.";
+    await expect(generateTTS("在吗", DEFAULT_VOICE, 1)).rejects.toThrow(offMessage);
 
     vi.stubEnv("TTS_ENABLED", "true");
     vi.stubEnv("TTS_ENGINE", "off");
-    await expect(generateTTS("在吗", DEFAULT_VOICE, 1)).rejects.toThrow(/switched off/);
+    await expect(generateTTS("在吗", DEFAULT_VOICE, 1)).rejects.toThrow(offMessage);
     expect(mocks.edgeTts).not.toHaveBeenCalled();
   });
 
