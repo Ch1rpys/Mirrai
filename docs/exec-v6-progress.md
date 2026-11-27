@@ -965,6 +965,42 @@
 
 ## 批次日志
 
+### WP17 · 独立验收 · 2026-11-27
+
+按 `docs/exec-v6.md` 的 WP17（B9.3；B9.1、B9.2 只做解锁检查）从头验一遍，只验收、不修：分支 `exec/v6`，开工 HEAD `c8afb9f`，`git status --porcelain` 空；没有 push、没有合并、没有切分支、没有动 `mirrai_live`、没有改 `docs/exec-v6.md`。WP17 没有数据库迁移（提交范围没碰 `drizzle/`），2.3 节的迁移四步不适用；临时库 `mirrai_v6_verify` 只用来跑 `--unlock-check`，用完已 `dropdb`。
+
+**逐条结论**
+
+- B9.3（🟡 维持）：六条验收项全过——单 token 加入 −100 / 多 token 跳过 / 截到 40 / 未知模型返回空对象（`logit-bias.test.ts` 13 过）；不支持的 provider 请求体没有 `logit_bias`、支持的请求体有（单测之外，我又用真 `OpenAIProvider` + 桩 `fetch` 的探针复验了一遍）；`grammar.test.ts` 快照 + 等价校验函数（三行过、四行不过、`- ` 开头不过，7 过）；夹具 `never` 有「呢」「～」、没有「呀」；没有 `never` 的分身请求不变（`prompt-golden.test.ts` 10 过、快照自 WP0 建好后未改）；未验证清单有真实效果那一行。真实效果要模型和真实记录，维持 🟡。
+- B9.1/B9.2（🔒 维持）：两条验收项全过——四条件各自的满足/不满足、没有盲测与只有本人盲测都判 false（`unlock-check.test.ts` 17 过）；结构测试确认没有 `server/adapter/`、没有训练相关依赖。临时库上真跑 `--unlock-check` 也复验了（七行、末行 `unlocked`、空分身与只有本人盲测都是「没有数据」）。
+
+**亲自跑过的**
+
+- 闸门（不带 `--fast`、不带 `DATABASE_URL`）：`corepack pnpm gate` 退出码 0，`all six steps passed`；`699 passed | 25 skipped (724)` 文件、`5952 passed | 122 skipped (6074)` 用例，与进度文件 B9.3 行逐字一致；相对开工（`695 passed | 25 skipped (720)`、`5899 passed | 122 skipped (6021)`，进度表上一轮）通过用例 +53、跳过不变（122）。`tsc --noEmit` 无输出；`audit-cn` 0；`fidelity-gate` 7 条 ✓；客户端构建、服务端打包通过；`prompt-golden.test.ts` 10 通过、快照未改。
+- WP17 的测试文件逐个跑过并读了断言：`logit-bias.test.ts` 13、`grammar.test.ts` 7、`shared/style-fingerprint.test.ts` 29（其中新增 3）、`server/chat/generate.test.ts` 87（其中新增 9）、`unlock-check.test.ts` 17、`StructuredOutputSettings.test.tsx` 4、`prompt-golden.test.ts` 10；没有空断言、没有 skip/todo/only，`server/llm` 的 mock 只打断模型调用本身（按 2.4 的规定）。
+- 清单之外补的接线/边界验证（一次性探针，跑完删掉，没进提交）：把 `executePlan` 接到真的 `OpenAIProvider` + 桩 `fetch`，不 mock `llmService`——官方 OpenAI 地址默认请求体里 `logit_bias={"8208":-100,"65270":-100}`（「呢」「～」）；`extraConfig.supportsLogitBias:false` 时没有；兼容网关默认没有；兼容网关显式打开后有；`supportsGrammar` 打开时回复的 `extraBody.grammar` 出现、没打开不出现；`--without` 关掉层后两者都没有；未知模型名走官方地址也没有；流式请求同样带上这两个字段。
+- 夹具量了一遍：`buildXiaomanRecords()` 5126 条记录、其中 TA 文本 3112 条；`measureFingerprint` 的 `never` 36 项，含「呢」「～」、不含「呀」；`buildLogitBias` 在 gpt-4o 下取到 18 个 token。
+- 临时库 `mirrai_v6_verify`（`push --force` 后造 2 个用户、3 个分身）：`--unlock-check` 真跑——满条件分身七行、`unlocked: true`（30.0%、word 7 / act 2 / mood 1、1200 条、AUC 0.7200）；空分身和「只有本人盲测」的分身第 2、3 行都是「没有数据」、`unlocked: false`；换 `--user` 到另一个账号 → `No such persona.`；`--locale en` 输出英文；跑前跑后 `blind_sessions`/`collected_messages`/`personas`/`users` 行数不变（只读）。`mirrai_live` 没连过。
+- 提交范围 `aaff18e..c8afb9f`（4 个提交：3 个实现 + 1 个进度文件）：没有删除文件，没有删改任何已有测试（两个被改的测试文件是纯新增）；没有新增 npm 依赖（`js-tiktoken` 是之前就在白名单里的包，本包没改 `package.json`/`pnpm-lock.yaml`）；提交信息没有 `Co-Authored-By`、没有 merge；没动 `server/wechat/ilink/**`、没动 `drizzle/` 的任何迁移；`docs/exec-v6.md` 未改；没发现混进不相干的改动。
+
+**发现的问题**
+
+- [ ] **B9.3 · 进度证据里的用例数写错** —— B9.3 行写「`grammar.test.ts` 9 通过」，实际 7 条：`node node_modules/vitest/vitest.mjs run server/llm/grammar.test.ts` → `7 passed (7)`。同一行的通过数也不自洽：13+9+17+4+3+9=55，而闸门相对开工只多 53 条（按 7 算正好 53）。复现：跑上面那条命令，或 `git show c228021:server/llm/grammar.test.ts | grep -cE "^\s+it\("`（7）。只订正数字，不影响该条状态。
+
+**存疑**
+
+- B9.3 的评测路径不读 `llm_configs.extraConfig`：`server/eval/run.ts` 构造的 `TurnInput` 没有 `extraConfig`，`server/chat/generate.ts` 的 `structuredOutputForTurn` 只能按 provider 实例判「官方地址默认真」。用户在兼容网关上显式打开 `supportsLogitBias` 时，聊天（`service.ts` 传了 `extraConfig`）会发 `logit_bias`，`pnpm eval` 不会发——未验证清单里「`pnpm eval -- --without logitBias` 对比默认与关掉」在非官方地址上会两次都不发。B2.8 的 `extraBody` 早就有同样的缺口，不是本包引入；但按 3.6「评测量的是线上那个东西」，要量 B9.3 得把 `extraConfig` 也传进 `runEval`。
+- B9.3 的 `never` 只在指纹重新测量时才写进 `styleProfile`（`server/_core/style-profile.ts` 在 `recordsVersion` 没变时跳过；`style.measure` 不 force）。导入和蒸馏走 `force: true`，正常流程没问题；但记录和指纹都没动过的老分身，手动点一次测量拿不到 `never`，这一层会静默不生效。手册没要求回填，先记着。
+
+**没能验的**
+
+- 真实模型效果（`logit_bias` 是否让回复更像 TA）和真实 `llama.cpp` 服务端：本机没有 provider、没有真实记录；grammar 只把 GBNF 对照 llama.cpp 源码核过（`parse_char` 接受 `\-`，`{0,0}` 可解析），没在真服务端跑。与「未验证清单」里 B9.3 那一行一致。
+- 实现会话在 `mirrai_v6_wp17` 上的两次真实输出无法复跑（库已 drop）；我用自建临时库复现了等价结论，数字不是同一组。
+
+**结论**
+
+B9.3、B9.1/B9.2 的验收项全过，状态不改（🟡 / 🔒）；只发现一处进度证据的用例数要订正，是文档问题，不是代码或测试问题。工作包可以往下走。
+
 ### WP17 · 实现会话 · 2026-11-27
 
 按 WP17（B9.3；B9.1、B9.2 只做解锁检查）做；分支 `exec/v6`，开工 HEAD `aaff18e`，`git status --porcelain` 空；没有 push、没有合并、没有切分支、没有动 `mirrai_live`、没有改 `docs/exec-v6.md`。开工闸门（不带 `--fast`、不带 `DATABASE_URL`）：`695 passed | 25 skipped (720)` 文件、`5899 passed | 122 skipped (6021)` 用例，与进度表上一轮一致。
