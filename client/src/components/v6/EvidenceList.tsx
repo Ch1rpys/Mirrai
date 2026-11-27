@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useLocale } from "@/contexts/LocaleContext";
 import { formatDayKey } from "@/lib/dates";
 import {
@@ -14,10 +15,16 @@ import {
  *
  * A layer with no cards is a model's summary. The mark says so, instead
  * of leaving a blank that looks like certainty.
+ *
+ * A quote is a link into the reader (C2.10's `?at=<recordId>`), so a
+ * person who doubts a summary can read the line it came from (B1.8,
+ * B7.3).
  */
 export default function EvidenceList(props: {
   field: EvidenceField;
   dimensions: EvidenceByDimension | null | undefined;
+  /** The persona whose record the quoted lines live in. */
+  personaId: number;
 }) {
   const { t, locale } = useLocale();
   const [open, setOpen] = useState(false);
@@ -47,7 +54,12 @@ export default function EvidenceList(props: {
       {open && (
         <ul className="mt-2 space-y-2">
           {cards.map((card, index) => (
-            <EvidenceCardItem key={`${card.claim}:${index}`} card={card} locale={locale} />
+            <EvidenceCardItem
+              key={`${card.claim}:${index}`}
+              card={card}
+              locale={locale}
+              personaId={props.personaId}
+            />
           ))}
         </ul>
       )}
@@ -55,7 +67,7 @@ export default function EvidenceList(props: {
   );
 }
 
-function EvidenceCardItem(props: { card: EvidenceCard; locale: string }) {
+function EvidenceCardItem(props: { card: EvidenceCard; locale: string; personaId: number }) {
   return (
     <li className="text-sm text-muted-foreground leading-relaxed">
       <p>{props.card.claim}</p>
@@ -66,7 +78,13 @@ function EvidenceCardItem(props: { card: EvidenceCard; locale: string }) {
           <p key={quote.recordId} className="mt-1 text-xs">
             {when ? `${when} · ` : ""}
             {quote.speaker ? `${quote.speaker} · ` : ""}
-            {quote.text}
+            <Link
+              href={`/persona/${props.personaId}/records?at=${quote.recordId}`}
+              className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+              title={quote.text}
+            >
+              {quote.text}
+            </Link>
           </p>
         );
       })}

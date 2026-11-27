@@ -34,7 +34,9 @@ const withHabit: EvidenceByDimension = {
 describe("the evidence under a portrait layer", () => {
   it("shows how many cards a layer has and expands them", async () => {
     const user = userEvent.setup();
-    render(<EvidenceList field="speakingStyle" dimensions={withHabit} />);
+    render(
+      <EvidenceList field="speakingStyle" dimensions={withHabit} personaId={5} />,
+    );
     const toggle = screen.getByRole("button", {
       name: translate("zh", "evidence.toggle", { count: 1 }),
     });
@@ -44,8 +46,26 @@ describe("the evidence under a portrait layer", () => {
     expect(screen.getByText(/在的呀/)).toBeInTheDocument();
   });
 
+  it("links a quoted line to its row in the record reader (B7.3)", async () => {
+    const user = userEvent.setup();
+    render(
+      <EvidenceList field="speakingStyle" dimensions={withHabit} personaId={5} />,
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: translate("zh", "evidence.toggle", { count: 1 }),
+      }),
+    );
+    // The quoted words are still the visible text; they now open the
+    // reader on the row they came from (C2.10's `?at=`).
+    const link = screen.getByText("在的呀").closest("a");
+    expect(link).toHaveAttribute("href", "/persona/5/records?at=7");
+  });
+
   it("always marks attachment style as inferred", () => {
-    render(<EvidenceList field="attachmentStyle" dimensions={withHabit} />);
+    render(
+      <EvidenceList field="attachmentStyle" dimensions={withHabit} personaId={5} />,
+    );
     expect(screen.getByText(translate("zh", "evidence.inferred"))).toBeInTheDocument();
     expect(screen.getByText(translate("zh", "evidence.inferred"))).toHaveAttribute(
       "title",

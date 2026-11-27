@@ -174,6 +174,7 @@ describe("every read of the three tables leaves the bin out", () => {
       ),
     ].sort();
     expect(whitelisted).toEqual([
+      "backfillSearchTokenBatch",
       "collectStoredFiles",
       "deleteUserAccount",
       "getPersonaByIdIncludingDeleted",

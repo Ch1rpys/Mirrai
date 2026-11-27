@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useParams } from "wouter";
+import { Link, useLocation, useParams } from "wouter";
 import { ArrowLeft, Bookmark, BookmarkCheck, Download, Play, Search } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
@@ -353,11 +353,18 @@ export default function Voices() {
               </p>
               {row.recordId != null && (
                 /**
-                 * The reader (C2.10) lands in WP11. Until it does, the
-                 * line number is shown so the row can be found by hand.
+                 * The line in the reader (C2.10) is where this
+                 * recording lives; the label is about that row, so it
+                 * links to it with `?at=` instead of naming a number
+                 * the person would have to find by hand (B7.3).
                  */
                 <p className="text-[11px] text-muted-subtle">
-                  {t("media.voicesRecord", { id: row.recordId })}
+                  <Link
+                    href={`/persona/${personaId}/records?at=${row.recordId}`}
+                    className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                  >
+                    {t("media.voicesRecord", { id: row.recordId })}
+                  </Link>
                 </p>
               )}
             </li>

@@ -25,6 +25,11 @@ const marksState: { value: any } = { value: { data: [] } };
 vi.mock("wouter", () => ({
   useParams: () => ({ id: "5" }),
   useLocation: () => ["/persona/5/voices", vi.fn()],
+  Link: ({ href, children, ...rest }: any) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({
@@ -126,6 +131,14 @@ describe("the soundtrack page", () => {
     expect(screen.getByText(/12 秒/)).toBeInTheDocument();
     expect(screen.getByText(/记录第 101 条/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: translate("zh", "media.transcribeAction") })).toBeEnabled();
+  });
+
+  it("links a recording to its row in the reader (B7.3)", () => {
+    render(<Voices />);
+    // The row label keeps its text; it now opens the reader with `?at=` so
+    // the line is highlighted instead of searched for by hand.
+    const link = screen.getByText(/记录第 101 条/).closest("a");
+    expect(link).toHaveAttribute("href", "/persona/5/records?at=101");
   });
 
   it("searches the transcripts through the server", async () => {

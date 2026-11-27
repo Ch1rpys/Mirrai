@@ -289,7 +289,11 @@ export default function PersonaProfile() {
                   <dt className="text-xs font-medium text-foreground/80 flex flex-wrap items-baseline">
                     <span>{item.label}</span>
                     {item.field && (
-                      <EvidenceList field={item.field} dimensions={evidenceDimensions} />
+                      <EvidenceList
+                        field={item.field}
+                        dimensions={evidenceDimensions}
+                        personaId={personaId}
+                      />
                     )}
                   </dt>
                   <dd className="text-sm text-muted-foreground mt-1 leading-relaxed">{item.value}</dd>
@@ -306,7 +310,11 @@ export default function PersonaProfile() {
           >
             <h2 className="section-title flex flex-wrap items-baseline">
               <span>{t("profile.catchphrases")}</span>
-              <EvidenceList field="catchphrases" dimensions={evidenceDimensions} />
+              <EvidenceList
+                field="catchphrases"
+                dimensions={evidenceDimensions}
+                personaId={personaId}
+              />
             </h2>
             <div className="flex flex-wrap gap-2 mt-3">
               {data.catchphrases.map((phrase: string) => (

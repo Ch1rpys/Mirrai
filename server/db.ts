@@ -65,7 +65,7 @@ import type { MaterialCounts } from "@shared/material-report";
 import { RITUAL_MAX_REPLY_CHARS, RITUAL_MAX_TRIGGER_CHARS } from "@shared/ritual-table";
 import { charBigrams } from "@shared/act-clusters";
 import { queryLexemes, searchTokens, toTsQuery } from "@shared/search-tokens";
-import { MAX_EMBEDDED_TURNS } from "@shared/records";
+import { MAX_EMBEDDED_TURNS, recordText } from "@shared/records";
 import { normalizeLockSettings, type LockSettings } from "@shared/lock";
 import { MAX_MESSAGE_PINS } from "@shared/message-marks";
 import { mergeUserFeatures, normalizeUserFeatures, type UserFeatures } from "@shared/user-features";
@@ -5048,7 +5048,11 @@ export async function updateRecordMeta(
    * merged, and written back in whatever form the account uses.
    */
   const [current] = await db
-    .select({ meta: collectedMessages.meta })
+    .select({
+      meta: collectedMessages.meta,
+      kind: collectedMessages.kind,
+      content: collectedMessages.content,
+    })
     .from(collectedMessages)
     .where(and(eq(collectedMessages.id, id), eq(collectedMessages.userId, userId)))
     .limit(1);
@@ -5058,9 +5062,23 @@ export async function updateRecordMeta(
     ...(existing && typeof existing === "object" && !Array.isArray(existing) ? existing : {}),
     ...patch,
   };
+  /**
+   * The transcript is part of what content readers see (`recordText`),
+   * so the search tokens are rebuilt with the meta (B7.3). This is the
+   * write the transcription task makes: a voice note becomes findable
+   * by what was said the moment its transcript lands.
+   */
+  const searchText = recordText({
+    kind: current.kind,
+    content: decryptTextForRead(userId, current.content) ?? "",
+    meta: merged,
+  });
   const [row] = await db
     .update(collectedMessages)
-    .set({ meta: encryptRecordMetaForWrite(userId, merged) as never })
+    .set({
+      meta: encryptRecordMetaForWrite(userId, merged) as never,
+      searchTokens: searchTokensValueFor(userId, searchText),
+    })
     .where(and(eq(collectedMessages.id, id), eq(collectedMessages.userId, userId)))
     .returning({ id: collectedMessages.id });
   return Boolean(row);
@@ -8000,7 +8018,19 @@ export async function createCollectedMessage(data: InsertCollectedMessage) {
     .insert(collectedMessages)
     .values({
       ...encryptWriteValues("collected_messages", data.userId, { ...data }),
-      searchTokens: searchTokensValueFor(data.userId, data.content),
+      /**
+       * The tokens cover the text content readers get from `recordText`
+       * (B7.3), not only `content`: a voice note is indexed by what was
+       * said, as soon as its transcript is known.
+       */
+      searchTokens: searchTokensValueFor(
+        data.userId,
+        recordText({
+          kind: data.kind,
+          content: data.content,
+          meta: metadataObject(data.meta),
+        }),
+      ),
     })
     .returning({ id: collectedMessages.id });
   return result.id;
@@ -8089,7 +8119,14 @@ export async function createCollectedMessages(
        */
       const values = chunk.map((row) => ({
         ...encryptWriteValues("collected_messages", row.userId, { ...row }),
-        searchTokens: searchTokensValueFor(row.userId, row.content),
+        searchTokens: searchTokensValueFor(
+          row.userId,
+          recordText({
+            kind: row.kind,
+            content: row.content,
+            meta: metadataObject(row.meta),
+          }),
+        ),
       }));
       /**
        * The second copy of a message is not written.
@@ -8339,7 +8376,23 @@ function escapeLike(value: string): string {
 }
 
 /**
- * Lexical search over the record table (C8.6).
+ * The transcript half of the record-text prefilter (B7.3).
+ *
+ * `recordText` returns a voice note's transcript in place of its
+ * `[voice:…]` marker. SQL cannot call that helper, so this is the same
+ * choice written as an expression: a voice row matches on the transcript
+ * in its `meta`. The application-side confirmation below runs the real
+ * `recordText`, so this is only a prefilter.
+ */
+function voiceTranscriptIlike(pattern: string) {
+  return sql`(
+    ${collectedMessages.kind} = 'voice'
+    AND ${collectedMessages.meta}->>'transcript' ILIKE ${pattern}
+  )`;
+}
+
+/**
+ * Lexical search over the record table (C8.6, B7.3).
  *
  * The tokens are character bigrams written by `array_to_tsvector`, so
  * PostgreSQL can use the GIN index instead of reading every row of the
@@ -8349,6 +8402,12 @@ function escapeLike(value: string): string {
  * Rows written before the column existed have no tokens yet. They are
  * found with the substring test until the backfill reaches them, so a
  * search during the backfill is still correct.
+ *
+ * What is searched is what content readers read: `recordText`, which
+ * returns a voice note's transcript (B7.3). The `ILIKE` prefilter sees
+ * the same words through `voiceTranscriptIlike`, and the confirmation
+ * below is `recordText` itself, so the stored marker of a voice note is
+ * never what a person has to type to find it.
  */
 export async function searchRecordsLexical(
   personaId: number,
@@ -8382,6 +8441,8 @@ export async function searchRecordsLexical(
       .select({
         id: collectedMessages.id,
         content: collectedMessages.content,
+        kind: collectedMessages.kind,
+        meta: collectedMessages.meta,
         timestamp: collectedMessages.timestamp,
         role: collectedMessages.role,
         speaker: collectedMessages.speaker,
@@ -8409,7 +8470,12 @@ export async function searchRecordsLexical(
     for (const row of candidates) {
       // The projection has no `userId`, so it is decrypted with the
       // caller's id — every row here is the caller's.
-      const text = String(decryptTextForRead(userId, row.content as string | null) ?? "");
+      const content = String(decryptTextForRead(userId, row.content as string | null) ?? "");
+      const text = recordText({
+        kind: row.kind,
+        content,
+        meta: metadataObject(decryptRecordMetaForRead(userId, row.meta)),
+      });
       if (!text.toLowerCase().includes(needle)) continue;
       hits.push({
         id: row.id,
@@ -8432,6 +8498,8 @@ export async function searchRecordsLexical(
     .select({
       id: collectedMessages.id,
       content: collectedMessages.content,
+      kind: collectedMessages.kind,
+      meta: collectedMessages.meta,
       timestamp: collectedMessages.timestamp,
       role: collectedMessages.role,
       speaker: collectedMessages.speaker,
@@ -8445,11 +8513,20 @@ export async function searchRecordsLexical(
       ...(role ? [eq(collectedMessages.role, role)] : []),
       ...(params.from ? [gte(collectedMessages.timestamp, params.from)] : []),
       ...(params.to ? [lte(collectedMessages.timestamp, params.to)] : []),
-      sql`${collectedMessages.content} ILIKE ${pattern}`,
+      or(
+        sql`${collectedMessages.content} ILIKE ${pattern}`,
+        voiceTranscriptIlike(pattern),
+      )!,
       tsQuery
         ? or(
             sql`${collectedMessages.searchTokens} @@ to_tsquery('simple', ${tsQuery})`,
             isNull(collectedMessages.searchTokens),
+            /**
+             * A voice note transcribed before transcripts were indexed
+             * has tokens for its `[voice:…]` marker only. Its words
+             * still count (B7.3), so the transcript match admits it.
+             */
+            voiceTranscriptIlike(pattern),
           )!
         : sql`true`,
     ))
@@ -8466,12 +8543,18 @@ export async function searchRecordsLexical(
    *
    * The database test is already `ILIKE`, so this is a second pair of
    * eyes rather than the only gate — but a search that returns a row
-   * which does not contain the words would be worse than a miss.
+   * which does not contain the words would be worse than a miss. The
+   * text checked is `recordText`, the same one every content reader
+   * gets (B7.3); a matched voice note comes back as its transcript.
    */
   const needle = q.toLowerCase();
   const scored: SearchRecordsLexicalHit[] = [];
   for (const row of rows) {
-    const text = String(row.content ?? "");
+    const text = recordText({
+      kind: row.kind,
+      content: String(row.content ?? ""),
+      meta: metadataObject(row.meta),
+    });
     if (!text.toLowerCase().includes(needle)) continue;
     scored.push({
       id: row.id,
@@ -8887,6 +8970,8 @@ export async function countRecords(
 export async function countMissingSearchTokens(
   kind: "records" | "messages",
 ): Promise<number> {
+  // soft-delete: include-deleted — the tokens of a row in the bin are kept
+  // so the row is still searchable after undo; the search filters the bin.
   const db = await getDb();
   if (!db) return 0;
   const table = kind === "records" ? collectedMessages : messages;
@@ -8903,19 +8988,48 @@ export async function countMissingSearchTokens(
  * The backfill is deliberately a batch: the table can hold a million
  * rows, and a single statement that rewrote them all would hold the
  * event loop and a lock for minutes. Returns how many rows it wrote.
+ *
+ * soft-delete: include-deleted — a row in the bin keeps its search
+ * tokens so it is still searchable after undo; the search itself filters
+ * the bin out, and this is a write-backfill rather than a reader.
  */
 export async function backfillSearchTokenBatch(
   kind: "records" | "messages",
   limit = 2000,
 ): Promise<number> {
+  // soft-delete: include-deleted — the tokens of a row in the bin are kept
+  // so the row is still searchable after undo; the search filters the bin.
   const db = await getDb();
   if (!db) return 0;
   const table = kind === "records" ? collectedMessages : messages;
-  const rows = await db
-    .select({ id: table.id, content: table.content, userId: table.userId })
-    .from(table)
-    .where(isNull(table.searchTokens))
-    .limit(Math.max(1, Math.min(20_000, limit)));
+  /**
+   * A record's tokens cover the text `recordText` reads (B7.3), so the
+   * backfill needs `kind` and `meta` to find the transcript of a voice
+   * note. A message row has neither: its text is its content.
+   */
+  const rows: Array<{
+    id: number;
+    userId: number;
+    content: string | null;
+    kind?: string | null;
+    meta?: unknown;
+  }> = kind === "records"
+    ? await db
+        .select({
+          id: collectedMessages.id,
+          content: collectedMessages.content,
+          userId: collectedMessages.userId,
+          kind: collectedMessages.kind,
+          meta: collectedMessages.meta,
+        })
+        .from(collectedMessages)
+        .where(isNull(collectedMessages.searchTokens))
+        .limit(Math.max(1, Math.min(20_000, limit)))
+    : await db
+        .select({ id: messages.id, content: messages.content, userId: messages.userId })
+        .from(messages)
+        .where(isNull(messages.searchTokens))
+        .limit(Math.max(1, Math.min(20_000, limit)));
   if (rows.length === 0) return 0;
   /**
    * An encrypted row's tokens are written by the enable migration, which
@@ -8937,9 +9051,16 @@ export async function backfillSearchTokenBatch(
   await db.transaction(async (tx) => {
     for (const row of writable) {
       const content = decryptTextForRead(row.userId, row.content) ?? "";
+      const text = kind === "records"
+        ? recordText({
+            kind: row.kind,
+            content,
+            meta: metadataObject(decryptRecordMetaForRead(row.userId, row.meta)),
+          })
+        : content;
       await tx
         .update(table)
-        .set({ searchTokens: searchTokensValueFor(row.userId, content) })
+        .set({ searchTokens: searchTokensValueFor(row.userId, text) })
         .where(eq(table.id, row.id));
     }
   });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import {
+  createCollectedMessage,
   createCollectedMessages,
   createMessage,
   createPersona,
@@ -9,6 +10,7 @@ import {
   searchAllMessages,
   searchMessages,
   searchRecordsLexical,
+  updateRecordMeta,
 } from "./db";
 import { backfillSearchTokens } from "./records/backfill-tokens";
 import { seedXiaoman } from "./test-fixtures/seed-db";
@@ -41,7 +43,64 @@ function row(
   };
 }
 
+/**
+ * A voice note whose words live only in `meta.transcript` (B7.3).
+ *
+ * The stored `content` is the language-independent marker the reader
+ * plays back; what was said is the transcript. Content readers get the
+ * transcript through `recordText`, so the search has to find it too.
+ */
+function voiceRow(userId: number, personaId: number, transcript: string) {
+  return {
+    userId,
+    personaId,
+    source: "generic",
+    role: "assistant" as const,
+    content: "[voice:12]",
+    timestamp: new Date("2022-03-02T12:00:00.000Z"),
+    kind: "voice",
+    speaker: "小满",
+    meta: { transcript },
+  };
+}
+
 describe.skipIf(!DATABASE_URL)("search over the record table", () => {
+  it("finds what was only said in a voice note (B7.3)", async () => {
+    const { userId, personaId } = await makePersona();
+    try {
+      await createCollectedMessages([
+        voiceRow(userId, personaId, "周末去海边"),
+        row(userId, personaId, "今天吃了面"),
+      ]);
+      const hits = await searchRecordsLexical(personaId, userId, { q: "海边" });
+      expect(hits.map((hit) => hit.content)).toEqual(["周末去海边"]);
+      // The record still reads as a voice note; only the search text is
+      // the transcript, not the stored marker.
+      expect(hits[0].id).toBeGreaterThan(0);
+    } finally {
+      await purgePersona(personaId, userId);
+    }
+  });
+
+  it("finds a voice note after the transcription task writes the words (B7.3)", async () => {
+    const { userId, personaId } = await makePersona();
+    try {
+      const recordId = await createCollectedMessage({
+        ...voiceRow(userId, personaId, ""),
+        meta: null,
+      });
+      expect(recordId).toBeGreaterThan(0);
+      // Before transcription every content reader has the marker only.
+      expect(await searchRecordsLexical(personaId, userId, { q: "海边" })).toEqual([]);
+      // The task writes `meta.transcript`; that is all a search should need.
+      await updateRecordMeta(recordId!, userId, { transcript: "周末去海边" });
+      const hits = await searchRecordsLexical(personaId, userId, { q: "海边" });
+      expect(hits.map((hit) => hit.content)).toEqual(["周末去海边"]);
+    } finally {
+      await purgePersona(personaId, userId);
+    }
+  });
+
   it("finds a phrase together, not the words apart", async () => {
     const { userId, personaId } = await makePersona();
     try {
