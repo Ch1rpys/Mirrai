@@ -19,10 +19,12 @@ import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
 import { copy } from "@shared/copy";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 import { authenticateRequest } from "../_core/auth";
-import { refreshRequestLock } from "../_core/app-lock";
+import { personaLocked, refreshRequestLock, sessionKeyFromRequest } from "../_core/app-lock";
 import { readLocale } from "../_core/context";
 import { RATE_LIMITS, rateLimiter } from "../_core/rate-limit";
+import { getPersonaById } from "../db";
 import { isEncryptionLocked } from "../encryption/lock";
 import {
   exportPersonaBundle,
@@ -136,6 +138,28 @@ export function registerPersonaBundleRoutes(app: Express): void {
       records: parsed.data.include?.records === true,
       conversation: parsed.data.include?.conversation === true,
     };
+    /**
+     * The same gates the other reads use: a locked persona needs its PIN
+     * in the last five minutes (C8.4), and an encrypted account whose key
+     * is not in this process answers 423 rather than a bundle of
+     * ciphertext (C8.5).
+     */
+    const persona = await getPersonaById(parsed.data.personaId, user.id);
+    if (!persona) {
+      res.status(404).json({ error: copy(locale, "errors.bundleNoPersona") });
+      return;
+    }
+    if (await personaLocked(
+      normalizePersonaSettings((persona as { settings?: unknown }).settings),
+      sessionKeyFromRequest(req),
+    )) {
+      res.status(403).json({ error: copy(locale, "errors.locked") });
+      return;
+    }
+    if (await isEncryptionLocked(user.id)) {
+      res.status(423).json({ error: copy(locale, "errors.bundleEncryptionLocked") });
+      return;
+    }
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "mirrai-bundle-out-"));
     try {
       const outPath = path.join(dir, "persona-bundle");

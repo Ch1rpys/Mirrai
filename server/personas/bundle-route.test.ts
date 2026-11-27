@@ -17,12 +17,20 @@ const rateCheck = vi.fn();
 const isEncryptionLocked = vi.fn();
 const exportPersonaBundle = vi.fn();
 const importPersonaBundle = vi.fn();
+const getPersonaById = vi.fn();
+const personaLocked = vi.fn();
+const sessionKeyFromRequest = vi.fn();
 
 vi.mock("../_core/auth", () => ({
   authenticateRequest: (...a: unknown[]) => authenticateRequest(...a),
 }));
 vi.mock("../_core/app-lock", () => ({
   refreshRequestLock: (...a: unknown[]) => refreshRequestLock(...a),
+  personaLocked: (...a: unknown[]) => personaLocked(...a),
+  sessionKeyFromRequest: (...a: unknown[]) => sessionKeyFromRequest(...a),
+}));
+vi.mock("../db", () => ({
+  getPersonaById: (...a: unknown[]) => getPersonaById(...a),
 }));
 vi.mock("../_core/context", () => ({
   readLocale: () => "zh",
@@ -74,6 +82,9 @@ beforeEach(async () => {
   refreshRequestLock.mockResolvedValue(false);
   rateCheck.mockResolvedValue({ allowed: true, retryAfterMs: 0, remaining: 1 });
   isEncryptionLocked.mockResolvedValue(false);
+  getPersonaById.mockResolvedValue({ id: 1, name: "小满", settings: {} });
+  personaLocked.mockResolvedValue(false);
+  sessionKeyFromRequest.mockReturnValue("session-key");
   exportPersonaBundle.mockImplementation(async (options: { outPath: string }) => {
     writeFileSync(options.outPath, Buffer.from("a bundle"));
     return {
@@ -114,6 +125,30 @@ describe("POST /api/persona/bundle", () => {
       body: JSON.stringify({ personaId: 1 }),
     });
     expect(res.status).toBe(403);
+    expect(exportPersonaBundle).not.toHaveBeenCalled();
+  });
+
+  it("refuses a locked persona that was not unlocked recently", async () => {
+    getPersonaById.mockResolvedValue({ id: 1, name: "小满", settings: { locked: true } });
+    personaLocked.mockResolvedValue(true);
+    const res = await fetch(`${baseUrl}/api/persona/bundle`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personaId: 1, include: { records: true } }),
+    });
+    expect(res.status).toBe(403);
+    expect(personaLocked).toHaveBeenCalledWith(expect.objectContaining({ locked: true }), "session-key");
+    expect(exportPersonaBundle).not.toHaveBeenCalled();
+  });
+
+  it("answers 423 while an encrypted account is locked", async () => {
+    isEncryptionLocked.mockResolvedValue(true);
+    const res = await fetch(`${baseUrl}/api/persona/bundle`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personaId: 1 }),
+    });
+    expect(res.status).toBe(423);
     expect(exportPersonaBundle).not.toHaveBeenCalled();
   });
 
