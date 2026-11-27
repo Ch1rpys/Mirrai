@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
 const next = vi.fn();
 const finish = vi.fn();
+const transcribeMutate = vi.fn();
+let transcribeOptions: { onSuccess?: (result: { text: string }) => void } | undefined;
 const navigate = vi.fn();
 let nextQueue: Array<Record<string, unknown>> = [];
 
@@ -34,7 +36,10 @@ vi.mock("@/lib/trpc", () => ({
         }),
       },
       transcribe: {
-        useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+        useMutation: (options?: { onSuccess?: (result: { text: string }) => void }) => {
+          transcribeOptions = options;
+          return { mutate: transcribeMutate, isPending: false };
+        },
       },
     },
   },
@@ -158,6 +163,58 @@ describe("the interview (C1.8)", () => {
         { aspect: "address", question: "你们平时怎么称呼对方？", answer: "他叫我小满" },
       ],
     });
+  });
+
+  it("puts a recording's words into the box, and only counts them when sent (C1.8)", async () => {
+    // The InterviewView test used an empty transcribe mock before: it
+    // never proved that the transcript lands in the box first rather
+    // than straight into the transcript.
+    class FakeRecorder {
+      mimeType = "audio/webm";
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      start() {}
+      stop() {
+        this.onstop?.();
+      }
+    }
+    const previousMediaRecorder = (window as any).MediaRecorder;
+    (window as any).MediaRecorder = FakeRecorder;
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }),
+      },
+    });
+    try {
+      const user = userEvent.setup();
+      render(<InterviewView initialName="小满" />);
+      nextQueue = [{ done: false, aspect: "address", question: "你们平时怎么称呼对方？", round: 1 }];
+      await user.click(screen.getByRole("button", { name: translate("zh", "interview.start") }));
+      await waitFor(() => screen.getByTestId("interview-question"));
+
+      await user.click(screen.getByRole("button", { name: translate("zh", "interview.record") }));
+      await user.click(
+        await screen.findByRole("button", { name: translate("zh", "interview.stopRecording") }),
+      );
+      await waitFor(() => expect(transcribeMutate).toHaveBeenCalled());
+      await act(async () => {
+        transcribeOptions?.onSuccess?.({ text: "我平时叫他阿树" });
+      });
+
+      const box = screen.getByLabelText(translate("zh", "interview.placeholder")) as HTMLTextAreaElement;
+      expect(box.value).toBe("我平时叫他阿树");
+      // Not counted yet: the person reads it first.
+      expect(next).toHaveBeenCalledWith({ transcript: [] });
+      await user.click(screen.getByRole("button", { name: translate("zh", "interview.send") }));
+      expect(next).toHaveBeenLastCalledWith({
+        transcript: [
+          { aspect: "address", question: "你们平时怎么称呼对方？", answer: "我平时叫他阿树" },
+        ],
+      });
+    } finally {
+      (window as any).MediaRecorder = previousMediaRecorder;
+    }
   });
 
   it("describes an existing persona without asking for a name", async () => {

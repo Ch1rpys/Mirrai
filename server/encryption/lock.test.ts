@@ -17,6 +17,10 @@ import { forgetAllEncryptionStates, setEncryptionEnabled } from "../_core/encryp
  */
 
 const getDueLetters = vi.fn();
+const listDueReplyJobs = vi.fn();
+const listDueScheduledItems = vi.fn();
+const claimReplyJob = vi.fn();
+const claimScheduledItem = vi.fn();
 const getPersonaById = vi.fn();
 const getUserEncryption = vi.fn();
 const claimLetter = vi.fn();
@@ -26,6 +30,10 @@ vi.mock("../db", () => ({
   getDueLetters: (...a: unknown[]) => getDueLetters(...a),
   getPersonaById: (...a: unknown[]) => getPersonaById(...a),
   getUserEncryption: (...a: unknown[]) => getUserEncryption(...a),
+  listDueReplyJobs: (...a: unknown[]) => listDueReplyJobs(...a),
+  listDueScheduledItems: (...a: unknown[]) => listDueScheduledItems(...a),
+  claimReplyJob: (...a: unknown[]) => claimReplyJob(...a),
+  claimScheduledItem: (...a: unknown[]) => claimScheduledItem(...a),
   claimLetter: (...a: unknown[]) => claimLetter(...a),
   markLetterUnanswered: (...a: unknown[]) => markLetterUnanswered(...a),
   deferLetter: vi.fn(),
@@ -74,6 +82,8 @@ vi.mock("./retrieval", async (importOriginal) => {
 });
 
 import { answerDueLetters } from "../chat/letters";
+import { sweepReplyJobs } from "../chat/reply-jobs";
+import { sweepScheduledItems } from "../scheduler/scheduled-items";
 import { isEncryptionLocked, withoutEncryptionLocked } from "./lock";
 
 const encryptedRow = {
@@ -143,6 +153,27 @@ describe("a due letter of a locked account", () => {
     // does not exist, marked the letter unanswered rather than claiming it.
     expect(getPersonaById).toHaveBeenCalledWith(5, 1);
     expect(markLetterUnanswered).toHaveBeenCalledWith(7, 1);
+  });
+});
+
+describe("the other sweeps leave a locked account's rows alone (C8.5)", () => {
+  it("does not claim a deferred reply or a scheduled item while locked", async () => {
+    // Two of the six sweeps had only a source-string check; this runs
+    // them with a due row for the locked account.
+    const lockedUser = {
+      userId: 1,
+      personaId: 5,
+      id: 7,
+      kind: "reply",
+      status: "pending",
+      dueAt: new Date("2024-05-01T12:00:00Z"),
+    };
+    listDueReplyJobs.mockResolvedValue([lockedUser]);
+    listDueScheduledItems.mockResolvedValue([{ ...lockedUser, kind: "capsule" }]);
+    expect(await sweepReplyJobs(new Date("2024-05-01T12:00:00Z"))).toBe(0);
+    expect(claimReplyJob).not.toHaveBeenCalled();
+    await sweepScheduledItems(new Date("2024-05-01T12:00:00Z"));
+    expect(claimScheduledItem).not.toHaveBeenCalled();
   });
 });
 

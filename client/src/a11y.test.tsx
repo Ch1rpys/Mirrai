@@ -147,6 +147,20 @@ function utilsSpy(): any {
   return proxy;
 }
 
+const pluginsState = vi.hoisted(() => ({
+  value: {
+    data: { enabled: true, plugins: [{ id: "plugin:demo:greet", name: "问候", version: "1.0.0", kind: "importer", egress: [] }] },
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  } as {
+    data?: unknown;
+    isLoading: boolean;
+    isError: boolean;
+    refetch: () => void;
+  },
+}));
+
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     setup: { useQuery: () => ({ data: { hasLlmProvider: true, hasUserProvider: false } }) },
@@ -192,14 +206,7 @@ vi.mock("@/lib/trpc", () => ({
     },
     plugins: {
       // The loaded-plugins panel is mounted in the data tab (C9.7).
-      list: {
-        useQuery: () => ({
-          data: { enabled: true, plugins: [] },
-          isLoading: false,
-          isError: false,
-          refetch: vi.fn(),
-        }),
-      },
+      list: { useQuery: () => pluginsState.value },
     },
     lock: {
       // The lobby's nav has the "lock now" button (C8.4).
@@ -810,6 +817,7 @@ import Letters from "./pages/Letters";
 import Group from "./pages/Group";
 import { GroupRooms } from "./components/v6/GroupRooms";
 import GroupChatSetting from "./components/v6/GroupChatSetting";
+import Plugins from "./components/v6/Plugins";
 
 /**
  * Renders a page inside the real theme provider (the accessibility panel
@@ -1014,6 +1022,26 @@ describe("every control has a name", () => {
     // Save, start and stop per channel; the inputs are not buttons.
     expect(drawnControls()).toBeGreaterThan(3);
     expect(unnamedControls()).toEqual([]);
+  });
+
+  it("in the plugins panel (C9.7)", () => {
+    // The C9.7 claim said the plugin panel passed the accessibility
+    // check, but with the empty list it drew no controls at all — the
+    // check was vacuous. The retry button is drawn on failure.
+    const original = pluginsState.value;
+    pluginsState.value = {
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch: vi.fn(),
+    };
+    try {
+      renderPage(<Plugins />);
+      expect(drawnControls()).toBeGreaterThan(0);
+      expect(unnamedControls()).toEqual([]);
+    } finally {
+      pluginsState.value = original;
+    }
   });
 
   it("in the persona bundle panel", () => {
