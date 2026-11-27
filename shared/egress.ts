@@ -137,12 +137,12 @@ export const EGRESS_ITEMS: EgressItem[] = [
       en: "This machine's Ollama at /api/embed (OLLAMA_URL, usually http://127.0.0.1:11434)",
     },
     payload: {
-      zh: "要检索的那一句，以及每一轮 TA 回复之前用户那一轮的原文。连本机时数据不出这台机器",
-      en: "The query, and the user burst that came before each of their turns. A local URL does not leave this machine",
+      zh: "要检索的那一句、每一轮 TA 回复之前用户那一轮的原文，以及每条用户消息（语义危机识别只发这一句）。连本机时数据不出这台机器",
+      en: "The query, the user burst that came before each of their turns, and each user message on its own (the semantic crisis check sends only that line). A local URL does not leave this machine",
     },
     when: {
-      zh: "本机 Ollama 装着嵌入模型时：测量画像之后给记录建向量，以及检索示范时",
-      en: "When local Ollama has an embedding model: after measuring the style profile, and when retrieving exemplars",
+      zh: "本机 Ollama 装着嵌入模型时：测量画像之后给记录建向量、检索示范时，以及每轮收到用户消息时判一次语义危机",
+      en: "When local Ollama has an embedding model: after measuring the style profile, when retrieving exemplars, and once per received message for the semantic crisis check",
     },
     defaultOn: false,
     offHow: {

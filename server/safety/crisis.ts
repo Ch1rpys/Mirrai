@@ -223,16 +223,50 @@ export function detectCrisis(text: string): CrisisDetection {
    */
   const compact = haystack.replace(/\s+/g, "");
 
+  /**
+   * The idioms in which a crisis word is written but nothing is meant.
+   *
+   * The list is a substring match, so "想死" fired on "想死你了" — the
+   * ordinary way to say "I missed you" — and the app answered an "I
+   * missed you" with the hotline list. "这题难到想死" and "我要笑死了"
+   * did the same.
+   *
+   * The matched stretches are cut out of the text before the word list
+   * runs. A sentence that means it still has its own words outside the
+   * idiom: "我想死你了，但我也不想活了" keeps "不想活".
+   *
+   * i18n:allow-input — these are removed from what the user typed.
+   */
+  const harmless = [
+    // "想死你/您/他/她/他们/你们/大家了" — I missed you.
+    /想死(?:你|您|他|她|它|您们|你们|他们|她们|大家|咱妈|咱爸)了?/g,
+    // "想死我了" — (something) made me miss it terribly.
+    /想死我了/g,
+    // "难/累/气/笑…到想死" — hyperbole.
+    /(?:难|累|饿|困|气|笑|热|冷|烦|吵|吓|急|渴|闷|忙|疼|尴尬|无聊)(?:到|得)想死/g,
+    // "笑死我了" / "累死我了" / "热死了" — the exaggeration, not the wish.
+    /(?:笑|累|热|气|烦|吓|急|渴|饿|困|闷|忙|疼|尴尬|无聊|甜|咸|辣|美|香|臭|脏|冷|挤|爽)(?:死|得要死|得要命|得不行)/g,
+    // "I'm gonna die of embarrassment" — the exaggeration.
+    /\b(?:i'?m |i am )?(?:gonna|going to|gonna just) die (?:of|from) (?:embarrassment|laughter|laughing|hunger|thirst|boredom|shame|a heart attack)\b/g,
+  ];
+
+  let matchedText = compact;
+  let matchedEnglish = haystack;
+  for (const idiom of harmless) {
+    matchedText = matchedText.replace(idiom, " ");
+    matchedEnglish = matchedEnglish.replace(idiom, " ");
+  }
+
   const matched: string[] = [];
 
   for (const term of CRISIS_TERMS_ZH) {
-    if (compact.includes(term)) {
+    if (matchedText.includes(term)) {
       matched.push(term);
       break;
     }
   }
   for (const term of CRISIS_TERMS_EN) {
-    if (haystack.includes(term)) {
+    if (matchedEnglish.includes(term)) {
       matched.push(term);
       break;
     }
@@ -243,12 +277,12 @@ export function detectCrisis(text: string): CrisisDetection {
   }
 
   for (const term of WEAK_SIGNAL_TERMS_ZH) {
-    if (compact.includes(term)) {
+    if (matchedText.includes(term)) {
       return { crisis: false, weakSignal: true, matched: [term] };
     }
   }
   for (const term of WEAK_SIGNAL_TERMS_EN) {
-    if (haystack.includes(term)) {
+    if (matchedEnglish.includes(term)) {
       return { crisis: false, weakSignal: true, matched: [term] };
     }
   }

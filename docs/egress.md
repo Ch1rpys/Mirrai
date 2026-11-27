@@ -10,7 +10,7 @@
 | stt-openai-compatible | 同一套 OpenAI 兼容地址的 /audio/transcriptions | 语音文件的字节，以及转写模型名 | 用户转写一条语音消息时 | 关 | 不配 OpenAI 兼容 provider，或不去转写语音 | server |
 | stt-local-http | 你自己起的语音识别服务（STT_HTTP_URL，默认必须是本机或局域网地址） | 语音文件的字节。导入记录里的录音只走本机引擎，不会发到别处 | STT_ENGINE=http 时转写一条语音，或转写导入记录里的语音条 | 关 | 不设 STT_ENGINE=http，或把它设成 off；也可以停掉那个服务 | server |
 | llm-claude | 用户配置的 Anthropic 地址（默认 api.anthropic.com） | 对话内容；密钥在 x-api-key 头里 | 这个分身被设成走 Claude 时 | 关 | 设置里不配 Claude，或改用别的 provider | server |
-| ollama-embed | 本机 Ollama 的 /api/embed 和状态查询 /api/tags（地址来自 OLLAMA_URL，通常是 http://127.0.0.1:11434） | 要检索的那一句，以及每一轮 TA 回复之前用户那一轮的原文；状态查询只读模型列表。连本机时数据不出这台机器 | 本机 Ollama 装着嵌入模型时：测量画像之后给记录建向量，以及检索示范时；设置页显示语义检索状态时 | 关 | 停掉 Ollama，或不装嵌入模型（OLLAMA_EMBED_MODEL） | server |
+| ollama-embed | 本机 Ollama 的 /api/embed 和状态查询 /api/tags（地址来自 OLLAMA_URL，通常是 http://127.0.0.1:11434） | 要检索的那一句、每一轮 TA 回复之前用户那一轮的原文，以及每条用户消息（语义危机识别只发这一句）；状态查询只读模型列表。连本机时数据不出这台机器 | 本机 Ollama 装着嵌入模型时：测量画像之后给记录建向量、检索示范时、每轮收到用户消息时判一次语义危机；设置页显示语义检索状态时 | 关 | 停掉 Ollama，或不装嵌入模型（OLLAMA_EMBED_MODEL） | server |
 | llm-ollama | 用户配置的 Ollama 地址（通常是本机 http://127.0.0.1:11434） | 对话内容。连本机时数据不出这台机器 | 这个分身被设成走 Ollama 时 | 关 | 设置里不配 Ollama | server |
 | llm-dify | 用户配置的 Dify 地址 | 当前一句用户消息；密钥在请求里 | 这个分身被设成走 Dify 时 | 关 | 设置里不配 Dify | server |
 | llm-xunfei | 讯飞星火 wss://spark-api.xf-yun.com | 对话内容；鉴权写在 WebSocket URL 里 | 这个分身被设成走讯飞时 | 关 | 设置里不配讯飞密钥 | server |

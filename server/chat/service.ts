@@ -33,6 +33,7 @@ import { layersFromSettings } from "@shared/layers";
 import { effectiveStyleProfile } from "@shared/style-profile";
 import { retrieveMemories } from "./retrieval";
 import { buildCrisisResponse, buildGentleCheckIn, detectCrisis } from "../safety/crisis";
+import { detectCrisisExtended, type ExtendedCrisisDetection } from "../safety/crisis-extended";
 import { evaluateUsage, pickCareNote, type CareNote } from "../safety/usage-monitor";
 import { assessTrajectory, getStoredTrajectory } from "../safety/trajectory";
 import { checkGraduationEligibility } from "../_core/persona-utils";
@@ -400,6 +401,13 @@ export interface ConversationOptions {
    * a crisis has been answered if there was one.
    */
   admitted?: boolean;
+  /**
+   * The crisis check receive already ran, when it did.
+   *
+   * The three layers are not free (the local one embeds the message), so
+   * a turn that already went through receive does not run them again.
+   */
+  admittedCrisis?: ExtendedCrisisDetection;
   /** Which arrival this reply belongs to, when the inbox is in play. */
   inbox?: { key: string; generation: number };
 }
@@ -1011,6 +1019,7 @@ export async function* runConversation(
       ...options,
       alreadyPersisted: true,
       admitted: true,
+      admittedCrisis: admitted.crisis,
       storedUserMessageId: admitted.userMessageId,
       signal: combineSignals(options.signal, controller.signal),
       inbox: { key, generation },
@@ -1228,7 +1237,7 @@ function emotionInertiaForTurn(
 
 type AdmitResult =
   | { done: true }
-  | { done: false; userMessageId: number | null; crisis: ReturnType<typeof detectCrisis> };
+  | { done: false; userMessageId: number | null; crisis: ExtendedCrisisDetection };
 
 /**
  * Receive: the persona is awake, the user's message is stored, a crisis
@@ -1354,7 +1363,13 @@ async function* admitUserMessage(
     });
   }
 
-  const crisis = detectCrisis(message);
+  /**
+   * Every local layer, not just the word list (C10.2).
+   *
+   * A message that says it without a crisis word used to reach the
+   * persona as an ordinary line and get an ordinary reply.
+   */
+  const crisis = await detectCrisisExtended(message);
   if (crisis.crisis) {
     const replyText = buildCrisisResponse(persona.name, locale, {
       memorial: isMemorial(persona),
@@ -1460,7 +1475,14 @@ async function* runConversationTurn(
   const dayStart = zonedDayStart(now, await db.getUserTimezone(userId));
 
   let storedUserMessageId: number | null = options.storedUserMessageId ?? null;
-  let crisis = detectCrisis(options.message);
+  /**
+   * The crisis verdict from receive, when this turn already went through
+   * it. The delayed-reply job and the isolated path call this function
+   * on their own, so they run the same check here rather than holding a
+   * turn open for a message nobody stopped.
+   */
+  let crisis: ExtendedCrisisDetection =
+    options.admittedCrisis ?? await detectCrisisExtended(options.message);
   if (!options.admitted) {
     const admitted = yield* admitUserMessage(options);
     if (admitted.done) return;
