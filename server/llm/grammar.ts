@@ -49,10 +49,17 @@ export function shapeGrammar(input: ShapeGrammarInput = {}): string {
     "# at most " + maxLines + " lines, none starting like a list item",
     "root ::= line " + moreLines + " nl?",
     'nl ::= "\\n"',
-    "line ::= plain rest | digit | digit safe rest",
+    /**
+     * A line may start with a number only when it is not a list marker.
+     *
+     * `digit` used to be a single character and `safe` refused the
+     * punctuation right after it, so "12. " got through: the second
+     * character was "2", not "." (B9.3).
+     */
+    "line ::= plain rest | digits | digits spacer rest",
     "plain ::= [^*#0-9\\n\\-]",
     "rest ::= [^\\n]*",
-    "digit ::= [0-9]",
-    "safe ::= [^\\n.、)）]",
+    "digits ::= [0-9]+",
+    "spacer ::= [^.、)）\\n]",
   ].join("\n");
 }

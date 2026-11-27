@@ -18,10 +18,9 @@ function fitsShape(text: string, maxLines: number): boolean {
     if (line.length === 0) return false;
     const first = line[0]!;
     if (first === "-" || first === "*" || first === "#") return false;
-    if (/[0-9]/.test(first) && line.length > 1) {
-      const second = line[1]!;
-      if (second === "." || second === "、" || second === ")" || second === "）") return false;
-    }
+    // A list item can start with any number of digits, not only one
+    // (B9.3): "12. " and "10、" are the same shape as "2. ".
+    if (/^\d+[.、)）]/.test(line)) return false;
     return true;
   });
 }
@@ -69,6 +68,13 @@ describe("the shape it is meant to enforce", () => {
     expect(fitsShape("1. 先这样\n2. 再那样", 3)).toBe(false);
     expect(fitsShape("1、先这样", 3)).toBe(false);
     expect(fitsShape("1）先这样", 3)).toBe(false);
+    // Multi-digit list markers are the same shape; the checker only
+    // looked at the second character, so these got through (B9.3).
+    expect(fitsShape("12. 先这样\n13. 再那样", 3)).toBe(false);
+    expect(fitsShape("10、先这样", 3)).toBe(false);
+    expect(fitsShape("10）先这样", 3)).toBe(false);
+    // Numbers that are not a list marker are still fine.
+    expect(fitsShape("2024 年的第一场雪", 3)).toBe(true);
   });
 
   it("refuses an empty reply and a blank line", () => {
