@@ -1566,7 +1566,18 @@ async function* runConversationTurn(
     }
   }
 
-  const timingEnabled = Boolean((persona as any).timingEnabled) && Boolean(loadBehaviorProfile(persona));
+  /**
+   * The API channel answers at once (C9.2).
+   *
+   * The same rule as the outer wait: a program that asked for a completion
+   * gets one answer, not a delayed or split one. Without this, a persona
+   * with "on their time" turned on could defer the reply into a job the
+   * endpoint never reads — an empty `content` — or split it into pieces.
+   */
+  const timingEnabled =
+    (options.channel ?? "web") !== "api"
+    && Boolean((persona as any).timingEnabled)
+    && Boolean(loadBehaviorProfile(persona));
   const rerankEnabled = Boolean((persona as any).rerankEnabled);
   const quirks = quirksForTurn(persona, options.channel);
   // A recall has to be shown before the line it replaced. Rerank is what

@@ -56,6 +56,7 @@ const getCollectedMessagesForPersona = vi.fn();
 const countRecords = vi.fn();
 const candidateRecordsByOverlap = vi.fn();
 const getWindowsAroundUserRecords = vi.fn();
+const createReplyJob = vi.fn();
 
 const storageToDataUrl = vi.fn();
 vi.mock("../storage", () => ({
@@ -121,7 +122,7 @@ vi.mock("../db", () => ({
   getWindowsAroundUserRecords: (...a: unknown[]) => getWindowsAroundUserRecords(...a),
   cancelPendingReplyJobs: vi.fn().mockResolvedValue(0),
   getPendingReplyJob: vi.fn().mockResolvedValue(null),
-  createReplyJob: vi.fn(),
+  createReplyJob: (...a: unknown[]) => createReplyJob(...a),
   getReplyJobById: vi.fn().mockResolvedValue(null),
   listDueReplyJobs: vi.fn().mockResolvedValue([]),
   claimReplyJob: vi.fn().mockResolvedValue(false),
@@ -2446,6 +2447,52 @@ describe("runConversation", () => {
     }
   });
 
+  it("does not delay or split the API channel even when the persona has its own timing", async () => {
+    invokeWithProvider.mockResolvedValue("嗯\n好\n在");
+    const events: Array<{ type: string; text?: string }> = [];
+    for await (const event of runConversation({
+      persona: timedWithTyping(),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      channel: "api",
+      now: new Date("2024-06-01T12:00:00.000Z"),
+    })) {
+      events.push(event as never);
+    }
+    expect(events.some((event) => event.type === "delay")).toBe(false);
+    expect(events.some((event) => event.type === "burst")).toBe(false);
+    expect(events.some((event) => event.type === "deferred")).toBe(false);
+    const stored = createMessage.mock.calls.find((call) => call[0].role === "assistant");
+    expect(stored?.[0].content).toBe("嗯\n好\n在");
+  });
+
+  it("does not turn the API channel's answer into a deferred reply job", async () => {
+    const events: Array<{ type: string }> = [];
+    for await (const event of runConversation({
+      persona: timedPersona({
+        behaviorProfile: {
+          samples: 20,
+          replyGapMedianSec: 600,
+          replyGapLogSigma: 0.1,
+          burstSizes: [1],
+          measuredAt: "2026-01-01T00:00:00.000Z",
+        },
+        settings: { timing: { asyncDelivery: true } },
+      }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      channel: "api",
+      now: new Date("2024-06-01T12:00:00.000Z"),
+    })) {
+      events.push(event as never);
+    }
+    expect(events.some((event) => event.type === "deferred")).toBe(false);
+    expect(createReplyJob).not.toHaveBeenCalled();
+    expect(events.some((event) => event.type === "done")).toBe(true);
+  });
+
   it("keeps the old delay when nothing has been measured", async () => {
     vi.useFakeTimers();
     try {
@@ -2807,6 +2854,10 @@ describe("the persona's tools (C9.4)", () => {
   }
 
   it("sends no tools at all when the switch is off", async () => {
+    // The provider can do tools; the layer is what keeps them off. The
+    // default test provider cannot do tools, which would make this pass
+    // even if the layer check disappeared.
+    resolveProviderForUser.mockResolvedValue(toolProvider());
     await collect();
     const options = (invokeWithProvider.mock.calls[0]?.[1] as any)?.options;
     expect(options?.tools).toBeUndefined();
