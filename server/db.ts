@@ -3882,12 +3882,39 @@ export async function updateMessageChannel(
     .where(and(eq(messages.id, id), eq(messages.userId, userId)));
 }
 
+/**
+ * Points a message at the message it answers.
+ *
+ * A persona bundle carries the conversation as NDJSON lines; a reply can
+ * come before the line it answers if the writer's order was not trusted.
+ * The import creates every message first and links the replies afterwards,
+ * so the link does not depend on the file's order.
+ */
+export async function updateMessageReplyTo(
+  id: number,
+  userId: number,
+  personaId: number,
+  replyToId: number | null,
+): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const rows = await db.update(messages)
+    .set({ replyToId })
+    .where(and(
+      eq(messages.id, id),
+      eq(messages.userId, userId),
+      eq(messages.personaId, personaId),
+    ))
+    .returning({ id: messages.id });
+  return rows.length > 0;
+}
+
 export async function getMessagesByPersonaId(personaId: number, userId: number, limit = 50) {
   const db = await getDb();
   if (!db) return [];
   const rows = await db.select().from(messages)
     .where(and(isNull(messages.deletedAt), eq(messages.personaId, personaId), eq(messages.userId, userId)))
-    .orderBy(desc(messages.createdAt)).limit(limit);
+    .orderBy(desc(messages.createdAt), desc(messages.id)).limit(limit);
   return decryptRows("messages", rows).reverse();
 }
 

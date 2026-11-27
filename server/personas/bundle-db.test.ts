@@ -5,6 +5,16 @@ import path from "node:path";
 import { zipSync, strToU8 } from "fflate";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+const schedulePersonaEmbeddingsMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../chat/embeddings", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../chat/embeddings")>();
+  return {
+    ...actual,
+    schedulePersonaEmbeddings: (...args: unknown[]) => schedulePersonaEmbeddingsMock(...args),
+  };
+});
+
 const { uploadRoot } = vi.hoisted(() => {
   const { mkdtempSync } = require("node:fs") as typeof import("node:fs");
   const { tmpdir } = require("node:os") as typeof import("node:os");
@@ -29,6 +39,7 @@ import {
   getPersonaSettings,
   getPersonaStyleProfile,
   getPersonasByUserId,
+  iterateRecords,
   linkMemoryMedia,
   listCollectedRecordIds,
   listMedia,
@@ -41,6 +52,7 @@ import {
 } from "../db";
 import { resolveStoredPath } from "../storage";
 import { buildSystemPrompt } from "../_core/persona-utils";
+import { buildPromptBundleForPersona } from "../chat/prompt";
 import { measureStyleProfile } from "../_core/style-profile";
 import { exportPersonaBundle, importPersonaBundle } from "./bundle";
 import { PERSONA_BUNDLE_PARTS, writePersonaBundle, extractPersonaBundle } from "../_core/bundle";
@@ -73,7 +85,9 @@ function recordIdsIn(value: unknown, out: number[] = []): number[] {
   if (!value || typeof value !== "object") return out;
   for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
     if (key === "recordId" && typeof item === "number") out.push(item);
-    else recordIdsIn(item, out);
+    else if ((key === "recordIds" || key === "quotedRecordIds") && Array.isArray(item)) {
+      for (const entry of item) if (typeof entry === "number") out.push(entry);
+    } else recordIdsIn(item, out);
   }
   return out;
 }
@@ -100,7 +114,7 @@ describe.skipIf(!DATABASE_URL)("a persona bundle, against the database (C9.5)", 
    * Sixty lines from the other side is the fingerprint's minimum, so the
    * import has something to measure afterwards.
    */
-  async function seed(userId: number) {
+  async function seed(userId: number, options: { annotated?: boolean } = {}) {
     const stamp = `${Date.now()}-${Math.floor(Math.random() * 100_000)}`;
     const personaId = await createPersona({
       userId,
@@ -126,6 +140,14 @@ describe.skipIf(!DATABASE_URL)("a persona bundle, against the database (C9.5)", 
         speaker: "小满",
         lineNo: index * 2 + 1,
         meta: null,
+        ...(options.annotated
+          ? {
+              act: "acknowledge",
+              actSource: "model",
+              emotion: index % 3 === 0 ? "happy" : "warm",
+              emotionSource: "rule",
+            }
+          : {}),
       });
       rows.push({
         userId,
@@ -217,6 +239,12 @@ describe.skipIf(!DATABASE_URL)("a persona bundle, against the database (C9.5)", 
         consent: "asked_yes",
         locked: true,
         providers: { planner: "local" },
+        skin: {
+          theme: "im-green",
+          alias: "小满",
+          // A file under this install's uploads directory: not portable.
+          background: "/uploads/personas/1/1/background.png",
+        },
         keptQuotes: [{ recordId: recordIds[3], text: "下次带你去吃那家面" }],
       },
     } as never);
@@ -277,6 +305,12 @@ describe.skipIf(!DATABASE_URL)("a persona bundle, against the database (C9.5)", 
     expect(importedSettings?.consent).toBe("asked_yes");
     expect(importedSettings?.locked).toBeUndefined();
     expect(importedSettings?.providers).toBeUndefined();
+    // The theme and the alias travel; the background is a local uploads URL.
+    expect(importedSettings?.skin?.theme).toBe("im-green");
+    expect(importedSettings?.skin?.alias).toBe("小满");
+    expect(importedSettings?.skin?.background).toBeUndefined();
+    // The import queues local embeddings the way the style.measure route does.
+    expect(schedulePersonaEmbeddingsMock).toHaveBeenCalledWith(imported.personaId, userA);
 
     // The sticker's bytes are the same bytes, under this install's keys.
     const stickers = await listStickers(imported.personaId, userA);
@@ -290,6 +324,8 @@ describe.skipIf(!DATABASE_URL)("a persona bundle, against the database (C9.5)", 
     const media = await listMedia(imported.personaId, userA);
     expect(media).toHaveLength(1);
     expect(media[0].fileKey).not.toBe(seeded.media.fileKey);
+    // The media row's line reference was rewritten too.
+    expect(newRecordIds).toContain(media[0].recordId);
     expect(sha256OfFile(media[0].fileKey)).toBe(seeded.media.hash);
     const links = await listMemoryMediaForMemories([memories[0].id], userA);
     expect(links).toHaveLength(1);
@@ -300,19 +336,30 @@ describe.skipIf(!DATABASE_URL)("a persona bundle, against the database (C9.5)", 
     expect(style?.fingerprint).toBeTruthy();
 
     // The two personas produce the same prompt once the ids are mapped.
-    // The import measures the style profile; measure the source too, so
-    // the comparison is of the same kind of persona.
+    // The manual asks for the same system prompt for the same input. The
+    // card prompt renders neither records nor the measured layers, so the
+    // comparison is made with the chat prompt assembly the app really uses.
     await measureStyleProfile({ personaId: seeded.personaId, userId: userA, force: true });
     const sourcePersona = await getPersonaById(seeded.personaId, userA);
-    const sourcePrompt = buildSystemPrompt(sourcePersona, { locale: "zh" });
-    const importedPrompt = buildSystemPrompt(importedPersona, { locale: "zh" });
-    const mapped = seeded.recordIds.reduce((text, oldId, index) => {
-      const newId = newRecordIds[index];
-      return text.split(`"${oldId}"`).join(`"${newId}"`).split(`:${oldId}`).join(`:${newId}`);
-    }, sourcePrompt);
-    // What differs after the mapping is only this install's own state.
-    expect(importedPrompt.length).toBeGreaterThan(0);
-    expect(mapped).toBe(importedPrompt);
+    const promptNow = new Date("2026-02-01T00:00:00Z");
+    const [sourcePrompt, importedChatPrompt] = await Promise.all([
+      buildPromptBundleForPersona({
+        persona: sourcePersona!,
+        userId: userA,
+        userMessage: "今天好累",
+        now: promptNow,
+        locale: "zh",
+      }),
+      buildPromptBundleForPersona({
+        persona: importedPersona!,
+        userId: userA,
+        userMessage: "今天好累",
+        now: promptNow,
+        locale: "zh",
+      }),
+    ]);
+    expect(sourcePrompt.prompt.length).toBeGreaterThan(0);
+    expect(importedChatPrompt.prompt).toBe(sourcePrompt.prompt);
   });
 
   it("round-trips the fixture-sized persona, whose bundle is bigger than one read chunk", async () => {
@@ -415,12 +462,26 @@ describe.skipIf(!DATABASE_URL)("a persona bundle, against the database (C9.5)", 
     expect(await countRecords(imported.personaId, userA, { register: "all" })).toBe(0);
     const style = await getPersonaStyleProfile(imported.personaId, userA);
     expect(style?.fingerprint).toBeFalsy();
+    // No records means no exemplar pool either, not an empty default.
+    expect(style?.samplePool).toBeFalsy();
     const memory = (await getMemoriesByPersonaId(imported.personaId, userA, 10))[0];
     // The text stays; the line it came from cannot.
     expect(memory.title).toBe("第一次见面");
     expect(memory.recordId).toBeNull();
     const personaRow = await getPersonaById(imported.personaId, userA);
     expect(buildSystemPrompt(personaRow, { locale: "zh" }).length).toBeGreaterThan(0);
+    const chatPrompt = await buildPromptBundleForPersona({
+      persona: personaRow!,
+      userId: userA,
+      userMessage: "今天好累",
+      now: new Date("2026-02-01T00:00:00Z"),
+      locale: "zh",
+    });
+    expect(chatPrompt.prompt.length).toBeGreaterThan(0);
+    // The seed turns / exemplars section is absent: the records it would
+    // quote were not in the bundle.
+    expect(chatPrompt.prompt).not.toContain("我在呢 0");
+    expect(chatPrompt.prompt).not.toContain("〔旧记录〕");
   });
 
   it("refuses a wrong passphrase and leaves no persona behind", async () => {
@@ -537,14 +598,74 @@ describe.skipIf(!DATABASE_URL)("a persona bundle, against the database (C9.5)", 
     const { getMessagesByPersonaId } = await import("../db");
     const messages = await getMessagesByPersonaId(imported.personaId, userA, 10);
     expect(messages).toHaveLength(2);
-    expect(messages[1].replyToId).toBe(messages[0].id);
-    expect(messages[1].replyToId).not.toBe(first);
+    const question = messages.find((message) => message.role === "user")!;
+    const answer = messages.find((message) => message.role === "assistant")!;
+    expect(answer.replyToId).toBe(question.id);
+    expect(answer.replyToId).not.toBe(first);
     // The picture travelled too, under this persona's own path.
     expect(messages[1].mediaUrl).toMatch(/^\/uploads\/personas\//);
     const importedPhotoKey = String(messages[1].mediaUrl).replace(/^\/uploads\//, "");
     expect(sha256OfFile(importedPhotoKey)).toBe(
       createHash("sha256").update(photoBytes).digest("hex"),
     );
+  });
+
+  it("carries the record annotations the style profile is measured from", async () => {
+    userA = userA || await createUser({ username: `bundle-annot-${Date.now()}`, passwordHash: "x", name: "阿树" });
+    const seeded = await seed(userA, { annotated: true });
+    const outPath = path.join(dir, "annotated.mirrai-persona");
+    await exportPersonaBundle({
+      personaId: seeded.personaId,
+      userId: userA,
+      include: { memories: false, records: true, conversation: false },
+      passphrase: null,
+      outPath,
+    });
+    const imported = await importPersonaBundle({ userId: userA, filePath: outPath, passphrase: null });
+    const rows: Array<Record<string, unknown>> = [];
+    for await (const row of iterateRecords(imported.personaId, userA, { register: "all" })) {
+      rows.push(row as Record<string, unknown>);
+    }
+    expect(rows).toHaveLength(120);
+    expect(rows[0]!.act).toBe("acknowledge");
+    expect(rows[0]!.actSource).toBe("model");
+    expect(rows[0]!.emotion).toBe("happy");
+    expect(rows[0]!.emotionSource).toBe("rule");
+    expect(rows[2]!.emotion).toBe("warm");
+  });
+
+  it("remaps the quoted record ids a conversation message carries", async () => {
+    userA = userA || await createUser({ username: `bundle-quote-${Date.now()}`, passwordHash: "x", name: "阿树" });
+    const seeded = await seed(userA);
+    const { createMessage } = await import("../db");
+    const quoted = await createMessage({
+      userId: userA,
+      personaId: seeded.personaId,
+      role: "assistant",
+      content: "你之前说过这句",
+      messageType: "text",
+      channel: "web",
+      metadata: { quotedRecordIds: [seeded.recordIds[3]] },
+    } as never);
+    expect(quoted).toBeGreaterThan(0);
+    const outPath = path.join(dir, "quoted.mirrai-persona");
+    await exportPersonaBundle({
+      personaId: seeded.personaId,
+      userId: userA,
+      include: { memories: false, records: true, conversation: true },
+      passphrase: null,
+      outPath,
+    });
+    const imported = await importPersonaBundle({ userId: userA, filePath: outPath, passphrase: null });
+    const { getMessagesByPersonaId } = await import("../db");
+    const messages = await getMessagesByPersonaId(imported.personaId, userA, 10);
+    const oldIds = new Set(seeded.recordIds);
+    const newIds = await listCollectedRecordIds(imported.personaId, userA);
+    const metadata = messages[0]?.metadata as { quotedRecordIds?: number[] } | null | undefined;
+    expect(metadata?.quotedRecordIds).toHaveLength(1);
+    const id = metadata!.quotedRecordIds![0]!;
+    expect(oldIds.has(id)).toBe(false);
+    expect(newIds).toContain(id);
   });
 
   it("is still readable as a bundle after a plain round trip of the format", async () => {

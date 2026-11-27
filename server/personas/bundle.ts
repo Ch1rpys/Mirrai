@@ -43,6 +43,7 @@ import {
   type PersonaBundleEntry,
   type WrittenPersonaBundle,
 } from "../_core/bundle";
+import { schedulePersonaEmbeddings } from "../chat/embeddings";
 import { measureStyleProfile } from "../_core/style-profile";
 
 export interface BundleInclude {
@@ -103,6 +104,17 @@ function sanitizedSettings(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const out: Record<string, unknown> = { ...(value as Record<string, unknown>) };
   for (const key of LOCAL_SETTINGS) delete out[key];
+  /**
+   * The chat background is a URL under this install's uploads directory
+   * (`/uploads/personas/<account>/<persona>/...`), so it names a file on
+   * the machine the bundle came from. The theme and the alias travel; the
+   * background does not.
+   */
+  if (out.skin && typeof out.skin === "object" && !Array.isArray(out.skin)) {
+    const skin = { ...(out.skin as Record<string, unknown>) };
+    delete skin.background;
+    out.skin = skin;
+  }
   return out;
 }
 
@@ -227,7 +239,15 @@ export async function exportPersonaBundle(
     ? await db.getMemoriesByPersonaId(personaId, userId, 100_000)
     : [];
   const messages = include.conversation
-    ? await db.getMessagesByPersonaIdPaged(personaId, userId, { pageSize: 1000, max: 20_000 })
+    /**
+     * Oldest message first. The reply links are ids, so a reply written
+     * first in the file would not yet have its target in the import's map.
+     * Sorting by id also makes the two files of the same persona produce
+     * the same bundle.
+     */
+    ? (await db.getMessagesByPersonaIdPaged(personaId, userId, { pageSize: 1000, max: 20_000 }))
+      .slice()
+      .sort((a, b) => a.id - b.id)
     : [];
   const stickers = await db.listStickers(personaId, userId);
   const wantsMedia = include.records || include.memories;
@@ -254,6 +274,16 @@ export async function exportPersonaBundle(
       timestamp: row.timestamp ? new Date(row.timestamp).toISOString() : null,
       lineNo: row.lineNo ?? null,
       meta,
+      /**
+       * The annotations made after import (B1.4/B1.5). They are part of
+       * what the record says: the style profile is measured from them, so
+       * leaving them out would make the imported persona measure a
+       * different person.
+       */
+      act: (row as { act?: string | null }).act ?? null,
+      actSource: (row as { actSource?: string | null }).actSource ?? null,
+      emotion: (row as { emotion?: string | null }).emotion ?? null,
+      emotionSource: (row as { emotionSource?: string | null }).emotionSource ?? null,
     };
   });
   const memoryRows = memories.map((memory, index) => ({
@@ -436,7 +466,12 @@ function remapRecordIds(value: unknown, map: Map<number, number>): unknown {
       out[key] = id;
       continue;
     }
-    if (key === "recordIds" && Array.isArray(item)) {
+    if ((key === "recordIds" || key === "quotedRecordIds") && Array.isArray(item)) {
+      /**
+       * `quotedRecordIds` is what a chat message stores when it quoted
+       * lines from the record reader (C8.10). It is a record reference
+       * like any other and must follow the import's id map.
+       */
       out[key] = item.flatMap((entry) => {
         const id = typeof entry === "number" ? map.get(entry) : undefined;
         return id == null ? [] : [id];
@@ -515,6 +550,10 @@ export async function importPersonaBundle(options: {
           fileId: null,
           lineNo: typeof data.lineNo === "number" ? data.lineNo : null,
           meta: data.meta ?? null,
+          act: typeof data.act === "string" ? data.act : null,
+          actSource: typeof data.actSource === "string" ? data.actSource : null,
+          emotion: typeof data.emotion === "string" ? data.emotion : null,
+          emotionSource: typeof data.emotionSource === "string" ? data.emotionSource : null,
         };
       });
       await db.createCollectedMessages(inserts as never);
@@ -610,6 +649,7 @@ export async function importPersonaBundle(options: {
     if (manifest.includes.conversation) {
       const rows = await readNdjson(stagingDir, PERSONA_BUNDLE_PARTS.messages);
       const messageMap = new Map<number, number>();
+      const pendingReplies: Array<{ id: number; oldReplyTo: number }> = [];
       for (const row of rows) {
         const data = row as Record<string, unknown>;
         const oldId = typeof data.oldId === "number" ? data.oldId : null;
@@ -641,9 +681,17 @@ export async function importPersonaBundle(options: {
           origin: typeof data.origin === "string" ? data.origin : null,
           metadata: remapRecordIds(data.metadata ?? null, recordMap),
           createdAt: data.createdAt ? new Date(String(data.createdAt)) : undefined,
-          replyToId: oldReplyTo != null ? messageMap.get(oldReplyTo) ?? null : null,
+          // Linked after every message exists; see `pendingReplies`.
+          replyToId: null,
         } as never);
         if (oldId != null) messageMap.set(oldId, id);
+        if (oldReplyTo != null) pendingReplies.push({ id, oldReplyTo });
+      }
+      for (const pending of pendingReplies) {
+        const replyToId = messageMap.get(pending.oldReplyTo);
+        if (replyToId != null) {
+          await db.updateMessageReplyTo(pending.id, userId, personaId!, replyToId);
+        }
       }
     }
 
@@ -704,9 +752,18 @@ export async function importPersonaBundle(options: {
     // The style profile is measured here rather than carried in the file:
     // the bundle never contains one. With no records there is nothing to
     // measure, and the measurement returns without inventing anything.
-    await measureStyleProfile({ personaId, userId, force: true }).catch((error: unknown) => {
+    try {
+      await measureStyleProfile({ personaId, userId, force: true });
+      /**
+       * The route the manual names (`style.measure`) also queues the
+       * local embeddings after measuring. Without them a long imported
+       * history falls back to literal exemplar search instead of the
+       * semantic one the source persona had.
+       */
+      schedulePersonaEmbeddings(personaId, userId);
+    } catch (error) {
       console.warn("[Bundle] The imported persona could not be measured:", error);
-    });
+    }
 
     return {
       personaId,
