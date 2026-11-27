@@ -499,7 +499,14 @@ export function generateManualHTML(
   locale: ExportLocale = "zh",
 ): string {
   const copy = MANUAL_COPY[locale];
-  const name = escapeHtml(input.persona.name);
+  /**
+   * The raw name (C2.9).
+   *
+   * It is escaped where it is printed, exactly once. Escaping it here
+   * and then escaping the whole title again turned 「小A & 朋友」 into
+   * 「小A &amp;amp; 朋友」.
+   */
+  const name = input.persona.name;
   const data = normalizePersonaData(
     (input.personaData ?? {}) as Record<string, unknown>,
     { name: input.persona.name, locale },

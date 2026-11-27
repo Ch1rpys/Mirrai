@@ -64,6 +64,22 @@ describe("on this day", () => {
     expect(years[0].rows[0].content).toBe("四年才过一次");
   });
 
+  it("keeps the twenty-ninth of February on its own day in a leap year", () => {
+    // In a leap year the 29th exists, so it is not folded into the 28th:
+    // the two days have different records and the calendar can show both.
+    const rows = [{
+      id: 1,
+      role: "assistant",
+      kind: "text",
+      content: "四年才过一次",
+      timestamp: new Date("2024-02-29T04:00:00.000Z"),
+      meta: null,
+    }];
+    const today = new Date("2028-02-28T04:00:00.000Z");
+    const years = pickOnThisDay(rows, today, ZONE);
+    expect(years).toHaveLength(0);
+  });
+
   it("uses the user's own calendar day on the other side of the date line", () => {
     const rows = [{
       id: 1,

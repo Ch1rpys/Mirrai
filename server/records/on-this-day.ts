@@ -52,6 +52,11 @@ function sceneIsNegative(rows: OnThisDayRow[]): boolean {
   return negative * 2 > labels.length;
 }
 
+function isLeapYear(year: number): boolean {
+  if (!Number.isFinite(year) || year <= 0) return false;
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
 /**
  * The rows to show, from records the caller has already read.
  *
@@ -65,8 +70,14 @@ export function pickOnThisDay(
   options: { harmReport?: unknown; keepHarm?: boolean } = {},
 ): OnThisDayYear[] {
   const wanted = monthDay(today, timeZone);
-  const leap = wanted === "02-28";
   const wantedYear = Number(zonedDateKey(today, timeZone).slice(0, 4));
+  /**
+   * The twenty-ninth counts on the twenty-eighth only in a common year
+   * (C2.1). In a leap year the twenty-ninth exists and has its own
+   * records; folding it into the twenty-eighth showed both days at once.
+   */
+  const commonYear = !isLeapYear(wantedYear);
+  const leap = wanted === "02-28" && commonYear;
   const report = normalizeHarmReport(options.harmReport);
   const keepHarm = options.keepHarm ?? report?.decision === "keep";
   const byYear = new Map<number, OnThisDayRow[]>();

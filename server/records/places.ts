@@ -92,6 +92,12 @@ export function collectPlacesFromRows(
     const meta = (row.meta ?? {}) as Record<string, unknown>;
     const name = typeof meta.name === "string" ? meta.name.trim() : "";
     const point = coords(meta);
+    /**
+     * A location row with neither a name nor a point is not a place
+     * (C2.8). It used to become an entry called "?, ?" — a place the
+     * user never went to, on the page about their own life.
+     */
+    if (!name && !point) continue;
     const at = row.timestamp ?? row.createdAt;
     add(name, point, at, { recordId: row.id, at: at.toISOString() });
   }

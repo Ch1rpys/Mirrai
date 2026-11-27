@@ -256,6 +256,19 @@ describe("the printable manual", () => {
     expect(html).toContain("咕咕");
   });
 
+  it("escapes the persona's name once, not twice", () => {
+    // The name was escaped before being put into the title, and the whole
+    // title was escaped again — so 「小A & 朋友」 came out as
+    // 「小A &amp;amp; 朋友」 on the printed page.
+    const withSymbols = {
+      ...input,
+      persona: { ...input.persona, name: "小满 & 朋友" },
+    };
+    const html = generateManualHTML(withSymbols as never, "zh");
+    expect(html).toContain("小满 &amp; 朋友");
+    expect(html).not.toContain("&amp;amp;");
+  });
+
   it("leaves out the making-up section when no conflict was measured", () => {
     const html = generateManualHTML(input as never, "zh");
     expect(html).not.toContain("怎么和好");

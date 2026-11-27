@@ -47,6 +47,13 @@ describe("the places in the record", () => {
     expect(places[0].samples.map((sample) => sample.mediaId ?? sample.recordId)).toEqual([1, 9]);
   });
 
+  it("does not invent a place out of a location line with no name and no point", () => {
+    // The row said "somewhere" and the app showed a made-up "?, ?" — a
+    // place the user never went to, on a map page about their own life.
+    const places = collectPlacesFromRows([record(1, "", NaN, NaN, 1)], []);
+    expect(places).toHaveLength(0);
+  });
+
   it("drops a coordinate that is not a coordinate", () => {
     expect(
       collectPlacesFromRows([record(1, "哪里", 999, 999, 1)], []),
