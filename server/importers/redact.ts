@@ -8,5 +8,6 @@ export {
   isRedactionActive,
   isKeptName,
   emptyRedactionCounts,
+  redactTextWithOptions,
 } from "@shared/redact";
 export type { RedactionOptions, RedactionCounts, RedactionReport } from "@shared/redact";

@@ -39,6 +39,7 @@ vi.mock("../db", async (importOriginal) => ({
 
 import { appRouter } from "../routers";
 import * as importers from "../importers";
+import { startImport } from "../importers";
 
 function ctxFor(userId: number): TrpcContext {
   return {
@@ -333,6 +334,73 @@ describe("import.status / preview / confirm / cancel", () => {
     const rows = createCollectedMessages.mock.calls[0][0] as Array<Record<string, unknown>>;
     expect(rows.map((row) => row.content)).toEqual(["打 [phone]", "在的"]);
     expect(JSON.stringify(rows)).not.toContain("13800138000");
+  });
+
+  /**
+   * The stored report is part of what the user is promised is gone
+   * (C1.7).
+   *
+   * Redaction rewrites the records, but the report kept the first rows of
+   * the raw table and the speaker names as they were in the file — and
+   * `import.status` sends the whole report back to the browser. So the
+   * phone number the user asked to replace was still readable in the
+   * database and on the page, next to the sentence that says it cannot
+   * be found again.
+   */
+  describe("the stored parse report after redaction (C1.7)", () => {
+    const reports = () =>
+      updatePersonaFile.mock.calls
+        .map((call) => call[2] as { parseStatus?: string; parseReport?: Record<string, unknown> })
+        .map((patch) => patch.parseReport)
+        .filter(Boolean);
+
+    it("keeps the raw table without the numbers it replaced", async () => {
+      const csv = [
+        "time,speaker,content",
+        "2022-03-01 20:00:00,小满,打 13800138000",
+        "2022-03-01 20:00:05,阿树,在的",
+      ].join("\n");
+      await startImport({
+        fileId: 11,
+        userId: 1,
+        text: csv,
+        format: "column-map",
+        columnMap: { time: 0, speaker: 1, content: 2 },
+        me: ["阿树"],
+        them: ["小满"],
+        redaction: { phones: true },
+        locale: "zh",
+      });
+      const stored = reports();
+      expect(stored.length).toBeGreaterThan(0);
+      for (const report of stored) {
+        expect(JSON.stringify(report)).not.toContain("13800138000");
+      }
+      const withTable = stored.find((report) => report && (report as any).rawTable);
+      expect(JSON.stringify((withTable as any)?.rawTable)).toContain("[phone]");
+    });
+
+    it("keeps the speaker list without the names it replaced", async () => {
+      const text = [
+        "[2022-03-01 20:00:00] 琪琪：在吗",
+        "[2022-03-01 20:00:05] 阿树：在的",
+        "[2022-03-01 20:00:10] 小满：在",
+      ].join("\n");
+      await startImport({
+        fileId: 11,
+        userId: 1,
+        text,
+        format: "generic-line",
+        me: ["阿树"],
+        them: ["小满"],
+        redaction: { names: ["琪琪"] },
+        locale: "zh",
+      });
+      const done = reports().find((report) => report && (report as any).progress === 100);
+      expect(done).toBeTruthy();
+      expect(JSON.stringify(done)).not.toContain("琪琪");
+      expect((done as any).speakers.map((row: { name: string }) => row.name)).toContain("[person-1]");
+    });
   });
 
   it("marks a cancelled import as failed", async () => {

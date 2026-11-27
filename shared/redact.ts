@@ -161,6 +161,21 @@ function redactText(
 }
 
 /**
+ * Redacts one string with the same tokens the records get.
+ *
+ * The stored parse report carries a speaker list and the first rows of a
+ * raw table (C1.7); both are the user's own file, and both used to keep
+ * the names and numbers that the records had already replaced. They are
+ * run through the same matcher, with the same name ordering, so the
+ * token in the report is the token in the record.
+ */
+export function redactTextWithOptions(text: string, options: RedactionOptions): string {
+  const counts = emptyRedactionCounts();
+  const people = personTokensOf(options.names ?? [], options.keepNames ?? []);
+  return redactText(text, options, counts, people);
+}
+
+/**
  * Returns a new list of records with the chosen patterns replaced.
  *
  * Does not mutate the input. `role: "other"` speakers that match a

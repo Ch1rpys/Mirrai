@@ -49,6 +49,7 @@ import { assignRoles, guessRoles } from "./roles";
 import {
   isRedactionActive,
   redactRecords,
+  redactTextWithOptions,
   redactionReportOf,
   type RedactionOptions,
 } from "./redact";
@@ -123,6 +124,47 @@ function reportOf(partial: ParseReport): ParseReport {
  * large export. A slice is enough for headers and those rows; a quote
  * cut in half only spoils the last one.
  */
+/**
+ * The report the user can see, with the originals replaced (C1.7).
+ *
+ * The records are written redacted, but the report kept the speaker
+ * names and the first rows of a raw table exactly as they were in the
+ * file — and `import.status` sends the report back to the browser. So
+ * the number a person asked to be replaced was still in the database,
+ * next to the sentence that says it cannot be found again.
+ */
+function redactedReport(report: ParseReport, options: RedactionOptions): ParseReport {
+  const text = (value: string) => redactTextWithOptions(value, options);
+  const next: ParseReport = { ...report };
+  if (next.rawTable) {
+    next.rawTable = {
+      headers: next.rawTable.headers.map(text),
+      rows: next.rawTable.rows.map((row) => row.map(text)),
+    };
+  }
+  if (next.speakers) {
+    next.speakers = next.speakers.map((row) => ({ ...row, name: text(row.name) }));
+  }
+  if (next.suggested) {
+    next.suggested = {
+      me: next.suggested.me.map(text),
+      them: next.suggested.them.map(text),
+    };
+  }
+  if (next.chats) {
+    next.chats = next.chats.map((chat) => ({ ...chat, title: text(chat.title) }));
+  }
+  if (next.chatFiles) {
+    next.chatFiles = next.chatFiles.map((entry) => ({ ...entry, path: text(entry.path) }));
+  }
+  if (next.warnings) {
+    next.warnings = next.warnings.map((warning) =>
+      warning.detail ? { ...warning, detail: text(warning.detail) } : warning,
+    );
+  }
+  return next;
+}
+
 function rawTableFrom(text: string): ParseReport["rawTable"] | undefined {
   const slice = text.length > 16_000 ? text.slice(0, 16_000) : text;
   const { headers, rows } = parseCsv(slice);
@@ -370,20 +412,42 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
     rawTable: importer.id === "column-map" ? rawTableFrom(source.text) : undefined,
   };
 
+  const persona = await getPersonaById(file.personaId, input.userId);
+  const user = await getUserById(input.userId);
+  const keepNames = [
+    ...(input.me ?? []),
+    ...(input.them ?? []),
+    persona?.name,
+    user?.name,
+  ].filter((name): name is string => Boolean(name && name.trim()));
+  const redactionOptions: RedactionOptions = {
+    ...(input.redaction ?? {}),
+    keepNames,
+  };
+  /**
+   * The report is redacted in the same pass as the records (C1.7).
+   *
+   * Everything written from here on — the chat picker, the role
+   * confirmation, the running import and the finished one — carries only
+   * the replaced text. The rows and the report have to agree; a report
+   * that kept the original would be the same data in another column.
+   */
+  const safeBaseReport = isRedactionActive(input.redaction)
+    ? redactedReport(baseReport, redactionOptions)
+    : baseReport;
+
   if (parsed.chats && parsed.chats.length > 1 && !input.chatId) {
     await updatePersonaFile(file.id, input.userId, {
       parseStatus: "needs_chat",
-      parseReport: reportOf({ ...baseReport, progress: 0 }),
+      parseReport: reportOf({ ...safeBaseReport, progress: 0 }),
     });
     return { status: "needs_chat", written: 0 };
   }
 
   if (parsed.records.length === 0) {
-    return fail(copy(locale, "errors.importFailed"), baseReport);
+    return fail(copy(locale, "errors.importFailed"), safeBaseReport);
   }
 
-  const persona = await getPersonaById(file.personaId, input.userId);
-  const user = await getUserById(input.userId);
   const confirmed = Boolean(
     input.me && input.them && input.me.length > 0 && input.them.length > 0,
   );
@@ -407,8 +471,10 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
     await updatePersonaFile(file.id, input.userId, {
       parseStatus: "needs_roles",
       parseReport: reportOf({
-        ...baseReport,
-        suggested: guessed ?? undefined,
+        ...safeBaseReport,
+        suggested: guessed
+          ? redactedReport({ suggested: guessed }, redactionOptions).suggested
+          : undefined,
         progress: 0,
       }),
     });
@@ -419,16 +485,6 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
   const assigned: Array<ParsedRecord & { role: RecordRole }> = writtenOnly
     ? parsed.records.map((record) => ({ ...record, role: "assistant" as RecordRole }))
     : assignRoles(parsed.records, mapping);
-  const keepNames = [
-    ...(mapping.me ?? []),
-    ...(mapping.them ?? []),
-    persona?.name,
-    user?.name,
-  ].filter((name): name is string => Boolean(name && name.trim()));
-  const redactionOptions: RedactionOptions = {
-    ...(input.redaction ?? {}),
-    keepNames,
-  };
   const redacted = isRedactionActive(input.redaction)
     ? redactRecords(assigned, redactionOptions)
     : { records: assigned, counts: undefined };
@@ -454,7 +510,7 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
     ? redactionReportOf(redactionOptions, redacted.counts)
     : undefined;
   const withRoles: ParseReport = {
-    ...baseReport,
+    ...safeBaseReport,
     roleCounts: countBy(assigned.map((row) => row.role)),
     ...(redactionReport ? { redaction: redactionReport } : {}),
   };
