@@ -1317,12 +1317,12 @@ corepack pnpm eval -- --persona <id> --user <id> --audition
 
 **发现的问题、观察与处理去向**
 
-- **没有功能性验收失败**：66 条（抽样 57 + 必查 14 − 重叠 5）逐条重跑，验收清单全部通过；没有条目需要改回 ⬜ 或 🟡。
-- 观察 1（文档口径，已有记录）：A1 的验收项指名 `routers.file-upload-import.test.ts` 断言「上传后写四列」，但实现按 C1.2 停在 `needs_roles`（偏差 55 已记录，A1 行证据也已写明四列断言在 `db-store.test.ts:526`）。等价覆盖成立，A1 维持 ✅；**建议**下一次实现会话在偏差表把「A1 验收项与 C1.2 边界冲突、证据位置移动」补成一条，避免独立验收再遇到同一处。
-- 观察 2（守卫保守，非缺陷）：P0.7 的 egress 扫描把注释/字符串里的 `fetch(` 也算出站。它只会多要求登记，不会漏放；不影响安全，建议以后做去注释扫描时顺手改善。
-- 观察 3（不可达路径）：C8.3 的内部 API `createBackup({ passphrase: "" })` 把空串当「不加密」；CLI 的 `--passphrase-file` 空文件会报错、界面要求非空口令，所以产品路径不可达。若以后有别的调用方，建议空串直接报错。
-- 观察 4（已测安全）：C5.5 的分身名可以含换行（`persona.name` 只限 1–100 字），`buildLetterEmail` 的 subject 会带上换行；但实测 nodemailer 在 SMTP 线上按编码/折叠处理，没有注入额外头。属于低优先级加固（把 CR/LF 从名字里剔掉更稳），不影响本条验收。
-- 环境注记：见开头「环境坑」。重跑命令请用 `/usr/local/bin/node`（v24）且 `psql/createdb/dropdb` 用 `/opt/homebrew/bin/...` 绝对路径；不要 `export PATH=/opt/homebrew/bin:$PATH` 后再跑 vitest。
+- **没有功能性验收失败**：66 条（抽样 57 + 必查 14 − 重叠 5）逐条重跑，验收清单全部通过；没有条目需要改回 ⬜ 或 🟡。下面 `- [ ]` 是留给之后实现会话的跟进项（都不影响本阶段收口）：
+- [ ] **A1 的验收口径与 C1.2 边界冲突（文档层）**：期望 = 手册 A1 验收项要求 `routers.file-upload-import.test.ts` 断言上传后 `createCollectedMessages` 带四列；实际 = 上传按 C1.2 停在 `needs_roles`，四列断言在 `server/collectors/db-store.test.ts:526`，等价覆盖由 import 路由 `confirm` 测试与 P18.2 的 CLI 导入 4904 条完成。复现：`node node_modules/vitest/vitest.mjs run server/routers.file-upload-import.test.ts server/collectors/db-store.test.ts --reporter=dot`。根因：`docs/exec-v6.md` A1 验收项（未随 C1.2 边界改写）+ 偏差 55。影响：只是文档口径，不改行为。处理：实现会话在进度表偏差表补一条说明「A1 验收项与 C1.2 边界冲突、证据位置移动」，不用改代码。
+- [ ] **P0.7 的 egress 扫描把注释里的 `fetch(` 当出站（低）**：期望 = 只算真实调用点；实际 = `server/egress.test.ts` 的 `CALL_PATTERN` 文本匹配会命中注释/字符串里的 `fetch(`。复现：新建 `server/__p184_comment_probe.ts` 内容为 `// this comment mentions fetch("https://example.com") but calls nothing` + 一行 export，跑 `server/egress.test.ts` → 3 条红；删掉恢复 5 过。根因：`server/egress.test.ts` 扫描前不去注释（偏差 14 只说明跳过 `.test.ts`）。影响：只会多要求登记、不会漏放，无安全/行为影响。处理：实现会话可做去注释扫描（低优先级）。
+- [ ] **C8.3 内部 `createBackup` 把空串口令当未加密（不可达，低）**：期望 = 空串口令报错或明确拒绝；实际 = `createBackup({ passphrase: "" })` 会创建未加密备份（返回 created）。复现：tsx 调 `createBackup({ scope: "instance", passphrase: "", out: "/tmp/p184-empty-pass.zip" })`。根因：`server/_core/backup.ts` 对 passphrase 的真值判断。影响：CLI 的 `--passphrase-file` 空文件会报错、界面要求非空口令，产品路径不可达。处理：实现会话可加一条空串校验（低）。
+- [ ] **C5.5 分身名含换行时邮件主题带换行（实测无注入，低）**：期望 = 主题单行；实际 = `buildLetterEmail` 的 subject 含 CR/LF；但用 `nodemailer` 的 `streamTransport` 实测 SMTP 线上的主题按编码/折叠处理，没有多出 `Bcc:` 头。复现：tsx 调 `buildLetterEmail({ config: { subjectWithName: true }, personaName: "X\nBcc: evil@example.com", body: "hi" })`，再用 nodemailer `streamTransport` 看原始头。根因：`server/_core/mail.ts` 的 `buildLetterEmail` 未清洗名字里的 CR/LF。影响：仅当用户把分身名写成多行时主题难看，不构成头注入。处理：实现会话可在拼主题前去掉 CR/LF（低）。
+- 环境注记（**不是仓库问题**，重跑时注意）：① 这台机器 `/opt/homebrew/bin/node` 是 Node 20.20.2，`export PATH=/opt/homebrew/bin:$PATH` 后再跑 vitest 会因 `node:sqlite` 不存在而大批 worker 失败——用 `/usr/local/bin/node`（v24.14.1）+ `psql/createdb/dropdb` 的绝对路径；② 并发跑两个 vitest 会弄脏 `node_modules/.vite`（本会话遇到一次：4 个库测试文件报 `No such built-in module: node:sqlite`），清掉缓存后重跑 29 个库测试文件全过。
 
 **收尾闸门与最终确认**
 
