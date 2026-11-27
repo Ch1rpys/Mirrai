@@ -6778,7 +6778,10 @@ export const appRouter = router({
         const letter = await getLetterById(input.id, ctx.user.id);
         if (!letter) throw new TRPCError({ code: "NOT_FOUND" });
         if (letter.kind !== "todo") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Only a note can be ticked off." });
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: copy(ctx.locale, "errors.onlyNoteCanBeTicked"),
+          });
         }
         const changed = await setLetterDone(input.id, ctx.user.id, input.done);
         if (!changed) throw new TRPCError({ code: "NOT_FOUND" });

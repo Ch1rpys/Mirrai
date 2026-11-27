@@ -115,7 +115,15 @@ export default function Book() {
             <input
               type="checkbox"
               checked={share}
-              onChange={(event) => setShare(event.target.checked)}
+              onChange={(event) => {
+                setShare(event.target.checked);
+                /**
+                 * The share version leaves the photos out by default
+                 * (C6.3). Ticking one and then switching used to carry
+                 * it into a book that is meant to show none.
+                 */
+                setPicked([]);
+              }}
             />
             {t("book.share")}
           </label>

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import userEvent from "@testing-library/user-event";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -94,6 +95,19 @@ describe("the keepsake book page (C6.3)", () => {
     expect(screen.getByText("「晚安呀」")).toBeInTheDocument();
     expect(screen.getByText("那天海很蓝")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: translate("zh", "book.photoAlt", { name: "小满" }) })).toBeInTheDocument();
+  });
+
+  it("clears the ticked photos when the share version is turned on (C6.3)", async () => {
+    // The share version leaves the photos out by default; ticking one
+    // before switching used to carry it into the shared book.
+    render(<Book />);
+    const photo = screen.getByRole("checkbox", {
+      name: translate("zh", "book.pickPhoto"),
+    });
+    await userEvent.click(photo);
+    expect(inputs.at(-1)?.photoIds).toEqual([11]);
+    await userEvent.click(screen.getByRole("checkbox", { name: translate("zh", "book.share") }));
+    expect(inputs.at(-1)).toMatchObject({ share: true, photoIds: [] });
   });
 
   it("leaves out a section that has nothing in it (C6.3)", () => {

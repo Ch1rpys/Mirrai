@@ -69,6 +69,7 @@ const PROBE_MESSAGE = "ping";
 function probeForProvider(
   name: string,
   provider: NonNullable<ReturnType<typeof registry.get>>,
+  userId: number,
 ): DiagnoseProviderProbe {
   return {
     name,
@@ -87,6 +88,11 @@ function probeForProvider(
          * it did not need.
          */
         options: { purpose: "other", maxTokens: 1, signal },
+        /**
+         * The probe is a real call to the user's model, so it is
+         * recorded like one (C8.9): the cost panel has to see it.
+         */
+        usage: { userId },
       });
     },
   };
@@ -260,14 +266,14 @@ export function createDiagnoseDeps(userId: number): DiagnoseDeps {
             });
             continue;
           }
-          probes.push(probeForProvider(config.providerName || provider.name, provider));
+          probes.push(probeForProvider(config.providerName || provider.name, provider, userId));
         }
         return probes;
       }
       for (const entry of registry.list()) {
         if (!entry.configured) continue;
         const provider = registry.get(entry.name);
-        if (provider) probes.push(probeForProvider(provider.name, provider));
+        if (provider) probes.push(probeForProvider(provider.name, provider, userId));
       }
       return probes;
     },

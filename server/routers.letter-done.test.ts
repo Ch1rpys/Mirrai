@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { TrpcContext } from "./_core/context";
+import { copy } from "@shared/copy";
 
 /**
  * Ticking a meeting note off (C3.7).
@@ -65,7 +66,12 @@ describe("letter.setDone", () => {
     getLetterById.mockResolvedValue({ id: 9, userId: 1, personaId: 5, kind: "letter" });
     await expect(
       appRouter.createCaller(ctxFor(1)).letter.setDone({ id: 9, done: true }),
-    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      // The sentence is shown to the person, so it is translated; it
+      // used to be an English string written into the server (C3.7).
+      message: copy("zh", "errors.onlyNoteCanBeTicked"),
+    });
     expect(setLetterDone).not.toHaveBeenCalled();
   });
 

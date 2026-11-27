@@ -13,6 +13,10 @@ export const ERRORS = {
     zh: "还没有配置这个模型服务，先把密钥填上再设为默认",
     en: "This provider is not configured yet — add its key before making it the default",
   },
+  "errors.onlyNoteCanBeTicked": {
+    zh: "只有「等 TA 回来再说」的清单能勾掉，信不能",
+    en: "Only a note on the waiting list can be ticked off, not a letter",
+  },
   "errors.replyFailed": {
     zh: "这次没能说出话来，请再试一次",
     en: "The reply could not be produced this time — please try again",
