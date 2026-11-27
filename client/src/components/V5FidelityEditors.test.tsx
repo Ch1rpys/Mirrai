@@ -62,6 +62,10 @@ vi.mock("@/contexts/LocaleContext", () => ({
   }),
 }));
 
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { id: 1, timezone: "Asia/Shanghai" } }),
+}));
+
 import V5FidelityEditors from "./V5FidelityEditors";
 
 describe("the fifth-stage editors", () => {

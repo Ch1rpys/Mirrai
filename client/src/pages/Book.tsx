@@ -17,6 +17,7 @@ import { ArrowLeft, BookOpen, Printer } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { formatDayKey } from "@/lib/dates";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { dayKeyInZone } from "@/lib/day";
 import { useLocale } from "@/contexts/LocaleContext";
 import PageLoader from "@/components/PageLoader";
 import NotFound from "@/pages/NotFound";
@@ -35,15 +36,21 @@ interface TimelineEntry {
   detail: string;
 }
 
-function dayOf(value: string | null | undefined): string | null {
-  return value ? value.slice(0, 10) : null;
-}
-
 export default function Book() {
   const params = useParams<{ id: string }>();
   const personaId = Number.parseInt(params.id ?? "", 10);
   const hasPersonaId = Number.isInteger(personaId) && personaId > 0;
-  const { isAuthenticated, loading: authLoading } = useAuth({ redirectOnUnauthenticated: true });
+  const {
+    isAuthenticated,
+    loading: authLoading,
+    user,
+  } = useAuth({ redirectOnUnauthenticated: true });
+  /**
+   * The day a memory happened is the day it was where the person lives
+   * (C2.6): the stored instant is UTC.
+   */
+  const dayOf = (value: string | null | undefined): string | null =>
+    value ? dayKeyInZone(value, (user as { timezone?: string | null } | null)?.timezone) : null;
   const { t, locale } = useLocale();
   const [share, setShare] = useState(false);
   const [picked, setPicked] = useState<number[]>([]);
@@ -166,7 +173,7 @@ export default function Book() {
               {data.timeline.map((entry: TimelineEntry) => (
                 <li key={entry.id}>
                   <p className="text-xs text-muted-subtle">
-                    {formatDayKey(entry.at.slice(0, 10), locale)}
+                    {formatDayKey(dayOf(entry.at) ?? "", locale)}
                   </p>
                   <p className="text-sm text-foreground mt-0.5">{entry.title}</p>
                   {entry.detail && (

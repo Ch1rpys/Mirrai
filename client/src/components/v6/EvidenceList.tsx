@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "wouter";
 import { useLocale } from "@/contexts/LocaleContext";
 import { formatDayKey } from "@/lib/dates";
+import { useDayKey } from "@/lib/day";
 import {
   fieldIsInferred,
   type EvidenceByDimension,
@@ -68,12 +69,13 @@ export default function EvidenceList(props: {
 }
 
 function EvidenceCardItem(props: { card: EvidenceCard; locale: string; personaId: number }) {
+  const day = useDayKey();
   return (
     <li className="text-sm text-muted-foreground leading-relaxed">
       <p>{props.card.claim}</p>
       {props.card.quotes.map((quote) => {
-        const day = quote.day ?? (quote.at ? quote.at.slice(0, 10) : "");
-        const when = day ? formatDayKey(day, props.locale) : "";
+        const dayKey = quote.day ?? (quote.at ? day(quote.at) : "");
+        const when = dayKey ? formatDayKey(dayKey, props.locale) : "";
         return (
           <p key={quote.recordId} className="mt-1 text-xs">
             {when ? `${when} · ` : ""}

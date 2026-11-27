@@ -23,6 +23,10 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { id: 1, timezone: "Asia/Shanghai" } }),
+}));
+
 import SaidBefore from "./SaidBefore";
 
 describe("the 'did they say this' panel", () => {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useDayKey } from "@/lib/day";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -36,6 +37,7 @@ export default function FirstsList({
   mayFeature: boolean;
 }) {
   const { t } = useLocale();
+  const day = useDayKey();
   const [opened, setOpened] = useState(false);
   const query = trpc.record.firsts.useQuery({ personaId }, { enabled: personaId > 0 });
   if (query.isLoading) return <p className="text-sm text-muted-foreground">{t("common.loading")}</p>;
@@ -65,7 +67,7 @@ export default function FirstsList({
           </p>
           <p className="text-foreground">{item.text}</p>
           <p className="text-[11px] text-muted-foreground">
-            <span>{item.at.slice(0, 10)}</span>
+            <span>{day(item.at)}</span>
             <a
               className="ml-2 underline underline-offset-2"
               href={`/persona/${personaId}/records?at=${item.recordId}`}

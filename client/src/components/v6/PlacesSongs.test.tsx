@@ -42,6 +42,10 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { id: 1, timezone: "Asia/Shanghai" } }),
+}));
+
 import { PlacesPanel, SongsPanel } from "./PlacesSongs";
 
 const place = {

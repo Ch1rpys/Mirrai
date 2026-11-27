@@ -61,6 +61,10 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { id: 1, timezone: "Asia/Shanghai" } }),
+}));
+
 import OurDictionary from "./OurDictionary";
 
 describe("the dictionary", () => {

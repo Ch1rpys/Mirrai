@@ -10,6 +10,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useDayKey } from "@/lib/day";
 import { formatDayKey } from "@/lib/dates";
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
@@ -22,10 +23,6 @@ interface UnfinishedItem {
   context: Array<{ recordId: number; role: string; text: string; at: string | null }>;
 }
 
-function dayOf(value: string | null): string | null {
-  return value ? value.slice(0, 10) : null;
-}
-
 export default function UnfinishedWords({
   personaId,
   name,
@@ -34,6 +31,7 @@ export default function UnfinishedWords({
   name: string;
 }) {
   const { t, locale } = useLocale();
+  const dayOf = useDayKey();
   const list = trpc.unsaid.list.useQuery({ personaId });
   const [answers, setAnswers] = useState<Record<number, string | null>>({});
 

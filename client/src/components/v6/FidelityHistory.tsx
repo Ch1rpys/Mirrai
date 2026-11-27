@@ -12,6 +12,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useDayKey } from "@/lib/day";
 import type { TranslationKey } from "@/i18n";
 import {
   compareAuc,
@@ -45,6 +46,7 @@ export function FidelityHistoryChart(props: {
   versions: HistoryVersion[];
 }) {
   const { t } = useLocale();
+  const day = useDayKey();
   const data = props.points.map((point) => ({
     at: point.at,
     overlap: point.overlap.value,
@@ -62,7 +64,7 @@ export function FidelityHistoryChart(props: {
               dataKey="at"
               type="number"
               domain={["dataMin", "dataMax"]}
-              tickFormatter={(at: number) => new Date(at).toISOString().slice(0, 10)}
+              tickFormatter={(at: number) => day(new Date(at).toISOString())}
               stroke="var(--color-muted-foreground)"
               fontSize={11}
             />
@@ -121,7 +123,7 @@ export function FidelityHistoryChart(props: {
         <ul data-testid="fidelity-version-marks" className="text-[11px] text-muted-subtle space-y-0.5">
           {props.versions.map((version) => (
             <li key={version.id} data-testid="fidelity-version-mark">
-              {version.reason} · {version.createdAt.slice(0, 10)}
+              {version.reason} · {day(version.createdAt)}
             </li>
           ))}
         </ul>

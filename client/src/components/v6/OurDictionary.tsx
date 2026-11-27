@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useDayKey } from "@/lib/day";
 import { Button } from "@/components/ui/button";
 import { normalizeLexicon, type LexiconEntry } from "@shared/lexicon";
 
@@ -13,6 +14,7 @@ import { normalizeLexicon, type LexiconEntry } from "@shared/lexicon";
  */
 export default function OurDictionary({ personaId }: { personaId: number }) {
   const { t } = useLocale();
+  const day = useDayKey();
   const utils = trpc.useUtils();
   const persona = trpc.persona.get.useQuery({ id: personaId }, { enabled: personaId > 0 });
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -90,7 +92,7 @@ export default function OurDictionary({ personaId }: { personaId: number }) {
 
   const renderEntry = (entry: LexiconEntry, candidate: boolean) => {
     const first = entry.evidence[0];
-    const date = first?.at?.slice(0, 10) ?? entry.firstAt?.slice(0, 10) ?? "";
+    const date = first?.at ? day(first.at) : entry.firstAt ? day(entry.firstAt) : "";
     return (
       <div key={entry.id} className="rounded border border-border/70 px-3 py-2 text-sm">
         <p className="text-foreground">
@@ -136,7 +138,7 @@ export default function OurDictionary({ personaId }: { personaId: number }) {
             {first.at && (
               <a
                 className="underline underline-offset-2"
-                href={`/persona/${personaId}/records?atDate=${first.at.slice(0, 10)}`}
+                href={`/persona/${personaId}/records?atDate=${day(first.at)}`}
               >
                 {t("report.dictionary.openRecord")}
               </a>

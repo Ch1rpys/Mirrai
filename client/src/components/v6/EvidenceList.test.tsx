@@ -4,6 +4,10 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 import { emptyEvidenceByDimension, type EvidenceByDimension } from "@shared/evidence-map";
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { id: 1, timezone: "Asia/Shanghai" } }),
+}));
+
 import EvidenceList from "./EvidenceList";
 
 vi.mock("@/contexts/LocaleContext", () => ({

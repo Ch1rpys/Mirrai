@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
@@ -13,16 +13,20 @@ vi.mock("@/contexts/LocaleContext", () => ({
   }),
 }));
 
+const firstsState = vi.hoisted(() => ({
+  value: [
+    { key: "firstLine", recordId: 1, at: "2022-03-01T12:00:00.000Z", text: "在吗", side: "me" },
+    { key: "firstGoodnightThem", recordId: 2, at: "2022-03-02T12:00:00.000Z", text: "晚安", side: "them" },
+    { key: "lastCall", recordId: 3, at: "2024-10-01T12:00:00.000Z", text: "[call:voice:600]", side: "them" },
+  ] as Array<Record<string, unknown>>,
+}));
+
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     record: {
       firsts: {
         useQuery: () => ({
-          data: [
-            { key: "firstLine", recordId: 1, at: "2022-03-01T12:00:00.000Z", text: "在吗", side: "me" },
-            { key: "firstGoodnightThem", recordId: 2, at: "2022-03-02T12:00:00.000Z", text: "晚安", side: "them" },
-            { key: "lastCall", recordId: 3, at: "2024-10-01T12:00:00.000Z", text: "[call:voice:600]", side: "them" },
-          ],
+          data: firstsState.value,
           isLoading: false,
           isError: false,
           refetch: vi.fn(),
@@ -32,9 +36,34 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { id: 1, timezone: "Asia/Shanghai" } }),
+}));
+
 import FirstsList from "./FirstsList";
 
+const defaultFirsts = [
+  { key: "firstLine", recordId: 1, at: "2022-03-01T12:00:00.000Z", text: "在吗", side: "me" },
+  { key: "firstGoodnightThem", recordId: 2, at: "2022-03-02T12:00:00.000Z", text: "晚安", side: "them" },
+  { key: "lastCall", recordId: 3, at: "2024-10-01T12:00:00.000Z", text: "[call:voice:600]", side: "them" },
+];
+
 describe("the firsts list", () => {
+  beforeEach(() => {
+    firstsState.value = defaultFirsts;
+  });
+
+  it("shows the day where the person lived it (C2.6)", () => {
+    // 00:30 in Shanghai is 16:30 UTC the day before; the list used to
+    // print the UTC date, so the first line looked a day early.
+    firstsState.value = [
+      { key: "firstLine", recordId: 1, at: "2022-03-01T16:30:00.000Z", text: "在吗", side: "me" },
+    ];
+    render(<FirstsList personaId={5} mayFeature />);
+    expect(screen.getByText("2022-03-02")).toBeInTheDocument();
+    expect(screen.queryByText("2022-03-01")).toBeNull();
+  });
+
   it("shows the endings for a persona the hall may feature", () => {
     render(<FirstsList personaId={5} mayFeature />);
     expect(screen.getByText(translate("zh", "report.firsts.firstLine"))).toBeInTheDocument();

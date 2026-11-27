@@ -2,6 +2,7 @@ import { useState } from "react";
 import { History } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useDayKey } from "@/lib/day";
 
 /**
  * "Did they ever say this?" (C2.3)
@@ -20,6 +21,7 @@ export default function SaidBefore({
   name: string;
 }) {
   const { t } = useLocale();
+  const day = useDayKey();
   const [open, setOpen] = useState(false);
   /**
    * The hurtful matches the user has opened (C10.1).
@@ -95,7 +97,7 @@ export default function SaidBefore({
                     ) : (
                       match.content
                     )}
-                    {match.at && <span className="ml-1 opacity-70">{match.at.slice(0, 10)}</span>}
+                    {match.at && <span className="ml-1 opacity-70">{day(match.at)}</span>}
                     <a
                       href={`/persona/${personaId}/records?at=${match.id}`}
                       className="ml-1 underline"

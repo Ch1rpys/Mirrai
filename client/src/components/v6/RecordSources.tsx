@@ -2,10 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { useLocale } from "@/contexts/LocaleContext";
-
-function dayLabel(iso: string | null): string {
-  return iso ? iso.slice(0, 10) : "";
-}
+import { useDayKey } from "@/lib/day";
 
 /**
  * The sources already in the record table.
@@ -16,6 +13,7 @@ function dayLabel(iso: string | null): string {
  */
 export default function RecordSources(props: { personaId: number }) {
   const { t } = useLocale();
+  const day = useDayKey();
   const confirm = useConfirm();
   const sources = trpc.record.sources.useQuery(
     { personaId: props.personaId },
@@ -61,8 +59,8 @@ export default function RecordSources(props: { personaId: number }) {
               {row.firstAt && row.lastAt ? (
                 <span className="text-xs text-muted-foreground">
                   {t("upload.recordSourceRange", {
-                    from: dayLabel(row.firstAt),
-                    to: dayLabel(row.lastAt),
+                    from: day(row.firstAt),
+                    to: day(row.lastAt),
                   })}
                 </span>
               ) : null}

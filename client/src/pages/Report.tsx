@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useDayKey } from "@/lib/day";
 import { Button } from "@/components/ui/button";
 import PageLoader from "@/components/PageLoader";
 import NotFound from "@/pages/NotFound";
@@ -51,6 +52,7 @@ export default function Report() {
   const params = useParams<{ id: string }>();
   const personaId = Number(params.id);
   const { t } = useLocale();
+  const day = useDayKey();
   const [tab, setTab] = useState<Tab>("annual");
   const persona = trpc.persona.get.useQuery({ id: personaId }, { enabled: personaId > 0 });
   const report = trpc.record.report.useQuery(
@@ -208,10 +210,10 @@ export default function Report() {
             <p className="text-xs text-muted-foreground">{t("report.longestSilence")}</p>
             {data.longestSilence ? (
               <a
-                href={`/persona/${personaId}/records?atDate=${data.longestSilence.from.slice(0, 10)}`}
+                href={`/persona/${personaId}/records?atDate=${day(data.longestSilence.from)}`}
                 className="underline underline-offset-2"
               >
-                {t("report.days", { n: data.longestSilence.days })} · {data.longestSilence.from.slice(0, 10)}
+                {t("report.days", { n: data.longestSilence.days })} · {day(data.longestSilence.from)}
               </a>
             ) : (
               <p className="text-muted-foreground">{t("report.noData")}</p>

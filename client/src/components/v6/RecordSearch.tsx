@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useDayKey } from "@/lib/day";
 
 /**
  * Search the record, literally and by meaning (C2.2).
@@ -43,6 +44,7 @@ export default function RecordSearch({
   onJump: (recordId: number) => void;
 }) {
   const { t } = useLocale();
+  const day = useDayKey();
   const utils = trpc.useUtils();
   const [q, setQ] = useState("");
   const [role, setRole] = useState<"assistant" | "all">("assistant");
@@ -175,7 +177,7 @@ export default function RecordSearch({
                   {t("records.folded")}
                   <span className="ml-2 text-[11px]">
                     {speakerOf(hit)}
-                    {hit.timestamp ? ` · ${hit.timestamp.slice(0, 10)}` : ""}
+                    {hit.timestamp ? ` · ${day(hit.timestamp)}` : ""}
                   </span>
                 </button>
               ) : (
@@ -188,7 +190,7 @@ export default function RecordSearch({
                 <Highlighted text={hit.content} query={q.trim()} />
                 <span className="ml-2 text-[11px] text-muted-foreground">
                   {speakerOf(hit)}
-                  {hit.timestamp ? ` · ${hit.timestamp.slice(0, 10)}` : ""}
+                  {hit.timestamp ? ` · ${day(hit.timestamp)}` : ""}
                 </span>
               </button>
               )}
@@ -254,7 +256,7 @@ export default function RecordSearch({
                 {hit.content}
                 <span className="ml-2 text-[11px] text-muted-foreground">
                   {speakerOf(hit)}
-                  {hit.timestamp ? ` · ${hit.timestamp.slice(0, 10)}` : ""}
+                  {hit.timestamp ? ` · ${day(hit.timestamp)}` : ""}
                 </span>
               </button>
             ),

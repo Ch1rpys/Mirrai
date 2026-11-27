@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useDayKey } from "@/lib/day";
 import { Button } from "@/components/ui/button";
 import { isSafeMediaUrl } from "@shared/safe-url";
 
@@ -22,6 +23,7 @@ function hostOf(url: string): string {
 
 export function PlacesPanel({ personaId }: { personaId: number }) {
   const { t } = useLocale();
+  const day = useDayKey();
   const query = trpc.record.places.useQuery({ personaId }, { enabled: personaId > 0 });
   const [basemap, setBasemap] = useState(false);
   const container = useRef<HTMLDivElement>(null);
@@ -115,7 +117,7 @@ export function PlacesPanel({ personaId }: { personaId: number }) {
           <div key={`${place.name}-${place.lat ?? ""}-${place.lng ?? ""}`} className="rounded border border-border/70 px-3 py-2 text-sm">
             <p className="text-foreground">{place.name}</p>
             <p className="text-[11px] text-muted-foreground">
-              {t("report.places.count", { n: place.count })} · {t("report.places.first", { date: place.first.slice(0, 10) })} · {t("report.places.last", { date: place.last.slice(0, 10) })}
+              {t("report.places.count", { n: place.count })} · {t("report.places.first", { date: day(place.first) })} · {t("report.places.last", { date: day(place.last) })}
             </p>
             {place.samples.length > 0 && (
               <p className="mt-1 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
@@ -127,7 +129,7 @@ export function PlacesPanel({ personaId }: { personaId: number }) {
                       href={`/persona/${personaId}/records?at=${sample.recordId}`}
                       className="underline underline-offset-2"
                     >
-                      {sample.at.slice(0, 10)}
+                      {day(sample.at)}
                     </a>
                   ) : sample.url ? (
                     <a
@@ -137,10 +139,10 @@ export function PlacesPanel({ personaId }: { personaId: number }) {
                       rel="noopener noreferrer"
                       className="underline underline-offset-2"
                     >
-                      {sample.at.slice(0, 10)}
+                      {day(sample.at)}
                     </a>
                   ) : (
-                    <span key={`m-${sample.mediaId}`}>{sample.at.slice(0, 10)}</span>
+                    <span key={`m-${sample.mediaId}`}>{day(sample.at)}</span>
                   )
                 ))}
               </p>
@@ -154,6 +156,7 @@ export function PlacesPanel({ personaId }: { personaId: number }) {
 
 export function SongsPanel({ personaId }: { personaId: number }) {
   const { t } = useLocale();
+  const day = useDayKey();
   const query = trpc.record.songs.useQuery({ personaId }, { enabled: personaId > 0 });
   if (query.isLoading) return <p className="text-sm text-muted-foreground">{t("common.loading")}</p>;
   if (query.isError) {
@@ -185,7 +188,7 @@ export function SongsPanel({ personaId }: { personaId: number }) {
             {song.artist && <span className="text-muted-foreground"> · {song.artist}</span>}
           </p>
           <p className="text-[11px] text-muted-foreground">
-            {t("report.songs.sharedByMe", { n: song.sharedByMe })} · {t("report.songs.sharedByThem", { n: song.sharedByThem })} · {t("report.songs.first", { date: song.first.slice(0, 10) })}
+            {t("report.songs.sharedByMe", { n: song.sharedByMe })} · {t("report.songs.sharedByThem", { n: song.sharedByThem })} · {t("report.songs.first", { date: day(song.first) })}
           </p>
         </div>
       ))}

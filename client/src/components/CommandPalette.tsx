@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useDayKey } from "@/lib/day";
 import { Search, MessageSquare, User, X, Bookmark, BookOpen } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
@@ -14,6 +15,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
  */
 export default function CommandPalette() {
   const { t } = useLocale();
+  const day = useDayKey();
   const [, navigate] = useLocation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -240,7 +242,7 @@ export default function CommandPalette() {
                       <span className="block text-xs text-muted-foreground">
                         {hit.personaName}
                         {hit.timestamp && (
-                          <span className="ml-1.5 opacity-70">{hit.timestamp.slice(0, 10)}</span>
+                          <span className="ml-1.5 opacity-70">{day(hit.timestamp)}</span>
                         )}
                       </span>
                       <span className={`block text-sm line-clamp-2 ${folded ? "text-muted-foreground" : "text-foreground"}`}>

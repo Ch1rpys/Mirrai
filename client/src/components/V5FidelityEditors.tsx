@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useDayKey } from "@/lib/day";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -116,6 +117,7 @@ function SuppressionsEditor({ personaId }: { personaId: number }) {
 }
 
 function LifeEventsEditor({ personaId }: { personaId: number }) {
+  const day = useDayKey();
   const { t, locale } = useLocale();
   const lang = locale === "en" ? "en" : "zh";
   const { data, refetch, isError } = trpc.lifeEvent.list.useQuery({ personaId });
@@ -213,7 +215,7 @@ function LifeEventsEditor({ personaId }: { personaId: number }) {
                 <ul className="mt-1 space-y-0.5">
                   {event.evidence.map((row, index) => (
                     <li key={`${row.at ?? ""}:${index}`} className="leading-relaxed">
-                      {row.at ? `${row.at.slice(0, 10)} ` : ""}{row.snippet}
+                      {row.at ? `${day(row.at)} ` : ""}{row.snippet}
                     </li>
                   ))}
                 </ul>

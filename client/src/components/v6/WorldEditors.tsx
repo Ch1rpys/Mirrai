@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useDayKey } from "@/lib/day";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -44,6 +45,7 @@ const POLARITY_LABEL: Record<StancePolarity, TranslationKey> = {
 };
 
 function EvidenceLines({ evidence }: { evidence: Array<{ at?: string; snippet: string }> }) {
+  const day = useDayKey();
   const { t } = useLocale();
   if (evidence.length === 0) return null;
   return (
@@ -52,7 +54,7 @@ function EvidenceLines({ evidence }: { evidence: Array<{ at?: string; snippet: s
       <ul className="mt-1 space-y-0.5">
         {evidence.map((row, index) => (
           <li key={`${row.at ?? ""}:${index}`} className="leading-relaxed">
-            {row.at ? `${row.at.slice(0, 10)} ` : ""}{row.snippet}
+            {row.at ? `${day(row.at)} ` : ""}{row.snippet}
           </li>
         ))}
       </ul>
