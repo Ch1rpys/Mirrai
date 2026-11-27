@@ -1228,6 +1228,7 @@ export default function Chat() {
               emotionalState: result.emotionalState,
               createdAt: new Date(),
               isStreaming: false,
+              provenance: result.provenance ?? undefined,
               ...(result.voice
                 ? {
                     messageType: "voice" as const,

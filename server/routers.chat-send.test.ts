@@ -169,3 +169,39 @@ describe("taking a stretch of the record into a turn", () => {
     expect(runConversation).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * The words that were said before (C10.7).
+ *
+ * The streaming route carries them on `done`; the non-streaming
+ * mutation collected the event and then dropped the variable, so a
+ * server without the streaming endpoint lost them.
+ */
+describe("provenance on the non-streaming path", () => {
+  const spans = [{ start: 0, end: 2, recordId: 11, at: "2023-03-04T12:00:00.000Z" }];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getPersonaById.mockResolvedValue({ id: 5, userId: 1, name: "小A", analysisStatus: "ready" });
+    updatePersona.mockResolvedValue(undefined);
+    runConversation.mockImplementation(async function* () {
+      yield {
+        type: "done",
+        messageId: 9,
+        emotionalState: "warm",
+        graduationSuggested: false,
+        careNote: null,
+        crisis: false,
+        lateNight: false,
+        provenance: spans,
+      };
+    });
+  });
+
+  it("returns the spans the turn computed", async () => {
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .chat.send({ personaId: 5, message: "在吗？", locale: "zh" });
+    expect((result as { provenance?: unknown }).provenance).toEqual(spans);
+  });
+});

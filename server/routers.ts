@@ -3617,6 +3617,15 @@ export const appRouter = router({
           superseded,
           ...(extra ? { extra } : {}),
           ...(voice ? { voice } : {}),
+          /**
+           * The words in the reply that were said before (C10.7).
+           *
+           * The streaming route carried them on `done`; this route
+           * collected them and then dropped the variable, so a server
+           * without the streaming endpoint showed an unmarked bubble
+           * until the transcript was reloaded.
+           */
+          ...(provenance.length > 0 ? { provenance } : {}),
         };
       }),
 
