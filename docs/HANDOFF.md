@@ -27,23 +27,20 @@
 
 - 仓库：`/Users/ch1rpy/Desktop/Mirrai`
 - 栈：React 19 + Vite + tRPC v11 + Tailwind v4（前端）；Express + tRPC + Drizzle/Postgres + Redis（后端）；`shared/` 是中英双语文案目录（前后端共用）
-- **Node 必须用 22**：默认的 Node 24 加载不了原生 rollup/esbuild 模块
+- **Node 用 24**（这台机器上 `node --version` 是 v24.14.1；`package.json` 要求 `>= 24`）。第六阶段全部闸门都在 Node 24 上跑过，原生 rollup/esbuild 模块正常加载。这里原来写着「Node 必须用 22」，那一条已经过时。
 
 ```bash
-NODE=~/.nvm/versions/node/v22.22.2/bin/node
-export PATH="/Users/ch1rpy/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/node/bin:$PATH"
-
 # 类型检查（不要 grep 过滤，要读完整输出！）
-$NODE node_modules/typescript/bin/tsc --noEmit
+node node_modules/typescript/bin/tsc --noEmit
 
 # 全量测试
-$NODE node_modules/vitest/vitest.mjs run --reporter=dot
+node node_modules/vitest/vitest.mjs run --reporter=dot
 
 # 客户端构建
-$NODE node_modules/vite/bin/vite.js build
+node node_modules/vite/bin/vite.js build
 
 # 服务端打包
-$NODE node_modules/esbuild/bin/esbuild server/_core/index.ts --platform=node \
+node node_modules/esbuild/bin/esbuild server/_core/index.ts --platform=node \
   --packages=external --bundle --format=esm --outdir=dist
 ```
 

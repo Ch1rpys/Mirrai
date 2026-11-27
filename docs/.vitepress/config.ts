@@ -68,7 +68,8 @@ export default defineConfig({
       {
         text: "路线图",
         items: [
-          { text: "第五阶段（当前）", link: "/roadmap-v5" },
+          { text: "第六阶段（当前）", link: "/roadmap-v6" },
+          { text: "第五阶段", link: "/roadmap-v5" },
           { text: "第四阶段", link: "/roadmap-v4" },
           { text: "第三阶段", link: "/roadmap-v3" },
           { text: "第二阶段", link: "/roadmap-v2" },
@@ -97,6 +98,7 @@ export default defineConfig({
           { text: "第三阶段", link: "/roadmap-v3" },
           { text: "第四阶段", link: "/roadmap-v4" },
           { text: "第五阶段", link: "/roadmap-v5" },
+          { text: "第六阶段", link: "/roadmap-v6" },
         ],
       },
       {
