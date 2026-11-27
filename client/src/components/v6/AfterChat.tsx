@@ -58,22 +58,31 @@ export default function AfterChat({
     onSuccess: () => setWorseDismissed(true),
   });
 
+  // The first render uses the query's answer; once captured, the local
+  // copy keeps the question on screen through a refetch.
+  const activePrompt = prompt ?? data?.pending ?? null;
+  const stillAsking = Boolean(activePrompt && !answered);
+  // The card is on screen only once the question is out of the way.
+  const showingWorse = Boolean(data?.worse) && !worseDismissed && !stillAsking;
+
   /**
    * The card is shown once.
    *
    * Showing it records that it was shown, so a reload does not bring it
    * back and the transparency panel does not collect a copy every time
    * the page opens.
+   *
+   * It is recorded only when the card is actually drawn. The question
+   * comes first, and acknowledging on `worse` alone marked the card as
+   * shown while the early return was still showing the question — a
+   * person who never answered then never saw the card.
    */
   useEffect(() => {
-    if (!data?.worse || acknowledged) return;
+    if (!showingWorse || acknowledged) return;
     setAcknowledged(true);
     acknowledge.mutate({ personaId });
-  }, [data?.worse, acknowledged, acknowledge, personaId]);
+  }, [showingWorse, acknowledged, acknowledge, personaId]);
 
-  // The first render uses the query's answer; once captured, the local
-  // copy keeps the question on screen through a refetch.
-  const activePrompt = prompt ?? data?.pending ?? null;
   if (activePrompt && !answered) {
     const sessionStartAt = activePrompt.sessionStartAt;
     return (
@@ -102,7 +111,7 @@ export default function AfterChat({
     );
   }
 
-  if (data?.worse && !worseDismissed) {
+  if (showingWorse) {
     return (
       <div className="container max-w-2xl mx-auto mb-3" data-after-chat="worse">
         <div className="rounded-xl border border-border/70 bg-muted/20 px-4 py-3 space-y-2">

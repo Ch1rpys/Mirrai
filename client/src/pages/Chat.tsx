@@ -2213,7 +2213,7 @@ export default function Chat() {
         personaId={personaId}
         name={displayName || t("common.them")}
         nextMeetAt={normalizePersonaSettings(persona?.settings).ldr?.nextMeetAt}
-        timezone={persona?.timezone || user?.timezone}
+        timezone={user?.timezone ?? persona?.timezone}
       />
 
       {/* Asked once, the next time the chat is opened after the day (C5.1). */}

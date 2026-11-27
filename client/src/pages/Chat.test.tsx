@@ -2,6 +2,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { zonedDateKey } from "@shared/timezone";
 import { translate } from "@/i18n";
 
 /**
@@ -13,6 +14,10 @@ import { translate } from "@/i18n";
  */
 
 const history: unknown[] = [];
+/** The signed-in user. Only the meeting-day test changes the zone. */
+const authUser = vi.hoisted(() => ({ timezone: "Asia/Shanghai" as string | null }));
+/** The notes kept for later; the meeting-day line needs one open note. */
+const meetingTodos: Array<{ id: number; doneAt: string | null }> = [];
 const chatPersona = vi.hoisted(() => ({
   value: {
     id: 1,
@@ -42,7 +47,7 @@ vi.mock("@/lib/chat-stream", () => ({
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    letter: { todos: { useQuery: () => ({ data: { todos: [] } }) } },
+    letter: { todos: { useQuery: () => ({ data: { todos: meetingTodos } }) } },
     persona: {
       get: {
         useQuery: () => ({
@@ -161,7 +166,7 @@ vi.mock("@/lib/trpc", () => ({
 vi.mock("@/_core/hooks/useAuth", () => ({
   // An id matters: the draft is stored per user, and without one the
   // page wrote `mirrai:draft:anon:1` while the test looked for `:1:1`.
-  useAuth: () => ({ isAuthenticated: true, user: { id: 1, timezone: "Asia/Shanghai" } }),
+  useAuth: () => ({ isAuthenticated: true, user: { id: 1, timezone: authUser.timezone } }),
 }));
 
 vi.mock("wouter", () => ({
@@ -199,7 +204,10 @@ describe("Chat", () => {
     clientMutation.mockReset();
     streamingUnsupported.value = false;
     history.length = 0;
+    meetingTodos.length = 0;
+    authUser.timezone = "Asia/Shanghai";
     delete chatPersona.value.settings;
+    delete chatPersona.value.timezone;
     Element.prototype.scrollIntoView = vi.fn();
     localStorage.clear();
     markAdd.mockReset();
@@ -227,6 +235,25 @@ describe("Chat", () => {
     const { container } = render(<Chat />);
     expect(container.querySelector(".chat-root")?.getAttribute("data-skin")).toBe("classic");
     expect(screen.getByText("数字分身")).toBeInTheDocument();
+  });
+
+  it("puts the meeting-day line on the user's day, not the persona's (C3.7)", () => {
+    /**
+     * The two zones are twenty-five hours apart, so their calendars
+     * never name the same day. The manual's acceptance is the user's
+     * day, and the entry used to follow the persona's instead.
+     */
+    authUser.timezone = "Pacific/Kiritimati";
+    chatPersona.value.timezone = "Pacific/Pago_Pago";
+    chatPersona.value.settings = {
+      ldr: { nextMeetAt: zonedDateKey(new Date(), "Pacific/Kiritimati") },
+    };
+    meetingTodos.push({ id: 1, doneAt: null });
+    render(<Chat />);
+    // The exact line, not the header's shorter "今天见面" countdown.
+    expect(
+      screen.getByText("今天见面。有 1 件「等 小A 回来再说」的事 →"),
+    ).toBeInTheDocument();
   });
 
   it("turns itself down when the server says it is the middle of the night (C10.5)", async () => {

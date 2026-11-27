@@ -121,6 +121,27 @@ describe("after a conversation", () => {
     expect(acknowledge).toHaveBeenCalledWith({ personaId: 5 });
   });
 
+  it("does not record the pause card as shown before it is drawn", async () => {
+    const user = userEvent.setup();
+    /**
+     * The question is asked first and the card comes after it.
+     *
+     * The card used to be acknowledged on the query alone, so a visit
+     * that only ever showed the question marked the card as shown
+     * without drawing it — and a person who did not answer never saw it.
+     */
+    pendingState = { data: { pending: { sessionStartAt }, worse: true } };
+    render(<AfterChat personaId={5} name="小满" />);
+    expect(screen.queryByText(translate("zh", "afterChat.worseCard", { name: "小满" }))).toBeNull();
+    expect(acknowledge).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: translate("zh", "afterChat.better") }));
+
+    expect(await screen.findByText(translate("zh", "afterChat.worseCard", { name: "小满" }))).toBeInTheDocument();
+    expect(acknowledge).toHaveBeenCalledTimes(1);
+    expect(acknowledge).toHaveBeenCalledWith({ personaId: 5 });
+  });
+
   it("slows down only when the user says so", async () => {
     const user = userEvent.setup();
     pendingState = { data: { pending: null, worse: true } };

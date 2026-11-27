@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocale } from "@/contexts/LocaleContext";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { parseZoneless, zonedDateKey, zonedHour, zonedMinute } from "@shared/timezone";
 import type { RecordKind } from "@shared/records";
 
 interface EditableRow {
@@ -18,6 +20,36 @@ interface EditableRow {
 
 const MAX_SCREENSHOTS = 30;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+
+/**
+ * The instant as the wall clock the user reads, in the shape a
+ * `datetime-local` input takes.
+ *
+ * The column used to print the stored UTC digits, so a message sent at
+ * 12:30 showed as 04:30 to a reader in Shanghai. A record's time is the
+ * user's own clock — the same clock every other date on the page is
+ * read on.
+ */
+function wallClockInZone(at: string, timeZone?: string | null): string {
+  const date = new Date(at);
+  if (Number.isNaN(date.getTime())) return "";
+  const hour = String(zonedHour(date, timeZone)).padStart(2, "0");
+  const minute = String(zonedMinute(date, timeZone)).padStart(2, "0");
+  return `${zonedDateKey(date, timeZone)}T${hour}:${minute}`;
+}
+
+/**
+ * The instant an edited wall clock names, read in the user's zone.
+ *
+ * `new Date(value)` reads the digits on the *browser's* clock, so a
+ * Shanghai user on a machine set to London stored a moment eight hours
+ * off every time they corrected a time. The edit is read on the clock
+ * the column is shown on.
+ */
+function instantForWallClock(value: string, timeZone?: string | null): string | null {
+  if (!value) return null;
+  return parseZoneless(value, timeZone)?.toISOString() ?? null;
+}
 
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -43,6 +75,8 @@ export default function ScreenshotImport({
   personaName: string;
 }) {
   const { t } = useLocale();
+  const { user } = useAuth();
+  const timezone = (user as { timezone?: string | null } | null)?.timezone ?? null;
   const capabilities = trpc.system.capabilities.useQuery();
   const [images, setImages] = useState<Array<{ name: string; base64: string }>>([]);
   const [date, setDate] = useState("");
@@ -213,12 +247,10 @@ export default function ScreenshotImport({
                 />
                 <input
                   type="datetime-local"
-                  value={row.at ? row.at.slice(0, 16) : ""}
+                  value={row.at ? wallClockInZone(row.at, timezone) : ""}
                   onChange={(event) =>
                     updateRow(index, {
-                      at: event.target.value
-                        ? new Date(event.target.value).toISOString()
-                        : null,
+                      at: instantForWallClock(event.target.value, timezone),
                     })
                   }
                   aria-label={t("screenshot.time")}

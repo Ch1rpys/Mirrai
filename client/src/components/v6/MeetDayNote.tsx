@@ -21,6 +21,11 @@ export default function MeetDayNote({
   personaId: number;
   name: string;
   nextMeetAt?: string | null;
+  /**
+   * The *user's* own zone. The manual's acceptance is that the entry
+   * appears on the meeting day where the reader is — TA's zone would
+   * put the line on the wrong day when the two calendars disagree.
+   */
   timezone?: string | null;
   /** Fixed in tests. */
   now?: Date;

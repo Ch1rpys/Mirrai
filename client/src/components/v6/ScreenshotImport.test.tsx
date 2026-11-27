@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
 const capabilities = vi.hoisted(() => ({ visionProviders: ["OpenAI"] as string[] }));
+/** The reader's own zone — the time column has to be read on it. */
+const authTimezone = vi.hoisted(() => ({ value: "Asia/Shanghai" as string | null }));
 const previewMutate = vi.fn();
 const confirmMutate = vi.fn();
 
@@ -67,6 +69,10 @@ vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { id: 1, timezone: authTimezone.value }, isAuthenticated: true, loading: false }),
+}));
+
 vi.mock("@/contexts/LocaleContext", () => ({
   useLocale: () => ({
     t: (key: any, params?: any) => translate("zh", key, params),
@@ -96,11 +102,26 @@ function chooseScreenshot() {
   return input;
 }
 
+/** Chooses a screenshot, reads it, and returns the reviewer's handle. */
+async function reviewRows() {
+  const user = userEvent.setup();
+  render(<ScreenshotImport personaId={5} personaName="小满" />);
+  chooseScreenshot();
+  await waitFor(() => expect(screen.getByText(translate("zh", "screenshot.chosen", { n: 1 }))).toBeInTheDocument());
+  await user.click(screen.getByRole("button", { name: translate("zh", "screenshot.recognize") }));
+  return user;
+}
+
+function timeInputs(): HTMLInputElement[] {
+  return screen.getAllByLabelText(translate("zh", "screenshot.time")) as HTMLInputElement[];
+}
+
 describe("importing screenshots", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal("FileReader", FakeFileReader);
     capabilities.visionProviders = ["OpenAI"];
+    authTimezone.value = "Asia/Shanghai";
   });
 
   it("greys the entry out when no model can see", () => {
@@ -145,5 +166,35 @@ describe("importing screenshots", () => {
         },
       ],
     });
+  });
+
+  it("shows the stored instant on the reader's own clock, not in UTC", async () => {
+    await reviewRows();
+    // 04:30Z is 12:30 in Shanghai. The column used to print the UTC
+    // digits, so the user read 04:30 for a message sent at noon.
+    expect(timeInputs()[0]!.value).toBe("2024-06-01T12:30");
+  });
+
+  it("writes an edited time as the clock the column shows", async () => {
+    authTimezone.value = "America/New_York";
+    const user = await reviewRows();
+    // 04:30Z is 00:30 in New York, the zone the column is read on.
+    expect(timeInputs()[0]!.value).toBe("2024-06-01T00:30");
+    fireEvent.change(timeInputs()[0]!, { target: { value: "2024-06-01T12:30" } });
+    await user.click(screen.getByRole("button", { name: translate("zh", "screenshot.confirm", { n: 2 }) }));
+    const sent = confirmMutate.mock.calls[0]![0] as { rows: Array<{ at: string | null }> };
+    // Noon in New York is 16:30Z. The browser's own zone must not
+    // re-interpret what the user typed.
+    expect(sent.rows[0]!.at).toBe("2024-06-01T16:30:00.000Z");
+  });
+
+  it("round-trips an edit back to the instant it showed", async () => {
+    authTimezone.value = "America/New_York";
+    const user = await reviewRows();
+    fireEvent.change(timeInputs()[0]!, { target: { value: "2024-06-01T01:30" } });
+    fireEvent.change(timeInputs()[0]!, { target: { value: "2024-06-01T00:30" } });
+    await user.click(screen.getByRole("button", { name: translate("zh", "screenshot.confirm", { n: 2 }) }));
+    const sent = confirmMutate.mock.calls[0]![0] as { rows: Array<{ at: string | null }> };
+    expect(sent.rows[0]!.at).toBe("2024-06-01T04:30:00.000Z");
   });
 });
