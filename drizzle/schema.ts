@@ -2533,3 +2533,23 @@ export const groupMessages = pgTable("group_messages", {
 
 export type GroupMessage = typeof groupMessages.$inferSelect;
 export type InsertGroupMessage = typeof groupMessages.$inferInsert;
+
+// ─── Consent (C10.3) ───────────────────────────────────────────────────────
+//
+// The person a persona is rebuilt from can say no. When they do, the
+// persona is removed for good — file bytes, rows, bin and all — and one
+// row is left here: who removed it, and when. There is no content, no
+// name and no persona id, so the tombstone cannot outlive the promise it
+// records by telling anybody anything about the person.
+
+/** One "the other person said no" removal. */
+export const consentRemovals = pgTable("consent_removals", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("consent_removals_user_idx").on(table.userId),
+}));
+
+export type ConsentRemoval = typeof consentRemovals.$inferSelect;
+export type InsertConsentRemoval = typeof consentRemovals.$inferInsert;

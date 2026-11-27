@@ -43,6 +43,7 @@ import {
   messageMarks, InsertMessageMark, MessageMark,
   groupRooms, groupRoomMembers, groupMessages,
   type GroupRoom, type GroupRoomMember, type GroupMessage,
+  consentRemovals,
   schemaMigrations,
 } from "../drizzle/schema";
 import { BUILTIN_SCENE_DEFINITIONS } from "@shared/copy/scenes";
@@ -1693,6 +1694,26 @@ async function removeStoredFiles(keys: string[]): Promise<void> {
   await Promise.all(keys.map((key) => storageDelete(key).catch(() => false)));
 }
 
+/**
+ * Removes a persona's own directories, after its files are unlinked.
+ *
+ * Unlinking the files left the empty `personas/<user>/<persona>` and
+ * `chat/<user>/<persona>` chains behind. Nothing read them, but "the
+ * persona is gone" is a promise about the disk too — and a leftover
+ * directory is a filename-shaped statement that it was there.
+ *
+ * Both prefixes encode the owner and the persona, so the whole tree
+ * under them belongs to this persona. A key that would escape the
+ * uploads root is refused inside `storageDeleteTree`.
+ */
+async function removePersonaDirectories(userId: number, personaId: number): Promise<void> {
+  const { storageDeleteTree } = await import("./storage");
+  await Promise.all([
+    storageDeleteTree(`personas/${userId}/${personaId}`).catch(() => false),
+    storageDeleteTree(`chat/${userId}/${personaId}`).catch(() => false),
+  ]);
+}
+
 export async function deleteUserAccount(id: number) {
   /**
    * soft-delete: include-deleted — deleting the account deletes every
@@ -1714,6 +1735,7 @@ export async function deleteUserAccount(id: number) {
 
   await withTransaction(async (tx) => {
     await tx.delete(apiKeys).where(eq(apiKeys.userId, id));
+    await tx.delete(consentRemovals).where(eq(consentRemovals.userId, id));
     await tx.delete(channelBindings).where(eq(channelBindings.userId, id));
     await tx.delete(channelDefaultPersonas).where(eq(channelDefaultPersonas.userId, id));
     await tx.delete(channelStates).where(eq(channelStates.userId, id));
@@ -2835,6 +2857,82 @@ export async function purgePersona(id: number, userId: number) {
   });
 
   await removeStoredFiles(storedFiles);
+  await removePersonaDirectories(userId, id);
+}
+
+// ─── Consent (C10.3) ───────────────────────────────────────────────────────
+
+/**
+ * Notes that a persona was removed because the person said no.
+ *
+ * Deliberately content-free: owner and moment, nothing else. It is how
+ * the app can say "the promise was kept" without keeping the promise's
+ * subject.
+ */
+export async function createConsentRemoval(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(consentRemovals).values({ userId: userId });
+}
+
+/** How many "said no" removals an account has recorded. Tests use it. */
+export async function countConsentRemovals(userId: number): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const rows = await db
+    .select({ n: count() })
+    .from(consentRemovals)
+    .where(eq(consentRemovals.userId, userId));
+  return Number(rows[0]?.n ?? 0);
+}
+
+/**
+ * Finds the persona a consent link belongs to.
+ *
+ * The link is opened by the other person, who has no account here — so
+ * there is no `userId` to filter by. The lookup is by the hash of a
+ * 32-byte token, which is only in the link that was handed out, and the
+ * row that answered it is still told apart by its owner id inside the
+ * caller.
+ *
+ * A persona in the recycle bin has no consent link: the bin is the
+ * owner taking it back, not the modelled person answering.
+ */
+export interface ConsentPersona {
+  id: number;
+  userId: number;
+  name: string;
+  settings: unknown;
+}
+
+export async function findPersonaByConsentTokenHash(
+  tokenHash: string,
+): Promise<ConsentPersona | undefined> {
+  const db = await getDb();
+  if (!db) return undefined;
+  if (!tokenHash) return undefined;
+  /**
+   * Only the columns the public page needs.
+   *
+   * The persona's data may be ciphertext, and a public request has no
+   * key; selecting the whole row would decrypt it and fail. The name and
+   * the settings are not encrypted — they are what the page and the chat
+   * gate read.
+   */
+  const rows = await db
+    .select({
+      id: personas.id,
+      userId: personas.userId,
+      name: personas.name,
+      settings: personas.settings,
+    })
+    .from(personas)
+    .where(and(
+      sql`${personas.settings} #>> '{consentLink,tokenHash}' = ${tokenHash}`,
+      isNull(personas.deletedAt),
+    ))
+    .limit(1);
+  return rows[0];
 }
 
 // ─── Undo and the recycle bin (C8.11) ───────────────────────────────────────
