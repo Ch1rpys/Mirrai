@@ -70,6 +70,9 @@ export default function WellbeingTrends() {
         better: recent.checkins.better,
         same: recent.checkins.same,
         worse: recent.checkins.worse,
+        previousBetter: previous.checkins.better,
+        previousSame: previous.checkins.same,
+        previousWorse: previous.checkins.worse,
       }),
     },
     {

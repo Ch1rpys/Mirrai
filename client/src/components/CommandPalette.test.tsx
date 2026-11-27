@@ -19,6 +19,9 @@ let results: any[] = [];
 let records: any[] = [];
 /** Whether the search failed. */
 let searchFailed = false;
+/** State of the separate records search (C2.2 groups). */
+let recordsFailed = false;
+let recordsLoading = false;
 
 vi.mock("wouter", () => ({
   useLocation: () => ["/chat", navigate],
@@ -28,7 +31,11 @@ vi.mock("@/lib/trpc", () => ({
   trpc: {
     persona: { list: { useQuery: () => ({ data: personas }) } },
     chat: { searchAll: { useQuery: () => ({ data: results, isError: searchFailed, isFetching: false }) } },
-    record: { searchAll: { useQuery: () => ({ data: records, isError: false, isFetching: false }) } },
+    record: {
+      searchAll: {
+        useQuery: () => ({ data: records, isError: recordsFailed, isFetching: recordsLoading }),
+      },
+    },
   },
 }));
 
@@ -50,6 +57,8 @@ describe("the command palette", () => {
     results = [];
     records = [];
     searchFailed = false;
+    recordsFailed = false;
+    recordsLoading = false;
   });
 
   it("does not tell the user they wrote nothing when the search failed", async () => {
@@ -70,6 +79,39 @@ describe("the command palette", () => {
     searchFailed = true;
     await user.type(screen.getByPlaceholderText(translate("zh", "commandPalette.placeholder")), "海边");
 
+    await waitFor(() => {
+      expect(screen.getByText(translate("zh", "common.error"))).toBeInTheDocument();
+    });
+    expect(screen.queryByText(translate("zh", "commandPalette.noResults"))).toBeNull();
+  });
+
+  it("does not say nothing was found while the records group is still loading", async () => {
+    // The records are a second query; the "searching" and "empty" states
+    // only followed the messages query — so during the first keystrokes
+    // the palette said there was nothing, then the records arrived.
+    const user = userEvent.setup();
+    render(<CommandPalette />);
+    await user.keyboard("{Meta>}k{/Meta}");
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(translate("zh", "commandPalette.placeholder"))).toBeInTheDocument();
+    });
+    recordsLoading = true;
+    await user.type(screen.getByPlaceholderText(translate("zh", "commandPalette.placeholder")), "海边");
+    await waitFor(() => {
+      expect(screen.getByText(translate("zh", "commandPalette.searching"))).toBeInTheDocument();
+    });
+    expect(screen.queryByText(translate("zh", "commandPalette.noResults"))).toBeNull();
+  });
+
+  it("says the records search failed rather than leaving the group out", async () => {
+    const user = userEvent.setup();
+    render(<CommandPalette />);
+    await user.keyboard("{Meta>}k{/Meta}");
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(translate("zh", "commandPalette.placeholder"))).toBeInTheDocument();
+    });
+    recordsFailed = true;
+    await user.type(screen.getByPlaceholderText(translate("zh", "commandPalette.placeholder")), "海边");
     await waitFor(() => {
       expect(screen.getByText(translate("zh", "common.error"))).toBeInTheDocument();
     });

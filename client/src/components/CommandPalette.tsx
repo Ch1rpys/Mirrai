@@ -28,6 +28,14 @@ export default function CommandPalette() {
     { q: query.trim() },
     { enabled: open && query.trim().length > 0 },
   );
+  /**
+   * The records group is its own query (C2.2), so its pending and failed
+   * states are its own too. Reading only the messages query meant the
+   * palette said "nothing found" while the records were still on their
+   * way, and left the records out entirely when their request failed.
+   */
+  const searchPending = results.isFetching || recordHits.isFetching;
+  const searchFailed = results.isError || recordHits.isError;
 
   // ⌘K / Ctrl-K, and Escape to close.
   useEffect(() => {
@@ -127,7 +135,7 @@ export default function CommandPalette() {
          */}
         <div className="max-h-[60vh] overflow-y-auto p-2">
           <div role="status" aria-live="polite" className="sr-only">
-            {query.trim() && !results.isFetching
+            {query.trim() && !searchPending
               ? t("commandPalette.resultCount", {
                   count:
                     matchingPersonas.length + matchingMessages.length + matchingRecords.length,
@@ -227,7 +235,7 @@ export default function CommandPalette() {
               palette flashed "no results" before the first results
               arrived — and again on every keystroke. A wrong answer
               where a pending one belongs. */}
-          {query.trim() && results.isFetching && (
+          {query.trim() && searchPending && (
             <p className="text-xs text-muted-foreground text-center py-6" role="status">
               {t("commandPalette.searching")}
             </p>
@@ -241,13 +249,13 @@ export default function CommandPalette() {
            * searched for something they had written, and the app said
            * they had not written it.
            */}
-          {query.trim() && results.isError && (
+          {query.trim() && searchFailed && (
             <p className="text-xs text-destructive text-center py-6" role="alert">
               {t("common.error")}
             </p>
           )}
 
-          {query.trim() && !results.isFetching && !results.isError && matchingPersonas.length === 0 && matchingMessages.length === 0 && matchingRecords.length === 0 && (
+          {query.trim() && !searchPending && !searchFailed && matchingPersonas.length === 0 && matchingMessages.length === 0 && matchingRecords.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-6" role="status">
               {t("commandPalette.noResults")}
             </p>

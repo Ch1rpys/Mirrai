@@ -210,6 +210,16 @@ describe("editing a persona", () => {
     };
   });
 
+  it("uses the memorial words for the two dates (C7.1)", () => {
+    persona.settings = { mode: "memorial" };
+    render(<PersonaEdit />);
+    // 「分开日期」 is wrong for somebody who has died: the dates are
+    // when they met and when they left.
+    expect(screen.getByText("认识的日子")).toBeInTheDocument();
+    expect(screen.getByText("离开的日子（可选）")).toBeInTheDocument();
+    expect(screen.queryByText("分开日期（可选）")).toBeNull();
+  });
+
   it("gives every field a name a screen reader can read out", () => {
     // Fifteen of the twenty-four controls on this page had no
     // accessible name at all: the label was not tied to the control, so

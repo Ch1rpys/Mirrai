@@ -56,7 +56,14 @@ export interface PersonaSettings {
   mode?: "default" | "memorial";
   memorial?: { birthday?: string; deathday?: string };
   graduationKind?: "farewell" | "said_it" | "reconciled" | "not_afraid";
-  keptQuotes?: Array<{ recordId: number; text: string; at?: string }>;
+  /**
+   * The three lines the user kept (C6.4).
+   *
+   * `recordId` is null when the settings came from a persona bundle that
+   * carried no records: the words are the words the person chose, and
+   * the id they pointed at does not exist in this database (C9.5).
+   */
+  keptQuotes?: Array<{ recordId: number | null; text: string; at?: string }>;
   consent?: "asked_yes" | "asked_no" | "not_asked" | "cannot_ask";
   locked?: boolean;
   unreachableSince?: string;
@@ -306,10 +313,16 @@ function normalizeKeptQuotes(value: unknown): PersonaSettings["keptQuotes"] | un
   const out: NonNullable<PersonaSettings["keptQuotes"]> = [];
   for (const item of value) {
     if (!isPlainObject(item)) continue;
-    const recordId = asFiniteNumber(item.recordId);
     const text = asString(item.text);
-    if (recordId === undefined || text === undefined) continue;
-    const quote: { recordId: number; text: string; at?: string } = { recordId, text };
+    if (text === undefined) continue;
+    /**
+     * A quote imported from a bundle without records keeps its words and
+     * loses its id (C9.5). Dropping the whole entry instead made the
+     * three lines disappear after a restore.
+     */
+    const recordId = item.recordId === null ? null : asFiniteNumber(item.recordId);
+    if (recordId === undefined) continue;
+    const quote: { recordId: number | null; text: string; at?: string } = { recordId, text };
     const at = asString(item.at);
     if (at !== undefined) quote.at = at;
     out.push(quote);

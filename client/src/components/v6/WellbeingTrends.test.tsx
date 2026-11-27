@@ -49,6 +49,9 @@ describe("the wellbeing trend", () => {
     expect(screen.getByText("最近的你")).toBeInTheDocument();
     expect(screen.getByText(/最近四周心情打卡 22 次，之前四周是 10 次/)).toBeInTheDocument();
     expect(screen.getByText(/好一点 4 次、差不多 2 次、更难受 1 次/)).toBeInTheDocument();
+    // The after-chat answers were the one series with no previous four
+    // weeks to compare against — the manual asks all four to compare.
+    expect(screen.getByText(/之前四周分别是 1 次、1 次、4 次/)).toBeInTheDocument();
     expect(screen.getByText(/最近四周你来了 18 天，之前四周是 9 天/)).toBeInTheDocument();
     expect(screen.getByText(/最近四周，深夜 0–5 点来的有 3 条，占 50 条；之前四周是 5 条，占 40 条/)).toBeInTheDocument();
   });

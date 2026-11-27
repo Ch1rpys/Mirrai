@@ -4,9 +4,14 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
+const mockState = vi.hoisted(() => ({ extraEvent: false }));
 const confirmMutation = vi.fn();
 const rejectMutation = vi.fn();
 const annotateMutation = vi.fn();
+
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { timezone: "Asia/Shanghai" } }),
+}));
 
 vi.mock("@/contexts/LocaleContext", () => ({
   useLocale: () => ({
@@ -58,6 +63,9 @@ vi.mock("@/lib/trpc", () => ({
             ],
             events: [
               { at: "2023-03-06T12:00:00.000Z", week: "2023-W10", kind: "meetup", title: "第一次见面" },
+              ...(mockState.extraEvent
+                ? [{ at: "2024-05-31T20:30:00.000Z", week: "2024-W22", kind: "news", title: "深夜那条消息" }]
+                : []),
             ],
           },
           isLoading: false,
@@ -77,7 +85,20 @@ vi.mock("@/lib/trpc", () => ({
 import TimelineChart from "./TimelineChart";
 
 describe("the timeline chart", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockState.extraEvent = false;
+  });
+
+  it("puts a relationship event on the reader's day, not the UTC one (C4.6)", () => {
+    // 04:30 on the 1st in Shanghai is still the 31st in Greenwich. The
+    // event list sliced the instant, so every event between midnight and
+    // eight in the morning showed the day before.
+    mockState.extraEvent = true;
+    render(<TimelineChart personaId={5} />);
+    expect(screen.getByText("2024-06-01")).toBeInTheDocument();
+    expect(screen.queryByText("2024-05-31")).toBeNull();
+  });
 
   it("draws one mark per turning point and says what changed", async () => {
     render(<TimelineChart personaId={5} />);

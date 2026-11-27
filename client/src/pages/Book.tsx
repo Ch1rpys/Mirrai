@@ -184,8 +184,8 @@ export default function Book() {
           <section>
             <h2 className="section-title mb-4">{t("book.keptQuotes")}</h2>
             <ul className="space-y-3">
-              {data.keptQuotes.map((quote: { recordId: number; text: string; at: string | null }) => (
-                <li key={quote.recordId}>
+              {data.keptQuotes.map((quote: { recordId: number | null; text: string; at: string | null }) => (
+                <li key={quote.recordId ?? quote.text}>
                   <p className="text-sm text-foreground whitespace-pre-wrap">「{quote.text}」</p>
                   {quote.at && (
                     <p className="text-[0.6875rem] text-muted-subtle mt-0.5">

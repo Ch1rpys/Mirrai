@@ -41,6 +41,7 @@ import HarmNotice from "@/components/v6/HarmNotice";
 import VersionHistory from "@/components/v6/VersionHistory";
 import TagInput from "@/components/v6/TagInput";
 import { normalizeHarmReport } from "@shared/harm";
+import { isMemorial } from "@shared/persona-state";
 import { useLocale } from "@/contexts/LocaleContext";
 import { copy } from "@shared/copy";
 import { RERANK_MIN_ASSISTANT_LINES } from "@shared/eval-limits";
@@ -190,6 +191,13 @@ export default function PersonaEdit() {
   const [name, setName] = useState("");
   const [showReunion, setShowReunion] = useState(false);
   const [relationshipDesc, setRelationshipDesc] = useState("");
+  /**
+   * The dates are named for the persona's own kind (C7.1).
+   *
+   * "在一起日期 / 分开日期" is wrong for somebody who has died: the
+   * memorial wording says when they met and when they left.
+   */
+  const memorial = isMemorial(persona);
   const [togetherFrom, setTogetherFrom] = useState("");
   const [togetherTo, setTogetherTo] = useState("");
   const [llmProvider, setLlmProvider] = useState("");
@@ -479,12 +487,12 @@ export default function PersonaEdit() {
               <Input id="persona-relationship" value={relationshipDesc} onChange={e => setRelationshipDesc(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="persona-together-from" className="text-xs text-muted-foreground">{t("personaEdit.togetherFromLabel")}</Label>
+              <Label htmlFor="persona-together-from" className="text-xs text-muted-foreground">{t(memorial ? "personaEdit.togetherFromLabelMemorial" : "personaEdit.togetherFromLabel")}</Label>
               <Input id="persona-together-from" value={togetherFrom} onChange={e => setTogetherFrom(e.target.value)}
                 placeholder="2021-05" />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="persona-together-to" className="text-xs text-muted-foreground">{t("personaEdit.togetherToLabel")}</Label>
+              <Label htmlFor="persona-together-to" className="text-xs text-muted-foreground">{t(memorial ? "personaEdit.togetherToLabelMemorial" : "personaEdit.togetherToLabel")}</Label>
               <Input id="persona-together-to" value={togetherTo} onChange={e => setTogetherTo(e.target.value)}
                 placeholder="2021-05" />
             </div>

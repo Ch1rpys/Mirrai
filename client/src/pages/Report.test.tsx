@@ -12,6 +12,10 @@ vi.mock("wouter", () => ({
   useLocation: () => ["/persona/5/report", vi.fn()],
 }));
 
+vi.mock("@/_core/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { timezone: "Asia/Shanghai" } }),
+}));
+
 vi.mock("@/contexts/LocaleContext", () => ({
   useLocale: () => ({
     t: (key: any, params?: any) => translate("zh", key, params),

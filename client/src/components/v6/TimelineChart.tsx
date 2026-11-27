@@ -11,6 +11,8 @@ import {
 } from "recharts";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { zonedDateKey } from "@shared/timezone";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -21,6 +23,14 @@ import { Button } from "@/components/ui/button";
  */
 export default function TimelineChart({ personaId }: { personaId: number }) {
   const { t } = useLocale();
+  /**
+   * The reader's own calendar for the event dates (C4.6).
+   *
+   * An event at 04:30 on the first in Shanghai is still the thirty-first
+   * in Greenwich; slicing the stored instant showed the day before.
+   */
+  const { user } = useAuth();
+  const timezone = (user as { timezone?: string | null } | null)?.timezone ?? null;
   const utils = trpc.useUtils();
   const timeline = trpc.record.timeline.useQuery({ personaId }, { enabled: personaId > 0 });
   const [selected, setSelected] = useState<string | null>(null);
@@ -127,7 +137,7 @@ export default function TimelineChart({ personaId }: { personaId: number }) {
           <p className="text-xs text-muted-foreground">{t("report.events")}</p>
           {events.map((event) => (
             <p key={`${event.at}-${event.title}`} className="text-xs text-muted-foreground">
-              <span className="text-foreground">{event.at.slice(0, 10)}</span> · {event.title}
+              <span className="text-foreground">{zonedDateKey(new Date(event.at), timezone)}</span> · {event.title}
             </p>
           ))}
         </div>

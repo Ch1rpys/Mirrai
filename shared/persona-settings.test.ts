@@ -74,6 +74,23 @@ describe("persona settings", () => {
     }).timing).toMatchObject({ sleep: true, followUp: true });
   });
 
+  it("keeps a kept quote whose record is gone, for an imported bundle (C9.5)", () => {
+    // A bundle without records cannot carry record ids, so the import
+    // writes `recordId: null`. The words are still the words the person
+    // chose; dropping the whole quote because the id is not a number
+    // made them disappear from the farewell page after a restore.
+    const settings = normalizePersonaSettings({
+      keptQuotes: [
+        { recordId: null, text: "晚安呀", at: "2024-05-01T21:00:00.000Z" },
+        { recordId: 12, text: "树树 我在" },
+      ],
+    });
+    expect(settings.keptQuotes).toEqual([
+      { recordId: null, text: "晚安呀", at: "2024-05-01T21:00:00.000Z" },
+      { recordId: 12, text: "树树 我在" },
+    ]);
+  });
+
   it("deep-merges without dropping fields the patch did not mention", () => {
     const current = normalizePersonaSettings({
       layers: { twoStage: true, stickers: false },

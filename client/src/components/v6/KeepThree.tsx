@@ -6,7 +6,11 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
 interface KeptQuote {
-  recordId: number;
+  /**
+   * Null for a quote restored from a bundle without records: the words
+   * are kept, but there is no line in this database to point at (C9.5).
+   */
+  recordId: number | null;
   text: string;
   at?: string;
 }
@@ -72,15 +76,18 @@ export default function KeepThree({
   const bookmarks = (marks.data ?? []).filter(
     (mark) => mark.kind === "bookmark" && mark.content,
   );
-  const isChosen = (recordId: number) => chosen.some((quote) => quote.recordId === recordId);
+  const isChosen = (recordId: number) =>
+    chosen.some((quote) => quote.recordId === recordId);
+  /** True when a restored quote has no record behind it and cannot be re-saved. */
+  const orphaned = chosen.some((quote) => quote.recordId === null);
 
-  function add(quote: KeptQuote) {
+  function add(quote: KeptQuote & { recordId: number }) {
     if (isChosen(quote.recordId)) return;
     if (chosen.length >= 3) return;
     setChosen((current) => [...current, quote]);
   }
 
-  function remove(recordId: number) {
+  function remove(recordId: number | null) {
     setChosen((current) => current.filter((quote) => quote.recordId !== recordId));
   }
 
@@ -181,7 +188,7 @@ export default function KeepThree({
         ) : (
           <ul className="space-y-1.5">
             {chosen.map((quote) => (
-              <li key={quote.recordId} className="flex items-start gap-2 rounded-md bg-muted/40 px-2.5 py-1.5">
+              <li key={quote.recordId ?? quote.text} className="flex items-start gap-2 rounded-md bg-muted/40 px-2.5 py-1.5">
                 <span className="flex-1 text-sm whitespace-pre-wrap break-words">{quote.text}</span>
                 <Button size="sm" variant="ghost" onClick={() => remove(quote.recordId)}>
                   {t("keepThree.remove")}
@@ -194,9 +201,14 @@ export default function KeepThree({
       <div className="flex flex-wrap items-center gap-2">
         <Button
           size="sm"
-          disabled={save.isPending || chosen.length === 0 || chosen.length > 3}
+          disabled={save.isPending || chosen.length === 0 || chosen.length > 3 || orphaned}
           onClick={() =>
-            save.mutate({ personaId, recordIds: chosen.map((quote) => quote.recordId) })
+            save.mutate({
+              personaId,
+              recordIds: chosen
+                .map((quote) => quote.recordId)
+                .filter((id): id is number => id !== null),
+            })
           }
         >
           {t("keepThree.save")}
