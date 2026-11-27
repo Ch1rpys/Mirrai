@@ -202,6 +202,18 @@ export interface LLMProvider {
    * tokenizer. A provider that is not an HTTP endpoint leaves it unset.
    */
   readonly baseUrl?: string;
+  /**
+   * The extra configuration of the row this instance was built from.
+   *
+   * The request-shape switches (`supportsLogitBias`, `supportsGrammar`)
+   * live on the user's configuration row, next to the address they
+   * describe. A generation path that reads the provider instance — the
+   * evaluation, a group room, rehearsal, drift — has no per-turn
+   * configuration of its own, so the instance carries the row's settings
+   * and the request builder reads them from here. Environment-configured
+   * providers leave it unset, and nothing is sent on a guess.
+   */
+  readonly extraConfig?: Record<string, unknown>;
   maxAttempts?: number;
   /** Declared once at construction; every provider must set it. */
   capabilities: LLMCapabilities;

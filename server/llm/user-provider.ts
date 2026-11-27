@@ -35,6 +35,7 @@ function cacheKey(userId: number, providerName: string, config: {
   apiKeyHint: string | null;
   baseUrl: string | null;
   model: string | null;
+  extraConfig?: unknown;
 }): string {
   return [
     userId,
@@ -43,6 +44,9 @@ function cacheKey(userId: number, providerName: string, config: {
     config.apiKeyHint ?? "",
     config.baseUrl ?? "",
     config.model ?? "",
+    // The request-shape switches are part of the instance's behaviour, so
+    // a cached instance must not outlive them.
+    JSON.stringify(config.extraConfig ?? null),
   ].join(":");
 }
 
@@ -162,6 +166,26 @@ export async function resolveProviderForUserWithOwnership(params: {
 }
 
 /**
+ * Puts the row's own settings on the provider instance built from it.
+ *
+ * The request-shape switches are read where the request is built. Chat
+ * carries the user's configuration on the turn, but evaluation, group
+ * rooms, rehearsal and drift only have the provider instance to ask —
+ * and reading the config table again in every one of them would be the
+ * same lookup written four times. The cache key includes the settings,
+ * so an instance never outlives the row it was built from.
+ */
+function withStoredExtraConfig(
+  provider: LLMProvider,
+  value: unknown,
+): LLMProvider {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return provider;
+  (provider as { extraConfig?: Record<string, unknown> }).extraConfig =
+    value as Record<string, unknown>;
+  return provider;
+}
+
+/**
  * Builds the provider for one of the user's own configuration rows.
  */
 export async function buildUserProvider(
@@ -191,6 +215,8 @@ export async function buildUserProvider(
         `[LLM] The "${config.providerName}" row has an address but no key of its own — the address is ignored, and the environment's provider is used.`,
       );
     }
+    // The environment's provider is shared by every user of this process,
+    // so the row's settings are not attached to it.
     return registry.get(config.providerName);
   }
 
@@ -206,13 +232,14 @@ export async function buildUserProvider(
    * environment's key is never mixed in: the override replaces it
    * rather than sitting beside it.
    */
-  const provider = registry.build(config.providerName, {
+  const built = registry.build(config.providerName, {
     apiKey,
     baseUrl: config.baseUrl ?? undefined,
     model: config.model ?? undefined,
   });
-  if (!provider) return registry.get(config.providerName);
+  if (!built) return registry.get(config.providerName);
 
+  const provider = withStoredExtraConfig(built, config.extraConfig);
   writeCache(key, provider);
   return provider;
 }

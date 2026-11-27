@@ -81,6 +81,35 @@ describe("resolveProviderForUser", () => {
     }
   });
 
+  it("carries the row's request-shape switches onto the provider it builds (B9.3)", async () => {
+    // A generation path that only has the provider instance (the
+    // evaluation, a group room, rehearsal) must still see the switches
+    // the owner saved on this row. Chat passes them on the turn; the
+    // instance is the only carrier everywhere else.
+    getLlmConfigsByUserId.mockResolvedValue([
+      {
+        id: 8,
+        userId: 1,
+        providerName: "OpenAI",
+        isDefault: true,
+        // Plaintext rows are still read, and they skip the vault.
+        apiKey: "sk-plain",
+        apiKeyHint: "lain",
+        baseUrl: "https://proxy.example.com/v1",
+        model: "gpt-4o",
+        systemMessage: null,
+        extraConfig: { supportsLogitBias: true, supportsGrammar: false },
+        createdAt: new Date(),
+      },
+    ]);
+
+    const provider = await resolveProviderForUser({ userId: 1 });
+    expect(provider?.extraConfig).toEqual({
+      supportsLogitBias: true,
+      supportsGrammar: false,
+    });
+  });
+
   it("does not fall back to the environment's provider when the user has their own", async () => {
     // The product's promise is that the data stays on the user's machine.
     // A user who has configured a provider of their own is saying where

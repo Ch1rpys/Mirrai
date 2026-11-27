@@ -47,6 +47,7 @@ vi.mock("../chat/prompt", () => ({
 
 import { previewLayersUsed, runEval } from "./run";
 import { measureFingerprint } from "@shared/style-fingerprint";
+import { encodingForModel } from "js-tiktoken";
 import type { EvalCaseData } from "./dataset";
 import * as generate from "../chat/generate";
 
@@ -202,6 +203,63 @@ describe("running the cases", () => {
       expect(params?.options?.tools).toBeUndefined();
       expect(params?.options?.toolChoice).toBeUndefined();
     }
+  });
+
+  it("carries the endpoint's stored request switches through the evaluation path (B9.3)", async () => {
+    // Chat carries the user's configuration on the turn. The evaluation
+    // has no turn-level configuration, so before the fix the ruler sent a
+    // different request than the conversation did — `--without logitBias`
+    // measured nothing on a compatible gateway. The provider instance now
+    // carries the switches of the row it was built from.
+    const fingerprint = measureFingerprint(
+      Array.from({ length: 40 }, (_, i) => ({
+        role: "assistant" as const,
+        content: `在的呀${i % 3}`,
+        kind: "text",
+      })),
+    );
+    expect(fingerprint).not.toBeNull();
+    const measured = {
+      ...persona,
+      styleProfile: {
+        version: 1,
+        measuredAt: "2023-01-01T00:00:00.000Z",
+        recordsVersion: "40:40",
+        fingerprint: { ...fingerprint, never: ["呢", "～"] },
+      },
+      behaviorProfile: {
+        samples: 40,
+        replyGapMedianSec: 40,
+        replyGapLogSigma: 0.8,
+        burstSizes: [1, 2],
+        proactiveRate: 0,
+        newlineRate: 0,
+        activeHours: [12],
+      },
+    };
+    const provider = {
+      ...stubProvider("Custom"),
+      baseUrl: "https://proxy.example.com/v1",
+      modelName: "gpt-4o",
+      extraConfig: { supportsLogitBias: true, supportsGrammar: true },
+    } as any;
+
+    await runEval({
+      persona: measured,
+      userId: 1,
+      cases: cases(),
+      trainingTexts: ["嗯嗯"],
+      provider,
+      rerank: false,
+    });
+
+    const request = invokeWithProvider.mock.calls[0][1] as any;
+    const encoder = encodingForModel("gpt-4o");
+    expect(request.options.logitBias).toEqual({
+      [String(encoder.encode("呢")[0])]: -100,
+      [String(encoder.encode("～")[0])]: -100,
+    });
+    expect(String(request.options.extraBody?.grammar)).toContain("(nl line){0,1}");
   });
 
   it("does not stop at the first line the provider fails on", async () => {

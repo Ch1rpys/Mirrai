@@ -869,7 +869,14 @@ function structuredOutputForTurn(
   const descriptor = {
     providerName: provider.name,
     baseUrl: provider.baseUrl,
-    extraConfig: input.extraConfig,
+    /**
+     * The switches live on the provider's configuration row. Chat has
+     * them on the turn; the evaluation, group rooms, rehearsal and drift
+     * only have the provider instance, which carries the row's settings
+     * (B9.3 acceptance fix). A provider without attached settings falls
+     * back to the official-address rule alone.
+     */
+    extraConfig: input.extraConfig ?? provider.extraConfig,
   };
   const out: { logitBias?: Record<string, number>; grammar?: string } = {};
   if (providerSupportsLogitBias(descriptor)) {
