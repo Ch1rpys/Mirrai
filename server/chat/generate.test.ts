@@ -133,6 +133,7 @@ vi.mock("../_core/emotion", () => ({
 
 import { copy } from "@shared/copy";
 import { measureFingerprint } from "@shared/style-fingerprint";
+import { encodingForModel } from "js-tiktoken";
 import { runConversation } from "./service";
 import { executePlan, fingerprintCoreForTurn, planTurn } from "./generate";
 import { layerOverridesForEval, runEval } from "../eval/run";
@@ -2842,5 +2843,136 @@ describe("a month over its budget", () => {
     };
     const plan = await planTurn(input);
     expect(plan.layersUsed).toContain("twoStage");
+  });
+});
+
+/**
+ * The token-bias layer (B9.3).
+ *
+ * The measurement is in the fingerprint's `never`; whether the field can
+ * travel is the endpoint's property. The two are tested separately because
+ * confusing them is how a model receives another model's token ids.
+ */
+describe("the token bias layer", () => {
+  function personaWithNever(never: string[] | null) {
+    const next = persona();
+    next.styleProfile = {
+      version: 1,
+      measuredAt: NOW.toISOString(),
+      recordsVersion: "1200:1200",
+      fingerprint: {
+        samples: 1200,
+        turnChars: { median: 10, p95: 24 },
+        ...(never ? { never } : {}),
+      },
+    };
+    return next;
+  }
+
+  function officialProvider(): LLMProvider {
+    return {
+      name: "OpenAI",
+      baseUrl: "https://api.openai.com/v1",
+      modelName: "gpt-4o",
+      capabilities: { streaming: false, vision: false, tools: false, jsonMode: false },
+      isConfigured: () => true,
+      invoke: async () => "",
+    };
+  }
+
+  function inputFor(never: string[] | null, extra: Record<string, unknown> = {}) {
+    return {
+      persona: personaWithNever(never),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "logit-bias:test",
+      exclude: { texts: [HELD_OUT] },
+      ...extra,
+    };
+  }
+
+  function replyOptions(callIndex = 0): Record<string, unknown> {
+    return (invokeWithProvider.mock.calls[callIndex][1] as {
+      options: Record<string, unknown>;
+    }).options;
+  }
+
+  it("sends a bias built from the never list to the official endpoint", async () => {
+    const input = inputFor(["呢", "～"]);
+    const plan = await planTurn(input);
+    expect(plan.layersUsed).toContain("logitBias");
+    invokeWithProvider.mockResolvedValueOnce("在吃");
+    await runExecute(plan, input, { provider: officialProvider() });
+    const encoder = encodingForModel("gpt-4o");
+    expect(replyOptions().logitBias).toEqual({
+      [String(encoder.encode("呢")[0])]: -100,
+      [String(encoder.encode("～")[0])]: -100,
+    });
+  });
+
+  it("leaves the request alone on an endpoint that cannot take it", async () => {
+    const input = inputFor(["呢"]);
+    const plan = await planTurn(input);
+    invokeWithProvider.mockResolvedValueOnce("在吃");
+    // Not the official address: the token ids would belong to another
+    // tokenizer.
+    await runExecute(plan, input, {
+      provider: { ...officialProvider(), baseUrl: "https://proxy.example.com/v1" },
+    });
+    expect(replyOptions().logitBias).toBeUndefined();
+  });
+
+  it("sends it when the user turned the field on for their own endpoint", async () => {
+    const input = inputFor(["呢"], {
+      extraConfig: { supportsLogitBias: true },
+    });
+    const plan = await planTurn(input);
+    invokeWithProvider.mockResolvedValueOnce("在吃");
+    await runExecute(plan, input, {
+      provider: { ...officialProvider(), name: "Custom", baseUrl: "http://127.0.0.1:8080/v1" },
+    });
+    expect(replyOptions().logitBias).toEqual({
+      [String(encodingForModel("gpt-4o").encode("呢")[0])]: -100,
+    });
+  });
+
+  it("can be turned off for an evaluation run", async () => {
+    const input = inputFor(["呢"], {
+      layerOverrides: layerOverridesForEval({ without: ["logitBias"] }),
+    });
+    const plan = await planTurn(input);
+    expect(plan.layersUsed).not.toContain("logitBias");
+    invokeWithProvider.mockResolvedValueOnce("在吃");
+    await runExecute(plan, input, { provider: officialProvider() });
+    expect(replyOptions().logitBias).toBeUndefined();
+  });
+
+  it("leaves a persona with no measurement's request unchanged", async () => {
+    const next = persona();
+    next.styleProfile = {
+      version: 1,
+      measuredAt: NOW.toISOString(),
+      recordsVersion: "100:100",
+      fingerprint: { samples: 100, turnChars: { median: 10, p95: 24 } },
+    };
+    const input = {
+      persona: next,
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "logit-bias:none",
+      exclude: { texts: [HELD_OUT] },
+    };
+    const plan = await planTurn(input);
+    expect(plan.layersUsed).not.toContain("logitBias");
+    invokeWithProvider.mockResolvedValueOnce("在吃");
+    await runExecute(plan, input, { provider: officialProvider() });
+    expect(replyOptions().logitBias).toBeUndefined();
+    expect(replyOptions().extraBody).toBeUndefined();
   });
 });

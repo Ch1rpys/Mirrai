@@ -48,7 +48,7 @@ export class ClaudeProvider implements LLMProvider {
   constructor(
     private apiKey: string,
     private model: string,
-    private baseUrl: string,
+    public readonly baseUrl: string,
   ) {}
 
   capabilities = {

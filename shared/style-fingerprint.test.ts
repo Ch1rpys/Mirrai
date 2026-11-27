@@ -123,6 +123,35 @@ describe("measureFingerprint", () => {
   });
 });
 
+describe("the never list (B9.3)", () => {
+  /** A line they actually said, used to build a big enough sample. */
+  const line = { role: "assistant", content: "在的呀", kind: "text" };
+
+  it("stays absent below a thousand lines", () => {
+    const fp = measureFingerprint(Array.from({ length: 999 }, () => ({ ...line })));
+    expect(fp).not.toBeNull();
+    expect(fp?.never).toBeUndefined();
+  });
+
+  it("lists a candidate that never appears and keeps the ones they used", () => {
+    const rows = Array.from({ length: 999 }, () => ({ ...line }));
+    rows.push({ role: "assistant", content: "好～", kind: "text" });
+    const fp = measureFingerprint(rows);
+    expect(fp?.never).toContain("呢");
+    expect(fp?.never).toContain("呵呵");
+    expect(fp?.never).not.toContain("呀");
+    expect(fp?.never).not.toContain("～");
+  });
+
+  it("reads the fixture's particle and tilde as never used", () => {
+    const fp = measureFingerprint(fixtureRows());
+    expect(fp?.samples).toBeGreaterThanOrEqual(1000);
+    expect(fp?.never).toContain("呢");
+    expect(fp?.never).toContain("～");
+    expect(fp?.never).not.toContain("呀");
+  });
+});
+
 describe("styleDistance", () => {
   it("is small when the generated lines are the person's own", () => {
     const rows = fixtureRows();

@@ -13,6 +13,11 @@ import type { Persona } from "../../drizzle/schema";
 import type { LLMMessage, LLMOptions, LLMProvider } from "../llm/types";
 import { llmService } from "../llm";
 import { invokeWithTools } from "../llm/tools";
+import {
+  bannedWordsForPersona,
+  buildLogitBias,
+  providerSupportsLogitBias,
+} from "../llm/logit-bias";
 import { buildPersonaTools, type ToolPhoto } from "./persona-tools";
 import { copy } from "@shared/copy";
 import { dayPartFromHour, normalizeActProfile, sampleAct, type ActDayPart, type ActVia } from "@shared/act-profile";
@@ -365,6 +370,16 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   const lexiconOn = Boolean(
     layers.lexicon && hasPromptLexicon((input.persona.personaData as { lexicon?: unknown } | null)?.lexicon),
   );
+  /**
+   * The token-bias layer has anything to say for this persona (B9.3).
+   *
+   * It is a layer only when there is a measurement behind it: a `never`
+   * list from a thousand lines, a confirmed "never says this", or a
+   * measured shape for the grammar. Whether the endpoint can take the
+   * field is decided at execution time — that is the provider's
+   * property, not the turn's.
+   */
+  const logitBiasOn = Boolean(layers.logitBias && structuredOutputDataFor(input.persona));
 
   if (sampled?.act === "silence" && timingEnabled && !input.exclude && !conflictTurn.forceRepair) {
     return {
@@ -535,21 +550,24 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       messages,
       plannerMessages,
       ...length,
-      layersUsed: withMeasuredLayers(
-        layersUsed,
-        length,
-        projectionOn,
-        fingerprintRerankOn,
-        lexiconOn,
-        seededOn,
-        false,
-        reminderOn,
-        twoStageOn,
-        clustersOn,
-        emotionInertiaOn,
-        closingTurn.closing,
-        peopleLayerOn(layers.people, messages, input.locale),
-        factRewriteOn,
+      layersUsed: withLogitBiasLayer(
+        withMeasuredLayers(
+          layersUsed,
+          length,
+          projectionOn,
+          fingerprintRerankOn,
+          lexiconOn,
+          seededOn,
+          false,
+          reminderOn,
+          twoStageOn,
+          clustersOn,
+          emotionInertiaOn,
+          closingTurn.closing,
+          peopleLayerOn(layers.people, messages, input.locale),
+          factRewriteOn,
+        ),
+        logitBiasOn,
       ),
       exemplarIds: turnExemplars.map((item) => item.id),
       exemplars: turnExemplars,
@@ -613,21 +631,24 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     messages: spliceAfterSystem(composed.messages, seedMsgs),
     plannerMessages,
     ...length,
-    layersUsed: withMeasuredLayers(
-      layersUsed,
-      length,
-      projectionOn,
-      fingerprintRerankOn,
-      lexiconOn,
-      seededOn,
-      false,
-      reminderOn,
-      twoStageOn,
-      clustersOn,
-      emotionInertiaOn,
-      closingTurn.closing,
-      peopleLayerOn(layers.people, composed.messages, input.locale),
-      factRewriteOn,
+    layersUsed: withLogitBiasLayer(
+      withMeasuredLayers(
+        layersUsed,
+        length,
+        projectionOn,
+        fingerprintRerankOn,
+        lexiconOn,
+        seededOn,
+        false,
+        reminderOn,
+        twoStageOn,
+        clustersOn,
+        emotionInertiaOn,
+        closingTurn.closing,
+        peopleLayerOn(layers.people, composed.messages, input.locale),
+        factRewriteOn,
+      ),
+      logitBiasOn,
     ),
     exemplarIds: [],
     seedRecordIds: seeds.excludeIds,
@@ -805,6 +826,57 @@ function withMeasuredLayers(
   if (extra.length === 0) return layersUsed;
   const used = new Set<LayerId>([...layersUsed, ...extra]);
   return LAYERS.filter((id) => used.has(id));
+}
+
+/**
+ * Whether this persona has anything the token-bias layer could act on
+ * (B9.3): a measured `never` list, a confirmed "never says this", or a
+ * measured burst shape for the grammar.
+ *
+ * Nothing is filled in when the data is missing — the layer is simply not
+ * one of the layers this turn used.
+ */
+function structuredOutputDataFor(persona: Persona): boolean {
+  if (bannedWordsForPersona(persona).length > 0) return true;
+  const behavior = loadBehaviorProfile(persona);
+  return Boolean(behavior && behavior.burstSizes.length > 0);
+}
+
+/** Adds `logitBias` in the order `LAYERS` declares it, when it is on. */
+function withLogitBiasLayer(layers: LayerId[], on: boolean): LayerId[] {
+  if (!on || layers.includes("logitBias")) return layers;
+  const used = new Set<LayerId>([...layers, "logitBias"]);
+  return LAYERS.filter((id) => used.has(id));
+}
+
+/**
+ * The bias this turn may send (B9.3), or undefined.
+ *
+ * `plan.layersUsed` says the layer ran for this turn; the endpoint has the
+ * last word on whether the field can travel at all. The token ids are
+ * built from the model name the provider reports — an unknown tokenizer
+ * produces no bias rather than a wrong one.
+ */
+function logitBiasForTurn(
+  input: TurnInput,
+  plan: TurnPlan,
+  provider: LLMProvider,
+): Record<string, number> | undefined {
+  if (!plan.layersUsed.includes("logitBias")) return undefined;
+  if (
+    !providerSupportsLogitBias({
+      providerName: provider.name,
+      baseUrl: provider.baseUrl,
+      extraConfig: input.extraConfig,
+    })
+  ) {
+    return undefined;
+  }
+  const bias = buildLogitBias({
+    model: provider.modelName,
+    banned: bannedWordsForPersona(input.persona),
+  });
+  return Object.keys(bias).length > 0 ? bias : undefined;
 }
 
 async function plannerMessagesForTurn(
@@ -1326,6 +1398,17 @@ export async function* executePlan(
   }
 
   /**
+   * The token bias for this turn (B9.3).
+   *
+   * It is computed once, before the reply paths fork: the four-way rerank,
+   * the two-stage voice, the stream and the one-shot all ask the model for
+   * the same reply and must all carry the same sampler fields. The planner
+   * does not — its answer is JSON, and the bias is for the reply.
+   */
+  const replyProvider = io.voiceProvider ?? io.provider;
+  const logitBias = logitBiasForTurn(input, plan, replyProvider);
+
+  /**
    * The tools turn (C9.4).
    *
    * It is non-streaming by definition: each tool round is a request that
@@ -1352,6 +1435,7 @@ export async function* executePlan(
           presencePenalty: io.options.presencePenalty,
           frequencyPenalty: io.options.frequencyPenalty,
           extraBody: io.options.extraBody,
+          ...(logitBias ? { logitBias } : {}),
           signal: io.signal,
           purpose: "reply",
         },
@@ -1385,6 +1469,7 @@ export async function* executePlan(
     presencePenalty: io.options.presencePenalty,
     frequencyPenalty: io.options.frequencyPenalty,
     extraBody: io.options.extraBody,
+    ...(logitBias ? { logitBias } : {}),
     stop: plan.stop,
     signal: io.signal,
   };

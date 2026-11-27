@@ -102,6 +102,14 @@ export type LLMOptions = {
    * ignore it.
    */
   stop?: string[];
+  /**
+   * Token ids the sampler may not pick (B9.3).
+   *
+   * Keys are token ids as strings; values are the OpenAI bias range. Only
+   * a provider whose tokenizer matches these ids may send it, and the
+   * caller decides that — see `providerSupportsLogitBias`.
+   */
+  logitBias?: Record<string, number>;
   /** Cancels an in-flight request (used by the streaming route). */
   signal?: AbortSignal;
   /**
@@ -185,6 +193,15 @@ export type InvokeResult = string;
 
 export interface LLMProvider {
   name: string;
+  /**
+   * The endpoint this instance talks to, when it talks HTTP to one.
+   *
+   * It exists so a caller can decide whether a request field that only
+   * some endpoints accept is safe to send — the official OpenAI address
+   * takes `logit_bias`, a compatible gateway may serve a different
+   * tokenizer. A provider that is not an HTTP endpoint leaves it unset.
+   */
+  readonly baseUrl?: string;
   maxAttempts?: number;
   /** Declared once at construction; every provider must set it. */
   capabilities: LLMCapabilities;

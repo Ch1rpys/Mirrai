@@ -108,6 +108,48 @@ export const ADDRESS_WORDS_ZH = [
 
 export const ADDRESS_WORDS_EN = ["baby", "babe", "dear", "honey", "love", "darling"] as const;
 
+/**
+ * The candidates the "never used" list is drawn from (B9.3).
+ *
+ * The list is the things a model adds to make a line look tidy: sentence
+ * particles the person never used, the full-width tilde and the polite
+ * laugh, written connectives, and the common emoji. Which of them this
+ * person actually never used is a measurement — a candidate only lands in
+ * `never` when a thousand of their lines contain it nowhere.
+ *
+ * It is deliberately a closed list. "Never says any word outside these"
+ * is not measurable; "never used these forty" is.
+ */
+// i18n:allow-input — matched against lines in the records, not shown as copy.
+export const NEVER_CANDIDATES = [
+  ...PARTICLES,
+  "～",
+  "~",
+  "呵呵",
+  // Written connectives: the shape a summary has, not a chat line.
+  "然而",
+  "因此",
+  "此外",
+  "总之",
+  "并且",
+  "以及",
+  "首先",
+  "其次",
+  "综上",
+  // The common emoji. One that never appears in a thousand lines is a
+  // habit the person does not have, and the model should not add it.
+  "😂",
+  "😊",
+  "😄",
+  "😭",
+  "🥺",
+  "❤️",
+  "👍",
+  "🙏",
+  "😅",
+  "🤔",
+] as const;
+
 // i18n:allow-input — matched against lines in the records, not shown as copy.
 const REDUPLICATION_KEYS = ["嗯", "好", "对", "行", "哦", "嗷"] as const;
 
@@ -616,6 +658,24 @@ function measureCore(
 }
 
 /**
+ * The candidates this person never used in a thousand lines (B9.3).
+ *
+ * An absence is only evidence when the sample is big enough: with forty
+ * lines a particle can be missing by chance. With a thousand, a candidate
+ * that appears nowhere is a habit the person does not have — and one that
+ * a token bias may therefore forbid.
+ *
+ * Returns `undefined` below the floor. Nothing is filled in with a default.
+ */
+export function measureNever(lines: Array<{ content: string }>): string[] | undefined {
+  if (lines.length < MIN_FINGERPRINT_NEVER_SAMPLES) return undefined;
+  const texts = lines.map((line) => line.content);
+  return NEVER_CANDIDATES.filter((candidate) =>
+    !texts.some((text) => text.includes(candidate)),
+  );
+}
+
+/**
  * Measures the writing habits of one side of the record.
  *
  * Fewer than forty text bubbles is not a fingerprint.
@@ -631,6 +691,9 @@ export function measureFingerprint(
 
   const core = measureCore(rows, role, addressForms);
   const fingerprint: StyleFingerprint = { ...core };
+
+  const never = measureNever(lines);
+  if (never) fingerprint.never = never;
 
   const byState = new Map<EmotionalState, FingerprintRow[]>();
   for (const row of lines) {

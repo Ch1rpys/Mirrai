@@ -47,7 +47,7 @@ export class OpenAIProvider implements LLMProvider {
   constructor(
     public name: string,
     private apiKey: string,
-    private baseUrl: string,
+    public readonly baseUrl: string,
     private model: string,
     private systemMessage?: string,
     public readonly maxAttempts = 3,
@@ -142,6 +142,17 @@ export class OpenAIProvider implements LLMProvider {
     if (stream) body.stream = true;
     if (options?.extraBody) {
       Object.assign(body, stripForbiddenExtraBody(options.extraBody));
+    }
+    /**
+     * The sampler's token ban (B9.3).
+     *
+     * It sits after `extraBody` on purpose: the bias is a layer with a
+     * measured reason, and a field typed by hand must not silently win
+     * over it. The caller only sets it for an endpoint where the token
+     * ids are known to mean what OpenAI means.
+     */
+    if (options?.logitBias && Object.keys(options.logitBias).length > 0) {
+      body.logit_bias = options.logitBias;
     }
     return JSON.stringify(body);
   }
