@@ -187,7 +187,7 @@ corepack pnpm eval -- --persona <id> --user <id> --audition
 
 ### 五、偏差表里影响最大的几条
 
-完整偏差表在下面的「偏差表」一节（共 625 条）。这里挑 12 条最可能影响你判断的：
+完整偏差表在下面的「偏差表」一节（共 627 条）。这里挑 12 条最可能影响你判断的：
 
 | 13 | P0.6 | 第 3.6 节 `--compare <层>` | CLI 的 `--compare` 仍是原来的四路对比开关；新增的是 `--without a,b` | P0.6「做法」第 3 步只要求 `--without` 和旧 `--variant` 别名；`compare-cli.test.ts` 不许改。 |
 | 31 | C1.1 | 每种文本类格式走 `renderFixture` 往返 | `imessage-db` 走 `formats/imessage-db.test.ts`，不进 `roundtrip.test.ts` | chat.db 是 SQLite，不是文本。 |
@@ -1033,6 +1033,8 @@ corepack pnpm eval -- --persona <id> --user <id> --audition
 | 623 | B4.1 | 手册写「设计值 ±0.08 / ±0.1」 | 没有独立的「设计值」这组常量：±0.08/±0.1 是验收时取的一条真空带，代码里没有可对照的设计值 | 真正要锁的是「采样噪声内不漂」：测试用自助法/重采样给出带，把 ±0.08/±0.1 当外部标准会被误读成代码常量 |
 | 624 | B4.6 | 手册的「场景时长 / 收尾比例」 | 实现按会话内相邻消息的间隔切场景，收尾比例按「场景最后一句是谁说的」计，不按固定墙钟时长 | 记录的时间戳精度和聊天节奏差异大，固定时长会把一个连续对话切成几段；口径写在 B4.6 行内，数字不能与手册的固定时长直接比 |
 | 625 | B8.10 | 手册做法 4「README 的注意事项加一句指向材料表」 | **已补（2026-11-27）**：`README.md` 的「原材料质量」那条后面加了指向上传页「材料够不够」的一句 | 报告指出时是旧句；现在中英功能列表与注意事项都有入口，这一行保留以便对照 |
+| 626 | C8.14 | 手册要求界面语言是繁体时，服务端文案也用繁体 | 服务端不少提示仍按「en 或 zh」二分（`locale === "en" ? "en" : "zh"`），zh-Hant 用户会看到简体句子 | 修它要逐个调用点把 `Locale` 传进去并重新走 `copy`，涉及推送、调度、通道与邮件几十处；这一轮先如实记下，不改承诺 |
+| 627 | C9.5 | 手册的导入失败「库里没有残留的半个分身」 | 实现删人/purge 后再删文件、并把变空的目录收掉，但这条清理路径没有单独的真库用例（失败点难在测试里稳定复现） | 现有 `bundle-db` 用例覆盖了错误口令/被改过的包/`../` 条目三种失败，均在写文件之前；「写了一半再失败」的目录清理只有代码保证 |
 | 592 | P18.1 | 手册 P18.1 第 2 条：扫描 `server/` 里读到的每个 `process.env.<名字>`，都能在 `.env.example` 里找到 | `server/env-example.test.ts` 把 13 个由操作系统 / 运行时注入的变量放进显式白名单（`APPDATA`、`HOME`、`HTTP(S)_PROXY`、`LOCALAPPDATA`、`NO_PROXY`、`PATH`、`TEMP`、`TMP`、`TMPDIR`、`USERPROFILE`、`NODE_ENV`、`npm_package_version`），其余必须出现在 `.env.example` | 这些不是用户配置，写进 `.env.example` 会误导人；白名单在测试里逐个注明来源，新增的应用配置仍然会被测试抓住 |
 | 593 | P18.1 | 同上，只要求扫字面 `process.env.<名字>` | 另加一条显式断言：附录 B 的 21 个变量都在 `.env.example` 里 | 附录 B 的 `MAX_IMPORT_BYTES` / `MAX_IMPORT_UNPACKED_BYTES` 是通过 `readLimit("名字")` 读的，字面扫描看不到；只守字面读法会漏掉手册点名要的变量 |
 | 594 | P18.1 | 同上，只要求附录 B 的变量进 `.env.example` | 同时补了 6 个此前未登记、但 `server/` 确实在读的配置项：`MAX_DISTILL_CALLS`、`MIRRAI_GRADUATION_RESUGGEST_DAYS`、`OPENAI_SYSTEM_MESSAGE`、`OPENAI_TRANSCRIBE_MODEL`、`REDIS_SERVER_BIN`、`DEV_ALLOWED_HOSTS` | 新测试要求「所有 server/ 读到的配置」都登记，不补测试红；补上之后用户才知道这些旋钮存在 |
@@ -1249,10 +1251,25 @@ corepack pnpm eval -- --persona <id> --user <id> --audition
 
 **第四批状态**：没有条目改状态（都是已 ✅/🟡 条目的中级/低级问题）；计数仍 ✅86 · 🟡87 · ⬜0。闸门 `734` 个文件（`709 passed | 25 skipped`）、`6223` 个用例（`6093 passed | 130 skipped`）、`all seven steps passed`。
 
+**第五批（第三轮修复：流/工具/皮肤/漂移/加密扫描/测试收紧，`4d1a9aa` … `0cfddd20`）**
+
+- **C10.7 burst 每一条都带 provenance**（`4d1a9aa`）：`done.provenance` 之外新增 `done.provenances`（每条存储气泡一项），客户端把 spans 按顺序挂到 `burst-<id>-*` 气泡；stream 路由也把 `claims` 带出来了（B6.6 的流式缺口）。服务端 `service.test.ts` 三句 burst 的 recordId 映射、客户端 Chat 测试两条 `.provenance-word`，均先红。
+- **C9.2 请求体解析失败按 OpenAI 错误形状返回**（`4d1a9aa`）：`/v1` 下注册四参数错误中间件，`invalid_json`/`request_too_large`，不再落到 Express 的 HTML 错误页；先红（旧响应不是 JSON）。
+- **B7.12 群聊用上公开面纱的 `publicVoice`**（`9b61f76`）：`groupOverlayText` 接 `publicVoice`，群聊说明里附「公开场合你说话是这样」；`group/reply.test.ts` 断言 plan 与 execute 收到的 overlay 一致。
+- **B7.15 两种 IM 皮肤有独立气泡宽度**（`9b61f76`）：`MessageBubble` 加 `message-bubble-column`，`skins.css` 对两种皮肤设 72%，`skins.test.ts` 结构断言；classic 不变。
+- **B8.3 漂移测不出来时不再说「声音没漂」**（`9b61f76`）：`DriftReport.failedTurns`；全部轮次失败抛 `DriftNoTurnsError`（CLI 退出码 1），部分失败打印失败轮数；两条新测试。
+- **C8.5 加密列扫描改为读 `ENCRYPTED_TABLES`（24 列）**（`9b61f76`）：原先手写 20 列，漏 `diary_entries.highlights/quotes/emotionalArc` 与 `persona_versions.styleProfile`；夹具补齐哨兵、临时库 9 条全过。进度表三处「20 个加密列」订正为 24。
+- **C9.3 MCP 每个回答都以说明行开头**（`ee9c030`）：加密锁着时的说明也走 `withHeader`；`search_records` 的 `role` 过滤加了 `user`/缺省 `all` 两条断言。
+- **C9.4 工具层补测**（`ee9c030`）：provider 不支持 tools 时回退普通回复（只调一次、不带 `options.tools`）；设置页「可以做几件小事」开关的组件测试。
+- **C9.5 分身包**（`ee9c030`）：导出对话框写明「里面有真人的聊天记录」（中英 + `zh-Hant`）；导入失败删文件后把变空的目录也收掉（不再留 `personas/<u>/<p>/` 空目录）。
+- **测试收紧**（`0cfddd20`）：C7.3 新增收藏分支、B5.6 撤回/`[recall]` 的 `content === "[recall]"` 与 `metadata.kind`、C2.10 `?at` 的 `scrollIntoView` 与「delete 只能删自己的」真库用例、C8.13 range 徽标、C8.14 `\bsad\b`（saddle 不再触发，sad/sadness/sadly 仍触发）。进度表把 C8.13 的「range 徽标已测」补成事实。
+
+**第五批状态**：没有条目改状态（都是 ✅/🟡 条目的中级/低级问题）；计数仍 ✅86 · 🟡87 · ⬜0。闸门 `734` 个文件（`709 passed | 25 skipped`）、`6237` 个用例（`6107 passed | 130 skipped`）、`all seven steps passed`。
+
 **最终验证（修复会话收尾；到本进度文件更新前 `60ffcdf..HEAD` 共 25 个提交、154 个文件）**
 
-- **闸门**：`corepack pnpm gate`（不带 `--fast`、不带 `DATABASE_URL`）退出码 0、`all seven steps passed`；`734` 个文件（`709 passed | 25 skipped`）、`6223` 个用例（`6093 passed | 130 skipped`）。跳过数相对验收基线 122 增加 8，全部是本次新增的**数据库用例**（在已登记的 DB 测试文件里追加：`db-search`、`db-sharing`、`db-soft-delete`、`db-groups`、`db-timeline`、`material`；新增的带库用例都跑过，无库时按既有规则跳过）；没有被新加 skip 的既有测试；`git diff --name-status main..HEAD -- '*.test.ts' '*.test.tsx' | grep '^D'` = 0（没有删测试）。黄金快照仍只有 `e506484` 一个提交、之后未改。
-- **带库测试**：临时库 `mirrai_v6_verify_final`（`drizzle-kit push --force` 后），`server/skip-audit.test.ts` 登记的 29 个 DB 测试文件用 `--no-file-parallelism` 顺序跑：`29 passed (29)`、`142 passed (142)`、**0 skipped**（第二轮又补了两个带库用例）；临时库已 `dropdb`。
+- **闸门**：`corepack pnpm gate`（不带 `--fast`、不带 `DATABASE_URL`）退出码 0、`all seven steps passed`；`734` 个文件（`709 passed | 25 skipped`）、`6237` 个用例（`6107 passed | 130 skipped`）。跳过数相对验收基线 122 增加 8，全部是本次新增的**数据库用例**（在已登记的 DB 测试文件里追加：`db-search`、`db-sharing`、`db-soft-delete`、`db-groups`、`db-timeline`、`material`；新增的带库用例都跑过，无库时按既有规则跳过）；没有被新加 skip 的既有测试；`git diff --name-status main..HEAD -- '*.test.ts' '*.test.tsx' | grep '^D'` = 0（没有删测试）。黄金快照仍只有 `e506484` 一个提交、之后未改。
+- **带库测试**：最后一轮在临时库 `mirrai_v6_verify_round3`（`drizzle-kit push --force` 后）重跑：`server/skip-audit.test.ts` 登记的 29 个 DB 测试文件用 `--no-file-parallelism` 顺序跑：`29 passed (29)`、`142 passed (142)`、**0 skipped**；临时库已 `dropdb`，`mirrai_live` 未连接。
 - **迁移四步 + 整段回滚/装回**：临时库 `mirrai_v6_verify_mig`（`push` → `migrate` 84 条 → `--replay` 84 条 → `--rollback 1` 退 0086 → `migrate` 回来）；再 43 次 `--rollback 1` 退到 0043：表 62→34、索引 171→72、journal 84→41、`file_type` 7 值→5 值；再 43 次 `migrate` 全部装回（表 62 / 索引 171 / journal 84 / 列 651、`file_type` 回 7 值）。另建只 `push` 的库 `mirrai_v6_verify_mig3` 与 push+migrate 库 `mirrai_v6_verify_mig2` 做 information_schema catalog diff（表名/列名/类型/可空）：**0 行差异**。三个临时库都已 `dropdb`；`mirrai_live` 未连接、未写。
 - **静态**：分支 `exec/v6`；`git status --porcelain` 空；`main..HEAD` 无 merge 提交、`Co-Authored-By` 0 条（`core.hooksPath` = `.githooks` 已确认）；`package.json` version 仍 1.3.0；未 push、未合并、未切分支、未改写历史；`main` 仍 `f71e77b`。
 - **仍没修/没量的**：真实模型/真实记录/真实设备才能量的效果类条目按 🟡 留在未验证清单（各自有可执行命令）；本机无法执行的验收项没有硬填数字。低严重度里未逐条处理的有：163 条历史问题行没有提交号（历史记录，不改变行为）、C10.2「引号里任何短语都被当地点」的抽取精度、C10.7 burst 只有最后一条立刻带 provenance、C8.11 30 天真实等待/浏览器整链路、C7.4 真实模型抽取等——都记在未验证清单或问题清单里。
