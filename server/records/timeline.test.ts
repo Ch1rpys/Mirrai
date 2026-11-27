@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
-import { findTurningPoints, weeklySeries, weekStartDate } from "./timeline";
+import {
+  findTurningPoints,
+  mergeTimelinePoints,
+  weeklySeries,
+  weekStartDate,
+  type StoredTurningPoint,
+  type TurningPoint,
+} from "./timeline";
 
 const rows = buildXiaomanRecords().map((row) => ({
   id: row.id,
@@ -112,5 +119,56 @@ describe("the weekly curves", () => {
   it("turns a week key into the date the reader can jump to", () => {
     expect(weekStartDate("2023-W27")).toBe("2023-07-03");
     expect(weekStartDate("not-a-week")).toBeNull();
+  });
+});
+
+describe("the user's decisions on the electrocardiogram (C2.5)", () => {
+  const detected: TurningPoint[] = [
+    { id: "2023-W27", at: "2023-W27", changes: [{ series: "charsMedian", before: 10, after: 6 }], status: "auto" },
+    { id: "2023-W33", at: "2023-W33", changes: [{ series: "total", before: 40, after: 12 }], status: "auto" },
+  ];
+
+  it("keeps a confirmed turn the new records no longer detect", () => {
+    // The records change — a file is deleted, a row is corrected — and a
+    // week that used to qualify stops qualifying. The user's confirmation
+    // and the sentence they wrote about it are still their own; hiding
+    // them makes the page disagree with what they decided.
+    const stored: StoredTurningPoint[] = [{
+      id: "2023-W29",
+      at: "2023-W29",
+      changes: [{ series: "charsMedian", before: 9, after: 5 }],
+      status: "confirmed",
+      note: "那周以后话短了",
+    }];
+    const merged = mergeTimelinePoints(detected, stored);
+    const kept = merged.find((point) => point.id === "2023-W29");
+    expect(kept).toMatchObject({ status: "confirmed", note: "那周以后话短了" });
+    expect(kept?.weekStart).toBe(weekStartDate("2023-W29"));
+    // And the detected ones are still there.
+    expect(merged.map((point) => point.id)).toEqual(["2023-W27", "2023-W29", "2023-W33"]);
+  });
+
+  it("applies the decision to a turn that is still detected", () => {
+    const merged = mergeTimelinePoints(detected, [{
+      id: "2023-W27",
+      at: "2023-W27",
+      changes: [],
+      status: "confirmed",
+      note: "是对的",
+    }]);
+    expect(merged.find((point) => point.id === "2023-W27")).toMatchObject({
+      status: "confirmed",
+      note: "是对的",
+    });
+  });
+
+  it("still drops a rejected turn, even when it was not re-detected", () => {
+    const merged = mergeTimelinePoints(detected, [{
+      id: "2000-W01",
+      at: "2000-W01",
+      changes: [],
+      status: "rejected",
+    }]);
+    expect(merged.map((point) => point.id)).not.toContain("2000-W01");
   });
 });

@@ -324,6 +324,53 @@ export function normalizeStoredTurningPoints(value: unknown): StoredTurningPoint
   return out;
 }
 
+/**
+ * The detected turns, with the user's own decisions applied (C2.5).
+ *
+ * A confirmed turn is part of what the user said about their own
+ * relationship. When the records change — a file is deleted, an import
+ * is confirmed again, a row is corrected — a week that used to qualify
+ * can stop qualifying, and the old code then dropped the decision with
+ * it: the confirmation and the note were still in the persona data, but
+ * the page showed neither. So a stored turn that this run did not
+ * re-detect is kept, as the user left it. A rejected one is still
+ * dropped: "not a turn" is also a decision, and the point is not shown.
+ */
+export function mergeTimelinePoints(
+  detected: TurningPoint[],
+  stored: StoredTurningPoint[],
+): TurningPoint[] {
+  const decisions = new Map(stored.map((point) => [point.id, point]));
+  const merged: TurningPoint[] = [];
+  const seen = new Set<string>();
+  for (const point of detected) {
+    const decision = decisions.get(point.id);
+    seen.add(point.id);
+    if (decision?.status === "rejected") continue;
+    merged.push(
+      decision
+        ? {
+            ...point,
+            status: decision.status,
+            ...(decision.note ? { note: decision.note } : {}),
+          }
+        : point,
+    );
+  }
+  for (const decision of stored) {
+    if (decision.status === "rejected" || seen.has(decision.id)) continue;
+    merged.push({
+      id: decision.id,
+      at: decision.at || decision.id,
+      weekStart: weekStartDate(decision.id) ?? undefined,
+      changes: decision.changes,
+      status: decision.status,
+      ...(decision.note ? { note: decision.note } : {}),
+    });
+  }
+  return merged.sort((a, b) => a.id.localeCompare(b.id));
+}
+
 /** The curves and the turns, with the user's decisions applied. */
 export interface TimelineEvent {
   at: string;
@@ -355,18 +402,7 @@ export async function buildTimeline(params: {
   const stored = normalizeStoredTurningPoints(
     (persona?.personaData as { turningPoints?: unknown } | null)?.turningPoints,
   );
-  const decisions = new Map(stored.map((point) => [point.id, point]));
-  const points = findTurningPoints(series)
-    .filter((point) => decisions.get(point.id)?.status !== "rejected")
-    .map((point) => {
-      const decision = decisions.get(point.id);
-      if (!decision) return point;
-      return {
-        ...point,
-        status: decision.status,
-        ...(decision.note ? { note: decision.note } : {}),
-      };
-    });
+  const points = mergeTimelinePoints(findTurningPoints(series), stored);
   /**
    * The relationship events the user already recorded, on the same
    * week axis as the curves. They are markers, not measurements: the

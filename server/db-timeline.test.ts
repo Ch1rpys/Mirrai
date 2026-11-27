@@ -44,4 +44,27 @@ describe.skipIf(!DATABASE_URL)("the turning points of a persona", () => {
       await purgePersona(personaId, userId);
     }
   }, 30_000);
+
+  it("keeps a confirmed turn that the current records do not detect (C2.5)", async () => {
+    // The records changed under a decision: the week no longer moves
+    // enough to be detected. The page must still show what the user
+    // confirmed and wrote, or their own note disappears with the data.
+    const userId = 9_946_000 + Math.floor(Math.random() * 10_000);
+    const { personaId } = await seedXiaoman(null, { userId });
+    try {
+      await setTurningPointDecision({
+        personaId,
+        userId,
+        id: "2000-W01",
+        status: "confirmed",
+        note: "这是我自己记下的",
+      });
+      const timeline = await buildTimeline({ personaId, userId });
+      const kept = timeline.points.find((point) => point.id === "2000-W01");
+      expect(kept).toMatchObject({ status: "confirmed", note: "这是我自己记下的" });
+      expect(kept?.weekStart).toBe("2000-01-03");
+    } finally {
+      await purgePersona(personaId, userId);
+    }
+  }, 30_000);
 });
