@@ -123,6 +123,18 @@ export function activeLifeEvents(events: LifeEvent[]): LifeEvent[] {
   return events.filter((event) => event.verified && !event.closed);
 }
 
+/**
+ * The key a rejected life event is remembered under (C10.6).
+ *
+ * A mined event's id is its position in the batch it was read from, so it
+ * is not stable across re-distillations. The title — the sentence the
+ * event was read off — is what the same candidate will carry again, so
+ * that is what a rejection is recorded against.
+ */
+export function lifeEventRejectedKey(title: string): string {
+  return `event:${title.trim()}`;
+}
+
 export function openLoops(events: LifeEvent[]): LifeEvent[] {
   return activeLifeEvents(events).filter((event) => event.kind === "open_loop");
 }

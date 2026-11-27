@@ -35,11 +35,11 @@ import {
   PERSONA_DOCUMENT_FIELDS,
   type PersonaData,
 } from "../_core/persona-schema";
-import { normalizeMicroRules, type MicroRule } from "@shared/micro-rules";
+import { normalizeMicroRules, microRuleRejectedKey, type MicroRule } from "@shared/micro-rules";
 import { normalizeImperfectionProfile } from "@shared/imperfection";
-import { normalizeSuppressions, type Suppression } from "@shared/suppressions";
+import { normalizeSuppressions, suppressionRejectedKey, type Suppression } from "@shared/suppressions";
 import { normalizeActProfile, type ActProfile } from "@shared/act-profile";
-import { normalizeLifeEvents, type LifeEvent } from "@shared/life-events";
+import { normalizeLifeEvents, lifeEventRejectedKey, type LifeEvent } from "@shared/life-events";
 import { normalizeOpeningProfile, type OpeningProfile } from "@shared/opening-profile";
 import { mergeLexicon, type LexiconEntry } from "@shared/lexicon";
 import { aggregatePeople, mergePeople, type Person, type PersonCard } from "@shared/people";
@@ -310,12 +310,28 @@ export function mergeUserDecisions(
     previous.imperfectionProfile,
     locale,
   );
+  /**
+   * Everything the user has said "no" to (C10.6).
+   *
+   * The inference view offers a reject button on every unverified
+   * candidate. Deleting the row is not enough: the next distillation
+   * reads the records again and offers the same candidate once more.
+   * The rejection is recorded here, in the user's own decisions, and
+   * every miner's fresh output is filtered against it.
+   */
+  const rejectedKeys: string[] = Array.isArray(previous.rejectedFeedbackKeys)
+    ? previous.rejectedFeedbackKeys.filter((key): key is string => typeof key === "string")
+    : Array.isArray(fresh.rejectedFeedbackKeys)
+      ? fresh.rejectedFeedbackKeys.filter((key): key is string => typeof key === "string")
+      : [];
+  const rejected = new Set(rejectedKeys);
   // A mined rule whose trigger the user has already confirmed is dropped:
   // the user's version is the one they checked, and two rules about the
   // same word are two contradictory instructions in one prompt.
   const covered = new Set(confirmed.map((rule) => rule.trigger.join("|")));
   const uncovered = minedRules.filter(
-    (rule) => !covered.has(rule.trigger.join("|")),
+    (rule) => !covered.has(rule.trigger.join("|"))
+      && !rejected.has(microRuleRejectedKey(rule.id)),
   );
 
   const confirmedSuppressions = normalizeSuppressions(previous.suppressions).filter(
@@ -325,7 +341,8 @@ export function mergeUserDecisions(
     confirmedSuppressions.map((row) => `${row.kind}:${row.pattern}`),
   );
   const freshSuppressions = normalizeSuppressions(mined.suppressions).filter(
-    (row) => !suppressionKeys.has(`${row.kind}:${row.pattern}`),
+    (row) => !suppressionKeys.has(`${row.kind}:${row.pattern}`)
+      && !rejected.has(suppressionRejectedKey(row.kind, row.pattern)),
   );
 
   const keptEvents = normalizeLifeEvents(previous.lifeEvents).filter(
@@ -334,7 +351,9 @@ export function mergeUserDecisions(
   const eventKeys = new Set(keptEvents.map((event) => event.id));
   const eventTitles = new Set(keptEvents.map((event) => event.title));
   const freshEvents = normalizeLifeEvents(mined.lifeEvents).filter(
-    (event) => !eventKeys.has(event.id) && !eventTitles.has(event.title),
+    (event) => !eventKeys.has(event.id)
+      && !eventTitles.has(event.title)
+      && !rejected.has(lifeEventRejectedKey(event.title)),
   );
 
   const merged: PersonaData = {
@@ -352,29 +371,21 @@ export function mergeUserDecisions(
     periods: normalizePeriods(previous.periods).length
       ? normalizePeriods(previous.periods)
       : mined.periods ?? normalizePeriods(fresh.periods),
-    rejectedFeedbackKeys: Array.isArray(previous.rejectedFeedbackKeys)
-      ? previous.rejectedFeedbackKeys.filter((key): key is string => typeof key === "string")
-      : fresh.rejectedFeedbackKeys,
+    rejectedFeedbackKeys: rejectedKeys,
     lexicon: mergeLexicon(
       previous.lexicon,
       mined.lexicon,
-      Array.isArray(previous.rejectedFeedbackKeys)
-        ? previous.rejectedFeedbackKeys.filter((key): key is string => typeof key === "string")
-        : fresh.rejectedFeedbackKeys ?? [],
+      rejectedKeys,
     ),
     people: mergePeople(
       previous.people,
       mined.people,
-      Array.isArray(previous.rejectedFeedbackKeys)
-        ? previous.rejectedFeedbackKeys.filter((key): key is string => typeof key === "string")
-        : fresh.rejectedFeedbackKeys ?? [],
+      rejectedKeys,
     ),
     stances: mergeStances(
       previous.stances,
       mined.stances,
-      Array.isArray(previous.rejectedFeedbackKeys)
-        ? previous.rejectedFeedbackKeys.filter((key): key is string => typeof key === "string")
-        : fresh.rejectedFeedbackKeys ?? [],
+      rejectedKeys,
     ),
     imperfectionDefaultsReviewed: Boolean(
       previous.imperfectionDefaultsReviewed ?? fresh.imperfectionDefaultsReviewed,

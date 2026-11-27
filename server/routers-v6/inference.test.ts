@@ -151,6 +151,23 @@ describe("the inference routes", () => {
     expect(people.map((row) => row.id)).toEqual(["p-qiqi"]);
   });
 
+  it("records the rejection so the next distillation does not offer it again (C10.6)", async () => {
+    const caller = appRouter.createCaller(ctxFor(1));
+    await caller.inference.rejectCandidate({
+      personaId: 5,
+      candidateKind: "people",
+      key: "p-mom",
+    });
+    const [, , patch] = updatePersona.mock.calls[0];
+    const data = (patch as {
+      personaData: { people: Array<{ id: string }>; rejectedFeedbackKeys?: string[] };
+    }).personaData;
+    // The row is gone and the reason is remembered, in the shape the
+    // miner's merge step filters against.
+    expect(data.people.map((row) => row.id)).toEqual(["p-qiqi"]);
+    expect(data.rejectedFeedbackKeys).toEqual(["people:我妈"]);
+  });
+
   it("refuses another user's persona", async () => {
     const caller = appRouter.createCaller(ctxFor(1));
     await expect(caller.inference.rejectCandidate({

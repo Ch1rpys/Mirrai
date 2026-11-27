@@ -30,13 +30,25 @@ import {
 } from "@shared/style-profile";
 import {
   normalizeMicroRules,
+  microRuleRejectedKey,
   type MicroRule,
 } from "@shared/micro-rules";
-import { normalizeSuppressions, type Suppression } from "@shared/suppressions";
-import { normalizeLifeEvents, type LifeEvent } from "@shared/life-events";
-import { normalizePeople, type Person } from "@shared/people";
-import { normalizeStances, type Stance } from "@shared/stances";
-import { normalizeLexicon, type LexiconEntry } from "@shared/lexicon";
+import {
+  normalizeSuppressions,
+  suppressionRejectedKey,
+  isSuppressionKind,
+  type Suppression,
+} from "@shared/suppressions";
+import { normalizeLifeEvents, lifeEventRejectedKey, type LifeEvent } from "@shared/life-events";
+import { normalizePeople, peopleRejectedKey, type Person } from "@shared/people";
+import {
+  normalizeStances,
+  stanceRejectedKey,
+  STANCE_POLARITIES,
+  type Stance,
+  type StancePolarity,
+} from "@shared/stances";
+import { normalizeLexicon, lexiconRejectedKey, type LexiconEntry } from "@shared/lexicon";
 import { normalizeHarmReport } from "@shared/harm";
 
 export type InferenceSource = "measured" | "mined" | "confirmed" | "written";
@@ -52,6 +64,54 @@ export const REJECTABLE_CANDIDATE_KINDS = [
 ] as const;
 
 export type RejectableCandidateKind = (typeof REJECTABLE_CANDIDATE_KINDS)[number];
+
+/**
+ * The stable key a rejected candidate is remembered under (C10.6).
+ *
+ * The inference view removes the candidate row from `personaData` and
+ * records the rejection in `rejectedFeedbackKeys`, so the next
+ * distillation does not offer the same thing again. Each kind has its
+ * own key shape, built from whatever survives a re-mining: a rule id, a
+ * kind + phrase for a subtraction, a title for a life event, a name, a
+ * topic + polarity, a term.
+ *
+ * A row without enough to build a key returns `null`; the row is still
+ * removed, it just cannot be remembered.
+ */
+export function rejectedFeedbackKeyForCandidate(
+  kind: RejectableCandidateKind,
+  row: Record<string, unknown>,
+): string | null {
+  const text = (value: unknown): string => (typeof value === "string" ? value.trim() : "");
+  if (kind === "microRules") {
+    const id = text(row.id);
+    return id ? microRuleRejectedKey(id) : null;
+  }
+  if (kind === "suppressions") {
+    if (!isSuppressionKind(row.kind)) return null;
+    const pattern = text(row.pattern);
+    return pattern || row.kind === "multi_point"
+      ? suppressionRejectedKey(row.kind, pattern)
+      : null;
+  }
+  if (kind === "lifeEvents") {
+    const title = text(row.title);
+    return title ? lifeEventRejectedKey(title) : null;
+  }
+  if (kind === "people") {
+    const name = text(row.name);
+    return name ? peopleRejectedKey(name) : null;
+  }
+  if (kind === "stances") {
+    const topic = text(row.topic);
+    const polarity = STANCE_POLARITIES.includes(row.polarity as StancePolarity)
+      ? (row.polarity as StancePolarity)
+      : null;
+    return topic && polarity ? stanceRejectedKey(topic, polarity) : null;
+  }
+  const term = text(row.term);
+  return term ? lexiconRejectedKey(term) : null;
+}
 
 export type InferenceAction =
   | { kind: "deleteMemory"; memoryId: number }

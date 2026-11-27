@@ -49,6 +49,18 @@ export interface MicroRule {
   evidence: MicroRuleEvidence[];
 }
 
+/**
+ * The key a rejected rule is remembered under (C10.6).
+ *
+ * A mined rule's id is derived from what it says — `auto-<hash of trigger
+ * and meaning>` — so the same candidate comes back with the same id on
+ * the next distillation. That makes the id the stable thing to record in
+ * `personaData.rejectedFeedbackKeys`: "do not offer me this again".
+ */
+export function microRuleRejectedKey(id: string): string {
+  return `rule:${id}`;
+}
+
 function toText(value: unknown): string {
   if (typeof value === "string") return value.trim();
   if (typeof value === "number" || typeof value === "boolean") return String(value);

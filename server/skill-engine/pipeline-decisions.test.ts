@@ -84,6 +84,94 @@ describe("a re-run of the distillation", () => {
     expect(merged.microRules?.map((rule) => rule.id)).toEqual(["r1"]);
   });
 
+  it("does not revive a rule the user rejected in the inference view (C10.6)", () => {
+    const rejectedRule: MicroRule = { ...candidate, id: "auto-rejected" };
+    const merged = mergeUserDecisions(
+      fresh,
+      { microRules: [], rejectedFeedbackKeys: ["rule:auto-rejected"] },
+      [rejectedRule],
+      "zh",
+    );
+    expect(merged.microRules).toEqual([]);
+    expect(merged.rejectedFeedbackKeys).toEqual(["rule:auto-rejected"]);
+
+    // Only the rejected one is filtered; a different fresh candidate
+    // still comes through.
+    const kept = mergeUserDecisions(
+      fresh,
+      { rejectedFeedbackKeys: ["rule:auto-rejected"] },
+      [candidate],
+      "zh",
+    );
+    expect(kept.microRules?.map((rule) => rule.id)).toEqual(["auto-1"]);
+  });
+
+  it("does not revive a subtraction the user rejected in the inference view (C10.6)", () => {
+    const minedSuppressions = [
+      {
+        id: "auto-no-phrase",
+        pattern: "好的吧",
+        kind: "no_phrase" as const,
+        confidence: 0.4,
+        source: "auto" as const,
+        verified: false,
+        evidence: [{ snippet: "好的吧" }],
+      },
+      {
+        id: "auto-no-advice",
+        pattern: "你应该",
+        kind: "no_advice" as const,
+        confidence: 0.4,
+        source: "auto" as const,
+        verified: false,
+        evidence: [{ snippet: "你应该" }],
+      },
+    ];
+    const merged = mergeUserDecisions(
+      fresh,
+      { rejectedFeedbackKeys: ["suppression:no_phrase:好的吧"] },
+      [],
+      "zh",
+      { suppressions: minedSuppressions },
+    );
+    expect(merged.suppressions?.map((row) => row.pattern)).toEqual(["你应该"]);
+  });
+
+  it("does not revive a life event the user rejected in the inference view (C10.6)", () => {
+    const minedEvents = [
+      {
+        id: "open-loop-1",
+        kind: "open_loop" as const,
+        title: "说好下周见",
+        detail: "说好下周见",
+        whoSaid: "them",
+        closed: false,
+        source: "auto" as const,
+        verified: false,
+        evidence: [{ snippet: "说好下周见" }],
+      },
+      {
+        id: "open-loop-2",
+        kind: "open_loop" as const,
+        title: "改天一起吃饭",
+        detail: "改天一起吃饭",
+        whoSaid: "me",
+        closed: false,
+        source: "auto" as const,
+        verified: false,
+        evidence: [{ snippet: "改天一起吃饭" }],
+      },
+    ];
+    const merged = mergeUserDecisions(
+      fresh,
+      { rejectedFeedbackKeys: ["event:说好下周见"] },
+      [],
+      "zh",
+      { lifeEvents: minedEvents },
+    );
+    expect(merged.lifeEvents?.map((event) => event.title)).toEqual(["改天一起吃饭"]);
+  });
+
   it("adds the freshly mined candidates", () => {
     const merged = mergeUserDecisions(fresh, {}, [candidate], "zh");
     expect(merged.microRules?.map((rule) => rule.id)).toEqual(["auto-1"]);

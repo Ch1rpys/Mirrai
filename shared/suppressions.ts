@@ -78,6 +78,18 @@ function toConfidence(value: unknown): number {
   return Math.max(0, Math.min(1, n));
 }
 
+/**
+ * The key a rejected subtraction is remembered under (C10.6).
+ *
+ * The mined id is derived from the kind and the phrase, so both are
+ * stable across a re-distillation. Recorded in
+ * `personaData.rejectedFeedbackKeys`, it keeps the same candidate from
+ * coming back.
+ */
+export function suppressionRejectedKey(kind: SuppressionKind, pattern: string): string {
+  return `suppression:${kind}:${pattern}`;
+}
+
 export function normalizeSuppressions(value: unknown): Suppression[] {
   if (!Array.isArray(value)) return [];
   const out: Suppression[] = [];

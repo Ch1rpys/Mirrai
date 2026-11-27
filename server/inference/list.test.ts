@@ -9,6 +9,7 @@ import {
   STYLE_PROFILE_KEY_COPY,
   buildInferenceSections,
   personaHasMeasurements,
+  rejectedFeedbackKeyForCandidate,
   type BuildInferenceInput,
 } from "./list";
 
@@ -128,6 +129,24 @@ describe("the inference view", () => {
       expect(copy("en", copyKey)).not.toBe(copyKey);
       expect(copy("en", copyKey)).not.toBe(copy("zh", copyKey));
     }
+  });
+
+  it("builds the durable rejection key for every candidate kind (C10.6)", () => {
+    // These are the same key shapes `mergeUserDecisions` filters the next
+    // distillation's candidates against.
+    expect(rejectedFeedbackKeyForCandidate("microRules", { id: "auto-x" })).toBe("rule:auto-x");
+    expect(rejectedFeedbackKeyForCandidate("suppressions", { kind: "no_phrase", pattern: "好的吧" }))
+      .toBe("suppression:no_phrase:好的吧");
+    expect(rejectedFeedbackKeyForCandidate("lifeEvents", { title: "说好下周见" }))
+      .toBe("event:说好下周见");
+    expect(rejectedFeedbackKeyForCandidate("people", { name: "琪琪" })).toBe("people:琪琪");
+    expect(rejectedFeedbackKeyForCandidate("stances", { topic: "咖啡", polarity: "like" }))
+      .toBe("stance:咖啡:like");
+    expect(rejectedFeedbackKeyForCandidate("lexicon", { term: "咕咕" })).toBe("lexicon:咕咕");
+    // A row without the pieces has no stable key; it is still removed.
+    expect(rejectedFeedbackKeyForCandidate("stances", { topic: "咖啡", polarity: "bogus" })).toBeNull();
+    expect(rejectedFeedbackKeyForCandidate("people", {})).toBeNull();
+    expect(rejectedFeedbackKeyForCandidate("microRules", { id: "  " })).toBeNull();
   });
 
   it("covers every style profile key that exists", () => {

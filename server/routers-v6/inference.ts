@@ -26,6 +26,7 @@ import { getStoredTrajectory } from "../safety/trajectory";
 import {
   buildInferenceSections,
   REJECTABLE_CANDIDATE_KINDS,
+  rejectedFeedbackKeyForCandidate,
   type RejectableCandidateKind,
 } from "../inference/list";
 
@@ -33,9 +34,12 @@ import {
  * Drops a candidate from the persona data under the same lock every other
  * persona-data write takes.
  *
- * It removes the row rather than marking it rejected: the user said they
- * do not want this candidate, and a re-run of the miner would otherwise
- * put it back. A confirmed row is left alone — the page only offers the
+ * Removing the row alone is not enough: the next distillation reads the
+ * records again and offers the same candidate once more, so the user
+ * would have to say "no" to it for ever. The rejection is recorded in
+ * `personaData.rejectedFeedbackKeys` — the same list the distillation's
+ * `mergeUserDecisions` filters every mined candidate against — so it
+ * stays gone. A confirmed row is left alone: the page only offers the
  * rejection on unverified candidates.
  */
 async function rejectCandidate(
@@ -49,10 +53,16 @@ async function rejectCandidate(
   const data = ((persona.personaData as Record<string, unknown> | null) ?? {});
   const rows = Array.isArray(data[kind]) ? [...(data[kind] as Array<Record<string, unknown>>)] : [];
   if (rows.length === 0) return false;
-  const kept = rows.filter((row) => String(row.id ?? "") !== key);
-  if (kept.length === rows.length) return false;
+  const removed = rows.find((row) => String(row.id ?? "") === key);
+  if (!removed) return false;
+  const kept = rows.filter((row) => row !== removed);
+  const rejectedKey = rejectedFeedbackKeyForCandidate(kind, removed);
+  const rejected = Array.isArray(data.rejectedFeedbackKeys)
+    ? (data.rejectedFeedbackKeys as unknown[]).filter((row): row is string => typeof row === "string")
+    : [];
+  if (rejectedKey && !rejected.includes(rejectedKey)) rejected.push(rejectedKey);
   await updatePersona(personaId, userId, {
-    personaData: { ...data, [kind]: kept },
+    personaData: { ...data, [kind]: kept, rejectedFeedbackKeys: rejected },
   });
   return true;
 }
