@@ -217,6 +217,20 @@ describe("the soundtrack page", () => {
     );
     expect(transcribe).toHaveBeenCalledWith({ personaId: 5 });
   });
+  it("marks a recording as a favorite (C7.3)", async () => {
+    marksState.value = { data: [] };
+    const user = userEvent.setup();
+    render(<Voices />);
+    await user.click(
+      screen.getByRole("button", { name: translate("zh", "media.voicesFavorite") }),
+    );
+    expect(addMark).toHaveBeenCalledWith({
+      personaId: 5,
+      recordId: 101,
+      kind: "bookmark",
+    });
+  });
+
   it("favorites a recording by bookmarking its record (C7.3)", async () => {
     marksState.value = {
       data: [{ id: 7, recordId: 101, kind: "bookmark" }],

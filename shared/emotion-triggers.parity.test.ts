@@ -196,6 +196,15 @@ describe("the English triggers are enough", () => {
     }
   });
 
+  it("matches sad as a word, not as the start of one (C8.14)", () => {
+    // The pattern was `\bsad` with no closing boundary: `saddle` moved
+    // the persona's mood. The sad forms a person writes still match.
+    expect(matchEmotionTrigger("I bought a new saddle", "en")).toBeNull();
+    expect(matchEmotionTrigger("I am sad", "en")).toBe("melancholy");
+    expect(matchEmotionTrigger("there is a sadness I cannot name", "en")).toBe("melancholy");
+    expect(matchEmotionTrigger("she said it sadly", "en")).toBe("melancholy");
+  });
+
   it("does not fire on ten ordinary English sentences", () => {
     /**
      * The list is deliberately mundane: work, travel, food, a phone, the

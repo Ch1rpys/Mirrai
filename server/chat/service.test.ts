@@ -3209,9 +3209,16 @@ describe("runConversation", () => {
     const recall = events.find((event) => event.type === "recall");
     expect(typeof recall?.text).toBe("string");
     expect(recall?.text).toBeTruthy();
-    const stored = createMessage.mock.calls.map((call) => JSON.stringify(call[0]));
-    expect(stored.some((row) => row.includes("[recall]"))).toBe(true);
-    expect(stored.some((row) => row.includes(String(recall?.text)))).toBe(false);
+    // The spoken line is only in the event; the stored row is the
+    // marker, with its own metadata (B5.6).
+    const storedRows = createMessage.mock.calls.map(
+      (call) => call[0] as { role?: string; content?: string; metadata?: { kind?: string } },
+    );
+    const storedRecall = storedRows.find(
+      (row) => row.role === "assistant" && row.content === "[recall]",
+    );
+    expect(storedRecall?.metadata?.kind).toBe("recall");
+    expect(storedRows.some((row) => String(row.content ?? "").includes(String(recall?.text)))).toBe(false);
   });
 
   it("pats before the reply when that user act used to be tapped", async () => {

@@ -55,7 +55,7 @@ export const EMOTION_TRIGGER_PATTERNS: {
     playful:
       /haha|lol|that'?s funny|\bfunny\b|joking|kidding|joke|crack me up|so much fun|having fun|hilarious|playful/,
     melancholy:
-      /\bsad|crying|upset|hurt|heartbroken|lonely|depressed|miserable|hopeless|feeling down|feeling low|feel down|feel low|feeling empty|empty inside|gloomy/,
+      /\bsad(?:ness|ly)?\b|crying|upset|hurt|heartbroken|lonely|depressed|miserable|hopeless|feeling down|feeling low|feel down|feel low|feeling empty|empty inside|gloomy/,
     happy:
       /\bhappy\b|great|awesome|i love you|so glad|\bglad\b|wonderful|thrilled|excited|amazing|fantastic|best day|\blove it\b|hooray/,
     distant:

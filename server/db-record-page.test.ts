@@ -147,6 +147,11 @@ describe.skipIf(!DATABASE_URL)("the timeline reader's data", () => {
         upsertRecordMark({ userId: userId + 1, personaId, recordId, kind: "bookmark", note: null }),
       ).resolves.toBeNull();
 
+      // Another account cannot delete the line out of this person's
+      // record; the ownership is part of the delete, not the route.
+      expect(await deleteRecordRow(recordId, personaId, userId + 1)).toBe(false);
+      expect((await pageRecords(personaId, userId, { limit: 10, direction: "newer" })).rows.map((row) => row.id))
+        .toContain(recordId);
       // Deleting the line takes its marks with it.
       expect(await deleteRecordRow(recordId, personaId, userId)).toBe(true);
       expect(await listRecordMarks(personaId, userId)).toHaveLength(0);

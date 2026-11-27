@@ -116,6 +116,9 @@ describe("the record reader", () => {
 
   it("opens at ?at= and marks that line", async () => {
     window.history.replaceState({}, "", "/persona/5/records?at=11");
+    // The line has to be in view, not only highlighted off-screen (C2.10).
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
     render(<Records />);
     expect(lastPageInput.value).toMatchObject({
       personaId: 5,
@@ -125,6 +128,9 @@ describe("the record reader", () => {
     const line = await screen.findByText("在的呀");
     expect(line.closest("[data-record-id]")?.getAttribute("data-record-id")).toBe("11");
     expect(line.closest("[data-record-id]")?.className).toContain("ring-2");
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalled();
+    });
   });
 
   it("takes a stretch of the record into the chat", async () => {

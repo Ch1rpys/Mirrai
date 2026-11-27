@@ -162,6 +162,24 @@ describe("the scene panel", () => {
     ).toBeInTheDocument();
   });
 
+  it("marks a scene that was cut from a stretch of the record (C8.13)", () => {
+    // The badge is the only way a person can tell a range scene from a
+    // hand-written one; the progress row claimed it was tested.
+    listState.value = {
+      data: [{
+        ...own,
+        id: 21,
+        name: "那一周",
+        recordRange: { personaId: 5, fromId: 10, toId: 20, from: "2022-03-01", to: "2022-03-07" },
+      }],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    };
+    renderPanel();
+    expect(screen.getByText(translate("zh", "sceneForm.rangeBadge"))).toBeInTheDocument();
+  });
+
   it("copies a built-in scene", async () => {
     renderPanel();
     await userEvent.click(
