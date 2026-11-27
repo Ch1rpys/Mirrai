@@ -141,6 +141,23 @@ describe("the backup archive", () => {
     }
   }, 20_000);
 
+  it("refuses an empty passphrase instead of writing an unencrypted archive", async () => {
+    // P18.4 found `Boolean(passphrase)` treating "" like "no passphrase":
+    // a caller that meant to encrypt got a plain zip. No product path is
+    // known to pass "", but silently downgrading the archive is the wrong
+    // answer.
+    const directory = await tempDir();
+    try {
+      const out = path.join(directory, "empty-passphrase.mirrai-backup");
+      await expect(
+        writeBackupArchive({ outPath: out, manifest: MANIFEST, entries: [], passphrase: "" }),
+      ).rejects.toBeInstanceOf(BackupFormatError);
+      await expect(fs.stat(out)).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("round-trips an archive whose file is bigger than one read chunk", async () => {
     // A real instance's backup is far bigger than the 64 KiB chunk the
     // reader hands out. The reader used to wait for a part to finish

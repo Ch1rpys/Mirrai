@@ -386,6 +386,16 @@ export async function writeBackupArchive(options: {
   onPart?: (part: BackupTablePart | BackupUploadPart) => void;
 }): Promise<WrittenBackup> {
   const { outPath, entries, passphrase } = options;
+  /**
+   * An empty passphrase is a mistake, not "no passphrase".
+   *
+   * The truthiness check below would otherwise write a plain zip for a
+   * caller that asked for encryption (P18.4). No product path passes "",
+   * and a silent downgrade is the wrong answer for the one that might.
+   */
+  if (typeof passphrase === "string" && passphrase.trim() === "") {
+    throw new BackupFormatError("A passphrase must not be empty.");
+  }
   const encrypted = Boolean(passphrase);
   await fs.mkdir(path.dirname(outPath), { recursive: true });
   const out = createWriteStream(outPath);
