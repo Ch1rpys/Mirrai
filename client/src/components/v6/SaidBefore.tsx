@@ -21,6 +21,13 @@ export default function SaidBefore({
 }) {
   const { t } = useLocale();
   const [open, setOpen] = useState(false);
+  /**
+   * The hurtful matches the user has opened (C10.1).
+   *
+   * The panel lives inside the chat bubble, where the reader's rule is
+   * that a hurtful line stays folded until it is asked for.
+   */
+  const [unfolded, setUnfolded] = useState<Set<number>>(() => new Set());
   const checked = trpc.record.nearest.useQuery(
     { personaId, text },
     { enabled: open },
@@ -66,18 +73,38 @@ export default function SaidBefore({
                     ? t("chat.saidSimilar")
                     : t("chat.saidNone")}
               </span>
-              {sentence.matches.map((match) => (
-                <span key={match.id} className="mt-0.5 block text-xs text-muted-foreground">
-                  {match.content}
-                  {match.at && <span className="ml-1 opacity-70">{match.at.slice(0, 10)}</span>}
-                  <a
-                    href={`/persona/${personaId}/records?at=${match.id}`}
-                    className="ml-1 underline"
-                  >
-                    {t("chat.saidOpen")}
-                  </a>
-                </span>
-              ))}
+              {sentence.matches.map((match) => {
+                const folded = Boolean(match.harmful) && !unfolded.has(match.id);
+                return (
+                  <span key={match.id} className="mt-0.5 block text-xs text-muted-foreground">
+                    {folded ? (
+                      <button
+                        type="button"
+                        className="underline"
+                        aria-label={t("records.folded")}
+                        onClick={() =>
+                          setUnfolded((current) => {
+                            const next = new Set(current);
+                            next.add(match.id);
+                            return next;
+                          })
+                        }
+                      >
+                        {t("records.folded")}
+                      </button>
+                    ) : (
+                      match.content
+                    )}
+                    {match.at && <span className="ml-1 opacity-70">{match.at.slice(0, 10)}</span>}
+                    <a
+                      href={`/persona/${personaId}/records?at=${match.id}`}
+                      className="ml-1 underline"
+                    >
+                      {t("chat.saidOpen")}
+                    </a>
+                  </span>
+                );
+              })}
             </span>
           ))}
           <span className="mt-1 block border-t border-border/60 px-1 pt-1 text-[11px] leading-relaxed text-muted-foreground">

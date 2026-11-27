@@ -118,6 +118,31 @@ describe("the command palette", () => {
     expect(screen.queryByText(translate("zh", "commandPalette.noResults"))).toBeNull();
   });
 
+  it("folds a hurtful record hit until it is opened (C10.1)", async () => {
+    const user = userEvent.setup();
+    render(<CommandPalette />);
+    await user.keyboard("{Meta>}k{/Meta}");
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(translate("zh", "commandPalette.placeholder"))).toBeInTheDocument();
+    });
+    records = [{
+      personaId: 5,
+      personaName: "小满",
+      recordId: 11,
+      content: "你就是个废物",
+      timestamp: null,
+      harmful: true,
+    }];
+    await user.type(screen.getByPlaceholderText(translate("zh", "commandPalette.placeholder")), "你");
+    await waitFor(() => {
+      expect(screen.getByText(translate("zh", "records.folded"))).toBeInTheDocument();
+    });
+    expect(screen.queryByText("你就是个废物")).toBeNull();
+    await user.click(screen.getByRole("button", { name: translate("zh", "records.folded") }));
+    expect(screen.getByText(/你就是个废物/)).toBeInTheDocument();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
   it("stays out of the way until it is asked for", () => {
     render(<CommandPalette />);
     expect(screen.queryByPlaceholderText(translate("zh", "commandPalette.placeholder"))).toBeNull();

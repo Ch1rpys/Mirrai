@@ -48,6 +48,23 @@ import type { ParseReport } from "../importers/types";
 /** Reports being built in the background, so one page does not start two. */
 const reportBuilds = new Set<number>();
 
+/**
+ * Whether a line should be folded away by default (C10.1).
+ *
+ * The reader, the search panels and ⌘K all show record lines, so they
+ * have to agree on which ones are folded: the harm report's decision,
+ * the same one the reader already reads.
+ */
+function harmfulLineOf(
+  personaData: unknown,
+): (content: string) => boolean {
+  const report = normalizeHarmReport(
+    (personaData as { harmReport?: unknown } | null | undefined)?.harmReport,
+  );
+  const keepHarm = report?.decision === "keep";
+  return (content: string) => !keepHarm && findHarmKind(content) != null;
+}
+
 export const recordRouter = router({
   sources: protectedProcedure
     .input(z.object({ personaId: z.number() }))
@@ -145,10 +162,7 @@ export const recordRouter = router({
           .filter((row) => row.recordId != null)
           .map((row) => [row.recordId as number, row]),
       );
-      const report = normalizeHarmReport(
-        (persona.personaData as { harmReport?: unknown } | null)?.harmReport,
-      );
-      const keepHarm = report?.decision === "keep";
+      const harmfulLine = harmfulLineOf(persona.personaData);
       return {
         rows: page.rows.map((row) => {
           const media = mediaByRecord.get(row.id);
@@ -178,7 +192,7 @@ export const recordRouter = router({
                 }
               : null,
             /** C10.1: folded until the user opens it, unless they kept it. */
-            harmful: !keepHarm && findHarmKind(row.content) != null,
+            harmful: harmfulLine(row.content),
             marks: marksByRecord.get(row.id) ?? [],
           };
         }),
@@ -217,12 +231,15 @@ export const recordRouter = router({
         to: input.to ? new Date(input.to) : undefined,
       });
       const hasMore = exactHits.length > 30;
+      const harmfulLine = harmfulLineOf(persona.personaData);
       const exact = exactHits.slice(0, 30).map((hit) => ({
         id: hit.id,
         content: hit.content,
         timestamp: hit.timestamp?.toISOString() ?? null,
         role: hit.role,
         speaker: hit.speaker,
+        /** Folded by default in the search panel (C10.1). */
+        harmful: harmfulLine(hit.content),
       }));
       const semantic = await searchRecordsSemantic(input.personaId, ctx.user.id, {
         q: input.q,
@@ -242,6 +259,7 @@ export const recordRouter = router({
               timestamp: hit.timestamp?.toISOString() ?? null,
               role: hit.role,
               speaker: hit.speaker,
+              harmful: harmfulLine(hit.content),
             }))
         : null;
       return {
@@ -453,11 +471,23 @@ export const recordRouter = router({
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
       assertPersonaWritable(persona, ctx.locale);
-      return findNearest({
+      const sentences = await findNearest({
         personaId: input.personaId,
         userId: ctx.user.id,
         text: input.text,
       });
+      /**
+       * The panel shows the line it matched, so it has to know which
+       * ones are folded elsewhere (C10.1).
+       */
+      const harmfulLine = harmfulLineOf(persona.personaData);
+      return sentences.map((sentence) => ({
+        ...sentence,
+        matches: sentence.matches.map((match) => ({
+          ...match,
+          harmful: harmfulLine(match.content),
+        })),
+      }));
     }),
 
   /** Original lines across all of the user's personas, for ⌘K (C2.2). */
@@ -471,6 +501,7 @@ export const recordRouter = router({
         recordId: number;
         content: string;
         timestamp: string | null;
+        harmful: boolean;
       }> = [];
       for (const persona of personas) {
         if (out.length >= 20) break;
@@ -478,6 +509,7 @@ export const recordRouter = router({
           q: input.q,
           limit: Math.min(5, 20 - out.length),
         });
+        const harmfulLine = harmfulLineOf(persona.personaData);
         for (const hit of hits) {
           out.push({
             personaId: persona.id,
@@ -485,6 +517,7 @@ export const recordRouter = router({
             recordId: hit.id,
             content: hit.content,
             timestamp: hit.timestamp?.toISOString() ?? null,
+            harmful: harmfulLine(hit.content),
           });
         }
       }

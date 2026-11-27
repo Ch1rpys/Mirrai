@@ -69,6 +69,34 @@ describe("the record search panel", () => {
     expect(document.querySelector("mark")?.textContent).toBe("海边");
   });
 
+  it("folds a hurtful hit until it is opened (C10.1)", async () => {
+    searchState.value = {
+      data: {
+        exact: [{
+          id: 11,
+          content: "你就是个废物",
+          timestamp: null,
+          role: "assistant",
+          speaker: "小满",
+          harmful: true,
+        }],
+        similar: [],
+        next: null,
+      },
+      isLoading: false,
+      isError: false,
+    };
+    render(<RecordSearch personaId={5} name="小满" onJump={onJump} />);
+    await userEvent.type(screen.getByRole("searchbox"), "你");
+    expect(screen.getByText(translate("zh", "records.folded"))).toBeInTheDocument();
+    expect(screen.queryByText("你就是个废物")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: translate("zh", "records.folded") }));
+    // Opened: the line is back as the row's own button.
+    expect(screen.getByRole("button", { name: "你就是个废物" })).toBeInTheDocument();
+    // The line is not jumped to by the fold toggle.
+    expect(onJump).not.toHaveBeenCalled();
+  });
+
   it("says only the literal search ran when the embedding model is missing", async () => {
     searchState.value = {
       data: { exact: [{ id: 11, content: "我在海边等你", timestamp: null }], similar: null, next: null },

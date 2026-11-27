@@ -17,6 +17,8 @@ interface Hit {
   timestamp: string | null;
   role?: string;
   speaker?: string | null;
+  /** A line the harm report asks the app to fold (C10.1). */
+  harmful?: boolean;
 }
 
 function Highlighted({ text, query }: { text: string; query: string }) {
@@ -45,6 +47,21 @@ export default function RecordSearch({
   const [q, setQ] = useState("");
   const [role, setRole] = useState<"assistant" | "all">("assistant");
   const [contextFor, setContextFor] = useState<number | null>(null);
+  /**
+   * The hurtful hits the user has opened (C10.1).
+   *
+   * The reader folds these lines; the search panel used to print them
+   * in full, so searching for a sentence showed it before the person
+   * asked to see it.
+   */
+  const [unfolded, setUnfolded] = useState<Set<number>>(() => new Set());
+  const folded = (hit: Hit) => Boolean(hit.harmful) && !unfolded.has(hit.id);
+  const unfold = (id: number) =>
+    setUnfolded((current) => {
+      const next = new Set(current);
+      next.add(id);
+      return next;
+    });
   /**
    * The extra pages of the literal results.
    *
@@ -148,6 +165,20 @@ export default function RecordSearch({
           </p>
           {exact.map((hit: Hit) => (
             <div key={hit.id} className="rounded px-1 py-1 text-sm hover:bg-muted/40">
+              {folded(hit) ? (
+                <button
+                  type="button"
+                  className="block w-full text-left text-muted-foreground"
+                  aria-label={t("records.folded")}
+                  onClick={() => unfold(hit.id)}
+                >
+                  {t("records.folded")}
+                  <span className="ml-2 text-[11px]">
+                    {speakerOf(hit)}
+                    {hit.timestamp ? ` · ${hit.timestamp.slice(0, 10)}` : ""}
+                  </span>
+                </button>
+              ) : (
               <button
                 type="button"
                 className="block w-full text-left"
@@ -160,6 +191,7 @@ export default function RecordSearch({
                   {hit.timestamp ? ` · ${hit.timestamp.slice(0, 10)}` : ""}
                 </span>
               </button>
+              )}
               <button
                 type="button"
                 className="mt-0.5 text-[11px] text-muted-foreground underline"
@@ -200,20 +232,33 @@ export default function RecordSearch({
           <p className="px-1 py-1 text-[0.625rem] uppercase tracking-wide text-muted-subtle">
             {t("records.similarGroup")}
           </p>
-          {data.similar.map((hit: Hit) => (
-            <button
-              key={hit.id}
-              type="button"
-              className="block w-full rounded px-1 py-1 text-left text-sm hover:bg-muted/40"
-              onClick={() => onJump(hit.id)}
-            >
-              {hit.content}
-              <span className="ml-2 text-[11px] text-muted-foreground">
-                {speakerOf(hit)}
-                {hit.timestamp ? ` · ${hit.timestamp.slice(0, 10)}` : ""}
-              </span>
-            </button>
-          ))}
+          {data.similar.map((hit: Hit) =>
+            folded(hit) ? (
+              <button
+                key={hit.id}
+                type="button"
+                className="block w-full rounded px-1 py-1 text-left text-sm text-muted-foreground hover:bg-muted/40"
+                aria-label={t("records.folded")}
+                onClick={() => unfold(hit.id)}
+              >
+                {t("records.folded")}
+                <span className="ml-2 text-[11px]">{speakerOf(hit)}</span>
+              </button>
+            ) : (
+              <button
+                key={hit.id}
+                type="button"
+                className="block w-full rounded px-1 py-1 text-left text-sm hover:bg-muted/40"
+                onClick={() => onJump(hit.id)}
+              >
+                {hit.content}
+                <span className="ml-2 text-[11px] text-muted-foreground">
+                  {speakerOf(hit)}
+                  {hit.timestamp ? ` · ${hit.timestamp.slice(0, 10)}` : ""}
+                </span>
+              </button>
+            ),
+          )}
         </div>
       )}
       {(data?.semanticTruncated ?? false) && (

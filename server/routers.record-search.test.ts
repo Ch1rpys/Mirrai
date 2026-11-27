@@ -6,6 +6,7 @@ const searchRecordsLexical = vi.fn();
 const searchRecordsSemantic = vi.fn();
 const getRecordsAround = vi.fn();
 const getPersonasByUserId = vi.fn();
+const candidateRecordsByOverlap = vi.fn();
 
 vi.mock("./_core/style-profile", () => ({
   afterRecordsChanged: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock("./db", async (importOriginal) => ({
   searchRecordsSemantic: (...a: unknown[]) => searchRecordsSemantic(...a),
   getRecordsAround: (...a: unknown[]) => getRecordsAround(...a),
   getPersonasByUserId: (...a: unknown[]) => getPersonasByUserId(...a),
+  candidateRecordsByOverlap: (...a: unknown[]) => candidateRecordsByOverlap(...a),
 }));
 
 import { appRouter } from "./routers";
@@ -62,6 +64,7 @@ describe("record.search, context and searchAll", () => {
     searchRecordsSemantic.mockResolvedValue({ hits: [], truncated: false });
     getPersonasByUserId.mockResolvedValue([{ id: 5, name: "小满" }]);
     getRecordsAround.mockResolvedValue({ target: undefined, before: [], after: [] });
+    candidateRecordsByOverlap.mockResolvedValue([]);
   });
 
   it("pages the literal hits by cursor and asks for one more than a page", async () => {
@@ -124,6 +127,54 @@ describe("record.search, context and searchAll", () => {
     expect(result.semanticTruncated).toBe(true);
   });
 
+  it("marks a hurtful hit so the panels can fold it by default (C10.1)", async () => {
+    // The reader folds these lines; the search panels and ⌘K did not,
+    // so the sentence was printed in full the moment a person searched
+    // for it. The decision is the same one the reader reads.
+    getPersonaById.mockResolvedValue({
+      id: 5,
+      userId: 1,
+      name: "小满",
+      personaData: { harmReport: { categories: [{ kind: "belittle", count: 2 }], decision: "remove" } },
+    });
+    searchRecordsLexical.mockResolvedValue([
+      { ...hit(1), content: "你就是个废物" },
+      { ...hit(2), content: "今天天气不错" },
+    ]);
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .record.search({ personaId: 5, q: "你" });
+    expect(result.exact.find((row) => row.id === 1)?.harmful).toBe(true);
+    expect(result.exact.find((row) => row.id === 2)?.harmful).toBe(false);
+  });
+
+  it("does not fold a hurtful hit the user kept (C10.1)", async () => {
+    getPersonaById.mockResolvedValue({
+      id: 5,
+      userId: 1,
+      name: "小满",
+      personaData: { harmReport: { categories: [{ kind: "belittle", count: 2 }], decision: "keep" } },
+    });
+    searchRecordsLexical.mockResolvedValue([{ ...hit(1), content: "你就是个废物" }]);
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .record.search({ personaId: 5, q: "你" });
+    expect(result.exact[0]?.harmful).toBe(false);
+  });
+
+  it("marks a hurtful hit in the cross-persona search too (C10.1)", async () => {
+    getPersonasByUserId.mockResolvedValue([
+      {
+        id: 5,
+        name: "小满",
+        personaData: { harmReport: { categories: [{ kind: "belittle", count: 2 }], decision: "pending" } },
+      },
+    ]);
+    searchRecordsLexical.mockResolvedValue([{ ...hit(1), content: "你就是个废物" }]);
+    const rows = await appRouter.createCaller(ctxFor(1)).record.searchAll({ q: "你" });
+    expect(rows[0]?.harmful).toBe(true);
+  });
+
   it("says the meaning search is unavailable with null, not an empty list", async () => {
     searchRecordsLexical.mockResolvedValue([]);
     searchRecordsSemantic.mockResolvedValue(null);
@@ -131,6 +182,29 @@ describe("record.search, context and searchAll", () => {
       .createCaller(ctxFor(1))
       .record.search({ personaId: 5, q: "海" });
     expect(result.similar).toBeNull();
+  });
+
+  it("marks a hurtful line in 'did they say this' so the bubble folds it (C10.1)", async () => {
+    getPersonaById.mockResolvedValue({
+      id: 5,
+      userId: 1,
+      name: "小满",
+      personaData: { harmReport: { categories: [{ kind: "belittle", count: 2 }], decision: "pending" } },
+    });
+    candidateRecordsByOverlap.mockResolvedValue([
+      {
+        id: 11,
+        content: "你就是个废物",
+        timestamp: new Date("2022-03-01T12:00:00.000Z"),
+        role: "assistant",
+        speaker: "小满",
+        coverage: 1,
+      },
+    ]);
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .record.nearest({ personaId: 5, text: "你就是个废物" });
+    expect(result[0]?.matches[0]?.harmful).toBe(true);
   });
 
   it("refuses the context of another persona's line", async () => {

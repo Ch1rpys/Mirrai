@@ -78,7 +78,16 @@ export default function CommandPalette() {
     recordId: number;
     content: string;
     timestamp: string | null;
+    /** A line the harm report asks the app to fold (C10.1). */
+    harmful?: boolean;
   }>;
+  /**
+   * The hurtful record hits the user has opened (C10.1).
+   *
+   * ⌘K printed the sentence in full while the reader folded it — the
+   * same record, two different promises.
+   */
+  const [unfoldedHits, setUnfoldedHits] = useState<Set<number>>(() => new Set());
 
   const go = (path: string) => {
     setOpen(false);
@@ -209,24 +218,38 @@ export default function CommandPalette() {
               <p className="text-[0.625rem] uppercase tracking-wide text-muted-subtle px-2 py-1.5">
                 {t("commandPalette.records")}
               </p>
-              {matchingRecords.map((hit) => (
-                <button
-                  key={`${hit.personaId}-${hit.recordId}`}
-                  onClick={() => go(`/persona/${hit.personaId}/records?at=${hit.recordId}`)}
-                  className="w-full flex items-start gap-2.5 px-2.5 py-2 rounded-md hover:bg-muted/50 transition-colors text-left"
-                >
-                  <BookOpen className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
-                  <span className="flex-1 min-w-0">
-                    <span className="block text-xs text-muted-foreground">
-                      {hit.personaName}
-                      {hit.timestamp && (
-                        <span className="ml-1.5 opacity-70">{hit.timestamp.slice(0, 10)}</span>
-                      )}
+              {matchingRecords.map((hit) => {
+                const folded = Boolean(hit.harmful) && !unfoldedHits.has(hit.recordId);
+                return (
+                  <button
+                    key={`${hit.personaId}-${hit.recordId}`}
+                    aria-label={folded ? t("records.folded") : undefined}
+                    onClick={() =>
+                      folded
+                        ? setUnfoldedHits((current) => {
+                            const next = new Set(current);
+                            next.add(hit.recordId);
+                            return next;
+                          })
+                        : go(`/persona/${hit.personaId}/records?at=${hit.recordId}`)
+                    }
+                    className="w-full flex items-start gap-2.5 px-2.5 py-2 rounded-md hover:bg-muted/50 transition-colors text-left"
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-xs text-muted-foreground">
+                        {hit.personaName}
+                        {hit.timestamp && (
+                          <span className="ml-1.5 opacity-70">{hit.timestamp.slice(0, 10)}</span>
+                        )}
+                      </span>
+                      <span className={`block text-sm line-clamp-2 ${folded ? "text-muted-foreground" : "text-foreground"}`}>
+                        {folded ? t("records.folded") : hit.content}
+                      </span>
                     </span>
-                    <span className="block text-sm text-foreground line-clamp-2">{hit.content}</span>
-                  </span>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )}
 

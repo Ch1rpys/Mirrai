@@ -59,6 +59,33 @@ describe("the 'did they say this' panel", () => {
     expect(links[0].closest("a")?.getAttribute("href")).toBe("/persona/5/records?at=11");
   });
 
+  it("folds a hurtful matching line until it is opened (C10.1)", async () => {
+    state.value = {
+      data: [{
+        text: "你就是个废物",
+        verdict: "verbatim",
+        matches: [{
+          id: 11,
+          content: "你就是个废物",
+          at: null,
+          harmful: true,
+        }],
+      }],
+      isLoading: false,
+      isError: false,
+    };
+    render(<SaidBefore personaId={5} text="你就是个废物" name="小满" />);
+    await userEvent.click(
+      screen.getByRole("button", { name: translate("zh", "chat.saidBefore", { name: "小满" }) }),
+    );
+    expect(screen.getByText(translate("zh", "records.folded"))).toBeInTheDocument();
+    // Only the sentence being checked is visible; the matching record
+    // line itself is still folded.
+    expect(screen.getAllByText("你就是个废物")).toHaveLength(1);
+    await userEvent.click(screen.getByRole("button", { name: translate("zh", "records.folded") }));
+    expect(screen.getAllByText("你就是个废物")).toHaveLength(2);
+  });
+
   it("always says the replica's line is rebuilt", async () => {
     state.value = { data: [], isLoading: false, isError: false };
     render(<SaidBefore personaId={5} text="在吗" name="小满" />);
