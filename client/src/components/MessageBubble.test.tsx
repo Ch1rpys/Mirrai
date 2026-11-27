@@ -614,6 +614,46 @@ describe("the message bubble", () => {
     ).toBeInTheDocument();
   });
 
+  it("spells out the day a memory-backed claim came from", () => {
+    /**
+     * The line is 「「拾光咖啡」— 记录里有（2022-03-12）」.
+     *
+     * The chat page builds `date` from the claim's `source.at`, which the
+     * server takes from the memory's own day. When it is missing the
+     * bubble still renders the copy key and the brackets come out empty,
+     * so "the date is on screen" is the thing worth asserting.
+     */
+    render(
+      <MessageBubble
+        msg={makeMessage({
+          claims: [{ text: "拾光咖啡", supported: true, date: "2022-03-12" }],
+        })}
+        personaName="小A"
+        showMood={false}
+      />,
+    );
+    const line = screen.getByText(/记录里有（2022-03-12）/);
+    expect(line.textContent).toContain("拾光咖啡");
+    // The empty-bracket shape the reported bug produced.
+    expect(line.textContent).not.toContain("（）");
+  });
+
+  it("says the claim's day in English too", () => {
+    locale = "en";
+    render(
+      <MessageBubble
+        msg={makeMessage({
+          claims: [{ text: "Blue Lake Cafe", supported: true, date: "2022-03-12" }],
+        })}
+        personaName="小A"
+        showMood={false}
+      />,
+    );
+    const line = screen.getByText(/in the record \(2022-03-12\)/);
+    expect(line.textContent).toContain("Blue Lake Cafe");
+    expect(line.textContent).not.toContain("()");
+  });
+
   it("says where an ordinary-looking message really came from", () => {
     // A reply to a letter, and a message the persona started, look like
     // any other turn unless the bubble says so.

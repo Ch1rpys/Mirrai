@@ -17,6 +17,52 @@ describe("extractClaims", () => {
     expect(extractClaims("我们是不是去过拾光咖啡？", "zh")).toEqual([]);
   });
 
+  /**
+   * The mark at the end of the line is what makes it a question.
+   *
+   * `splitClauses` cuts on the punctuation, so the question mark never
+   * reached the clause the extractor looked at — "你昨天去拾光咖啡了？"
+   * read as a statement, and the place became a claim the persona then
+   * had to have in the record.
+   */
+  it("does not treat a line that ends in a question mark as a claim", () => {
+    expect(extractClaims("你昨天去拾光咖啡了吗？", "zh")).toEqual([]);
+    expect(extractClaims("你昨天去拾光咖啡了？", "zh")).toEqual([]);
+    expect(extractClaims("你昨天去拾光咖啡了?", "zh")).toEqual([]);
+    // Trailing whitespace after the mark does not turn it back into a statement.
+    expect(extractClaims("你昨天去拾光咖啡了？  \n", "zh")).toEqual([]);
+    // The interrobang is still a question.
+    expect(extractClaims("你昨天去拾光咖啡了吗？！", "zh")).toEqual([]);
+  });
+
+  it("reads the question mark through the closing quote", () => {
+    expect(extractClaims("「你昨天去拾光咖啡了？」", "zh")).toEqual([]);
+    expect(extractClaims("你昨天去拾光咖啡了？」", "zh")).toEqual([]);
+  });
+
+  it("does not treat an English line ending in a question mark as a claim", () => {
+    expect(extractClaims("You went to the Blue Lake Cafe?", "en")).toEqual([]);
+    expect(extractClaims("Did you go to the Blue Lake Cafe?", "en")).toEqual([]);
+  });
+
+  it("keeps a plain statement a claim", () => {
+    expect(extractClaims("你昨天去了拾光咖啡。", "zh")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "place", text: "拾光咖啡" }),
+      ]),
+    );
+  });
+
+  /**
+   * A question among statements stops only itself: the rest of the same
+   * reply can still name things the record has to hold.
+   */
+  it("skips the question and keeps the statement after it", () => {
+    const claims = extractClaims("你昨天去拾光咖啡了？我去了蓝湖公园。", "zh");
+    expect(claims.some((row) => row.text === "拾光咖啡")).toBe(false);
+    expect(claims.some((row) => row.kind === "place" && row.text === "蓝湖公园")).toBe(true);
+  });
+
   it("keeps the place name and skips a drink", () => {
     const named = extractClaims("我们去了拾光咖啡", "zh");
     expect(named.some((row) => row.kind === "place" && row.text === "拾光咖啡")).toBe(true);

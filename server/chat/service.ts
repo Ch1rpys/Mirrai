@@ -720,7 +720,14 @@ export async function composeMessages(params: {
   exemplarSection?: string;
 }): Promise<{
   messages: LLMMessage[];
-  recalled: Array<{ id: number; title: string; subject: string; description?: string | null }>;
+  recalled: Array<{
+    id: number;
+    title: string;
+    subject: string;
+    description?: string | null;
+    /** The day the memory happened, for the fact check's support line. */
+    date?: string | null;
+  }>;
 }> {
   const now = params.now ?? new Date();
   const locale = params.locale ?? "zh";
@@ -898,6 +905,13 @@ export async function composeMessages(params: {
       title: m.title,
       subject: (m as any).subject ?? "them",
       description: m.description ?? null,
+      /**
+       * The model's answer is what the bubble reads back as the day of
+       * a claim this memory supports. It used to be dropped here, so a
+       * supported claim had a memory id and no date — and the fact
+       * line came out as 「记录里有（）」.
+       */
+      date: m.date ?? null,
     })),
   };
 }
@@ -2904,6 +2918,12 @@ async function* runConversationTurn(
               id: row.id,
               title: row.title,
               description: row.description,
+              /**
+               * The memory's own day, so a claim it supports carries the
+               * date the bubble shows. `verifyClaims` turns it into
+               * `source.at`, which is what the chat page reads.
+               */
+              date: row.date ?? null,
             })),
           })
         : [];

@@ -85,9 +85,23 @@ function hasLatin(text: string): boolean {
   return /[A-Za-z]/.test(text);
 }
 
+/**
+ * Whether the clause asks something.
+ *
+ * The punctuation that ended the clause is the strongest mark, and it is
+ * passed separately because `splitClauses` cuts on it: 「你昨天去拾光
+ * 咖啡了？」 has been split into 「你昨天去拾光咖啡了」 before this is
+ * asked, so looking for the mark inside the clause found nothing. The
+ * line read as a statement and the place became a claim the reply had
+ * to have in the record.
+ *
+ * The mark is also what covers an inverted sentence the words below do
+ * not recognise ("You went to the Blue Lake Cafe?") and the trailing
+ * closing quote the split leaves behind.
+ */
 // i18n:allow-input — particles that mark a question in what they typed
-function isQuestionClause(clause: string, locale: Locale): boolean {
-  if (/[？?]/.test(clause)) return true;
+function isQuestionClause(clause: string, locale: Locale, endedBy: string): boolean {
+  if (/[？?]/.test(endedBy)) return true;
   const trimmed = clause.replace(/[。！!…\s]+$/g, "");
   if (trimmed.endsWith("吗") || clause.includes("是不是")) return true;
   if (locale === "en" || hasLatin(trimmed)) {
@@ -98,20 +112,22 @@ function isQuestionClause(clause: string, locale: Locale): boolean {
   return false;
 }
 
-function splitClauses(reply: string): Array<{ text: string; start: number }> {
+function splitClauses(
+  reply: string,
+): Array<{ text: string; start: number; endedBy: string }> {
   const source = String(reply ?? "");
   if (!source) return [];
-  const out: Array<{ text: string; start: number }> = [];
+  const out: Array<{ text: string; start: number; endedBy: string }> = [];
   const re = /[。！？!?；;\n]+/g;
   let last = 0;
   let match: RegExpExecArray | null;
   while ((match = re.exec(source))) {
     const text = source.slice(last, match.index);
-    if (text.trim()) out.push({ text, start: last });
+    if (text.trim()) out.push({ text, start: last, endedBy: match[0] });
     last = match.index + match[0].length;
   }
   const tail = source.slice(last);
-  if (tail.trim()) out.push({ text: tail, start: last });
+  if (tail.trim()) out.push({ text: tail, start: last, endedBy: "" });
   return out;
 }
 
@@ -448,7 +464,7 @@ function extractEvents(clause: string, start: number, locale: Locale): Claim[] {
 export function extractClaims(reply: string, locale: Locale): Claim[] {
   const out: Claim[] = [];
   for (const clause of splitClauses(reply)) {
-    if (isQuestionClause(clause.text, locale)) continue;
+    if (isQuestionClause(clause.text, locale, clause.endedBy)) continue;
     for (const claim of extractDates(clause.text, clause.start, locale)) pushClaim(out, claim);
     for (const claim of extractPlaces(clause.text, clause.start, locale)) pushClaim(out, claim);
     for (const claim of extractEvents(clause.text, clause.start, locale)) pushClaim(out, claim);

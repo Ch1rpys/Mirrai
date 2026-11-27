@@ -1492,11 +1492,33 @@ describe("runConversation", () => {
           expect.objectContaining({
             text: "拾光咖啡",
             supported: true,
-            source: expect.objectContaining({ type: "memory", id: 9 }),
+            /**
+             * The day the memory happened, not only its id.
+             *
+             * The bubble writes 「「拾光咖啡」— 记录里有（{{date}}）」, and
+             * the memory was assembled for the fact check with its
+             * title and description only — so the source arrived
+             * without a day and the bubble showed an empty pair of
+             * brackets.
+             */
+            source: expect.objectContaining({
+              type: "memory",
+              id: 9,
+              at: "2022-03-12",
+            }),
           }),
         ]),
       }),
     );
+    // The live stream hands the same claim to the bubble it renders.
+    const done = events.find((event) => event.type === "done") as
+      | { claims?: Array<{ text: string; source?: { at?: string } }> }
+      | undefined;
+    expect(done?.claims?.find((row) => row.text === "拾光咖啡")?.source).toEqual({
+      type: "memory",
+      id: 9,
+      at: "2022-03-12",
+    });
   });
 
   it("still replies when the fact check throws", async () => {

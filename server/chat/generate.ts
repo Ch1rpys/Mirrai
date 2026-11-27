@@ -217,7 +217,19 @@ export interface TurnPlan {
    */
   exemplars?: Exemplar[];
   seedRecordIds: number[];
-  recalled: Array<{ id: number; title: string; subject: string; description?: string | null }>;
+  /**
+   * The memories this turn was composed with.
+   *
+   * `date` rides along because the fact check names the day a supported
+   * claim came from — the bubble writes 「记录里有（{{date}}）」.
+   */
+  recalled: Array<{
+    id: number;
+    title: string;
+    subject: string;
+    description?: string | null;
+    date?: string | null;
+  }>;
   rng: () => number;
   reanchor?: ReanchorIssue[];
   /** This turn is closing the chat the way they used to. */
@@ -1321,6 +1333,10 @@ function claimsContextFor(plan: TurnPlan, input: TurnInput): VerifyClaimsContext
       id: row.id,
       title: row.title,
       description: row.description,
+      // This path only reads `supported`, but a memory reached the
+      // reply through the same `recalled` list as the annotator's — the
+      // day belongs with it here as well.
+      date: row.date ?? null,
     })),
   };
 }
