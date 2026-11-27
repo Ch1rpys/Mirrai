@@ -18,6 +18,7 @@ import {
 import { mergePersonaSettings } from "@shared/persona-settings";
 import { normalizePeriods } from "@shared/periods";
 import { mineAddressForms } from "@shared/address-history";
+import { normalizePeople } from "@shared/people";
 import { preferredClockZone } from "@shared/timezone";
 import { draftImperfection } from "@shared/imperfection-draft";
 import { normalizeStyleProfile, type StyleProfile } from "@shared/style-profile";
@@ -184,7 +185,19 @@ export async function measureStyleProfile(params: {
   const personaZone = typeof persona?.timezone === "string" ? persona.timezone : null;
   const timeZone = userZone || personaZone || null;
   const sessionZone = preferredClockZone(personaZone, userZone);
-  const addressHistory = mineAddressForms(rows, knownForms, { timeZone });
+  /**
+   * The other people in the record are not ways of addressing the user
+   * (B3.8). A name the persona uses about somebody else — 琪琪 today —
+   * must not become a term of address just because it starts a line.
+   */
+  const peopleForms = normalizePeople(rawData.people).flatMap((person) => [
+    person.name,
+    ...person.aliases,
+  ]);
+  const addressHistory = mineAddressForms(rows, knownForms, {
+    timeZone,
+    excludeForms: peopleForms,
+  });
   const minedForms = addressHistory
     .filter((entry) => entry.direction === "them_to_me")
     .map((entry) => entry.form);

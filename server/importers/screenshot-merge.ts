@@ -239,7 +239,14 @@ export function mergeScreenshotPages(
     return { rows, timeApprox: false, needsDate: rows.length > 0 };
   }
 
-  for (const [index, { message, page }] of flattened.entries()) {
+  /**
+   * Minutes are counted per stored line, not per element the vision
+   * model returned. A centered system notice it could not read used to
+   * consume one, so the next real line was a minute later than it
+   * should be (B7.11).
+   */
+  let minute = 0;
+  for (const { message, page } of flattened) {
     const side = asSide(message.side);
     if (!side || side === "center") continue;
     const kind = message.kind && isRecordKind(message.kind) ? message.kind : "text";
@@ -247,11 +254,12 @@ export function mergeScreenshotPages(
       role: side === "left" ? "assistant" : "user",
       content: contentForKind(kind, message.text),
       kind,
-      at: new Date(base.getTime() + index * 60_000),
+      at: new Date(base.getTime() + minute * 60_000),
       timeApprox: true,
       unclear: message.unclear === true,
       page,
     });
+    minute += 1;
   }
   return { rows, timeApprox: true, needsDate: false };
 }

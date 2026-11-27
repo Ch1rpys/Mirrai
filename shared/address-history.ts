@@ -53,21 +53,37 @@ const NICKNAME_PREFIXES = new Set(["小", "阿", "老"]);
 export function mineAddressForms(
   rows: FingerprintRow[],
   known: string[] = [],
-  options?: { timeZone?: string | null },
+  options?: {
+    timeZone?: string | null;
+    /**
+     * Other people's names, which are not forms of address (B3.8).
+     *
+     * 「琪琪今天也在」 puts a name at the start of a line; the person
+     * being talked about is not the person being talked to.
+     */
+    excludeForms?: string[];
+  },
 ): AddressEntry[] {
   const knownSet = new Set(known.map((form) => form.trim()).filter(Boolean));
+  const excludeSet = new Set(
+    (options?.excludeForms ?? [])
+      .map((form) => form.trim())
+      .filter((form) => form.length > 0 && !knownSet.has(form)),
+  );
   const timeZone = options?.timeZone ?? null;
   const them = collectDirection(
     rows.filter((row) => row.role === "assistant" && isTextRecord(row)),
     "them_to_me",
     knownSet,
     timeZone,
+    excludeSet,
   );
   const me = collectDirection(
     rows.filter((row) => row.role === "user" && isTextRecord(row)),
     "me_to_them",
     knownSet,
     timeZone,
+    excludeSet,
   );
   return [...them, ...me];
 }
@@ -134,6 +150,7 @@ function collectDirection(
   direction: AddressDirection,
   known: Set<string>,
   timeZone: string | null,
+  exclude: Set<string> = new Set(),
 ): AddressEntry[] {
   const vocative = new Map<string, Stats>();
   const total = new Map<string, number>();
@@ -143,6 +160,7 @@ function collectDirection(
     const text = String(row.content ?? "").trim();
     if (!text) continue;
     for (const form of vocativesIn(text, known)) {
+      if (exclude.has(form)) continue;
       candidates.add(form);
       bumpVocative(vocative, form, row, timeZone);
     }
@@ -223,6 +241,13 @@ function vocativesIn(text: string, known: Set<string>): string[] {
   // "树树在吗" has no comma. A repeated given name glued to the next
   // word is still a name. A whole-line "哈哈" is not.
   if (!bare && chars.length > 2 && isNameReduplication(chars.slice(0, 2).join(""))) {
+    /**
+     * 「树树在吗」 has no comma, but it is still talking to the person.
+     *
+     * A name that starts the line is only an address when it is the
+     * person being talked to; the caller excludes the names of people
+     * the record talks about (B3.8).
+     */
     found.add(chars.slice(0, 2).join(""));
   }
   for (let n = 1; n <= 4 && n <= chars.length; n++) {

@@ -288,6 +288,25 @@ describe("the subcommands call the function behind the route", () => {
     expect(Array.isArray(JSON.parse(json.lines[0]).items)).toBe(true);
   });
 
+  it("doctor: exits non-zero when an item failed (C9.6)", async () => {
+    const { base } = deps({
+      createCaller: vi.fn().mockReturnValue({
+        system: {
+          diagnose: vi.fn().mockResolvedValue({
+            items: [
+              { id: "database", status: "ok" },
+              { id: "redis", status: "fail", detail: "unreachable" },
+            ],
+          }),
+        },
+      }),
+    });
+    const { lines, io } = output();
+    const code = await runMirrai(["doctor", "--user", "1"], base, io);
+    expect(code).toBe(1);
+    expect(lines.join("\n")).toContain("redis");
+  });
+
   it("every --json line parses", async () => {
     const { base } = deps();
     for (const argv of [

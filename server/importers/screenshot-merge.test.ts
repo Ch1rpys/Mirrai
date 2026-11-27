@@ -81,6 +81,24 @@ describe("merging screenshots", () => {
     expect(merged.rows[1]?.at?.toISOString()).toBe("2024-06-01T04:01:00.000Z");
   });
 
+  it("does not give a minute to a centered line it cannot read (B7.11)", () => {
+    // An unreadable centered system prompt was an index in the array, so
+    // the next real line started a minute later than it should.
+    const merged = mergeScreenshotPages(
+      [
+        [
+          { side: "left", text: "在吗" },
+          { side: "center", text: "系统提示：对方撤回了一条消息" },
+          { side: "right", text: "在" },
+        ],
+      ],
+      { date: "2024-06-01", timeZone: "Asia/Shanghai" },
+    );
+    expect(merged.rows.map((row) => row.content)).toEqual(["在吗", "在"]);
+    expect(merged.rows[0]?.at?.toISOString()).toBe("2024-06-01T04:00:00.000Z");
+    expect(merged.rows[1]?.at?.toISOString()).toBe("2024-06-01T04:01:00.000Z");
+  });
+
   it("asks for a date when there is no time bar and no date", () => {
     const merged = mergeScreenshotPages([[{ side: "left", text: "在吗" }]]);
     expect(merged.needsDate).toBe(true);

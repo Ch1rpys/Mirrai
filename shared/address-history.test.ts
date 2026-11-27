@@ -37,11 +37,16 @@ describe("mineAddressForms", () => {
 
   it("finds 树树 from the lines themselves, and does not take a short reply as a name", () => {
     const known = ["宝贝", "阿树", "小满", ...ADDRESS_WORDS_ZH, ...ADDRESS_WORDS_EN];
-    const mined = mineAddressForms(fixtureRows(), known, { timeZone: "Asia/Shanghai" });
+    const mined = mineAddressForms(fixtureRows(), known, {
+      timeZone: "Asia/Shanghai",
+      // 琪琪 is somebody the persona talks about, not to; the style
+      // measurement passes the people list in, and the miner excludes it
+      // (B3.8).
+      excludeForms: ["琪琪"],
+    });
     const them = mined.filter((entry) => entry.direction === "them_to_me");
     const forms = them.map((entry) => entry.form);
-    expect(forms).toContain("树树");
-    expect(forms).toContain("陈树");
+    expect([...forms].sort()).toEqual(["树树", "陈树"].sort());
     expect(forms).not.toContain("晚安");
     expect(forms).not.toContain("嗯");
     expect(forms).not.toContain("随便");
@@ -49,6 +54,18 @@ describe("mineAddressForms", () => {
     expect(forms).not.toContain("行");
     expect(pickThemToMeAddress(them)).toBe("树树");
     expect(them.find((entry) => entry.form === "陈树")?.byState).toEqual({ distant: expect.any(Number) });
+  });
+
+  it("does not mine somebody the persona talks about as a form of address (B3.8)", () => {
+    const rows: FingerprintRow[] = Array.from({ length: 12 }, () => ({
+      role: "assistant",
+      content: "琪琪今天也在",
+      timestamp: new Date("2023-01-01T12:00:00.000Z"),
+      kind: "text",
+      emotion: "warm",
+    }));
+    const mined = mineAddressForms(rows, [], { excludeForms: ["琪琪"] });
+    expect(mined.filter((entry) => entry.direction === "them_to_me")).toEqual([]);
   });
 
   it("files a Shanghai morning in that morning's quarter", () => {
