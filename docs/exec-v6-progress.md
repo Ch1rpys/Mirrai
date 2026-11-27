@@ -1028,7 +1028,7 @@ corepack pnpm eval -- --persona <id> --user <id> --audition
 | 618 | C4.3 | 手册界面文案写「来了几次」 | 实现与文案陈述的是「来了几天」（`visits` 按天计数） | 人去「来」一次可能聊很多条，按天更不容易夸大；文案已照实现写 |
 | 619 | C4.4 | 手册界面文案写「换个位置」 | 聊天页入口写「角色互换」 | 入口名与页面标题一致、也比「换个位置」更能说明是角色互换；功能不受影响 |
 | 620 | C4.5 | 手册数据定义写 `user_journal.entryDate` 为日期 | 列是 `varchar(10)` 的 `YYYY-MM-DD` 日期键 | 日期键与 v5 的其它日键列一致（`mood.date`、`memories.date`）；不引入时区语义，避免用户时区变更时旧行漂移 |
-| 621 | C8.9 | 手册要求「每一次调用写一行」用量 | 一键诊断的一次探针调用不写用量账本 | 探针的 `maxTokens: 1`，记一行账的噪声大于信息；偏差表列在这里而不是悄悄省略 |
+| 621 | C8.9 | 手册要求「每一次调用写一行」用量 | **已修（2026-11-27，`c0a4bc7`）**：探针调用带 `usage: { userId }`，`llm_usage` 有这一行；新单测断言记账上下文 | 原偏差为「探针调用不写用量账本」；记账后删除偏差理由，保留行号便于对照 |
 | 592 | P18.1 | 手册 P18.1 第 2 条：扫描 `server/` 里读到的每个 `process.env.<名字>`，都能在 `.env.example` 里找到 | `server/env-example.test.ts` 把 13 个由操作系统 / 运行时注入的变量放进显式白名单（`APPDATA`、`HOME`、`HTTP(S)_PROXY`、`LOCALAPPDATA`、`NO_PROXY`、`PATH`、`TEMP`、`TMP`、`TMPDIR`、`USERPROFILE`、`NODE_ENV`、`npm_package_version`），其余必须出现在 `.env.example` | 这些不是用户配置，写进 `.env.example` 会误导人；白名单在测试里逐个注明来源，新增的应用配置仍然会被测试抓住 |
 | 593 | P18.1 | 同上，只要求扫字面 `process.env.<名字>` | 另加一条显式断言：附录 B 的 21 个变量都在 `.env.example` 里 | 附录 B 的 `MAX_IMPORT_BYTES` / `MAX_IMPORT_UNPACKED_BYTES` 是通过 `readLimit("名字")` 读的，字面扫描看不到；只守字面读法会漏掉手册点名要的变量 |
 | 594 | P18.1 | 同上，只要求附录 B 的变量进 `.env.example` | 同时补了 6 个此前未登记、但 `server/` 确实在读的配置项：`MAX_DISTILL_CALLS`、`MIRRAI_GRADUATION_RESUGGEST_DAYS`、`OPENAI_SYSTEM_MESSAGE`、`OPENAI_TRANSCRIBE_MODEL`、`REDIS_SERVER_BIN`、`DEV_ALLOWED_HOSTS` | 新测试要求「所有 server/ 读到的配置」都登记，不补测试红；补上之后用户才知道这些旋钮存在 |
@@ -1228,9 +1228,23 @@ corepack pnpm eval -- --persona <id> --user <id> --audition
 
 **第三批状态**：C10.1 改回 ✅；B6.3、B6.6、B7.3、B7.14、B8.2、B8.4、B8.5、C3.2 改回 🟡（效果未量，未验证清单各有对应行）；B4.2、B5.2、B5.8、B6.5、C4.3、C4.6、C7.1、C9.5、C8.10、B9.3、C2.1、C2.8、C2.9、B1.8 补修了报告里的中级/低级问题（状态维持）。计数 ✅ 85→86、🟡 79→87、⬜ 9→0。**此前所有 ⬜ 已清空。** 闸门（不带 `--fast`、不带 `DATABASE_URL`）：`corepack pnpm gate` 退出码 0、`all seven steps passed`；`732` 个文件（`707 passed | 25 skipped`）、`6201` 个用例（`6073 passed | 128 skipped`）。
 
+**第四批（第二轮修复：折叠、取消、日期、读表与记账，`439ea25` … `c0a4bc7`）**
+
+- **C10.1 折叠面扩大**（`439ea25`）：阅读器搜索面板、⌘K「原始记录」组、「这句 TA 说过吗」面板都按同一个 harm 决定默认折起，点开才显示原句；`record.search`/`searchAll`/`nearest` 的命中带 `harmful`。服务端 4 条与组件 3 条先红；`SaidBefore` 的折叠按钮有无障碍名。
+- **C5.3 到期危机检查补全 + 取消语义**（`e6495ae`）：`capsule`/`letter` 分支到期也过一次 `detectCrisis` 并记安全事件（信仍投递，回信路径本来就会给求助回答；胶囊等到日子才开）；`scheduled.cancel` 记 reason `"user"`，全局信箱「还没到日子」每行多一个「取消」，显示「你自己取消了」而不是「那天不能聊」。服务端/调度/信箱各先红。
+- **所有页面日期改用户时区**（`47b924d`）：新增 `client/src/lib/day.ts`（`dayKeyInZone` + `useDayKey`），FirstsList、OurDictionary、PlacesSongs、FidelityHistory、WorldEditors/V5FidelityEditors、EvidenceList、RecordSources、UnfinishedWords、Book、Report、RecordSearch、⌘K、SaidBefore 的 UTC `.slice(0,10)` 全部换成用户日历日；上海 00:00–07:59 的记录不再显示早一天。helper 单测 + FirstsList 组件测试锁住（旧代码红）。
+- **B7.15 背景图写权限**（`6941c9e`）：`uploadBackground`/`clearBackground` 补 `assertPersonaWritable`（共享分身只读），先红。
+- **C8.7 重启后第一轮不再全表读**（`6941c9e`）：新增 `recentRecordTexts(personaId,userId,limit)`（有序 + LIMIT + 解密），`rerank-model` 改用它，5 千行上限由查询保证；真库用例断言最新行/上限/角色与 kind 过滤；单测断言不再调 `iterateRecords`。
+- **C8.9 诊断探针记账**（`c0a4bc7`）：探针调用带 `usage: { userId }`，新单测断言记账上下文。（偏差 621 因此已修，行内已注明。）
+- **C3.7 错误文案本地化**（`c0a4bc7`）：`letter.setDone` 的英文硬编码换成 `errors.onlyNoteCanBeTicked`（中英），路由测试断言译文。
+- **C6.3 分享版清空已勾选照片**（`c0a4bc7`）：切到分享版时清空 `picked`，组件测试断言请求里 `photoIds: []`。
+- **C8.6 语义检索真链测试**（`6941c9e`）：在 `db-search.test.ts` 用假嵌入模型 + 真库 `searchRecordsSemantic`：命中近义行、排除远行、日期范围对语义半也生效（避免新增 DB 文件改 skip-audit 清单）。
+
+**第四批状态**：没有条目改状态（都是已 ✅/🟡 条目的中级/低级问题）；计数仍 ✅86 · 🟡87 · ⬜0。闸门 `734` 个文件（`709 passed | 25 skipped`）、`6220` 个用例（`6090 passed | 130 skipped`）、`all seven steps passed`。
+
 **最终验证（修复会话收尾；到本进度文件更新前 `60ffcdf..HEAD` 共 25 个提交、154 个文件）**
 
-- **闸门**：`corepack pnpm gate`（不带 `--fast`、不带 `DATABASE_URL`）退出码 0、`all seven steps passed`；`732` 个文件（`707 passed | 25 skipped`）、`6201` 个用例（`6073 passed | 128 skipped`）。跳过数相对验收基线 122 增加 6，全部是本次新增的**数据库用例**（在已登记的 DB 测试文件里追加：`db-search` 2、`db-sharing` 1、`db-soft-delete` 1、`db-groups` 1、`db-timeline` 1、`material` 1，合计 6，且不在无库时跑）；没有被新加 skip 的既有测试；`git diff --name-status main..HEAD -- '*.test.ts' '*.test.tsx' | grep '^D'` = 0（没有删测试）。黄金快照仍只有 `e506484` 一个提交、之后未改。
+- **闸门**：`corepack pnpm gate`（不带 `--fast`、不带 `DATABASE_URL`）退出码 0、`all seven steps passed`；`734` 个文件（`709 passed | 25 skipped`）、`6220` 个用例（`6090 passed | 130 skipped`）。跳过数相对验收基线 122 增加 8，全部是本次新增的**数据库用例**（在已登记的 DB 测试文件里追加：`db-search`、`db-sharing`、`db-soft-delete`、`db-groups`、`db-timeline`、`material`；新增的带库用例都跑过，无库时按既有规则跳过）；没有被新加 skip 的既有测试；`git diff --name-status main..HEAD -- '*.test.ts' '*.test.tsx' | grep '^D'` = 0（没有删测试）。黄金快照仍只有 `e506484` 一个提交、之后未改。
 - **带库测试**：临时库 `mirrai_v6_verify_final`（`drizzle-kit push --force` 后），`server/skip-audit.test.ts` 登记的 29 个 DB 测试文件用 `--no-file-parallelism` 顺序跑：`29 passed (29)`、`140 passed (140)`、**0 skipped**；库已 `dropdb`。
 - **迁移四步 + 整段回滚/装回**：临时库 `mirrai_v6_verify_mig`（`push` → `migrate` 84 条 → `--replay` 84 条 → `--rollback 1` 退 0086 → `migrate` 回来）；再 43 次 `--rollback 1` 退到 0043：表 62→34、索引 171→72、journal 84→41、`file_type` 7 值→5 值；再 43 次 `migrate` 全部装回（表 62 / 索引 171 / journal 84 / 列 651、`file_type` 回 7 值）。另建只 `push` 的库 `mirrai_v6_verify_mig3` 与 push+migrate 库 `mirrai_v6_verify_mig2` 做 information_schema catalog diff（表名/列名/类型/可空）：**0 行差异**。三个临时库都已 `dropdb`；`mirrai_live` 未连接、未写。
 - **静态**：分支 `exec/v6`；`git status --porcelain` 空；`main..HEAD` 无 merge 提交、`Co-Authored-By` 0 条（`core.hooksPath` = `.githooks` 已确认）；`package.json` version 仍 1.3.0；未 push、未合并、未切分支、未改写历史；`main` 仍 `f71e77b`。
