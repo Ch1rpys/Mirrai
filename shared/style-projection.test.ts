@@ -80,6 +80,15 @@ describe("strip_period", () => {
     expect(apply("好的。", fp).text).toBe("好的。");
   });
 
+  it("leaves a period in the middle of a bubble alone", () => {
+    // The manual's rule is "the single 。 at the end of each bubble". The
+    // implementation used to delete every ideographic period that was not
+    // beside a digit — so a two-sentence reply lost its first full stop.
+    expect(apply("好的。知道了", ready).text).toBe("好的。知道了");
+    expect(apply("第一句。第二句。", ready).text).toBe("第一句。第二句");
+    expect(apply("好的。", ready).text).toBe("好的");
+  });
+
   it("leaves ellipsis, decimals, and abbreviations alone", () => {
     expect(apply("好的...", ready).text).toBe("好的...");
     expect(apply("好的…", ready).text).toBe("好的…");
@@ -170,17 +179,31 @@ describe("ellipsis_form", () => {
 });
 
 describe("exclaim_runs", () => {
+  /**
+   * The buckets are the way `measureFingerprint` stores them: bucket i
+   * counts runs of i + 1 marks. `[0, 0, 10]` is ten runs of three — the
+   * fixture here used to read it as "max two", one off from what the
+   * measurement writes, which is exactly why the cap was wrong on real
+   * fingerprints.
+   */
   const ready = core({
     punctuation: { exclaimRuns: [0, 0, 10] } as StyleFingerprintCore["punctuation"],
   });
 
   it("caps a run longer than they ever used", () => {
-    expect(apply("好的！！！！", ready).text).toBe("好的！！");
+    expect(apply("好的！！！！", ready).text).toBe("好的！！！");
     expect(apply("好的！！！！", ready).applied).toContain("exclaim_runs");
   });
 
   it("leaves a run within their max alone", () => {
-    expect(apply("好的！！", ready).text).toBe("好的！！");
+    expect(apply("好的！！！", ready).text).toBe("好的！！！");
+  });
+
+  it("reads the measured bucket as a run length", () => {
+    const fp = core({
+      punctuation: { exclaimRuns: [0, 0, 0, 10] } as StyleFingerprintCore["punctuation"],
+    });
+    expect(apply("好的！！！！！", fp).text).toBe("好的！！！！");
   });
 
   it("does not fire without enough marks", () => {
@@ -284,11 +307,22 @@ describe("the fixture fingerprint", () => {
 
   it("projects 知道了。哈哈 the way the happy state writes", () => {
     const { happy } = fixtureCore();
+    /**
+     * The manual's acceptance example is "知道了。哈哈" with `strip_period`
+     * applied, while the manual's own rule for `strip_period` is "the
+     * single 。 at the end of every bubble" — the two disagree on this
+     * input. The acceptance report settled it on the rule text, so the
+     * period in the middle of the bubble stays, and the same sentence with
+     * a period at the end loses that one.
+     */
     const result = apply("知道了。哈哈", happy, "xiaoman-happy");
-    expect(result.applied).toContain("strip_period");
     expect(result.applied).toContain("laugh_runs");
-    expect(result.text).toMatch(/^知道了哈{2,}$/);
-    expect(result.text).not.toContain("。");
+    expect(result.applied).not.toContain("strip_period");
+    expect(result.text).toMatch(/^知道了。哈{2,}$/);
+    const withTail = apply("知道了。哈哈。", happy, "xiaoman-happy");
+    expect(withTail.applied).toContain("strip_period");
+    expect(withTail.applied).toContain("laugh_runs");
+    expect(withTail.text).toMatch(/^知道了。哈{2,}$/);
   });
 
   it("keeps a distant period", () => {
@@ -296,6 +330,49 @@ describe("the fixture fingerprint", () => {
     const result = apply("随便。", distant);
     expect(result.text).toBe("随便。");
     expect(result.applied).not.toContain("strip_period");
+  });
+
+  it("is idempotent across the reachable punctuation-width and comma combinations", () => {
+    // A persona who writes "好的 知道了" (spaces where commas would go) and
+    // almost never uses half-width marks is a reachable fingerprint. With
+    // the rules ordered the old way, the first pass produced a full-width
+    // comma and the second pass turned it into a space — so the text kept
+    // moving between two shapes.
+    const spaceAndFull = core({
+      samples: 221,
+      endings: { period: 0 } as StyleFingerprintCore["endings"],
+      punctuation: {
+        spaceAsComma: 1,
+        commaPerChar: 0.001,
+        halfWidthRate: 0.05,
+        markCount: 40,
+      } as StyleFingerprintCore["punctuation"],
+    });
+    for (const line of ["好的,知道了", "好的，知道了", "行吧,那就这样"]) {
+      const once = apply(line, spaceAndFull);
+      const twice = apply(once.text, spaceAndFull);
+      expect(twice.text, line).toBe(once.text);
+      expect(twice.applied, line).toEqual([]);
+    }
+
+    // The same fixed point the other way round: half-width marks plus
+    // spaces for commas.
+    const spaceAndHalf = core({
+      samples: 221,
+      endings: { period: 0 } as StyleFingerprintCore["endings"],
+      punctuation: {
+        spaceAsComma: 1,
+        commaPerChar: 0.001,
+        halfWidthRate: 0.95,
+        markCount: 40,
+      } as StyleFingerprintCore["punctuation"],
+    });
+    for (const line of ["好的，知道了", "行吧，那就这样"]) {
+      const once = apply(line, spaceAndHalf);
+      const twice = apply(once.text, spaceAndHalf);
+      expect(twice.text, line).toBe(once.text);
+      expect(twice.applied, line).toEqual([]);
+    }
   });
 
   it("is idempotent on fifty fixture lines with the same seed", () => {

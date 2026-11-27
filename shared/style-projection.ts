@@ -32,7 +32,15 @@ export interface ProjectionResult {
   applied: ProjectionRule[];
 }
 
-const HAN_COMMA_RE = /(\p{Script=Han})，(\p{Script=Han})/gu;
+/**
+ * A comma between two Han characters — either width.
+ *
+ * The full-width one only used to match, so a full-width preference turn
+ * of `punct_width` reintroduced a `，` that the next pass turned into a
+ * space: the projection never reached a fixed point. Both widths are the
+ * same habit, so both count as the thing `comma_to_space` learned.
+ */
+const HAN_COMMA_RE = /(\p{Script=Han})[,，](\p{Script=Han})/gu;
 const EMOJI_RE = /\p{Extended_Pictographic}/gu;
 // i18n:allow-input — the laugh character counted in the records, not copy.
 const LAUGH_CHAR = "哈";
@@ -173,12 +181,22 @@ function stripPeriod(text: string): string {
     kept.push(match);
     return `\u0000${kept.length - 1}\u0000`;
   });
-  const withoutIdeographic = protectedText.replace(/。/g, (mark, offset, source) => {
-    const prev = source[offset - 1] ?? "";
-    const next = source[offset + 1] ?? "";
-    if (/\d/u.test(prev) || /\d/u.test(next)) return mark;
-    return "";
-  });
+  /**
+   * Only the end of each bubble.
+   *
+   * The manual's rule is "the single 。 at the end of every bubble". This
+   * used to delete every ideographic period that was not beside a digit,
+   * so a two-sentence reply lost the full stop in the middle of itself —
+   * a change to the sentence, not to the habit.
+   */
+  const withoutIdeographic = protectedText
+    .split("\n")
+    .map((line) => line.replace(/。$/, (mark, offset, source) => {
+      const prev = source[offset - 1] ?? "";
+      if (/\d/u.test(prev)) return mark;
+      return "";
+    }))
+    .join("\n");
   const withoutDot = withoutIdeographic.replace(/[^\n]+/g, stripTrailingAsciiDot);
   return withoutDot.replace(/\u0000(\d+)\u0000/g, (_, index) => kept[Number(index)] ?? "");
 }
@@ -250,14 +268,20 @@ function haRunCount(runs: number[]): number {
   return runs.reduce((sum, count, length) => sum + (length >= 2 ? count : 0), 0);
 }
 
+/**
+ * The mark-run buckets are zero-based: bucket i counts runs of i + 1
+ * marks (`bumpRun` in `style-fingerprint.ts` writes `length - 1`). These
+ * two helpers used the index as the length, so a measured cap of three
+ * was applied as two.
+ */
 function markRunTotal(runs: number[]): number {
-  return runs.reduce((sum, count, length) => sum + count * length, 0);
+  return runs.reduce((sum, count, index) => sum + count * (index + 1), 0);
 }
 
 function maxRunLength(runs: number[]): number {
   let max = 0;
-  for (let length = 0; length < runs.length; length++) {
-    if ((runs[length] ?? 0) > 0) max = length;
+  for (let index = 0; index < runs.length; index++) {
+    if ((runs[index] ?? 0) > 0) max = index + 1;
   }
   return max;
 }
