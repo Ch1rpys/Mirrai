@@ -27,10 +27,17 @@ const chatPersona = vi.hoisted(() => ({
 const markAdd = vi.fn();
 const markRemove = vi.fn();
 const streamChat = vi.fn();
+/**
+ * The fallback path is normally unreachable in these tests (the streaming
+ * route is mocked as supported). One test turns it on to check the
+ * non-streaming reply carries the provenance marks (C10.7).
+ */
+const clientMutation = vi.fn();
+const streamingUnsupported = vi.hoisted(() => ({ value: false }));
 
 vi.mock("@/lib/chat-stream", () => ({
   streamChat: (...a: unknown[]) => streamChat(...a),
-  isStreamingUnsupported: () => false,
+  isStreamingUnsupported: () => streamingUnsupported.value,
 }));
 
 vi.mock("@/lib/trpc", () => ({
@@ -140,7 +147,7 @@ vi.mock("@/lib/trpc", () => ({
         pendingReply: { invalidate: vi.fn() },
         markRead: { invalidate: vi.fn() },
       },
-      client: { mutation: vi.fn() },
+      client: { mutation: (...a: unknown[]) => clientMutation(...a) },
       scheduled: { list: { invalidate: vi.fn() } },
       letter: {
         unreadCount: { invalidate: vi.fn() },
@@ -189,6 +196,8 @@ import Chat from "./Chat";
 describe("Chat", () => {
   beforeEach(() => {
     streamChat.mockReset();
+    clientMutation.mockReset();
+    streamingUnsupported.value = false;
     history.length = 0;
     delete chatPersona.value.settings;
     Element.prototype.scrollIntoView = vi.fn();
@@ -423,4 +432,40 @@ describe("a quoted stretch of the record", () => {
     expect(screen.queryByLabelText(translate("zh", "chat.removeQuote"))).toBeNull();
     expect(screen.getAllByText(/2 句记录/).length).toBeGreaterThan(0);
   });
+  it("marks the reply from the non-streaming fallback (C10.7)", async () => {
+    /**
+     * A server without the streaming endpoint goes through `chat.send`.
+     * The route now returns the provenance spans; the page has to put
+     * them on the bubble it builds from the answer.
+     */
+    localStorage.setItem("mirrai.provenance", "on");
+    streamingUnsupported.value = true;
+    streamChat.mockRejectedValue(Object.assign(new Error("no stream"), { status: 404 }));
+    clientMutation.mockResolvedValue({
+      reply: "今天下雨了。我想你了。",
+      emotionalState: "warm",
+      graduationSuggested: false,
+      careNote: null,
+      crisis: false,
+      failed: false,
+      superseded: false,
+      provenance: [{ start: 6, end: 10, recordId: 12, at: "2023-03-04T12:00:00.000Z" }],
+    });
+
+    const user = userEvent.setup();
+    const { container } = render(<Chat />);
+    await user.type(screen.getByRole("textbox", { name: "对 小A 说点什么..." }), "在吗");
+    await user.click(screen.getByRole("button", { name: "发送" }));
+
+    await waitFor(() => {
+      expect(container.querySelector(".provenance-word")).toBeTruthy();
+    });
+    expect(container.querySelector(".provenance-word")?.textContent).toBe("我想你了");
+    expect(clientMutation).toHaveBeenCalledWith(
+      "chat.send",
+      expect.objectContaining({ personaId: 1, message: "在吗" }),
+      expect.anything(),
+    );
+  });
+
 });
