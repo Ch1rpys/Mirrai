@@ -350,6 +350,19 @@ describe("the counsellor summary (C4.6)", () => {
     expect(html).toContain("深夜 0–5 点来的 1/5 条");
   });
 
+  it("says when the theme list was capped (C4.6)", () => {
+    // Twelve of forty words silently looked like the whole list.
+    const words = Array.from({ length: 14 }, (_, index) => `zorblat${String.fromCharCode(97 + index)}`);
+    const messages = words.flatMap((word) =>
+      Array.from({ length: 5 }, () => ({ role: "user" as const, content: `${word} again` })),
+    );
+    const html = generateCounselorSummaryHTML(
+      { ...input, messages, includeThemes: true },
+      "zh",
+    );
+    expect(html).toContain("只列了最常用的 12 个");
+  });
+
   it("includes the diary only when asked, and never the persona's reply", () => {
     const html = generateCounselorSummaryHTML(
       { ...input, includeJournal: true, includeThemes: true },
