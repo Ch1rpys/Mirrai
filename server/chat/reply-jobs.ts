@@ -25,6 +25,7 @@ import { attachMessageProvenance } from "../records/provenance";
 import { EMOTION_TRIGGER_PATTERNS } from "@shared/emotion-triggers";
 import { toSimplified } from "@shared/han-normalize";
 import { isQuietHour } from "../scheduler/reminders";
+import { isLateNightHour } from "../safety/usage-monitor";
 import { ENV } from "../_core/env";
 import {
   currentRoutines,
@@ -394,6 +395,8 @@ async function runFollowUpJob(job: ReplyJob, userId: number): Promise<boolean> {
   if (!settings.timing.asyncDelivery || !settings.timing.followUp) return cancel();
   if (!Boolean((persona as { timingEnabled?: boolean }).timingEnabled)) return cancel();
   if (!loadBehaviorProfile(persona)) return cancel();
+  // The other person said no (C10.3): no follow-up either.
+  if (settings.consent === "asked_no") return cancel();
   const profile = normalizeDoubleText(effectiveStyleProfile(persona).doubleText);
   if (!profile) return cancel();
 
@@ -413,6 +416,12 @@ async function runFollowUpJob(job: ReplyJob, userId: number): Promise<boolean> {
   ) || "UTC";
   const userZone = userZoneRaw || zone;
   if (isQuietHour(now, ENV.reminderQuietHours, userZone)) return cancel();
+  /**
+   * The middle of the night is off, whatever the quiet window says
+   * (C10.5): a follow-up is not worth waking somebody at two in the
+   * morning.
+   */
+  if (isLateNightHour(now, userZone)) return cancel();
   const routine = normalizeRoutine(effectiveStyleProfile(persona).routine);
   if (settings.timing.sleep && routine && isAsleep(now, routine, zone)) return cancel();
 

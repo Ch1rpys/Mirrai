@@ -2149,9 +2149,16 @@ async function* runConversationTurn(
    * once — in the system's voice, because the persona has already said
    * goodnight in its own. The closing has to fall inside this session,
    * or a new conversation an hour later would be treated as its tail.
+   *
+   * This is decided even when the measured session is already long
+   * enough for the ordinary note. It used to be skipped whenever
+   * `pickCareNote` had something to say — and on a session over two
+   * hours, the closing turn itself recorded a usage event without
+   * saying the line, so the note was suppressed twice and never
+   * appeared after the goodnight.
    */
   let continuationNote = false;
-  if (!pickedNote && signals) {
+  if (signals) {
     let lastClosingAt: Date | null = null;
     try {
       lastClosingAt = await db.getLastClosingMessageAt(persona.id, userId);
@@ -2222,9 +2229,9 @@ async function* runConversationTurn(
         console.warn("[Safety] Could not read the usage events:", e);
         return false;
       });
-    if (alreadyToday) {
+    if (alreadyToday && !continuationNote) {
       careNote = { ...pickedNote, text: "", showBanner: false };
-    } else {
+    } else if (!alreadyToday) {
       await db.createSafetyEvent({
         userId,
         personaId: persona.id,
@@ -2233,7 +2240,7 @@ async function* runConversationTurn(
       }).catch((e) => console.warn("[Safety] Failed to record usage event:", e));
     }
   }
-  if (plan.closing && careNote?.kind === "long_session") {
+  if (plan.closing && careNote?.kind === "long_session" && !continuationNote) {
     careNote = { ...careNote, text: "", showBanner: false };
   }
 

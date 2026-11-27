@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const getProactivePersonas = vi.fn();
 const getPersonaById = vi.fn();
@@ -73,6 +73,9 @@ vi.mock("../channels", () => ({
 }));
 
 import { runProactiveSweep } from "./proactive-sweep";
+import { ENV } from "../_core/env";
+
+const DEFAULT_QUIET_HOURS = ENV.reminderQuietHours;
 
 const persona = {
   id: 1,
@@ -386,4 +389,54 @@ describe("the sweep that lets the persona speak first", () => {
 
     expect(send).not.toHaveBeenCalled();
   });
+
+  it("never speaks first between midnight and five, whatever the quiet hours say (C10.5)", async () => {
+    /**
+     * The quiet hours are an operator setting. The middle of the night
+     * is not: changing the window must not let the app start a
+     * conversation at three in the morning.
+     */
+    ENV.reminderQuietHours = "13:00-14:00";
+    getProactivePersonas.mockResolvedValue([{
+      id: 1,
+      userId: 1,
+      name: "小A",
+      lastChatAt: new Date("2026-05-01T12:00:00Z"),
+      presence: "active",
+      graduationStatus: null,
+      analysisStatus: "ready",
+      proactiveFrequencyHours: 24,
+    }]);
+
+    const threeInTheMorning = new Date(2026, 5, 1, 3, 0, 0);
+    const sent = await runProactiveSweep(threeInTheMorning);
+
+    expect(sent).toBe(0);
+    expect(createMessage).not.toHaveBeenCalled();
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+  });
+
+  it("says nothing when the other person said no (C10.3)", async () => {
+    getProactivePersonas.mockResolvedValue([{
+      id: 1,
+      userId: 1,
+      name: "小A",
+      lastChatAt: new Date("2026-05-01T12:00:00Z"),
+      presence: "active",
+      graduationStatus: null,
+      analysisStatus: "ready",
+      proactiveFrequencyHours: 24,
+    }]);
+    getPersonaById.mockResolvedValue({ ...persona, settings: { consent: "asked_no" } });
+
+    const sent = await runProactiveSweep(new Date("2026-06-01T12:00:00Z"));
+
+    expect(sent).toBe(0);
+    expect(createMessage).not.toHaveBeenCalled();
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+  });
+});
+
+afterEach(() => {
+  ENV.reminderQuietHours = DEFAULT_QUIET_HOURS;
 });

@@ -43,6 +43,22 @@ export const LATE_NIGHT_SESSION_MS = 45 * 60 * 1000;
  */
 export const LATE_NIGHT_CONTINUATION_MS = 30 * 60 * 1000;
 
+/**
+ * Whether the user's clock is in the hours nothing may speak first
+ * (C10.5).
+ *
+ * The quiet hours the operator configures cover these hours by default,
+ * but that is a setting: changing `REMINDER_QUIET_HOURS` could silently
+ * re-open the middle of the night. Both the proactive sweep and the
+ * double-text job therefore check this separately — whatever the quiet
+ * window says, 00:00–05:00 on the reader's own clock is where the app
+ * does not start a conversation.
+ */
+export function isLateNightHour(now: Date, timezone?: string | null): boolean {
+  const hour = zonedHour(now, timezone);
+  return hour >= LATE_NIGHT_START_HOUR && hour < LATE_NIGHT_END_HOUR;
+}
+
 /** Dependency trend: recent frequency against the previous week. */
 export const DEPENDENCY_RATIO = 1.5;
 export const DEPENDENCY_RISING_DAYS = 3;

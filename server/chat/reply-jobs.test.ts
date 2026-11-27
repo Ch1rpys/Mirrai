@@ -969,6 +969,30 @@ describe("a follow-up after they go quiet", () => {
     await expectCancelled();
   });
 
+  it("does not follow up between midnight and five, whatever the quiet hours say (C10.5)", async () => {
+    /**
+     * The quiet hours are a setting; the middle of the night is not.
+     * Changing the window must not let a follow-up arrive at 02:30.
+     */
+    ENV.reminderQuietHours = "13:00-14:00";
+    await seedFollowUp();
+    vi.setSystemTime(parseZoneless("2024-06-02 02:30", "Asia/Shanghai")!);
+    await expectCancelled();
+  });
+
+  it("cancels when the other person said no (C10.3)", async () => {
+    await seedFollowUp({
+      persona: followPersona({
+        settings: {
+          timing: { asyncDelivery: true, followUp: true, sleep: false },
+          consent: "asked_no",
+        },
+      }),
+    });
+    vi.setSystemTime(NOW);
+    await expectCancelled();
+  });
+
   it("cancels when they are asleep", async () => {
     ENV.reminderQuietHours = "00:00-00:01";
     const afternoon = parseZoneless("2024-06-01 13:00", "Asia/Shanghai")!;

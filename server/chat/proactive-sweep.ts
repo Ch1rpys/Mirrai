@@ -12,6 +12,7 @@ import { loadBehaviorProfile } from "../_core/behavior-profile";
 import { resolvePresence } from "@shared/graduation-mode";
 import { getChannelAdapter } from "../channels";
 import { isQuietHour } from "../scheduler/reminders";
+import { isLateNightHour } from "../safety/usage-monitor";
 import { pushToUser } from "../_core/push";
 import { ENV } from "../_core/env";
 import { openingRateForWindow, normalizeOpeningProfile } from "@shared/opening-profile";
@@ -247,6 +248,11 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
       if (isQuietHour(now, ENV.reminderQuietHours, settings.timezone)) {
         continue;
       }
+      /**
+       * The middle of the night is off, whatever the quiet window says
+       * (C10.5). The quiet hours are a setting; this is not.
+       */
+      if (isLateNightHour(now, settings.timezone)) continue;
 
       /**
        * The language the persona speaks.
@@ -268,6 +274,13 @@ export async function runProactiveSweep(now: Date = new Date()): Promise<number>
       const personaSettings = normalizePersonaSettings(persona.settings);
       // A memorial persona never speaks first, and never gets a nudge (C7.1).
       if (personaSettings.mode === "memorial") continue;
+      /**
+       * The other person said no (C10.3).
+       *
+       * `asked_no` closes every way the persona can speak; the owner
+       * deletes it from the profile page.
+       */
+      if (personaSettings.consent === "asked_no") continue;
       // Any step down the taper stops the persona from speaking first.
       const taperStage = personaSettings.taper?.stage ?? 0;
       if (taperStage > 0) continue;

@@ -1830,6 +1830,83 @@ describe("runConversation", () => {
     expect(doneThird?.careNote?.kind ?? null).toBeNull();
   });
 
+  it("says the system line after the closing even when the session is already long (C10.5)", async () => {
+    /**
+     * The natural case the earlier test left out: the conversation is
+     * already over two hours old when the persona says goodnight. The
+     * closing turn records the usage event but suppresses the system's
+     * line (the persona said it in its own words), and the ordinary
+     * note is "once a day" — so without an exception for the
+     * continuation, the system's line never appears at all.
+     */
+    const closingAt = new Date("2026-01-14T18:20:00Z"); // 02:20 Shanghai
+    const sessionStart = new Date(closingAt.getTime() - 3 * 60 * 60 * 1000);
+    const closingHabit = {
+      timezone: "Asia/Shanghai",
+      styleProfile: {
+        version: 1,
+        measuredAt: closingAt.toISOString(),
+        recordsVersion: "80:80",
+        sessions: {
+          scenes: 30,
+          lengthMin: { median: 30, p90: 240 },
+          closeByThemRate: 0.8,
+          closers: [{ text: "晚安", n: 20 }],
+        },
+      },
+    };
+    getUserTimezone.mockResolvedValue("Asia/Shanghai");
+    getSessionStartAt.mockResolvedValue(sessionStart);
+    getMessagesSince.mockResolvedValue([]);
+    getLastClosingMessageAt.mockResolvedValue(null);
+    const first = [];
+    for await (const event of runConversation({
+      persona: persona(closingHabit),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      now: closingAt,
+    })) {
+      first.push(event);
+    }
+    const storedClosing = createMessage.mock.calls.find((call) => call[0].role === "assistant");
+    expect(storedClosing?.[0].metadata?.closing).toBe(true);
+    expect(storedClosing?.[0].content).not.toContain(copy("zh", "labels.care.longSession"));
+
+    // The closing turn recorded today's usage event. The database now
+    // says so, which is what used to swallow the continuation note.
+    hasSafetyEventSince.mockResolvedValue(true);
+
+    const later = new Date(closingAt.getTime() + 35 * 60 * 1000);
+    getMessagesSince.mockResolvedValue([
+      {
+        id: 1,
+        role: "assistant",
+        content: "晚安",
+        createdAt: closingAt,
+        metadata: { closing: true },
+        origin: null,
+      },
+    ]);
+    getLastClosingMessageAt.mockResolvedValue(closingAt);
+    createMessage.mockClear();
+    const second = [];
+    for await (const event of runConversation({
+      persona: persona(closingHabit),
+      userId: 1,
+      message: "再聊会儿",
+      mode: "once",
+      now: later,
+    })) {
+      second.push(event);
+    }
+    const doneSecond = second.find((e) => e.type === "done");
+    expect(doneSecond?.careNote?.kind).toBe("long_session");
+    expect(doneSecond?.careNote?.text).toBeTruthy();
+    const storedSecond = createMessage.mock.calls.find((call) => call[0].role === "assistant");
+    expect(storedSecond?.[0].metadata?.systemContinuation).toBe(true);
+  });
+
   it("refuses to talk to a persona that has graduated", async () => {
     // The graduation used to be a badge: the app announced the anniversary
     // of a relationship the user had ended and still let them talk to it.

@@ -13,6 +13,7 @@ vi.mock("../db", () => ({
 import {
   pickCareNote,
   evaluateUsage,
+  isLateNightHour,
   LATE_NIGHT_SESSION_MS,
   LONG_SESSION_MS,
   type UsageSignals,
@@ -128,6 +129,18 @@ describe("pickCareNote", () => {
     // messages across the whole app, not this conversation.
     expect(note?.text).toContain("You've talked a lot today");
     expect(note?.textKey).toBe("safety.care.dailyLimit");
+  });
+});
+
+describe("the hours nothing may speak first", () => {
+  it("is the reader's 00:00–05:00, not the server's (C10.5)", () => {
+    // 02:30 in Shanghai.
+    expect(isLateNightHour(new Date("2026-01-14T18:30:00Z"), "Asia/Shanghai")).toBe(true);
+    // 04:59 in Shanghai; 05:00 is already morning.
+    expect(isLateNightHour(new Date("2026-01-14T20:59:00Z"), "Asia/Shanghai")).toBe(true);
+    expect(isLateNightHour(new Date("2026-01-14T21:00:00Z"), "Asia/Shanghai")).toBe(false);
+    // The same instant is the middle of the afternoon in New York.
+    expect(isLateNightHour(new Date("2026-01-14T18:30:00Z"), "America/New_York")).toBe(false);
   });
 });
 
