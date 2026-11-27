@@ -34,6 +34,7 @@ import type { ImperfectionDrafts } from "./imperfection-draft";
 import { normalizeRituals, type RitualEntry } from "./ritual-table";
 import type { UserSideProfile } from "./user-side-profile";
 import { normalizeGroupStats, type GroupStats } from "./group-stats";
+import { normalizePersonaSettings } from "./persona-settings";
 
 export const STYLE_PROFILE_KEYS = [
   "fingerprint",
@@ -110,6 +111,33 @@ export interface StyleProfile {
   mirror?: MirrorProfile;
   rerankWeights?: unknown; // 由 B8.8 填
 }
+
+/**
+ * The interface's measured fields, without the three identity fields.
+ *
+ * `STYLE_PROFILE_KEYS` is the list the whole stage iterates: the
+ * effective-profile filter, the inference view, the "don't use this"
+ * switches. A field added to `StyleProfile` and forgotten in the list
+ * would be invisible to all three — so the equality is asserted at
+ * compile time, below.
+ */
+type MeasuredStyleProfileKey = Exclude<keyof StyleProfile, "version" | "measuredAt" | "recordsVersion">;
+
+type SameKeys<A extends string, B extends string> = [A] extends [B]
+  ? ([B] extends [A] ? true : false)
+  : false;
+
+/**
+ * Compiles only while the two lists are the same set of names.
+ *
+ * Adding a field to `StyleProfile` without adding it to
+ * `STYLE_PROFILE_KEYS` — or the other way round — makes this
+ * assignment a type error, which fails `tsc` and the gate.
+ */
+export const STYLE_PROFILE_KEYS_MATCH_INTERFACE: SameKeys<
+  StyleProfileKey,
+  MeasuredStyleProfileKey
+> = true;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -236,11 +264,25 @@ export function normalizeStyleProfile(value: unknown): StyleProfile {
 }
 
 /**
- * The profile the generation path actually reads.
+ * The profile the generation path actually reads (C10.6).
  *
- * Until C10.6 lands this is the stored profile, unchanged. Later it
- * will drop keys the user has turned off.
+ * The stored measurements are the app's; the switches are the user's.
+ * A key the user turned off is dropped here, at the one place the
+ * generation path reads the profile, so no layer can keep using a
+ * measurement the user said not to use.
+ *
+ * Only the measured keys are affected: the identity fields stay.
  */
-export function effectiveStyleProfile(persona: { styleProfile?: unknown }): StyleProfile {
-  return normalizeStyleProfile(persona.styleProfile);
+export function effectiveStyleProfile(persona: {
+  styleProfile?: unknown;
+  settings?: unknown;
+}): StyleProfile {
+  const profile = normalizeStyleProfile(persona.styleProfile);
+  const disabled = new Set(normalizePersonaSettings(persona.settings).disabledProfiles ?? []);
+  if (disabled.size === 0) return profile;
+  for (const key of STYLE_PROFILE_KEYS) {
+    if (!disabled.has(key)) continue;
+    delete (profile as unknown as Record<string, unknown>)[key];
+  }
+  return profile;
 }

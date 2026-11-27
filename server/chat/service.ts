@@ -1820,7 +1820,7 @@ async function* runConversationTurn(
   const voiceNoteDecision =
     settingsForTurn.layers.voiceNotes === true && !options.fromReplyJob
       ? pickVoiceNoteForTurn({
-          styleProfile: (persona as { styleProfile?: unknown }).styleProfile,
+          styleProfile: effectiveStyleProfile(persona),
           state: persona.emotionalState,
           seed: turnInput.seed,
           channel: options.channel ?? "web",
@@ -2334,7 +2334,7 @@ async function* runConversationTurn(
       text: spoken,
       userId,
       stats: voiceNoteDecision.stats,
-      styleProfile: (persona as { styleProfile?: unknown }).styleProfile,
+      styleProfile: effectiveStyleProfile(persona),
       locale,
     }).catch((error) => {
       console.warn("[Chat] The voice note could not be made:", error);
@@ -2614,7 +2614,7 @@ async function* runConversationTurn(
     const photo = await pickPhotoForTurn({
       personaId: persona.id,
       userId,
-      styleProfile: (persona as { styleProfile?: unknown }).styleProfile,
+      styleProfile: effectiveStyleProfile(persona),
       state: newEmotionalState,
       seed: turnInput.seed,
       channel: options.channel ?? "web",
@@ -2656,7 +2656,7 @@ async function* runConversationTurn(
     const sticker = await pickStickerForTurn({
       personaId: persona.id,
       userId,
-      styleProfile: (persona as { styleProfile?: unknown }).styleProfile,
+      styleProfile: effectiveStyleProfile(persona),
       state: newEmotionalState,
       seed: turnInput.seed,
       channel: options.channel ?? "web",

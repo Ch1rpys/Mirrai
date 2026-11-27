@@ -20,7 +20,7 @@ import { personaLocked, refreshRequestLock, sessionKeyFromRequest } from "../_co
 import { ENV } from "../_core/env";
 import { copy } from "@shared/copy";
 import { mergePersonaSettings, normalizePersonaSettings } from "@shared/persona-settings";
-import { normalizeStyleProfile } from "@shared/style-profile";
+import { effectiveStyleProfile } from "@shared/style-profile";
 import { zonedHour, zonedWeekday } from "@shared/timezone";
 import { getPersonaById, setMessageContent } from "../db";
 import { getMessagesByPersonaId } from "../db";
@@ -334,7 +334,7 @@ export function attachCallServer(server: Server, overrides: Partial<CallDeps> = 
 
     async function begin(force: boolean) {
       if (started) return;
-      const calls = normalizeStyleProfile(persona.styleProfile).calls;
+      const calls = effectiveStyleProfile(persona).calls;
       /**
        * A persona with no call measurement has no recorded answering
        * habit, so there is nothing to check. One that has calls is only

@@ -2148,6 +2148,41 @@ describe("persona sampling on the reply", () => {
     expect(plan.sampledAct).not.toBe("repair");
   });
 
+  it("drops the cold-line block when the owner turned the conflict profile off (C10.6)", async () => {
+    const turnedOff = personaWithConflict("distant", 60);
+    turnedOff.settings = { disabledProfiles: ["conflict"] };
+    const plan = await planTurn({
+      persona: turnedOff,
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "conflict:cold",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(plan.messages[0]?.content ?? "");
+    expect(prompt).not.toContain(copy("zh", "prompt.coldLinesHeading"));
+    expect(prompt).not.toContain("哦。");
+    expect(prompt).not.toContain(copy("zh", "prompt.repairLinesHeading"));
+
+    // Turning it back on brings the block back — the switch is the only
+    // difference between the two runs.
+    const turnedOn = personaWithConflict("distant", 60);
+    turnedOn.settings = { disabledProfiles: [] };
+    const onPlan = await planTurn({
+      persona: turnedOn,
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "conflict:cold",
+      exclude: { texts: [HELD_OUT] },
+    });
+    expect(String(onPlan.messages[0]?.content ?? "")).toContain(copy("zh", "prompt.coldLinesHeading"));
+  });
+
   it("forces a repair after nine hours of a freeze", async () => {
     const plan = await planTurn({
       persona: personaWithConflict("distant", 9 * 60),
