@@ -2007,6 +2007,10 @@ export default function Lobby() {
                 {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
             )}
+            <button onClick={() => navigate("/inferences")}
+              className="app-nav-icon" title={t("inference.nav")} aria-label={t("inference.nav")}>
+              <Sparkles className="w-4 h-4" />
+            </button>
             <button onClick={() => navigate("/analytics")}
               className="app-nav-icon" title={t("lobby.nav.analytics")} aria-label={t("lobby.nav.analytics")}>
               <Activity className="w-4 h-4" />

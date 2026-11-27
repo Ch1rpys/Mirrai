@@ -1495,6 +1495,20 @@ export function DataManagementTab() {
       <AppLockSettings />
       <EncryptionSettings />
 
+      {/* Everything the app worked out, with the switches to turn any of
+          it off (C10.6). */}
+      <section className="surface p-5 sm:p-6">
+        <SectionHeader note={t("inference.note")} title={t("inference.nav")} />
+        <Button
+          size="sm"
+          variant="outline"
+          className="rounded-md px-5 bg-transparent"
+          onClick={() => navigate("/inferences")}
+        >
+          {t("inference.open")}
+        </Button>
+      </section>
+
       <EgressList />
 
       <Plugins />

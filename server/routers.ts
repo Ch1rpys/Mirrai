@@ -206,6 +206,7 @@ import { encryptionRouter } from "./routers-v6/encryption";
 import { pluginsRouter } from "./routers-v6/plugins";
 import { groupRouter } from "./routers-v6/group";
 import { consentRouter } from "./routers-v6/consent";
+import { inferenceRouter } from "./routers-v6/inference";
 import { purgeForConsent } from "./consent/purge";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { stateRulesFromTranscript } from "./skill-engine/state-rules";
@@ -8249,6 +8250,7 @@ export const appRouter = router({
   plugins: pluginsRouter,
   group: groupRouter,
   consent: consentRouter,
+  inference: inferenceRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {

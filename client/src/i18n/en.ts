@@ -2651,6 +2651,11 @@ export const en = {
       submitting: "Recording…",
     },
   },
+  inference: {
+    nav: "What the app worked out",
+    open: "Open the inference view",
+    note: "See what the app worked out from your records and conversations, and deal with it item by item.",
+  },
   relationship: {
     title: "What has happened between you",
     note: "The persona only knows what is in the chat history. This is reality — without it, it stays frozen at the beginning.",
