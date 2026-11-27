@@ -291,6 +291,32 @@ describe("the tools", () => {
     await client.close();
   });
 
+  it("caps the answer at ten a side even if the database sends more", async () => {
+    const many = (prefix: string) => Array.from({ length: 25 }, (_, index) => ({
+      ...record,
+      id: 1000 + index,
+      content: `${prefix}${index}`,
+      role: "user",
+      speaker: "阿树",
+    }));
+    getRecordsAround.mockResolvedValue({
+      target: record,
+      before: many("前"),
+      after: many("后"),
+    });
+    const { client } = await connect();
+    const text = textOf(await client.callTool({
+      name: "get_record_context",
+      arguments: { recordId: 11, before: 100, after: 100 },
+    }));
+    const lines = text.split("\n").filter((line) => line.startsWith("[") || line.startsWith("→"));
+    expect(lines).toHaveLength(MCP_CONTEXT_LINES * 2 + 1);
+    // The ten closest lines on each side, not the first twenty-five.
+    expect(lines[0]).toContain("前15");
+    expect(lines.at(-1)).toContain("后9");
+    await client.close();
+  });
+
   it("says so when the record does not exist", async () => {
     getRecordsAround.mockResolvedValue({ target: undefined, before: [], after: [] });
     const { client } = await connect();

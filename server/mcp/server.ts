@@ -297,10 +297,15 @@ export function createMirraiMcpServer(identity: McpIdentity): McpServer {
           return result(withHeader(lockedPersonaText(identity), identity));
         }
       }
+      /**
+       * The database is asked for at most ten on each side, and the tool
+       * caps the answer again: the contract is the tool's ("at most ten
+       * before and ten after"), not a promise the reader makes.
+       */
       const lines = [
-        ...context.before.map((row) => recordLine(row, identity)),
+        ...context.before.slice(-MCP_CONTEXT_LINES).map((row) => recordLine(row, identity)),
         `→ ${recordLine(context.target, identity)}`,
-        ...context.after.map((row) => recordLine(row, identity)),
+        ...context.after.slice(0, MCP_CONTEXT_LINES).map((row) => recordLine(row, identity)),
       ];
       return result(withHeader(lines.join("\n"), identity));
     },
