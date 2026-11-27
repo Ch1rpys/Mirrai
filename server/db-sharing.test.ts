@@ -17,6 +17,7 @@ import {
   getAllPersonasForReminders,
   getMessagesByPersonaId,
   getPersonaById,
+  getPersonasByUserId,
   getPersonaShareByTokenHash,
   isPersonaSharedWithMember,
   listJournalEntries,
@@ -369,6 +370,32 @@ describe.skipIf(!DATABASE_URL)("sharing a persona with family (C7.2)", () => {
       expect(await getPersonaById(memberPersonaId, memberId)).toBeTruthy();
     } finally {
       if (memberPersonaId) await purgePersona(memberPersonaId, memberId).catch(() => undefined);
+      await purgePersona(ownerPersonaId, ownerId).catch(() => undefined);
+    }
+  });
+});
+
+describe.skipIf(!DATABASE_URL)("an invitation's expiry (C7.2)", () => {
+  it("cannot be accepted once its day has passed", async () => {
+    // The preview refuses an expired token; accepting through the other
+    // entry point has to refuse it too.
+    const stamp = Date.now() + Math.floor(Math.random() * 10_000);
+    const ownerId = await createUser({ username: `share-exp-owner-${stamp}`, passwordHash: "x", name: "主人" });
+    const memberId = await createUser({ username: `share-exp-member-${stamp}`, passwordHash: "x", name: "家人" });
+    const ownerPersonaId = await createPersona({ userId: ownerId, name: "小满", analysisStatus: "ready" });
+    try {
+      const token = `token-exp-${stamp}`;
+      await createPersonaShare({
+        ownerUserId: ownerId,
+        personaId: ownerPersonaId,
+        tokenHash: hashToken(token),
+        status: "invited",
+        expiresAt: new Date(Date.now() - 60_000),
+      } as never);
+      await expect(acceptPersonaShare(hashToken(token), memberId)).resolves.toBeNull();
+      // The owner still holds the persona; no half-accepted row was made.
+      expect(await getPersonasByUserId(memberId)).toEqual([]);
+    } finally {
       await purgePersona(ownerPersonaId, ownerId).catch(() => undefined);
     }
   });
