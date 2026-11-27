@@ -13,7 +13,8 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { copy, type Locale } from "@shared/copy";
-import { normalizeStyleProfile } from "@shared/style-profile";
+import { effectiveStyleProfile } from "@shared/style-profile";
+import { normalizePersonaSettings } from "@shared/persona-settings";
 import { getEffectivePresence } from "../_core/graduation";
 import { sealState } from "@shared/persona-state";
 import { protectedProcedure, rateLimit, router } from "../_core/trpc";
@@ -61,6 +62,16 @@ function canJoinGroup(
 ): boolean {
   if (!persona) return false;
   if (persona.analysisStatus !== "ready") return false;
+  /**
+   * The other person said no (C10.3).
+   *
+   * `asked_no` closes the one-to-one chat; a room is another way to make
+   * the persona speak, so it is closed too. The owner deletes the
+   * persona from the profile page.
+   */
+  if (normalizePersonaSettings((persona as { settings?: unknown }).settings).consent === "asked_no") {
+    return false;
+  }
   const presence = getEffectivePresence({
     personaPresence: (persona as { presence?: string | null }).presence,
     graduationStatus: (persona as { graduationStatus?: string | null }).graduationStatus,
@@ -113,7 +124,7 @@ function memberView(
   persona: Persona,
   available: boolean,
 ) {
-  const profile = normalizeStyleProfile(persona.styleProfile);
+  const profile = effectiveStyleProfile(persona);
   return {
     personaId: persona.id,
     name: persona.name,
@@ -312,7 +323,7 @@ export const groupRouter = router({
       const memberInputs: GroupMember[] = members
         .filter((row) => row.available)
         .map(({ persona }) => {
-          const profile = normalizeStyleProfile(persona.styleProfile);
+          const profile = effectiveStyleProfile(persona);
           const aliases = (persona.settings as { skin?: { alias?: unknown } } | null)?.skin?.alias;
           return {
             personaId: persona.id,

@@ -199,6 +199,18 @@ describe("creating a room", () => {
     expect(createRoom).not.toHaveBeenCalled();
   });
 
+  it("refuses a persona whose other person said no (C10.3)", async () => {
+    getPersona.mockImplementation(async (id: number) =>
+      id === 2
+        ? personaRow(2, "阿凯", { settings: { consent: "asked_no" } })
+        : personaRow(1, "小满"),
+    );
+    await expect(caller().create({ name: "群", personaIds: [1, 2] })).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    expect(createRoom).not.toHaveBeenCalled();
+  });
+
   it("refuses a sealed persona", async () => {
     getPersona.mockImplementation(async (id: number) =>
       id === 2
@@ -259,6 +271,17 @@ describe("sending one line", () => {
     composeReply.mockResolvedValue("我在");
     const result = await caller().send({ roomId: 3, text: "@小满 在吗" });
     expect(result.replies.map((row) => row.personaId)).toEqual([1]);
+  });
+
+  it("mutes a member whose other person said no (C10.3)", async () => {
+    getPersonas.mockResolvedValue([
+      personaRow(1, "小满"),
+      personaRow(2, "阿凯", { settings: { consent: "asked_no" } }),
+    ]);
+    composeReply.mockResolvedValue("我在");
+    const result = await caller().send({ roomId: 3, text: "@小满 @阿凯 在吗" });
+    expect(result.replies.map((row) => row.personaId)).toEqual([1]);
+    expect(composeReply).toHaveBeenCalledTimes(1);
   });
 
   it("mutes a member who can no longer join the room", async () => {

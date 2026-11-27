@@ -126,6 +126,29 @@ describe("the consent routes", () => {
     expect(days).toBeLessThan(30.1);
   });
 
+  it("starts a new link unanswered after the old one was answered (C10.3)", async () => {
+    /**
+     * Re-asking is a new question. The deep merge kept the old
+     * `answeredAt`, so the fresh link was refused as already used
+     * before it could be opened.
+     */
+    getPersonaSettings.mockResolvedValue({
+      consent: "asked_yes",
+      consentLink: {
+        tokenHash: hashConsentToken("old-token"),
+        expiresAt: future,
+        answeredAt: past,
+      },
+    });
+    const caller = appRouter.createCaller(ctxFor(1));
+    const result = await caller.consent.createLink({ personaId: 5 });
+    const token = result.path.split("/").pop()!;
+    const [, , saved] = setPersonaSettings.mock.calls[0];
+    expect(saved.consentLink.tokenHash).toBe(hashConsentToken(token));
+    expect(saved.consentLink.answeredAt).toBeUndefined();
+    expect(saved.consentLink.expiresAt).toBe(result.expiresAt);
+  });
+
   it("exports a self-contained page with the persona's name", async () => {
     const caller = appRouter.createCaller(ctxFor(1));
     const result = await caller.consent.exportPage({ personaId: 5 });

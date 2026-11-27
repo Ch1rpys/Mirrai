@@ -117,6 +117,16 @@ export const consentRouter = router({
         const next = mergePersonaSettings(current, {
           consentLink: { tokenHash: hashConsentToken(token), expiresAt },
         });
+        /**
+         * A new link starts unanswered (C10.6 acceptance finding).
+         *
+         * The merge is deep, so a link that had already been answered
+         * kept its `answeredAt` when it was replaced — and the new link
+         * was refused by `getByToken` before it could be opened. The
+         * owner re-asks with a fresh question, so the fresh link carries
+         * only its own hash and expiry.
+         */
+        if (next.consentLink) delete next.consentLink.answeredAt;
         const written = await setPersonaSettings(input.personaId, ctx.user.id, next);
         if (!written) throw new TRPCError({ code: "NOT_FOUND" });
         return { path: `/consent/${token}`, expiresAt };
