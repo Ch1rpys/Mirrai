@@ -92,6 +92,15 @@ describe("detectIndirectCrisis", () => {
     }
   });
 
+  it("keeps the keyword verdict for the sentence the older pass missed (C10.2)", async () => {
+    // 「我很累，也不想活了」 is the one positive of the older suite the
+    // re-assertion pass skipped: tiredness and the wish not to live in
+    // one sentence.
+    const result = await detectCrisisExtended("我很累，也不想活了", { semantic: false });
+    expect(result.crisis).toBe(true);
+    expect(result.matched.length).toBeGreaterThan(0);
+  });
+
   it("raises at least a weak signal for one family", async () => {
     /**
      * Some of these sentences are also in the keyword list
