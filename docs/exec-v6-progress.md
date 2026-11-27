@@ -1240,11 +1240,14 @@ corepack pnpm eval -- --persona <id> --user <id> --audition
 - **C6.3 分享版清空已勾选照片**（`c0a4bc7`）：切到分享版时清空 `picked`，组件测试断言请求里 `photoIds: []`。
 - **C8.6 语义检索真链测试**（`6941c9e`）：在 `db-search.test.ts` 用假嵌入模型 + 真库 `searchRecordsSemantic`：命中近义行、排除远行、日期范围对语义半也生效（避免新增 DB 文件改 skip-audit 清单）。
 
-**第四批状态**：没有条目改状态（都是已 ✅/🟡 条目的中级/低级问题）；计数仍 ✅86 · 🟡87 · ⬜0。闸门 `734` 个文件（`709 passed | 25 skipped`）、`6220` 个用例（`6090 passed | 130 skipped`）、`all seven steps passed`。
+- **B6.7 单字别名的误命中**（`153e463`）：手动记忆的 people 自动填充从 `String.includes` 改成 `containsTerm`（与蒸馏卡同一套分词规则），「小」不再把「小米粥」算成关于小满的记忆；先红后绿。
+- **C3.6 中文数字校验**（`153e463`）：措辞助手的数字校验除了 ASCII，还认「三点」「二十号」这类写在量词前的汉语数词，并归一成同一数值（「3 点」与「三点」算同一个数）；中文「一起」这类不是数字，不误伤。先红后绿。
+
+**第四批状态**：没有条目改状态（都是已 ✅/🟡 条目的中级/低级问题）；计数仍 ✅86 · 🟡87 · ⬜0。闸门 `734` 个文件（`709 passed | 25 skipped`）、`6223` 个用例（`6093 passed | 130 skipped`）、`all seven steps passed`。
 
 **最终验证（修复会话收尾；到本进度文件更新前 `60ffcdf..HEAD` 共 25 个提交、154 个文件）**
 
-- **闸门**：`corepack pnpm gate`（不带 `--fast`、不带 `DATABASE_URL`）退出码 0、`all seven steps passed`；`734` 个文件（`709 passed | 25 skipped`）、`6220` 个用例（`6090 passed | 130 skipped`）。跳过数相对验收基线 122 增加 8，全部是本次新增的**数据库用例**（在已登记的 DB 测试文件里追加：`db-search`、`db-sharing`、`db-soft-delete`、`db-groups`、`db-timeline`、`material`；新增的带库用例都跑过，无库时按既有规则跳过）；没有被新加 skip 的既有测试；`git diff --name-status main..HEAD -- '*.test.ts' '*.test.tsx' | grep '^D'` = 0（没有删测试）。黄金快照仍只有 `e506484` 一个提交、之后未改。
+- **闸门**：`corepack pnpm gate`（不带 `--fast`、不带 `DATABASE_URL`）退出码 0、`all seven steps passed`；`734` 个文件（`709 passed | 25 skipped`）、`6223` 个用例（`6093 passed | 130 skipped`）。跳过数相对验收基线 122 增加 8，全部是本次新增的**数据库用例**（在已登记的 DB 测试文件里追加：`db-search`、`db-sharing`、`db-soft-delete`、`db-groups`、`db-timeline`、`material`；新增的带库用例都跑过，无库时按既有规则跳过）；没有被新加 skip 的既有测试；`git diff --name-status main..HEAD -- '*.test.ts' '*.test.tsx' | grep '^D'` = 0（没有删测试）。黄金快照仍只有 `e506484` 一个提交、之后未改。
 - **带库测试**：临时库 `mirrai_v6_verify_final`（`drizzle-kit push --force` 后），`server/skip-audit.test.ts` 登记的 29 个 DB 测试文件用 `--no-file-parallelism` 顺序跑：`29 passed (29)`、`140 passed (140)`、**0 skipped**；库已 `dropdb`。
 - **迁移四步 + 整段回滚/装回**：临时库 `mirrai_v6_verify_mig`（`push` → `migrate` 84 条 → `--replay` 84 条 → `--rollback 1` 退 0086 → `migrate` 回来）；再 43 次 `--rollback 1` 退到 0043：表 62→34、索引 171→72、journal 84→41、`file_type` 7 值→5 值；再 43 次 `migrate` 全部装回（表 62 / 索引 171 / journal 84 / 列 651、`file_type` 回 7 值）。另建只 `push` 的库 `mirrai_v6_verify_mig3` 与 push+migrate 库 `mirrai_v6_verify_mig2` 做 information_schema catalog diff（表名/列名/类型/可空）：**0 行差异**。三个临时库都已 `dropdb`；`mirrai_live` 未连接、未写。
 - **静态**：分支 `exec/v6`；`git status --porcelain` 空；`main..HEAD` 无 merge 提交、`Co-Authored-By` 0 条（`core.hooksPath` = `.githooks` 已确认）；`package.json` version 仍 1.3.0；未 push、未合并、未切分支、未改写历史；`main` 仍 `f71e77b`。
