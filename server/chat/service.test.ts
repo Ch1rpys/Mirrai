@@ -1307,6 +1307,41 @@ describe("runConversation", () => {
     ).toHaveLength(0);
   });
 
+  it("does not decay a mood whose dynamics have too few samples (B4.3)", async () => {
+    const now = new Date("2026-01-15T12:00:00.000Z");
+    inferEmotionalState.mockResolvedValue({ state: "warm", source: "heuristic" });
+    for await (const _event of runConversation({
+      persona: persona({
+        emotionalState: "distant",
+        emotionalStateSince: new Date(now.getTime() - 400 * 60_000),
+        styleProfile: {
+          version: 1,
+          measuredAt: "2026-01-15T12:00:00.000Z",
+          recordsVersion: "100:100",
+          emotionDynamics: {
+            transitions: { distant: { distant: 12, warm: 2 } },
+            dwell: { distant: { medianMin: 300, p75Min: 360, episodes: 6 } },
+            modal: "warm",
+            samples: 14,
+          },
+        },
+      }),
+      userId: 1,
+      message: "吃饭了吗",
+      mode: "once",
+      now,
+    })) {
+      // drain
+    }
+    // The stale distant mood is not decayed: this turn is planned with
+    // it, because the dynamics are below the sample floor.
+    const system = invokeWithProvider.mock.calls[0]?.[1]?.messages?.find(
+      (row: { role?: string }) => row.role === "system",
+    ) as { content?: string } | undefined;
+    expect(system?.content).toContain(copy("zh", "prompt.emotionalDistant"));
+    expect(system?.content).not.toContain(copy("zh", "prompt.emotionalWarm"));
+  });
+
   it("writes a decayed mood back before the reply is planned", async () => {
     const now = new Date("2026-01-15T12:00:00.000Z");
     inferEmotionalState.mockResolvedValue({ state: "warm", source: "heuristic" });
@@ -1341,6 +1376,13 @@ describe("runConversation", () => {
         emotionalStateSince: now,
       }),
     );
+    // The prompt is planned after the decay, so this turn already speaks
+    // in the decayed mood, not the stale one (B4.3).
+    const system = invokeWithProvider.mock.calls[0]?.[1]?.messages?.find(
+      (row: { role?: string }) => row.role === "system",
+    ) as { content?: string } | undefined;
+    expect(system?.content).toContain(copy("zh", "prompt.emotionalWarm"));
+    expect(system?.content).not.toContain(copy("zh", "prompt.emotionalDistant"));
   });
 
   it("keeps the crisis path even when a ritual table is present", async () => {

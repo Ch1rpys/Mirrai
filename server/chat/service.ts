@@ -27,7 +27,7 @@ import type { Persona } from "../../drizzle/schema";
 import * as db from "../db";
 import { computeIntimacy, getEmotionalStateDesc } from "../_core/persona-utils";
 import { inferEmotionalState, isEmotionalState } from "../_core/emotion";
-import { applyInertia, decayState, normalizeEmotionDynamics } from "@shared/emotion-dynamics";
+import { applyInertia, decayState, DYNAMICS_MIN_TRANSITIONS, normalizeEmotionDynamics } from "@shared/emotion-dynamics";
 import { isUserAsking, labelUserActByRule, type UserAct } from "@shared/speech-acts";
 import { layersFromSettings } from "@shared/layers";
 import { effectiveStyleProfile } from "@shared/style-profile";
@@ -1280,6 +1280,13 @@ function emotionInertiaForTurn(
   if (!layers.emotionInertia) return null;
   const dynamics = normalizeEmotionDynamics(effectiveStyleProfile(persona).emotionDynamics);
   if (!dynamics) return null;
+  /**
+   * A measurement that does not have enough transitions is not a habit
+   * (B4.3). The miner refuses to write one below the floor, but a row
+   * measured before the floor — or edited — must not be applied as if it
+   * were evidence.
+   */
+  if (dynamics.samples < DYNAMICS_MIN_TRANSITIONS) return null;
   const raw = (persona as { emotionalStateSince?: Date | string | null }).emotionalStateSince;
   const sinceAt = raw ? (raw instanceof Date ? raw.getTime() : new Date(raw).getTime()) : NaN;
   if (!Number.isFinite(sinceAt)) return null;

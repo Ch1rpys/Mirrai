@@ -7584,7 +7584,13 @@ export const appRouter = router({
         personaId: z.number(),
         rules: z.array(z.object({
           id: z.string().max(64).optional(),
-          pattern: z.string().min(1).max(200),
+          /**
+           * A phrase rule needs its phrase; a multi-point rule has none
+           * (B4.7). The miner produces `multi_point` with an empty
+           * pattern, and requiring one here made the just-mined rule
+           * impossible to confirm in the editor.
+           */
+          pattern: z.string().max(200),
           kind: z.enum([
             "no_question_ending", "no_phrase", "no_advice", "no_subclause",
             "no_word_class", "avoid_topic", "forget_admit", "forget_wrong", "forget_deflect",
@@ -7598,6 +7604,14 @@ export const appRouter = router({
             at: z.string().max(40).optional(),
             snippet: z.string().max(1000),
           })).max(20).default([]),
+        }).superRefine((rule, ctx) => {
+          if (rule.kind !== "multi_point" && rule.pattern.trim().length === 0) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["pattern"],
+              message: "A phrase rule needs a phrase.",
+            });
+          }
         })).max(200),
       }))
       .mutation(async ({ ctx, input }) => {

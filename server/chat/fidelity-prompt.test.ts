@@ -279,6 +279,11 @@ describe("the imperfection in the prompt", () => {
     const unfenced = after.replace(fenced, "");
     expect(unfenced).not.toContain("通常接最后一件");
     expect(after.indexOf("【减法】")).toBeGreaterThan(-1);
+    // Inside the subtraction section, not merely inside the fence: that
+    // is where a subtraction line belongs (B4.7).
+    const sectionStart = after.indexOf("【减法】");
+    const section = after.slice(sectionStart, after.indexOf("</persona_data>", sectionStart));
+    expect(section).toContain("只接其中一件");
   });
 
   it("does not mention a knowledge boundary until the user confirms it", () => {
@@ -316,6 +321,9 @@ describe("the imperfection in the prompt", () => {
     const unfenced = after.replace(fenced, "");
     expect(unfenced).not.toContain("股票基金理财");
     expect(after.indexOf("【减法】")).toBeGreaterThan(-1);
+    const sectionStart = after.indexOf("【减法】");
+    const section = after.slice(sectionStart, after.indexOf("</persona_data>", sectionStart));
+    expect(section).toContain("你不懂这类话题");
   });
 
   it("names one action in the instruction zone", () => {
