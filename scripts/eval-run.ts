@@ -49,6 +49,7 @@ import { DriftNeedUserSideError, DRIFT_TURNS_DEFAULT, runDrift } from "../server
 import { attachComposite, runAudition, type AuditionResult } from "../server/eval/audition";
 import { ablationCalls, layersFromBaseline, runAblation } from "../server/eval/ablate";
 import { resolveProviderForUser } from "../server/llm/user-provider";
+import { evaluateUnlockCheck, formatUnlockCheck } from "../server/eval/unlock-check";
 
 const args = process.argv.slice(2);
 
@@ -142,6 +143,13 @@ const ablate = args.includes("--ablate");
 const tune = args.includes("--tune");
 const yes = args.includes("--yes");
 /**
+ * Answers whether the heavy approaches are unlocked yet (B9.1/B9.2).
+ *
+ * It reads and prints. It does not train anything, not even when the
+ * answer is yes.
+ */
+const unlockCheck = args.includes("--unlock-check");
+/**
  * The language the records are written in.
  *
  * The emotion is read off the words, so it is read with the trigger
@@ -184,9 +192,38 @@ const flagTolerances = {
 
 if (!Number.isFinite(personaId) || !Number.isFinite(userId)) {
   console.error(
-    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--topP n] [--k n] [--discriminator] [--drift] [--turns n] [--audition] [--ablate] [--tune] [--yes] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n] [--tolerance-style n]",
+    "Usage: pnpm eval -- --persona <id> --user <id> [--variant withoutRules|withoutAct|withoutRerank] [--without a,b] [--no-rerank] [--locale zh|en] [--cases] [--pairs] [--save] [--gate] [--compare] [--calibrate] [--calibrate-runs n] [--temperature n] [--topP n] [--k n] [--discriminator] [--drift] [--turns n] [--audition] [--ablate] [--tune] [--yes] [--unlock-check] [--tolerance-overlap n] [--tolerance-likelihood n] [--tolerance-emotion n] [--tolerance-style n]",
   );
   process.exit(1);
+}
+
+if (unlockCheck) {
+  /**
+   * The unlock check (B9.1/B9.2): read only, no model, no training.
+   *
+   * It is answered from what is already stored — the persona's switches,
+   * the blind sittings others have finished, the judge's stored AUC, and
+   * the line count. A persona with no records is still answerable: the
+   * verdict will simply be no.
+   */
+  try {
+    const person = await db.getPersonaById(personaId, userId);
+    if (!person) {
+      console.error("No such persona.");
+      process.exit(1);
+    }
+    const sessions = await db.listBlindSessions(personaId, userId);
+    const taTextLines = await db.countRecords(personaId, userId, {
+      role: "assistant",
+      kinds: ["text"],
+    });
+    const report = evaluateUnlockCheck({ persona: person, sessions, taTextLines });
+    for (const line of formatUnlockCheck(report, locale)) console.log(line);
+    process.exit(0);
+  } catch (error) {
+    console.error("The unlock check could not read the data:", (error as Error).message);
+    process.exit(1);
+  }
 }
 
 /**

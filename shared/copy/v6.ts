@@ -2532,4 +2532,63 @@ export const V6 = {
     zh: "开口方式",
     en: "How they open a conversation",
   },
+
+  "unlock.cheapLayers": {
+    zh: "便宜层和重排：{{state}}（规则 {{rules}}，减法 {{suppressions}}，示范 {{exemplars}}，动作 {{act}}，重排 {{rerank}}）",
+    en: "Cheap layers and rerank: {{state}} (rules {{rules}}, subtraction {{suppressions}}, exemplars {{exemplars}}, act {{act}}, rerank {{rerank}})",
+  },
+  "unlock.blindHitRate": {
+    zh: "应用内盲测：{{state}}。非本人的试镜 {{sittings}} 场，把分身的话当成真话 {{picked}}",
+    en: "In-app blind test: {{state}}. {{sittings}} sittings by someone else; the persona's line was taken as real {{picked}}",
+  },
+  "unlock.blindHitRateNone": {
+    zh: "应用内盲测：没有数据",
+    en: "In-app blind test: no data",
+  },
+  "unlock.blindReasons": {
+    zh: "盲测理由：{{state}}。「用词」{{word}} 条，「动作错了」{{act}} 条，共 {{total}} 条",
+    en: "Blind-test reasons: {{state}}. Wording {{word}}, wrong action {{act}}, {{total}} in all",
+  },
+  "unlock.blindReasonsNone": {
+    zh: "盲测理由：没有数据",
+    en: "Blind-test reasons: no data",
+  },
+  "unlock.taTextLines": {
+    zh: "TA 的文本行：{{state}}。{{count}} 条",
+    en: "Their text lines: {{state}}. {{count}}",
+  },
+  "unlock.met": { zh: "满足", en: "met" },
+  "unlock.notMet": { zh: "不满足", en: "not met" },
+  "unlock.noData": { zh: "没有数据", en: "no data" },
+  "unlock.yes": { zh: "开", en: "on" },
+  "unlock.no": { zh: "关", en: "off" },
+  "unlock.referenceAuc": {
+    zh: "参考：判别器的 AUC 是 {{auc}}",
+    en: "For reference: the discriminator AUC is {{auc}}",
+  },
+  "unlock.referenceAucNone": {
+    zh: "参考：判别器还没有量",
+    en: "For reference: the discriminator has not been trained",
+  },
+  "unlock.referenceTells": {
+    zh: "参考：判别器最倚重的五个特征 {{tells}}",
+    en: "For reference: the five features it leans on most: {{tells}}",
+  },
+  "unlock.referenceTellsNone": {
+    zh: "参考：判别器还没有特征权重",
+    en: "For reference: no feature weights",
+  },
+  "unlock.tell": {
+    zh: "{{feature}}（归在{{category}}）",
+    en: "{{feature}} ({{category}})",
+  },
+  "unlock.category.wording": { zh: "用词", en: "wording" },
+  "unlock.category.length": { zh: "长度", en: "length" },
+  "unlock.category.ending": { zh: "句尾", en: "line ending" },
+  "unlock.category.particle": { zh: "语气词", en: "particle" },
+  "unlock.category.laugh": { zh: "笑", en: "laugh" },
+  "unlock.category.emoji": { zh: "表情", en: "emoji" },
+  "unlock.category.punctuation": { zh: "标点", en: "punctuation" },
+  "unlock.category.layout": { zh: "分行", en: "line layout" },
+  "unlock.category.surprise": { zh: "意外程度", en: "surprise" },
 } as const satisfies CopyTable;
