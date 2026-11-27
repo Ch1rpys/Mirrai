@@ -1636,9 +1636,24 @@ function ChannelStatusChip({ connected, status }: { connected: boolean; status: 
   return <StatusChip tone={tone}>{labelKey ? t(labelKey) : t("settings.channels.status.unknown")}</StatusChip>;
 }
 
+const BUILTIN_CHANNEL_IDS = new Set(["wechat", "feishu", "telegram", "discord", "matrix"]);
+
 function ChannelsTab({ onOpenTab }: { onOpenTab: (key: TabKey) => void }) {
   const { t } = useLocale();
   const channels = trpc.channel.list.useQuery();
+  /**
+   * Plugin channels (C9.7) have no credentials form of their own — the
+   * plugin owns them — but they are channels like any other, so they get
+   * a start/stop control here.
+   */
+  const startPlugin = trpc.channel.start.useMutation({
+    onSuccess: () => { toast.success(t("channelsBot.started")); channels.refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const stopPlugin = trpc.channel.stop.useMutation({
+    onSuccess: () => { toast.success(t("channelsBot.stopped")); channels.refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   return (
     <div className="space-y-5">
@@ -1666,6 +1681,20 @@ function ChannelsTab({ onOpenTab }: { onOpenTab: (key: TabKey) => void }) {
                       onClick={() => onOpenTab("wechat")}>
                       {t("settings.channels.goToSettings")}
                     </Button>
+                  )}
+                  {!BUILTIN_CHANNEL_IDS.has(channel.id) && (
+                    <>
+                      <Button size="sm" variant="ghost" className="rounded-md text-xs h-7 px-3"
+                        disabled={startPlugin.isPending}
+                        onClick={() => startPlugin.mutate({ channel: channel.id })}>
+                        {t("channelsBot.start")}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="rounded-md text-xs h-7 px-3"
+                        disabled={stopPlugin.isPending}
+                        onClick={() => stopPlugin.mutate({ channel: channel.id })}>
+                        {t("channelsBot.stop")}
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>

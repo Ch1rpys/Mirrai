@@ -4185,8 +4185,13 @@ export const appRouter = router({
       return statuses;
     }),
 
+    /**
+     * The channel id is any channel in the registry, not a closed enum:
+     * a plugin may register `plugin:<name>:<id>` (C9.7), and it has to be
+     * startable like a built-in channel. Unknown ids are NOT_FOUND.
+     */
     getStatus: protectedProcedure
-      .input(z.object({ channel: z.enum(["wechat", "feishu", "telegram", "discord", "matrix"]) }))
+      .input(z.object({ channel: z.string().min(1).max(120) }))
       .query(async ({ ctx, input }) => {
         const adapter = getChannelAdapter(input.channel);
         if (!adapter) throw new TRPCError({ code: "NOT_FOUND" });
@@ -4194,7 +4199,7 @@ export const appRouter = router({
       }),
 
     start: protectedProcedure
-      .input(z.object({ channel: z.enum(["wechat", "feishu", "telegram", "discord", "matrix"]) }))
+      .input(z.object({ channel: z.string().min(1).max(120) }))
       .mutation(async ({ ctx, input }) => {
         const adapter = getChannelAdapter(input.channel);
         if (!adapter) throw new TRPCError({ code: "NOT_FOUND" });
@@ -4203,7 +4208,7 @@ export const appRouter = router({
       }),
 
     stop: protectedProcedure
-      .input(z.object({ channel: z.enum(["wechat", "feishu", "telegram", "discord", "matrix"]) }))
+      .input(z.object({ channel: z.string().min(1).max(120) }))
       .mutation(async ({ ctx, input }) => {
         const adapter = getChannelAdapter(input.channel);
         if (!adapter) throw new TRPCError({ code: "NOT_FOUND" });
