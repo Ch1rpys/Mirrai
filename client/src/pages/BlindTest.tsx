@@ -25,7 +25,7 @@ export default function BlindTest() {
   const { isAuthenticated, loading: authLoading } = useAuth({ redirectOnUnauthenticated: true });
   const { t } = useLocale();
   const [sessionId, setSessionId] = useState<number | null>(null);
-  const [, setSubject] = useState<"self" | "friend" | null>(null);
+  const [subject, setSubject] = useState<"self" | "friend" | null>(null);
   const [pairs, setPairs] = useState<Array<{ first: string; second: string }>>([]);
   const [index, setIndex] = useState(0);
   const [summary, setSummary] = useState<{
@@ -152,7 +152,7 @@ export default function BlindTest() {
         </div>
       ) : null}
 
-      {current && !summary ? (
+      {current && !summary && subject !== "friend" ? (
         <div className="space-y-3">
           <p className="text-xs text-muted-subtle">
             {t("fidelity.blind.progress", { current: index + 1, total: pairs.length })}
@@ -163,6 +163,30 @@ export default function BlindTest() {
             disabled={answer.isPending}
             onSubmit={(pick, reason) => void submit(pick, reason)}
           />
+        </div>
+      ) : null}
+
+      {/**
+       * A friend sitting is the friend's to answer, so the owner gets
+       * the link straight away — not after answering the pairs. The
+       * link works from here and after the owner's own result: the
+       * server starts a fresh guest sitting when the sitting it is
+       * asked about is already finished.
+       */}
+      {subject === "friend" && !summary ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => void makeInvite()}>
+              {t("fidelity.blind.invite")}
+            </Button>
+          </div>
+          {invitePath ? (
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {t("fidelity.blind.inviteHint", { name, count: pairs.length })}
+              <br />
+              {invitePath}
+            </p>
+          ) : null}
         </div>
       ) : null}
 

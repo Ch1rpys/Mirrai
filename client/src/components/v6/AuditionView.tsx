@@ -15,6 +15,9 @@ export interface AuditionRow {
   avgChars?: number;
   avgMs?: number;
   composite?: number;
+  /** How many cases the candidate could not answer (B8.4). */
+  failedCases?: number;
+  attemptedCases?: number;
   error?: string;
 }
 
@@ -92,7 +95,18 @@ export default function AuditionView({ personaId }: { personaId: number }) {
                 <tr key={row.id} className="border-t border-border/60">
                   <td className="py-1.5 pr-3 whitespace-nowrap">{row.label}</td>
                   <td className="py-1.5 pr-3 tabular-nums">
-                    {row.error ? t("fidelity.audition.failed") : fmt(row.composite)}
+                    {/* A failed candidate says what the provider said.
+                        The fixed "did not answer" hid the reason the
+                        audition had already kept (B8.4). */}
+                    {row.error ? (
+                      <span className="text-xs text-muted-foreground">{row.error}</span>
+                    ) : (row.failedCases ?? 0) > 0 ? (
+                      <span className="text-xs text-muted-foreground">
+                        {t("fidelity.audition.failed")}
+                      </span>
+                    ) : (
+                      fmt(row.composite)
+                    )}
                   </td>
                   <td className="py-1.5 pr-3 tabular-nums">{fmt(row.overlap)}</td>
                   <td className="py-1.5 pr-3 tabular-nums">{fmt(row.styleDistance ?? undefined)}</td>

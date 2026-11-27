@@ -7,7 +7,7 @@
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { copy } from "@shared/copy";
+import { copy, type Locale } from "@shared/copy";
 import { FEEDBACK_REASONS } from "@shared/speech-acts";
 import { protectedProcedure, publicProcedure, router, rateLimit } from "../_core/trpc";
 import { RATE_LIMITS } from "../_core/rate-limit";
@@ -28,6 +28,7 @@ import {
   asStoredGroups,
   BLIND_DEFAULT_GROUPS,
   createBlindToken,
+  expectedMessageIdsFromCases,
   exportBlindRecord,
   hashBlindToken,
   pickBlindGroups,
@@ -110,6 +111,40 @@ function throwIfGuestClosed(
   }
 }
 
+/**
+ * The pairs for a new sitting, out of the latest evaluation run.
+ *
+ * Both the owner's own sitting and the fresh guest sitting an invite
+ * creates are cut the same way. Each pair keeps the id of the record
+ * its expected answer came from, so a reason given later points at the
+ * line it is about rather than at a position in a list.
+ */
+async function pickSittingGroups(params: {
+  personaId: number;
+  userId: number;
+  subject: BlindSubject;
+  groups: number;
+  locale: Locale;
+  seed: string;
+}): Promise<BlindStoredGroup[]> {
+  const run = await getLatestEvalRun(params.personaId, params.userId);
+  const cases = await getEvalCases(params.personaId, params.userId);
+  const messageIds = expectedMessageIdsFromCases(cases);
+  const picked = pickBlindGroups(scoresOf(run?.metricsJson), {
+    groups: params.groups,
+    subject: params.subject,
+    occurredAt: occurredAtMap(cases),
+    seed: `${params.seed}:${run?.id ?? 0}`,
+  });
+  if (picked.length < params.groups) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: copy(params.locale, "eval.blind.needEval"),
+    });
+  }
+  return picked.map((group) => ({ ...group, messageId: messageIds.get(group.caseId) }));
+}
+
 export const blindRouter = router({
   start: protectedProcedure
     .input(
@@ -122,29 +157,23 @@ export const blindRouter = router({
     .mutation(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-      const run = await getLatestEvalRun(input.personaId, ctx.user.id);
       const wanted = input.groups ?? BLIND_DEFAULT_GROUPS;
-      const cases = await getEvalCases(input.personaId, ctx.user.id);
-      const picked = pickBlindGroups(scoresOf(run?.metricsJson), {
-        groups: wanted,
+      const picked = await pickSittingGroups({
+        personaId: input.personaId,
+        userId: ctx.user.id,
         subject: input.subject,
-        occurredAt: occurredAtMap(cases),
-        seed: `blind-pick:${input.personaId}:${run?.id ?? 0}`,
+        groups: wanted,
+        locale: ctx.locale,
+        seed: `blind-pick:${input.personaId}`,
       });
-      if (picked.length < wanted) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: copy(ctx.locale, "eval.blind.needEval"),
-        });
-      }
       const created = await createBlindSession({
         userId: ctx.user.id,
         personaId: input.personaId,
         subject: input.subject,
-        groups: picked,
+        groups: [],
         answers: [],
       });
-      const arranged = arrangeBlindGroups(asStoredGroups(created.groups), created.id);
+      const arranged = arrangeBlindGroups(picked, created.id);
       await updateBlindSession(created.id, ctx.user.id, { groups: arranged });
       return {
         sessionId: created.id,
@@ -252,6 +281,16 @@ export const blindRouter = router({
       };
     }),
 
+  /**
+   * A one-use link for somebody without an account.
+   *
+   * The link has to point at a sitting a friend can still take. A
+   * finished sitting cannot: the guest routes close it on purpose (a
+   * sitting is answerable once). So an invite created from a finished
+   * sitting — the owner has just done their own test, or a friend has
+   * just finished — starts a fresh guest sitting and points at that.
+   * An unfinished sitting is handed to the friend as it is.
+   */
   invite: protectedProcedure
     .input(z.object({ sessionId: z.number() }))
     .mutation(async ({ ctx, input }) => {
@@ -259,11 +298,46 @@ export const blindRouter = router({
       if (!session) throw new TRPCError({ code: "NOT_FOUND" });
       const token = createBlindToken();
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      await updateBlindSession(session.id, ctx.user.id, {
-        tokenHash: hashBlindToken(token),
-        expiresAt,
-      });
-      return { token, path: `/blind/${token}`, expiresAt: expiresAt.toISOString() };
+      const tokenHash = hashBlindToken(token);
+      let sittingId = session.id;
+      if (session.finishedAt) {
+        const persona = await getPersonaById(session.personaId, ctx.user.id);
+        if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        const wanted = Math.min(
+          40,
+          Math.max(1, asStoredGroups(session.groups).length || BLIND_DEFAULT_GROUPS),
+        );
+        const picked = await pickSittingGroups({
+          personaId: session.personaId,
+          userId: ctx.user.id,
+          subject: "friend",
+          groups: wanted,
+          locale: ctx.locale,
+          seed: `blind-invite:${session.personaId}:${session.id}`,
+        });
+        const created = await createBlindSession({
+          userId: ctx.user.id,
+          personaId: session.personaId,
+          subject: "friend",
+          groups: [],
+          answers: [],
+        });
+        const arranged = arrangeBlindGroups(picked, created.id);
+        await updateBlindSession(created.id, ctx.user.id, {
+          groups: arranged,
+          tokenHash,
+          expiresAt,
+        });
+        sittingId = created.id;
+      } else {
+        await updateBlindSession(session.id, ctx.user.id, { tokenHash, expiresAt });
+      }
+      return {
+        token,
+        path: `/blind/${token}`,
+        expiresAt: expiresAt.toISOString(),
+        sessionId: sittingId,
+      };
     }),
 
   guestLoad: publicProcedure

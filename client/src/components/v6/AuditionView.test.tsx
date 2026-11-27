@@ -8,6 +8,34 @@ const auditionMutate = vi.fn();
 const updateMutate = vi.fn();
 
 let onAuditionSuccess: ((report: unknown) => void) | undefined;
+/** What the mocked audition reports back; a test can add a failed row. */
+let reportRows: Array<Record<string, unknown>> = [
+  {
+    id: "long",
+    providerName: "long",
+    model: "essay",
+    label: "long · essay",
+    composite: 0.1,
+    overlap: 0.2,
+    styleDistance: 0.8,
+    residueRate: 0.4,
+    avgChars: 80,
+    avgMs: 40,
+  },
+  {
+    id: "ta",
+    providerName: "openai",
+    model: "voice",
+    label: "openai · voice",
+    composite: 0.9,
+    overlap: 0.8,
+    styleDistance: 0.1,
+    residueRate: 0.05,
+    avgChars: 8,
+    avgMs: 20,
+  },
+];
+const defaultReportRows = reportRows;
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -24,32 +52,7 @@ vi.mock("@/lib/trpc", () => ({
             mutate: (input: unknown) => {
               auditionMutate(input);
               onAuditionSuccess?.({
-                results: [
-                  {
-                    id: "long",
-                    providerName: "long",
-                    model: "essay",
-                    label: "long · essay",
-                    composite: 0.1,
-                    overlap: 0.2,
-                    styleDistance: 0.8,
-                    residueRate: 0.4,
-                    avgChars: 80,
-                    avgMs: 40,
-                  },
-                  {
-                    id: "ta",
-                    providerName: "openai",
-                    model: "voice",
-                    label: "openai · voice",
-                    composite: 0.9,
-                    overlap: 0.8,
-                    styleDistance: 0.1,
-                    residueRate: 0.05,
-                    avgChars: 8,
-                    avgMs: 20,
-                  },
-                ],
+                results: reportRows,
                 cases: 12,
                 calls: 24,
               });
@@ -89,6 +92,7 @@ describe("the audition table", () => {
   beforeEach(() => {
     auditionMutate.mockReset();
     updateMutate.mockReset();
+    reportRows = defaultReportRows;
   });
 
   it("sorts the table by composite, highest first", async () => {
@@ -111,5 +115,34 @@ describe("the audition table", () => {
     const apply = screen.getAllByRole("button", { name: translate("zh", "fidelity.audition.useThis") });
     await user.click(apply[0]!);
     expect(updateMutate).toHaveBeenCalledWith({ id: 7, llmProvider: "openai" });
+  });
+
+  it("shows the provider's own reason for a failed candidate", async () => {
+    reportRows = [
+      {
+        id: "unreachable",
+        providerName: "ollama",
+        model: "llama3",
+        label: "ollama · llama3",
+        failedCases: 12,
+        attemptedCases: 12,
+        error: "12/12 道题没有答出来：connect ECONNREFUSED 127.0.0.1:11434",
+      },
+      {
+        id: "ta",
+        providerName: "openai",
+        model: "voice",
+        label: "openai · voice",
+        composite: 0.9,
+      },
+    ];
+    const user = userEvent.setup();
+    render(<AuditionView personaId={7} />);
+    await user.click(screen.getByRole("button", { name: translate("zh", "fidelity.audition.run") }));
+    await waitFor(() => {
+      expect(screen.getByText(/connect ECONNREFUSED/)).toBeInTheDocument();
+    });
+    // The unreachable model cannot be chosen for the persona.
+    expect(screen.getAllByRole("button", { name: translate("zh", "fidelity.audition.useThis") })).toHaveLength(1);
   });
 });

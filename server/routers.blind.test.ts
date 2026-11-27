@@ -63,6 +63,77 @@ function twelveScores() {
   }));
 }
 
+/** Six stored pairs, the shape a small sitting has. */
+function sixGroups() {
+  return twelveScores()
+    .slice(0, 6)
+    .map((score, i) => ({
+      caseId: i,
+      real: score.expectedText,
+      fake: score.generatedText,
+      realFirst: i % 2 === 0,
+    }));
+}
+
+/**
+ * An in-memory `blind_sessions` table, so a test can walk the whole
+ * guest path: the row the owner starts, the token written onto it, the
+ * friend's answers, and the sitting closing at the end.
+ */
+function installBlindStore(initial: Array<Record<string, any>> = []) {
+  const rows = new Map<number, Record<string, any>>(
+    initial.map((row) => [
+      row.id,
+      {
+        tokenHash: null,
+        expiresAt: null,
+        finishedAt: null,
+        answers: [],
+        summary: null,
+        ...row,
+      },
+    ]),
+  );
+  let nextId = Math.max(0, ...rows.keys()) + 1;
+  createBlindSession.mockImplementation(async (data: Record<string, any>) => {
+    const row = {
+      id: nextId++,
+      tokenHash: null,
+      expiresAt: null,
+      finishedAt: null,
+      answers: [],
+      summary: null,
+      ...data,
+    };
+    rows.set(row.id, row);
+    return row;
+  });
+  updateBlindSession.mockImplementation(
+    async (id: number, _userId: number, patch: Record<string, any>) => {
+      const row = rows.get(id);
+      if (!row) return undefined;
+      Object.assign(row, patch);
+      return row;
+    },
+  );
+  getBlindSession.mockImplementation(async (id: number, userId: number) => {
+    const row = rows.get(id);
+    return row && row.userId === userId ? row : undefined;
+  });
+  getBlindSessionByTokenHash.mockImplementation(async (hash: string) =>
+    [...rows.values()].find((row) => row.tokenHash === hash),
+  );
+  updateBlindSessionByTokenHash.mockImplementation(
+    async (hash: string, patch: Record<string, any>) => {
+      const row = [...rows.values()].find((candidate) => candidate.tokenHash === hash);
+      if (!row) return undefined;
+      Object.assign(row, patch);
+      return row;
+    },
+  );
+  return { rows };
+}
+
 describe("the in-app blind test", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -287,6 +358,91 @@ describe("the in-app blind test", () => {
     expect(listed.sessions[0]).not.toHaveProperty("groups");
     await expect(
       appRouter.createCaller(ctxFor(2)).blind.list({ personaId: 3 }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("does not invite from somebody else's sitting", async () => {
+    getBlindSession.mockResolvedValue(undefined);
+    await expect(
+      appRouter.createCaller(ctxFor(2)).blind.invite({ sessionId: 7 }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(createBlindSession).not.toHaveBeenCalled();
+    expect(updateBlindSession).not.toHaveBeenCalled();
+  });
+
+  it("gives the invite of a finished sitting a fresh sitting a guest can open", async () => {
+    const finished = {
+      id: 7,
+      userId: 1,
+      personaId: 3,
+      subject: "self",
+      groups: sixGroups(),
+      answers: sixGroups().map((_, i) => ({ group: i, pick: "first", seconds: 3 })),
+      summary: { n: 6, pickedReal: 0.5, pickedPersona: 0.5, unsure: 0, medianSeconds: 3, reasons: {} },
+      startedAt: new Date("2026-11-17T00:00:00.000Z"),
+      finishedAt: new Date("2026-11-17T00:10:00.000Z"),
+    };
+    const { rows } = installBlindStore([finished]);
+    const caller = appRouter.createCaller(ctxFor(1));
+
+    const invite = await caller.blind.invite({ sessionId: 7 });
+
+    // The token cannot point at the finished sitting: the guest route
+    // closes a finished sitting by design. It points at a fresh one.
+    expect(invite.sessionId).not.toBe(7);
+    expect(rows.get(invite.sessionId)?.finishedAt).toBeNull();
+    expect(rows.get(invite.sessionId)?.subject).toBe("friend");
+    expect(invite.path).toBe(`/blind/${invite.token}`);
+
+    // And a guest can actually open it.
+    const guest = appRouter.createCaller({ ...ctxFor(1, "198.51.100.7"), user: null });
+    const loaded = await guest.blind.guestLoad({ token: invite.token });
+    expect(loaded.total).toBe(6);
+    expect(loaded.groups).toHaveLength(6);
+    expect(JSON.stringify(loaded)).not.toMatch(/real|said|expected|generated/i);
+
+    // The owner's own sitting is left finished and untouched.
+    expect(rows.get(7)?.finishedAt).toBeInstanceOf(Date);
+    expect(rows.get(7)?.tokenHash).toBeNull();
+  });
+
+  it("carries a friend sitting from the invite through every guest answer", async () => {
+    installBlindStore();
+    const caller = appRouter.createCaller(ctxFor(1));
+    const started = await caller.blind.start({ personaId: 3, subject: "friend", groups: 6 });
+    expect(started.subject).toBe("friend");
+    expect(started.total).toBe(6);
+
+    const invite = await caller.blind.invite({ sessionId: started.sessionId });
+    expect(invite.sessionId).toBe(started.sessionId);
+    const guest = appRouter.createCaller({ ...ctxFor(1, "198.51.100.8"), user: null });
+    const loaded = await guest.blind.guestLoad({ token: invite.token });
+    expect(loaded.name).toBe("小满");
+    expect(loaded.groups).toHaveLength(6);
+    expect(JSON.stringify(loaded)).not.toMatch(/real|said|expected|generated/i);
+
+    let last: any = null;
+    for (let group = 0; group < loaded.total; group++) {
+      last = await guest.blind.guestAnswer({
+        token: invite.token,
+        group,
+        pick: group % 2 === 0 ? "first" : "second",
+        seconds: 2,
+        reason: group === 0 ? "word" : undefined,
+      });
+    }
+    expect(last.done).toBe(true);
+    expect(last.summary.n).toBe(6);
+    expect(
+      last.summary.pickedReal + last.summary.pickedPersona + last.summary.unsure,
+    ).toBeCloseTo(1, 10);
+    expect(last.summary.reasons).toEqual({ word: 1 });
+
+    // The token is one use: the sitting is finished, so it closes.
+    await expect(
+      appRouter
+        .createCaller({ ...ctxFor(1, "198.51.100.8"), user: null })
+        .blind.guestLoad({ token: invite.token }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 

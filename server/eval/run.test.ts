@@ -277,6 +277,26 @@ describe("running the cases", () => {
     expect(metrics.cases).toBe(1);
   });
 
+  it("keeps the provider's own error with the run", async () => {
+    invokeWithProvider
+      .mockRejectedValueOnce(new Error("provider exploded"))
+      .mockResolvedValue("早点睡");
+
+    const metrics = await runEval({
+      persona,
+      userId: 1,
+      cases: cases(),
+      trainingTexts: ["嗯嗯"],
+    });
+
+    // The caller — the audition in particular — has to be able to tell
+    // a measured run from a run that mostly failed, and to say why in
+    // the provider's own words instead of a fixed sentence.
+    expect(metrics.attemptedCases).toBe(2);
+    expect(metrics.failedCases).toBe(1);
+    expect(metrics.failureReasons).toEqual(["provider exploded"]);
+  });
+
   it("skips a case the model answered with nothing", async () => {
     invokeWithProvider.mockResolvedValueOnce("   ").mockResolvedValue("早点睡");
     const metrics = await runEval({

@@ -145,9 +145,55 @@ describe("runAudition", () => {
     expect(report.results[0]!.id).toBe("ta");
     expect(report.results[0]!.composite).toBeGreaterThan(report.results[1]!.composite ?? -Infinity);
     const failed = report.results.find((row) => row.id === "boom");
-    expect(failed?.error).toBe(copy("zh", "eval.audition.failed"));
+    // The provider's own words, not a fixed sentence: "any failure keeps
+    // its reason" has to reach the result.
+    expect(failed?.error).toContain("the model refused");
+    expect(failed?.error).not.toBe(copy("zh", "eval.audition.failed"));
+    expect(failed?.failedCases).toBe(2);
+    expect(failed?.attemptedCases).toBe(2);
     expect(failed?.composite).toBeUndefined();
     expect(report.calls).toBe(6);
     expect(report.cases).toBe(2);
+  });
+
+  it("reports a candidate that could not answer most cases instead of ranking it", async () => {
+    const taLine = fixtureTaLine();
+    // Ten cases the in-character model answers every time. The broken
+    // provider is unreachable for eight of them — it can only answer
+    // the two calls that happen to get through. Before the fix those
+    // two scored cases were enough for it to be ranked on.
+    const tenCases = Array.from({ length: 10 }, () => cases()[0]!);
+    let brokenCalls = 0;
+    const report = await runAudition({
+      persona: persona(),
+      userId: 1,
+      cases: tenCases,
+      trainingTexts: [taLine],
+      providers: [
+        {
+          id: "steady",
+          providerName: "steady",
+          model: "voice",
+          provider: stubProvider("steady", async () => taLine),
+        },
+        {
+          id: "broken",
+          providerName: "broken",
+          model: "none",
+          provider: stubProvider("broken", async () => {
+            brokenCalls += 1;
+            if (brokenCalls <= 2) return taLine;
+            throw new Error("connect ECONNREFUSED 127.0.0.1:11434");
+          }),
+        },
+      ],
+    });
+
+    const failed = report.results.find((row) => row.id === "broken");
+    expect(failed?.error).toContain("ECONNREFUSED");
+    expect(failed?.failedCases).toBe(8);
+    expect(failed?.attemptedCases).toBe(10);
+    expect(failed?.composite).toBeUndefined();
+    expect(report.results[0]!.id).toBe("steady");
   });
 });

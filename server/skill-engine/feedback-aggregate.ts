@@ -22,6 +22,16 @@ export interface FeedbackRow {
   reason: string;
   createdAt?: Date | string | null;
   rewrite?: string | null;
+  /**
+   * The line the reason was about, when the row knows it without a
+   * lookup.
+   *
+   * A blind-test reason is about the persona's line in a pair, and that
+   * line was never stored as a message. The pair kept it, so the row
+   * carries it here and the queue can show what the reason refers to.
+   * A normal unlike mark has no snippet: the message itself is the line.
+   */
+  snippet?: string;
 }
 
 export interface FeedbackCandidate {
@@ -96,7 +106,11 @@ export function aggregateFidelityFeedback(params: {
     if (rejected.has(key) || seen.has(key)) continue;
     seen.add(key);
     const rewrite = typeof row.rewrite === "string" ? row.rewrite.replace(/\s+/g, " ").trim() : "";
-    const extra = rewrite ? { rewrite } : {};
+    const snippet = typeof row.snippet === "string" ? row.snippet.trim() : "";
+    const extra = {
+      ...(rewrite ? { rewrite } : {}),
+      ...(snippet ? { snippet } : {}),
+    };
     const evidence = [
       { snippet: `message:${row.messageId}` },
       ...(rewrite ? [{ snippet: rewrite.slice(0, 80) }] : []),

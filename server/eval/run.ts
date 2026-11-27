@@ -243,13 +243,34 @@ export interface EvalRunOptions {
 }
 
 /**
+ * What a run measured, and what it could not.
+ *
+ * A run does not stop at the first provider error — that is the point of
+ * skipping the case — but the caller has to be able to tell a measured
+ * run from one that mostly failed. The audition ranks candidates on
+ * these numbers, and a candidate that could not answer most of the
+ * cases would otherwise be ranked on the handful it managed to answer.
+ *
+ * The reasons are the provider's own words, kept so that a failed
+ * candidate can say what happened instead of a fixed sentence.
+ */
+export interface EvalRunResult extends EvalMetrics {
+  /** How many cases the run tried. */
+  attemptedCases: number;
+  /** How many cases could not be scored at all. */
+  failedCases: number;
+  /** The provider's own words for the calls that failed. */
+  failureReasons: string[];
+}
+
+/**
  * Runs the cases and scores them.
  *
  * A provider that fails on one case does not fail the run: the case is
  * skipped and the run reports how many it managed to score. A ruler
  * that stops at the first bad answer is not a ruler.
  */
-export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
+export async function runEval(options: EvalRunOptions): Promise<EvalRunResult> {
   const locale = options.locale ?? "zh";
   const variant = options.variant ?? "default";
   const provider =
@@ -286,6 +307,9 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
   const whyWon: string[] = [];
   const usedLayers = new Set<LayerId>();
   const samplesPerCase = Math.max(1, options.samplesPerCase ?? 1);
+  const attemptedCases = options.cases.length;
+  const failureReasons: string[] = [];
+  let failedCases = 0;
 
   for (let i = 0; i < options.cases.length; i++) {
     const caseData = options.cases[i];
@@ -364,10 +388,15 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
           }
         }
       } catch (error) {
+        const message =
+          error instanceof Error && error.message.trim()
+            ? error.message.trim()
+            : String(error);
+        // The provider's own words: the audition reports them, and a
+        // run that mostly failed is not the same thing as a short run.
+        failureReasons.push(message);
         console.warn(
-          `[Eval] Case ${caseData.expected.content.slice(0, 30)} failed: ${
-            (error as Error).message
-          }`,
+          `[Eval] Case ${caseData.expected.content.slice(0, 30)} failed: ${message}`,
         );
       }
       if (!generated.trim()) continue;
@@ -391,6 +420,10 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
       );
     }
     if (!sampleScores.length) {
+      // Nothing was scored for this case — the provider failed, or it
+      // answered with nothing. A case like that is not a short run; it
+      // is a case that could not be measured.
+      failedCases += 1;
       options.onProgress?.(i + 1, options.cases.length);
       continue;
     }
@@ -406,5 +439,5 @@ export async function runEval(options: EvalRunOptions): Promise<EvalMetrics> {
   if (whyWon.length) {
     aggregated.variant = `${variant}; ${whyWon.join(" | ")}`;
   }
-  return aggregated;
+  return { ...aggregated, attemptedCases, failedCases, failureReasons };
 }

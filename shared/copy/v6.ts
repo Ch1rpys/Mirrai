@@ -565,6 +565,17 @@ export const V6 = {
     zh: "这个模型没有答出来",
     en: "This model did not answer.",
   },
+  /**
+   * A candidate that could not answer most of the cases it was asked.
+   *
+   * The percentage is the point: the cases that did come back are a
+   * different sample from the ones it never saw, so the score would be
+   * a score of the easy half. The provider's own words are kept.
+   */
+  "eval.audition.failedCases": {
+    zh: "{{failed}}/{{total}} 道题没有答出来：{{reason}}",
+    en: "{{failed}}/{{total}} cases could not be answered: {{reason}}",
+  },
   "eval.ablate.helps": { zh: "有贡献", en: "helps" },
   "eval.ablate.noise": { zh: "在噪声之内", en: "within noise" },
   "eval.ablate.worse": { zh: "变差了", en: "worse" },

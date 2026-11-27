@@ -250,12 +250,13 @@ import {
 } from "@shared/stances";
 import { mineOpenLoops } from "./skill-engine/open-loops";
 import { mineRoutines } from "./skill-engine/routine";
-import { feedbackRowsFromBlindSessions } from "./eval/blind";
+import { expectedMessageIdsFromCases, feedbackRowsFromBlindSessions } from "./eval/blind";
 import {
   aggregateFidelityFeedback,
   confirmedSuppressionFromUnlike,
   inventedMemoryDraft,
   sampledActFromMetadata,
+  type FeedbackRow,
 } from "./skill-engine/feedback-aggregate";
 import { mayReachOut } from "@shared/graduation-mode";
 import { hashPassword, verifyPassword } from "./_core/password";
@@ -939,6 +940,70 @@ function personaForEval<T extends { timezone?: string | null }>(
 ): T {
   if (!timezone || persona.timezone) return persona;
   return { ...persona, timezone };
+}
+
+/**
+ * The reasons from the blind sittings, as rows the candidate queue reads.
+ *
+ * A sitting stores the position of the case each pair was cut from, not
+ * the line: the position alone points at nothing. The stored cases
+ * carry the id of the expected answer's record, so the position is
+ * resolved here — and a sitting that already stored the id keeps it.
+ */
+async function blindFeedbackRowsFor(
+  personaId: number,
+  userId: number,
+): Promise<FeedbackRow[]> {
+  const sessions = await listBlindSessions(personaId, userId);
+  if (sessions.length === 0) return [];
+  const cases = await getEvalCases(personaId, userId);
+  return feedbackRowsFromBlindSessions(sessions, expectedMessageIdsFromCases(cases));
+}
+
+/**
+ * The held-out cases the ruler will measure, cut once for every way in.
+ *
+ * The evaluation run, the audition and the audition button's cost
+ * estimate have to be looking at the same set. The estimate used to
+ * count only the stored cases — so a persona that had records but had
+ * never stored a case showed "0 questions, 0 calls" next to a button
+ * that would cut sixty on the spot.
+ *
+ * The stored cases are still what gets measured when they exist; only
+ * when there are none is the set cut from the records, the same way the
+ * run cuts it. The unlike rewrites join that set, as they do for a run.
+ *
+ * `withMessages` reads the records even when the stored cases are
+ * enough, because the callers that do more than count need them for the
+ * training texts.
+ */
+async function prepareEvalCases(
+  persona: { personaData?: unknown; timezone?: string | null },
+  userId: number,
+  personaId: number,
+  options: { locale: Locale; userTimezone: string | null; withMessages?: boolean },
+): Promise<{
+  cut: EvalCaseData[];
+  messages: EvalSourceMessage[];
+  timezone: string | null;
+  fromStore: boolean;
+}> {
+  const stored = casesFromRows(await getEvalCases(personaId, userId));
+  const { periods, timezone } = evalCutOptions(persona, options.userTimezone);
+  if (stored.length && !options.withMessages) {
+    return { cut: stored, messages: [], timezone, fromStore: true };
+  }
+  const rows = await getCollectedMessagesForPersonaRows(personaId, userId, {
+    newest: true,
+  });
+  const messages = evalMessagesFromRows(rows);
+  const cut = stored.length
+    ? stored
+    : [
+        ...buildEvalCases(messages, { locale: options.locale, periods, timezone }),
+        ...(await evalCasesFromRewrites(personaId, userId)),
+      ];
+  return { cut, messages, timezone, fromStore: stored.length > 0 };
 }
 
 /**
@@ -6829,22 +6894,15 @@ export const appRouter = router({
          */
         runningEvals.add(runKey);
         try {
-          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id, { newest: true });
-          const messages = evalMessagesFromRows(rows);
-          const { periods, timezone } = evalCutOptions(persona, ctx.user.timezone);
+          // The same preparation the audition and the cost estimate use:
+          // stored cases win, and a persona with none gets a fresh cut.
+          const { cut, messages, timezone, fromStore } = await prepareEvalCases(
+            persona,
+            ctx.user.id,
+            input.personaId,
+            { locale: input.locale, userTimezone: ctx.user.timezone, withMessages: true },
+          );
           const runPersona = personaForEval(persona, timezone);
-
-          // The stored cases are the ones that get measured. Cutting a
-          // fresh set every time would measure a different question each
-          // time, and the comparison with the last run would be between
-          // two different things.
-          const stored = casesFromRows(await getEvalCases(input.personaId, ctx.user.id));
-          const feedback = stored.length
-            ? []
-            : await evalCasesFromRewrites(input.personaId, ctx.user.id);
-          const cut = stored.length
-            ? stored
-            : [...buildEvalCases(messages, { locale: input.locale, periods, timezone }), ...feedback];
           const cases = await labelEvalCases(cut, { userId: ctx.user.id, locale: input.locale });
           if (!cases.length) {
             throw new TRPCError({
@@ -6853,7 +6911,7 @@ export const appRouter = router({
             });
           }
           const unlabeledBefore = cut.some((item) => !item.expectedAct);
-          if (!stored.length || unlabeledBefore) {
+          if (!fromStore || unlabeledBefore) {
             // There were none stored, or the stored ones had no cached
             // act yet. They are kept labelled, so the next run measures
             // the same lines and does not ask the model again.
@@ -6943,16 +7001,22 @@ export const appRouter = router({
     /**
      * How many models would be tried, and how many calls that is.
      *
-     * The button has to say the cost before it spends it.
+     * The button has to say the cost before it spends it — and it has
+     * to be the cost of the cases the audition will really measure. A
+     * persona with records but no stored case gets a set cut on the
+     * spot, so the number is that set's size, not zero.
      */
     auditionInfo: protectedProcedure
       .input(z.object({ personaId: z.number() }))
       .query(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        const stored = casesFromRows(await getEvalCases(input.personaId, ctx.user.id));
+        const { cut } = await prepareEvalCases(persona, ctx.user.id, input.personaId, {
+          locale: "zh",
+          userTimezone: ctx.user.timezone,
+        });
         const providers = await listAuditionProviders(ctx.user.id);
-        const caseCount = stored.length;
+        const caseCount = cut.length;
         return {
           count: providers.length,
           cases: caseCount,
@@ -6989,16 +7053,14 @@ export const appRouter = router({
         }
         runningEvals.add(runKey);
         try {
-          const rows = await getCollectedMessagesForPersonaRows(input.personaId, ctx.user.id, { newest: true });
-          const messages = evalMessagesFromRows(rows);
-          const { periods, timezone } = evalCutOptions(persona, ctx.user.timezone);
-          const stored = casesFromRows(await getEvalCases(input.personaId, ctx.user.id));
-          const feedback = stored.length
-            ? []
-            : await evalCasesFromRewrites(input.personaId, ctx.user.id);
-          const cut = stored.length
-            ? stored
-            : [...buildEvalCases(messages, { locale: input.locale, periods, timezone }), ...feedback];
+          // The same preparation `auditionInfo` priced: the estimate and
+          // the sitting must be about the same cases.
+          const { cut, messages, timezone } = await prepareEvalCases(
+            persona,
+            ctx.user.id,
+            input.personaId,
+            { locale: input.locale, userTimezone: ctx.user.timezone, withMessages: true },
+          );
           const cases = await labelEvalCases(cut, { userId: ctx.user.id, locale: input.locale });
           if (!cases.length) {
             throw new TRPCError({
@@ -7340,9 +7402,7 @@ export const appRouter = router({
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
         const rows = await listFidelityFeedbackForPersona(input.personaId, ctx.user.id);
-        const blindRows = feedbackRowsFromBlindSessions(
-          await listBlindSessions(input.personaId, ctx.user.id),
-        );
+        const blindRows = await blindFeedbackRowsFor(input.personaId, ctx.user.id);
         const rejected = ((persona.personaData as any)?.rejectedFeedbackKeys ?? []) as string[];
         const items = aggregateFidelityFeedback({
           rows: [...rows, ...blindRows],
@@ -7353,7 +7413,9 @@ export const appRouter = router({
             const message = await getMessageById(item.messageId, ctx.user.id, input.personaId);
             return {
               ...item,
-              snippet: String(message?.content ?? "").slice(0, 240),
+              // A blind-test reason is about a pair, not a stored message:
+              // the row carries the line to show instead.
+              snippet: String(item.snippet ?? message?.content ?? "").slice(0, 240),
               sampledAct: sampledActFromMetadata(message?.metadata),
             };
           })),
@@ -7399,18 +7461,24 @@ export const appRouter = router({
           const persona = await getPersonaById(input.personaId, ctx.user.id);
           if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
           const rows = await listFidelityFeedbackForPersona(input.personaId, ctx.user.id);
+          // The blind reasons are candidates too: a sitting's reason has
+          // to be confirmable, so this aggregates exactly what the queue
+          // showed.
+          const blindRows = await blindFeedbackRowsFor(input.personaId, ctx.user.id);
           const data = ((persona.personaData as Record<string, unknown>) || {});
           const rejected = Array.isArray(data.rejectedFeedbackKeys)
             ? [...(data.rejectedFeedbackKeys as string[])]
             : [];
           const candidate = aggregateFidelityFeedback({
-            rows,
+            rows: [...rows, ...blindRows],
             rejectedKeys: rejected,
           }).find((item) => item.key === input.key);
           if (!candidate) throw new TRPCError({ code: "NOT_FOUND" });
 
           const message = await getMessageById(candidate.messageId, ctx.user.id, input.personaId);
-          const snippet = String(message?.content ?? "").slice(0, 240);
+          // A blind-test reason's unlike line is the pair's persona line,
+          // not a message: the candidate carries it.
+          const snippet = String(candidate.snippet ?? message?.content ?? "").slice(0, 240);
           const sampledAct = sampledActFromMetadata(message?.metadata);
           const next: Record<string, unknown> = { ...data };
           if (!rejected.includes(input.key)) rejected.push(input.key);

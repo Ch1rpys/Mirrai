@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   arrangeBlindGroups,
   eligibleBlindScores,
+  expectedMessageIdsFromCases,
   exportBlindRecord,
+  feedbackRowsFromBlindSessions,
   hashBlindToken,
   pickBlindGroups,
   publicBlindGroups,
@@ -121,5 +123,61 @@ describe("the sitting's score", () => {
     expect(hashBlindToken("abc")).toHaveLength(64);
     expect(hashBlindToken("abc")).toBe(hashBlindToken("abc"));
     expect(hashBlindToken("abc")).not.toBe(hashBlindToken("abd"));
+  });
+});
+
+describe("the reasons a sitting leaves for the candidate queue", () => {
+  function finishedSession(groups: BlindStoredGroup[]) {
+    return {
+      id: 7,
+      finishedAt: new Date("2026-11-20T00:00:00.000Z"),
+      groups,
+      answers: [{ group: 0, pick: "second" as const, seconds: 3, reason: "word" as const }],
+    };
+  }
+
+  it("points at the expected answer's record, not at the case's position", () => {
+    // The reason was given on case 3 of the run. Case 3's expected line
+    // was cut from record 42; 3 is a position in a list, not a line.
+    const cases = [0, 1, 2, 3].map((index) => ({
+      expectedJson: index === 3
+        ? { id: 42, role: "assistant", content: ORIGINAL }
+        : { id: 100 + index, role: "assistant", content: `别的一句${index}` },
+    }));
+    const rows = feedbackRowsFromBlindSessions(
+      [
+        finishedSession([
+          { caseId: 3, real: ORIGINAL, fake: "分身写的另一句", realFirst: false },
+        ]),
+      ],
+      expectedMessageIdsFromCases(cases),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.messageId).toBe(42);
+    // The reason is about the line the sitter did not pick — the
+    // persona's line — so that is the unlike line the queue shows.
+    expect(rows[0]!.snippet).toBe("分身写的另一句");
+  });
+
+  it("uses the record id stored with the pair when one is there", () => {
+    const rows = feedbackRowsFromBlindSessions(
+      [
+        finishedSession([
+          { caseId: 3, messageId: 77, real: ORIGINAL, fake: "分身写的另一句", realFirst: false },
+        ]),
+      ],
+      new Map([[3, 42]]),
+    );
+    expect(rows[0]!.messageId).toBe(77);
+  });
+
+  it("does not leave a candidate that points at nothing", () => {
+    // A sitting from before the record id was stored, and no stored
+    // case to resolve the position against: there is no object to
+    // point at, so there is no candidate.
+    const rows = feedbackRowsFromBlindSessions([
+      finishedSession([{ caseId: 3, real: ORIGINAL, fake: "分身写的另一句", realFirst: false }]),
+    ]);
+    expect(rows).toEqual([]);
   });
 });

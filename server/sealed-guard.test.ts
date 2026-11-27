@@ -212,6 +212,9 @@ describe("a sealed persona (C6.2)", () => {
       const chunks = source.split(/(?=publicProcedure|protectedProcedure)/);
       for (const chunk of chunks) {
         if (!chunk.startsWith("publicProcedure")) continue;
+        // The split also catches the import line that mentions
+        // `publicProcedure`; a preamble has no procedures in it.
+        if (!/\.(query|mutation|subscription)\(/.test(chunk)) continue;
         // The public procedures in `blind.ts` take a guest token, not a
         // persona; a personaId inside one would be the bypass this test
         // is looking for.

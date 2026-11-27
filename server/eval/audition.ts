@@ -8,6 +8,11 @@
  * A candidate that throws is recorded and skipped. The rest still get
  * a score. The composite is the mean of the batch's own z-scores, so
  * it only means something inside this sitting.
+ *
+ * A candidate that fails *most* of its cases is not ranked at all: the
+ * cases that came back are the easier half, and a score of those does
+ * not say how it would sound on the half it could not answer. Its row
+ * keeps the provider's own reason.
  */
 import type { Persona } from "../../drizzle/schema";
 import type { LLMProvider } from "../llm/types";
@@ -15,10 +20,19 @@ import { registry } from "../llm";
 import { buildUserProvider } from "../llm/user-provider";
 import * as db from "../db";
 import { copy } from "@shared/copy";
-import { runEval, type EvalRunOptions } from "./run";
+import { runEval, type EvalRunOptions, type EvalRunResult } from "./run";
 import type { EvalCaseData } from "./dataset";
 import type { EvalMetrics } from "./metrics";
 import type { Locale } from "@shared/copy";
+
+/**
+ * How many cases a candidate may fail and still be ranked.
+ *
+ * One failed call is the provider having a bad minute; more than half
+ * means the candidate could not answer what it was asked, and the cases
+ * that did come back are a different, easier sample.
+ */
+export const AUDITION_MAX_CASE_FAILURE_RATE = 0.5;
 
 export interface AuditionSlot {
   id: string;
@@ -41,6 +55,14 @@ export interface AuditionResult {
   avgChars?: number;
   avgMs?: number;
   composite?: number;
+  /**
+   * How many of the cases the candidate was asked it could not answer.
+   *
+   * A candidate with one or two failures is still ranked; the count is
+   * carried so the result does not hide that.
+   */
+  failedCases?: number;
+  attemptedCases?: number;
   error?: string;
 }
 
@@ -178,6 +200,23 @@ function avgCharsOf(metrics: EvalMetrics): number {
 }
 
 /**
+ * Why a candidate could not be ranked, in its provider's own words.
+ *
+ * The fixed "this model did not answer" is the fallback, not the
+ * message: when the provider said something, that is what the row says.
+ */
+function failureMessage(metrics: EvalRunResult, locale: Locale): string {
+  const reason = metrics.failureReasons.find((text) => text.trim().length > 0);
+  const failed = metrics.failedCases ?? 0;
+  const attempted = metrics.attemptedCases ?? 0;
+  if (reason && attempted > 0) {
+    return copy(locale, "eval.audition.failedCases", { failed, total: attempted, reason });
+  }
+  if (reason) return reason;
+  return copy(locale, "eval.audition.failed");
+}
+
+/**
  * Runs the same cases against each candidate.
  */
 export async function runAudition(options: AuditionOptions): Promise<AuditionReport> {
@@ -205,15 +244,25 @@ export async function runAudition(options: AuditionOptions): Promise<AuditionRep
     try {
       const metrics = await runEval({ ...evalOptions, provider: slot.provider });
       const avgMs = Date.now() - started;
-      if (!metrics.cases) {
+      const attemptedCases = metrics.attemptedCases || options.cases.length;
+      const failedCases = metrics.failedCases ?? 0;
+      const failureRate = attemptedCases > 0 ? failedCases / attemptedCases : 0;
+      // Too many failures and there is no measurement to compare: the
+      // cases that came back are the easy half, and ranking on them
+      // would rank the candidate on a sample it could answer.
+      if (!metrics.cases || failureRate > AUDITION_MAX_CASE_FAILURE_RATE) {
         results.push({
           ...base,
-          error: copy(locale, "eval.audition.failed"),
+          failedCases,
+          attemptedCases,
+          error: failureMessage(metrics, locale),
         });
         continue;
       }
       results.push({
         ...base,
+        failedCases,
+        attemptedCases,
         overlap: metrics.overlap,
         likelihoodGap: metrics.likelihoodGap,
         lengthDistance: metrics.lengthDistance,

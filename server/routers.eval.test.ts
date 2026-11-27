@@ -247,6 +247,39 @@ describe("the fidelity evaluation", () => {
     expect(runAudition).not.toHaveBeenCalled();
   });
 
+  it("estimates the calls on the cases the audition will really measure", async () => {
+    // Records are there but no case was ever stored, so the audition cuts
+    // a set on the fly. The number next to the button has to be that
+    // number, not zero.
+    getEvalCases.mockResolvedValue([]);
+    evalCases = Array.from({ length: 7 }, (_, i) => ({
+      context: [],
+      expected: { role: "assistant", content: `在的${i}`, timestamp: null },
+      expectedState: null,
+    }));
+    const providers = [
+      { id: "env:one", providerName: "one", model: "m1" },
+      { id: "env:two", providerName: "two", model: "m2" },
+    ];
+    listAuditionProviders.mockResolvedValue(providers);
+    runAudition.mockImplementation(async (options: { cases: unknown[] }) => ({
+      results: [],
+      cases: options.cases.length,
+      calls: providers.length * options.cases.length,
+    }));
+    const caller = appRouter.createCaller(ctxFor(1));
+
+    const info = await caller.eval.auditionInfo({ personaId: 5 });
+    expect(info.count).toBe(2);
+    expect(info.cases).toBe(7);
+    expect(info.calls).toBe(14);
+
+    await caller.eval.audition({ personaId: 5, locale: "zh" });
+    expect(runAudition).toHaveBeenCalledTimes(1);
+    const measured = (runAudition.mock.calls[0]![0] as { cases: unknown[] }).cases.length;
+    expect(measured).toBe(info.cases);
+  });
+
   it("cuts app cases with labels, periods, and the user's zone", async () => {
     const ctx = ctxFor(1, "Asia/Shanghai");
     persona.personaData = {

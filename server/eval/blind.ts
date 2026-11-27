@@ -27,6 +27,15 @@ export interface BlindScoreLine {
 
 export interface BlindStoredGroup {
   caseId: number;
+  /**
+   * The record the expected answer was cut from.
+   *
+   * `caseId` is the case's position in the run's case list, which says
+   * nothing outside the run. The candidate queue has to point at the
+   * line itself, so the id of the expected answer's record is stored
+   * with the pair when the sitting is created.
+   */
+  messageId?: number;
   real: string;
   fake: string;
   realFirst: boolean;
@@ -215,8 +224,39 @@ export function exportBlindRecord(
   return `${lines.join("\n")}\n`;
 }
 
+/**
+ * The id of each case's expected answer, keyed by the case's position.
+ *
+ * A blind sitting stores the position of the case each pair came from.
+ * The candidate queue needs the record the answer was cut from — the
+ * `expected` line carries the id of that record, and the stored case is
+ * where it is kept.
+ */
+export function expectedMessageIdsFromCases(
+  rows: Array<{ expectedJson?: unknown }>,
+): Map<number, number> {
+  const out = new Map<number, number>();
+  rows.forEach((row, index) => {
+    const expected = row?.expectedJson;
+    if (!expected || typeof expected !== "object" || Array.isArray(expected)) return;
+    const id = (expected as { id?: unknown }).id;
+    if (typeof id === "number" && Number.isFinite(id)) out.set(index, id);
+  });
+  return out;
+}
+
+/**
+ * A reason given in a blind sitting, as a row the candidate queue reads.
+ *
+ * The sitting keeps both lines, so the row can say which one the reason
+ * was about without reading anything else: the sitter's reason describes
+ * the line they did not pick — the persona's line. The row points at the
+ * expected answer (its record id), which is the stored half of the pair
+ * and the case the candidate is for.
+ */
 export function feedbackRowsFromBlindSessions(
   sessions: Array<{ id: number; groups?: unknown; answers?: unknown; finishedAt?: Date | string | null }>,
+  expectedMessageIds?: Map<number, number>,
 ): FeedbackRow[] {
   const rows: FeedbackRow[] = [];
   for (const session of sessions) {
@@ -227,10 +267,15 @@ export function feedbackRowsFromBlindSessions(
       if (!answer.reason || !isFeedbackReason(answer.reason)) continue;
       const group = groups[answer.group];
       if (!group) continue;
+      const messageId = group.messageId ?? expectedMessageIds?.get(group.caseId);
+      // A candidate whose object is a position in a list nobody can see
+      // is not a candidate. It needs a line to point at.
+      if (messageId === undefined) continue;
       rows.push({
         id: session.id * 1000 + answer.group,
-        messageId: group.caseId,
+        messageId,
         reason: answer.reason,
+        snippet: group.fake,
       });
     }
   }
@@ -246,6 +291,10 @@ export function asStoredGroups(value: unknown): BlindStoredGroup[] {
     return [
       {
         caseId: typeof row.caseId === "number" ? row.caseId : 0,
+        messageId:
+          typeof row.messageId === "number" && Number.isFinite(row.messageId)
+            ? row.messageId
+            : undefined,
         real: row.real,
         fake: row.fake,
         realFirst: row.realFirst === true,
