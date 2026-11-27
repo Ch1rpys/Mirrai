@@ -176,6 +176,12 @@ export interface TurnInput {
    * An ordinary reply is still an ordinary reply.
    */
   budgetOver?: boolean;
+  /**
+   * The middle of the user's night and a session past forty-five
+   * minutes (C10.5). When it is true and there is a measured closing
+   * habit, this turn closes instead of waiting for the measured hour.
+   */
+  lateNight?: boolean;
 }
 
 export interface TurnPlan {
@@ -1060,27 +1066,46 @@ async function closingForTurn(
     }
   }
   const timeZone = preferredClockZone(personaZone, userZone);
+  /**
+   * The measured closing lines, ready for the prompt.
+   *
+   * The closers are material, like the other lines measured from the
+   * records. A line the user asked to remove for harm must not come
+   * back through the closing block after the exemplar and conflict
+   * blocks have already filtered it.
+   */
+  const measuredClosers = () =>
+    filterHarm(
+      profile.closers.map((row) => ({ content: row.text, role: "assistant" as const })),
+      input.persona.personaData as { harmReport?: never } | null,
+    )
+      .slice(0, CLOSER_PROMPT_MAX)
+      .map((row) => row.content);
+
+  /**
+   * Late at night the persona says goodnight first (C10.5).
+   *
+   * A person at two in the morning does not need the statistics to say
+   * the conversation has run long; if this persona has a measured habit
+   * of closing, this turn is the close. The measured hour and the p90
+   * still apply at every other time of day.
+   *
+   * A closing already said this session is not repeated, and a persona
+   * with no measured closing lines has no habit to fall back on — that
+   * case keeps the ordinary behaviour.
+   */
+  if (input.lateNight === true && !closedThisSession) {
+    const lateClosers = measuredClosers();
+    if (lateClosers.length > 0) return { closing: true, closerLines: lateClosers };
+  }
+
   const closing = shouldClose({
     sessionMin,
     personaMinuteOfDay: minuteOfDay(input.now, timeZone),
     profile,
     closedThisSession,
   });
-  /**
-   * The closers are material, like the other lines measured from the
-   * records. A line the user asked to remove for harm must not come
-   * back through the closing block after the exemplar and conflict
-   * blocks have already filtered it.
-   */
-  const closers = closing
-    ? filterHarm(
-        profile.closers.map((row) => ({ content: row.text, role: "assistant" as const })),
-        input.persona.personaData as { harmReport?: never } | null,
-      )
-        .slice(0, CLOSER_PROMPT_MAX)
-        .map((row) => row.content)
-    : [];
-  return { closing, closerLines: closers };
+  return { closing, closerLines: closing ? measuredClosers() : [] };
 }
 
 function conflictMaterialForTurn(

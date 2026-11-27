@@ -349,6 +349,18 @@ export default function Chat() {
     replyToMessageId: number;
   } | null>(null);
   const [currentState, setCurrentState] = useState("warm");
+  /**
+   * The middle of the night (C10.5).
+   *
+   * The server says so on the turn that knows the session's length; the
+   * page then darkens itself and stops moving. It is not a setting and
+   * it is not remembered: it belongs to this conversation tonight.
+   */
+  const [nightMode, setNightMode] = useState(false);
+  useEffect(() => {
+    // A different conversation is a different night.
+    setNightMode(false);
+  }, [personaId]);
 
   const [showStatePanel, setShowStatePanel] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -1067,6 +1079,7 @@ export default function Chat() {
               // protocol — but nothing read it, so the most serious moment
               // the app handles looked exactly like any other message.
               if (info.crisis) setShowCrisis(true);
+              if (info.lateNight) setNightMode(true);
             },
             onError: (message) => {
               toast.error(t("chat.interrupted", { message }));
@@ -1209,6 +1222,7 @@ export default function Chat() {
          * nothing.
          */
         if (result.crisis) setShowCrisis(true);
+        if ((result as { lateNight?: boolean }).lateNight) setNightMode(true);
         if (result.careNote?.showBanner) toast.info(careBannerText(result.careNote, t));
       }
     } catch (err) {
@@ -1849,6 +1863,7 @@ export default function Chat() {
     <div
       className="h-dvh bg-background flex flex-col relative chat-root"
       data-skin={skin.theme}
+      data-night={nightMode ? "true" : undefined}
       style={
         skin.background
           ? {
@@ -2378,6 +2393,7 @@ export default function Chat() {
                 userName={user?.name || t("common.me")}
                 showMood={showMood}
                 personaId={personaId}
+                night={nightMode}
                 onRegenerate={handleRegenerate}
                 onEdit={handleEditMessage}
                 onDelete={handleDeleteMessage}

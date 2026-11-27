@@ -9942,6 +9942,34 @@ export async function touchMemoryRecalled(id: number, userId: number, at: Date) 
 // ─── Message window helpers ────────────────────────────────────────────────
 
 /** Messages for a persona within a time window, oldest first. */
+/**
+ * When the persona last closed the conversation in its own words (C10.5).
+ *
+ * A closing is stored as `metadata.closing` on the assistant message.
+ * The late-night rule uses the time of the last one to know whether the
+ * user has kept going for another half hour after being told goodnight.
+ */
+export async function getLastClosingMessageAt(
+  personaId: number,
+  userId: number,
+): Promise<Date | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db
+    .select({ at: messages.createdAt })
+    .from(messages)
+    .where(and(
+      isNull(messages.deletedAt),
+      eq(messages.personaId, personaId),
+      eq(messages.userId, userId),
+      eq(messages.role, "assistant"),
+      sql`${messages.metadata}->>'closing' = 'true'`,
+    ))
+    .orderBy(desc(messages.createdAt))
+    .limit(1);
+  return rows[0]?.at ?? null;
+}
+
 export async function getMessagesSince(
   personaId: number,
   userId: number,

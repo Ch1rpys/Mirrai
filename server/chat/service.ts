@@ -34,7 +34,12 @@ import { effectiveStyleProfile } from "@shared/style-profile";
 import { retrieveMemories } from "./retrieval";
 import { buildCrisisResponse, buildGentleCheckIn, detectCrisis } from "../safety/crisis";
 import { detectCrisisExtended, type ExtendedCrisisDetection } from "../safety/crisis-extended";
-import { evaluateUsage, pickCareNote, type CareNote } from "../safety/usage-monitor";
+import {
+  evaluateUsage,
+  pickCareNote,
+  LATE_NIGHT_CONTINUATION_MS,
+  type CareNote,
+} from "../safety/usage-monitor";
 import { assessTrajectory, getStoredTrajectory } from "../safety/trajectory";
 import { checkGraduationEligibility } from "../_core/persona-utils";
 import { worseStreakFor } from "../safety/checkins";
@@ -146,6 +151,12 @@ export type ChatEvent =
       graduationSuggested: boolean;
       careNote: CareNote | null;
       crisis: boolean;
+      /**
+       * It is the middle of the user's night, this session has been
+       * running a while, and the interface should turn itself down
+       * (C10.5).
+       */
+      lateNight?: boolean;
       /**
        * Messages the reply carried besides its words: a sticker today,
        * a photograph in B7.9. They are stored after the text, and the
@@ -1474,7 +1485,8 @@ async function* runConversationTurn(
    * filed under the day before, and the safety count for the day was
    * off by an hour's worth of messages.
    */
-  const dayStart = zonedDayStart(now, await db.getUserTimezone(userId));
+  const userTimezone = await db.getUserTimezone(userId).catch(() => null);
+  const dayStart = zonedDayStart(now, userTimezone);
 
   let storedUserMessageId: number | null = options.storedUserMessageId ?? null;
   /**
@@ -1650,10 +1662,33 @@ async function* runConversationTurn(
     userId,
     await db.getUserTimezone(userId).catch(() => null),
   );
+  /**
+   * The usage signals are read before the plan (C10.5).
+   *
+   * Late-night use changes what this turn is: at two in the morning a
+   * persona with a closing habit says goodnight instead of waiting for
+   * the measured hour. That decision is part of the prompt, so the
+   * signals have to be known before `planTurn` builds it.
+   *
+   * A safety layer that cannot answer says nothing — it must not take
+   * the conversation down with it.
+   */
+  let signals: Awaited<ReturnType<typeof evaluateUsage>> | undefined;
+  try {
+    signals = await evaluateUsage({
+      userId,
+      personaId: persona.id,
+      now: now.getTime(),
+      timezone: userTimezone,
+    });
+  } catch (e) {
+    console.warn("[Safety] Could not evaluate the usage:", e);
+  }
   const turnInput = {
     persona,
     userId,
     budgetOver,
+    lateNight: signals?.lateNight === true,
     userMessage: message,
     retrievalQuery,
     history: [] as Array<{ role: "user" | "assistant"; content: string }>,
@@ -2093,44 +2128,64 @@ async function* runConversationTurn(
     }
   }
 
-  /**
-   * The user's own time zone.
-   *
-   * The limits are the user's: "five messages a day" means five messages
-   * in the user's day, not in the server's.
-   */
-  const usageTimezone = await db.getUserTimezone(userId);
-
   // The care note is decided before the reply is stored, so it can be part
   // of what the persona actually says — the plan asks for the persona itself
   // to say the caring words, not for a separate system notice.
-  /**
-   * The signals.
-   *
-   * The evaluation was not guarded — and it runs *after* the reply has
-   * been produced and *before* it is stored. So a transient database
-   * error in the safety layer turned a reply that had already been
-   * written into a failure: the user's message was stored, the reply
-   * was not, and the transcript kept their words with nothing under
-   * them.
-   *
-   * A safety layer that cannot answer is a safety layer that says
-   * nothing — it must not take the conversation down with it.
-   */
-  let signals: Awaited<ReturnType<typeof evaluateUsage>> | undefined;
-  try {
-    signals = await evaluateUsage({
-      userId,
-      personaId: persona.id,
-      now: now.getTime(),
-      timezone: usageTimezone,
-    });
-  } catch (e) {
-    console.warn("[Safety] Could not evaluate the usage:", e);
-  }
-  const pickedNote = signals
+  let pickedNote = signals
     ? pickCareNote(signals, locale, { memorial: isMemorial(persona) })
     : null;
+  /**
+   * The user kept talking after the persona said goodnight (C10.5).
+   *
+   * A closing is a line, not a lock: the user may well answer it and
+   * carry on. Half an hour later the app says its own long-session line
+   * once — in the system's voice, because the persona has already said
+   * goodnight in its own. The closing has to fall inside this session,
+   * or a new conversation an hour later would be treated as its tail.
+   */
+  let continuationNote = false;
+  if (!pickedNote && signals) {
+    let lastClosingAt: Date | null = null;
+    try {
+      lastClosingAt = await db.getLastClosingMessageAt(persona.id, userId);
+    } catch {
+      lastClosingAt = null;
+    }
+    const sessionStartAt = now.getTime() - signals.sessionDurationMs;
+    if (
+      lastClosingAt
+      && now.getTime() - lastClosingAt.getTime() >= LATE_NIGHT_CONTINUATION_MS
+      && sessionStartAt <= lastClosingAt.getTime()
+    ) {
+      /**
+       * Once per closing.
+       *
+       * The condition stays true for every turn after the half hour,
+       * so the marker on the message that carried the line is what
+       * keeps the night from being noticed at every message.
+       */
+      const recent = await db
+        .getMessagesSince(persona.id, userId, new Date(sessionStartAt))
+        .catch(() => [] as Array<{ metadata?: unknown }>);
+      const alreadySaid = recent.some((row) => {
+        const meta = row.metadata as { systemContinuation?: unknown } | null | undefined;
+        return Boolean(meta && typeof meta === "object" && meta.systemContinuation === true);
+      });
+      if (!alreadySaid) {
+        continuationNote = true;
+        pickedNote = {
+          kind: "long_session",
+          text: copy(locale, isMemorial(persona)
+            ? "labels.care.longSession.memorial"
+            : "labels.care.longSession"),
+          textKey: isMemorial(persona)
+            ? "safety.care.longSession.memorial"
+            : "safety.care.longSession",
+          showBanner: false,
+        };
+      }
+    }
+  }
 
   /**
    * The note is said once a day.
@@ -2370,6 +2425,7 @@ async function* runConversationTurn(
     ...(twoStage === "fallback" ? { twoStage: "fallback" as const } : {}),
     ...(emotionMeta ? { emotion: emotionMeta } : {}),
     ...(plan.closing ? { closing: true } : {}),
+    ...(continuationNote ? { systemContinuation: true } : {}),
     ...(plan.routine ? { routine: plan.routine } : {}),
     ...(delayMeta ? { delay: delayMeta } : {}),
     ...(options.fromReplyJob
@@ -2686,7 +2742,7 @@ async function* runConversationTurn(
    *
    * The user's day is used, and the snapshot is written under it.
    */
-  const timezone = usageTimezone;
+  const timezone = userTimezone;
   const todayStr = zonedDateKey(now, timezone) || localDateKey(now);
   // The lookup has to be under the same day the snapshot is written
   // under, or the "one a day" guard fires against the wrong row.
@@ -2823,6 +2879,7 @@ async function* runConversationTurn(
     graduationSuggested,
     careNote,
     crisis: false,
+    lateNight: signals?.lateNight === true,
     recalled,
     ...(plan.routine ? { routine: plan.routine } : {}),
     ...(claims && claims.length > 0 ? { claims } : {}),

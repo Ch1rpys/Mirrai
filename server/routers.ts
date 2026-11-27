@@ -3444,6 +3444,7 @@ export const appRouter = router({
         let graduationSuggested = false;
         let careNote = null;
         let crisis = false;
+        let lateNight = false;
         let choice: { options: [string, string]; replyToMessageId: number } | null = null;
         let failure: string | null = null;
         /**
@@ -3507,6 +3508,7 @@ export const appRouter = router({
               graduationSuggested = event.graduationSuggested;
               careNote = event.careNote;
               crisis = event.crisis;
+              lateNight = event.lateNight === true;
               if (event.extra && event.extra.length > 0) extra = event.extra;
               if (event.voice) {
                 voice = event.voice;
@@ -3540,6 +3542,7 @@ export const appRouter = router({
             graduationSuggested,
             careNote,
             crisis,
+            lateNight,
             failed: true,
           };
         }
@@ -3575,6 +3578,7 @@ export const appRouter = router({
               graduationSuggested,
               careNote,
               crisis,
+              lateNight,
               failed: true,
             };
           }
@@ -3604,6 +3608,7 @@ export const appRouter = router({
           graduationSuggested,
           careNote,
           crisis,
+          lateNight,
           choice,
           failed: false,
           superseded,

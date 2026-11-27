@@ -8,7 +8,7 @@
  */
 import * as db from "../db";
 import { copy } from "@shared/copy";
-import { zonedDateKey, zonedDayStart } from "@shared/timezone";
+import { zonedDateKey, zonedDayStart, zonedHour } from "@shared/timezone";
 import type { Locale } from "@shared/copy";
 
 /** A single unbroken conversation longer than this triggers a check-in. */
@@ -24,6 +24,24 @@ export const SESSION_GAP_MS = 30 * 60 * 1000;
 
 /** More than this many messages in a day triggers a check-in. */
 export const DAILY_MESSAGE_LIMIT = 5;
+
+/**
+ * The hours a conversation counts as late night (C10.5).
+ *
+ * The clock is the user's, not the server's: midnight to five in their
+ * own zone.
+ */
+export const LATE_NIGHT_START_HOUR = 0;
+export const LATE_NIGHT_END_HOUR = 5;
+
+/** A session longer than this at those hours is late-night use. */
+export const LATE_NIGHT_SESSION_MS = 45 * 60 * 1000;
+
+/**
+ * How long after the persona says goodnight the night counts as
+ * carrying on anyway (C10.5).
+ */
+export const LATE_NIGHT_CONTINUATION_MS = 30 * 60 * 1000;
 
 /** Dependency trend: recent frequency against the previous week. */
 export const DEPENDENCY_RATIO = 1.5;
@@ -50,6 +68,11 @@ export interface UsageSignals {
   dailyMessageCount: number;
   /** Whether the dependency trend looks like it is climbing. */
   dependencyRising: boolean;
+  /**
+   * It is the middle of the user's night and they have been talking for
+   * more than forty-five minutes (C10.5).
+   */
+  lateNight: boolean;
   /** Daily message counts for the last 15 days, oldest first. */
   dailyCounts: number[];
 }
@@ -172,10 +195,24 @@ export async function evaluateUsage(params: {
   const dependencyRising =
     (grewFromNothing || grewFromBefore) && risingConsecutively && spokeToday;
 
+  /**
+   * Late-night use (C10.5).
+   *
+   * The hour has to come from the user's own clock: two in the morning
+   * for them may be the middle of the server's day. And it only counts
+   * when the conversation has already been running for a while — a
+   * single message at 00:05 is not a night that got away from them.
+   */
+  const hour = zonedHour(now, timezone);
+  const lateNight = hour >= LATE_NIGHT_START_HOUR
+    && hour < LATE_NIGHT_END_HOUR
+    && sessionDurationMs > LATE_NIGHT_SESSION_MS;
+
   return {
     sessionDurationMs,
     dailyMessageCount,
     dependencyRising,
+    lateNight,
     dailyCounts,
   };
 }

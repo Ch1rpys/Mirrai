@@ -220,6 +220,35 @@ describe("Chat", () => {
     expect(screen.getByText("数字分身")).toBeInTheDocument();
   });
 
+  it("turns itself down when the server says it is the middle of the night (C10.5)", async () => {
+    streamChat.mockImplementation(async (options: {
+      callbacks: {
+        onDelta?: (text: string) => void;
+        onDone?: (info: Record<string, unknown>) => void;
+      };
+    }) => {
+      options.callbacks.onDelta?.("晚安");
+      options.callbacks.onDone?.({
+        messageId: 7,
+        emotionalState: "warm",
+        graduationSuggested: false,
+        careNote: null,
+        crisis: false,
+        lateNight: true,
+      });
+    });
+    const user = userEvent.setup();
+    const { container } = render(<Chat />);
+    expect(container.querySelector(".chat-root")?.getAttribute("data-night")).toBeNull();
+
+    await user.type(screen.getByRole("textbox", { name: "对 小A 说点什么..." }), "在吗");
+    await user.click(screen.getByRole("button", { name: "发送" }));
+
+    await waitFor(() => {
+      expect(container.querySelector(".chat-root")?.getAttribute("data-night")).toBe("true");
+    });
+  });
+
   it("puts the recordings entry in the header only for a memorial persona (C7.3)", () => {
     const label = translate("zh", "media.voicesEntry", { name: "小A" });
     const first = render(<Chat />);

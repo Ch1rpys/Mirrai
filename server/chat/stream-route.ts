@@ -266,6 +266,10 @@ async function handleChatStream(req: Request, res: Response): Promise<void> {
             graduationSuggested: event.graduationSuggested,
             careNote: event.careNote,
             crisis: event.crisis,
+            // The interface turns itself down when the user is up late
+            // (C10.5). The flag rides on `done` because only the turn
+            // that just happened knows the session's length.
+            ...(event.lateNight ? { lateNight: true } : {}),
             // Which memories went into this turn. The client reads them,
             // and the stream was the only place they were live — so the
             // chip that says what the persona recalled never appeared

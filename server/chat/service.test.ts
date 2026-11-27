@@ -29,6 +29,7 @@ const getLastMessageAt = vi.fn();
 const getMessageCountSince = vi.fn();
 const getDailyChatCounts = vi.fn();
 const getSessionStartAt = vi.fn();
+const getLastClosingMessageAt = vi.fn();
 const getUserMessageCountSince = vi.fn();
 const getUserMessageCountForPersonaSince = vi.fn();
 const getDailyUserChatCounts = vi.fn();
@@ -95,6 +96,7 @@ vi.mock("../db", () => ({
   getMessageCountSince: (...a: unknown[]) => getMessageCountSince(...a),
   getDailyChatCounts: (...a: unknown[]) => getDailyChatCounts(...a),
   getSessionStartAt: (...a: unknown[]) => getSessionStartAt(...a),
+  getLastClosingMessageAt: (...a: unknown[]) => getLastClosingMessageAt(...a),
   getUserMessageCountSince: (...a: unknown[]) => getUserMessageCountSince(...a),
   getUserMessageCountForPersonaSince: (...a: unknown[]) => getUserMessageCountForPersonaSince(...a),
   getDailyUserChatCounts: (...a: unknown[]) => getDailyUserChatCounts(...a),
@@ -249,6 +251,7 @@ describe("runConversation", () => {
     getMessageCountSince.mockResolvedValue(1);
     getDailyChatCounts.mockResolvedValue([]);
     getSessionStartAt.mockResolvedValue(new Date());
+    getLastClosingMessageAt.mockResolvedValue(null);
     getUserTimezone.mockResolvedValue(null);
     /**
      * The user, with the trajectory assessment on "auto".
@@ -1546,6 +1549,172 @@ describe("runConversation", () => {
     expect(stored?.[0].content).not.toContain(copy("zh", "labels.care.longSession"));
     expect(stored?.[0].metadata?.closing).toBe(true);
     expect(createSafetyEvent).toHaveBeenCalled();
+  });
+
+  it("closes the night before the measured hour, and keeps the system line out (C10.5)", async () => {
+    // 02:30 in Shanghai; the persona's measured p90 is four hours, so
+    // nothing but the hour itself would have closed this session.
+    const now = new Date("2026-01-14T18:30:00Z");
+    getUserTimezone.mockResolvedValue("Asia/Shanghai");
+    getSessionStartAt.mockResolvedValue(new Date(now.getTime() - 3 * 60 * 60 * 1000));
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona({
+        timezone: "Asia/Shanghai",
+        styleProfile: {
+          version: 1,
+          measuredAt: now.toISOString(),
+          recordsVersion: "80:80",
+          sessions: {
+            scenes: 30,
+            lengthMin: { median: 120, p90: 240 },
+            closeByThemRate: 0.8,
+            closers: [{ text: "晚安", n: 20 }],
+          },
+        },
+      }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      now,
+    })) {
+      events.push(event);
+    }
+    const done = events.find((e) => e.type === "done");
+    // The turn is a closing, so the system's long-session line is not
+    // spoken — but the event is still recorded.
+    expect(done?.careNote?.kind).toBe("long_session");
+    expect(done?.careNote?.text).toBe("");
+    expect((done as { lateNight?: boolean } | undefined)?.lateNight).toBe(true);
+    const stored = createMessage.mock.calls.find((call) => call[0].role === "assistant");
+    expect(stored?.[0].metadata?.closing).toBe(true);
+    expect(stored?.[0].content).not.toContain(copy("zh", "labels.care.longSession"));
+    expect(createSafetyEvent).toHaveBeenCalled();
+  });
+
+  it("leaves the system line in when there is no closing habit to fall back on (C10.5)", async () => {
+    const now = new Date("2026-01-14T18:30:00Z");
+    getUserTimezone.mockResolvedValue("Asia/Shanghai");
+    getSessionStartAt.mockResolvedValue(new Date(now.getTime() - 3 * 60 * 60 * 1000));
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona({ timezone: "Asia/Shanghai" }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      now,
+    })) {
+      events.push(event);
+    }
+    const done = events.find((e) => e.type === "done");
+    expect(done?.careNote?.kind).toBe("long_session");
+    expect(done?.careNote?.text).toBeTruthy();
+    const stored = createMessage.mock.calls.find((call) => call[0].role === "assistant");
+    expect(stored?.[0].metadata?.closing).toBeUndefined();
+    expect(stored?.[0].content).toContain(copy("zh", "labels.care.longSession"));
+  });
+
+  it("says the system line once when the night carries on after the closing (C10.5)", async () => {
+    const closingAt = new Date("2026-01-14T18:20:00Z"); // 02:20 Shanghai
+    const sessionStart = new Date(closingAt.getTime() - 60 * 60 * 1000);
+    const closingHabit = {
+      timezone: "Asia/Shanghai",
+      styleProfile: {
+        version: 1,
+        measuredAt: closingAt.toISOString(),
+        recordsVersion: "80:80",
+        sessions: {
+          scenes: 30,
+          lengthMin: { median: 30, p90: 240 },
+          closeByThemRate: 0.8,
+          closers: [{ text: "晚安", n: 20 }],
+        },
+      },
+    };
+    getUserTimezone.mockResolvedValue("Asia/Shanghai");
+    getSessionStartAt.mockResolvedValue(sessionStart);
+
+    // The turn that closes: an hour in, and it is past two in the morning.
+    getMessagesSince.mockResolvedValue([]);
+    getLastClosingMessageAt.mockResolvedValue(null);
+    const first = [];
+    for await (const event of runConversation({
+      persona: persona(closingHabit),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+      now: closingAt,
+    })) {
+      first.push(event);
+    }
+    const storedClosing = createMessage.mock.calls.find((call) => call[0].role === "assistant");
+    expect(storedClosing?.[0].metadata?.closing).toBe(true);
+
+    // Half an hour later the user is still there. The closing is already
+    // in this session and the system says its own line once.
+    const later = new Date(closingAt.getTime() + 35 * 60 * 1000);
+    getMessagesSince.mockResolvedValue([
+      {
+        id: 1,
+        role: "assistant",
+        content: "晚安",
+        createdAt: closingAt,
+        metadata: { closing: true },
+        origin: null,
+      },
+    ]);
+    getLastClosingMessageAt.mockResolvedValue(closingAt);
+    createMessage.mockClear();
+    const second = [];
+    for await (const event of runConversation({
+      persona: persona(closingHabit),
+      userId: 1,
+      message: "再聊会儿",
+      mode: "once",
+      now: later,
+    })) {
+      second.push(event);
+    }
+    const doneSecond = second.find((e) => e.type === "done");
+    expect(doneSecond?.careNote?.kind).toBe("long_session");
+    expect(doneSecond?.careNote?.text).toBeTruthy();
+    const storedSecond = createMessage.mock.calls.find((call) => call[0].role === "assistant");
+    expect(storedSecond?.[0].metadata?.systemContinuation).toBe(true);
+
+    // And a third turn does not repeat it.
+    const thirdAt = new Date(later.getTime() + 15 * 60 * 1000);
+    getMessagesSince.mockResolvedValue([
+      {
+        id: 1,
+        role: "assistant",
+        content: "晚安",
+        createdAt: closingAt,
+        metadata: { closing: true },
+        origin: null,
+      },
+      {
+        id: 2,
+        role: "assistant",
+        content: "夜深了，早点睡。",
+        createdAt: later,
+        metadata: { systemContinuation: true },
+        origin: null,
+      },
+    ]);
+    createMessage.mockClear();
+    const third = [];
+    for await (const event of runConversation({
+      persona: persona(closingHabit),
+      userId: 1,
+      message: "嗯",
+      mode: "once",
+      now: thirdAt,
+    })) {
+      third.push(event);
+    }
+    const doneThird = third.find((e) => e.type === "done");
+    expect(doneThird?.careNote?.text ?? "").toBe("");
+    expect(doneThird?.careNote?.kind ?? null).toBeNull();
   });
 
   it("refuses to talk to a persona that has graduated", async () => {

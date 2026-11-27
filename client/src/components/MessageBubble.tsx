@@ -328,6 +328,56 @@ function numericMessageId(id: Message["id"]): number | null {
   return match ? Number(match[1]) : null;
 }
 
+/**
+ * A sticker picture, frozen at its first frame when it is late (C10.5).
+ *
+ * A looping picture is a small, cheerful thing at seven in the evening
+ * and a small, moving thing at two in the morning. The browser gives no
+ * way to pause a GIF with CSS, so in night mode the first frame is drawn
+ * into a canvas and that still image is shown instead.
+ *
+ * When the drawing fails the picture stays a picture; a still frame is a
+ * courtesy, not a requirement.
+ */
+function StickerImage({ src, alt, night }: { src: string; alt: string; night?: boolean }) {
+  const [frozen, setFrozen] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!night) {
+      setFrozen(null);
+      return;
+    }
+    let cancelled = false;
+    const image = new Image();
+    image.onload = () => {
+      if (cancelled) return;
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth || 160;
+        canvas.height = image.naturalHeight || 160;
+        const context = canvas.getContext("2d");
+        if (!context) return;
+        context.drawImage(image, 0, 0);
+        setFrozen(canvas.toDataURL("image/png"));
+      } catch {
+        // A picture that cannot be drawn is left as it is.
+      }
+    };
+    image.src = src;
+    return () => {
+      cancelled = true;
+    };
+  }, [night, src]);
+
+  return (
+    <img
+      src={night ? frozen ?? src : src}
+      alt={alt}
+      className="max-w-[160px] max-h-[160px] rounded-md"
+    />
+  );
+}
+
 export function MessageBubble({
   msg,
   personaName,
@@ -346,6 +396,7 @@ export function MessageBubble({
   onTopic,
   starred,
   pinned,
+  night,
 }: {
   msg: Message;
   personaName: string;
@@ -391,6 +442,11 @@ export function MessageBubble({
   /** Whether this message is already starred / pinned. */
   starred?: boolean;
   pinned?: boolean;
+  /**
+   * It is late for the user (C10.5): moving pictures stop, and the page
+   * around them is darker.
+   */
+  night?: boolean;
 }) {
   const { t, locale } = useLocale();
   const [unlikeOpen, setUnlikeOpen] = useState(false);
@@ -498,13 +554,7 @@ export function MessageBubble({
     if (isSticker) {
       const label = renderRecordContent({ kind: "sticker", content: msg.content }, locale);
       if (msg.mediaUrl) {
-        return (
-          <img
-            src={msg.mediaUrl}
-            alt={label}
-            className="max-w-[160px] max-h-[160px] rounded-md"
-          />
-        );
+        return <StickerImage src={msg.mediaUrl} alt={label} night={night} />;
       }
       return (
         <span className="inline-block rounded-md border border-border/70 px-2 py-1 text-xs text-muted-foreground">

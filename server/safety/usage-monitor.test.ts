@@ -13,6 +13,7 @@ vi.mock("../db", () => ({
 import {
   pickCareNote,
   evaluateUsage,
+  LATE_NIGHT_SESSION_MS,
   LONG_SESSION_MS,
   type UsageSignals,
 } from "./usage-monitor";
@@ -25,6 +26,7 @@ function signals(overrides: Partial<UsageSignals> = {}): UsageSignals {
     sessionDurationMs: 0,
     dailyMessageCount: 0,
     dependencyRising: false,
+    lateNight: false,
     dailyCounts: [],
     ...overrides,
   };
@@ -159,6 +161,62 @@ describe("evaluateUsage", () => {
     const result = await evaluateUsage({ userId: 1, personaId: 1, now: NOW });
 
     expect(result.sessionDurationMs).toBe(0);
+  });
+
+  it("notices a late-night session and nothing else (C10.5)", async () => {
+    // 02:30 in Shanghai, forty-six minutes into the conversation.
+    const late = Date.UTC(2026, 0, 14, 18, 30, 0);
+    getSessionStartAt.mockResolvedValue(new Date(late - LATE_NIGHT_SESSION_MS - 60_000));
+    const lateResult = await evaluateUsage({
+      userId: 1,
+      personaId: 1,
+      now: late,
+      timezone: "Asia/Shanghai",
+    });
+    expect(lateResult.lateNight).toBe(true);
+
+    // The same length in the afternoon is not the middle of the night.
+    const afternoon = Date.UTC(2026, 0, 15, 6, 30, 0); // 14:30 Shanghai
+    getSessionStartAt.mockResolvedValue(new Date(afternoon - LATE_NIGHT_SESSION_MS - 60_000));
+    const afternoonResult = await evaluateUsage({
+      userId: 1,
+      personaId: 1,
+      now: afternoon,
+      timezone: "Asia/Shanghai",
+    });
+    expect(afternoonResult.lateNight).toBe(false);
+
+    // Two in the morning but only ten minutes long: one message before bed
+    // is not a night that got away from them.
+    getSessionStartAt.mockResolvedValue(new Date(late - 10 * 60_000));
+    const shortResult = await evaluateUsage({
+      userId: 1,
+      personaId: 1,
+      now: late,
+      timezone: "Asia/Shanghai",
+    });
+    expect(shortResult.lateNight).toBe(false);
+  });
+
+  it("reads the night on the user's clock, not the server's (C10.5)", async () => {
+    // 18:30 UTC is 02:30 in Shanghai and the middle of the afternoon in
+    // New York — the same instant, two different answers.
+    const instant = Date.UTC(2026, 0, 14, 18, 30, 0);
+    getSessionStartAt.mockResolvedValue(new Date(instant - 60 * 60_000));
+    const shanghai = await evaluateUsage({
+      userId: 1,
+      personaId: 1,
+      now: instant,
+      timezone: "Asia/Shanghai",
+    });
+    const newYork = await evaluateUsage({
+      userId: 1,
+      personaId: 1,
+      now: instant,
+      timezone: "America/New_York",
+    });
+    expect(shanghai.lateNight).toBe(true);
+    expect(newYork.lateNight).toBe(false);
   });
 
   it("counts only the messages the user sent", async () => {

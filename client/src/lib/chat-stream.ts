@@ -43,6 +43,11 @@ export interface StreamDoneInfo {
   } | null;
   crisis: boolean;
   /**
+   * It is the middle of the user's night and the session has been
+   * running for a while (C10.5). The chat page turns itself down.
+   */
+  lateNight?: boolean;
+  /**
    * Messages the reply carried besides its words (B7.1 stickers).
    *
    * They are stored after the text, so they arrive after it and are

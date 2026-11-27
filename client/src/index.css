@@ -927,3 +927,27 @@ html[data-reduce-motion="true"] .surface-interactive:hover {
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
+
+/* ─── Late at night (C10.5) ──────────────────────────────────────────────── */
+/*
+ * The middle of the user's night and a long session: the conversation
+ * itself is unaffected, and the screen stops asking for attention. It is
+ * darker, nothing moves, the typing dots do not bounce and a looping
+ * sticker is shown as a still frame (that one is handled in
+ * MessageBubble, because CSS cannot pause a GIF).
+ *
+ * This is not a theme and it is not remembered: it lasts for the
+ * conversation that earned it.
+ */
+[data-night="true"] {
+  filter: brightness(0.84) saturate(0.9);
+}
+[data-night="true"] *,
+[data-night="true"] *::before,
+[data-night="true"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+[data-night="true"] .typing-dot {
+  opacity: 0.55;
+}
