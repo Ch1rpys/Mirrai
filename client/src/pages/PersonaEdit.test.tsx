@@ -54,7 +54,7 @@ vi.mock("@/lib/trpc", () => ({
       },
       getSettings: {
         useQuery: () => ({
-          data: { layers: { abPairs: false }, skin: { theme: "classic" } },
+          data: { layers: { abPairs: false }, skin: { theme: "classic" }, ldr: { city: { name: "上海", lat: 31.2, lng: 121.5, timezone: "Asia/Shanghai" }, weather: true } },
           isLoading: false,
           refetch: vi.fn(),
         }),
@@ -208,6 +208,15 @@ describe("editing a persona", () => {
         realismLevel: 30,
       },
     };
+  });
+
+  it("names the persona in the weather switch, not TA (C5.2)", () => {
+    // LdrSettings fell back to 「TA」 because the page never passed the
+    // name: the switch said 「显示 TA 那边的天气」 on a page that knows
+    // exactly who this is.
+    render(<PersonaEdit />);
+    expect(screen.getByText(translate("zh", "ldr.weatherToggle", { name: "小A" }))).toBeInTheDocument();
+    expect(screen.queryByText(translate("zh", "ldr.weatherToggle", { name: "TA" }))).toBeNull();
   });
 
   it("uses the memorial words for the two dates (C7.1)", () => {
