@@ -35,6 +35,7 @@ import {
   softDeletePersona, restorePersona, listDeletedPersonas, purgePersona,
   createConsentRemoval,
   getPersonaByIdIncludingDeleted,
+  getActiveShareForMemberPersona,
   getPersonasWithStats, getUserStats, getUserMilestones, getRecentActivity, getDailyChatCounts,
   createPersonaFile, getFilesByPersonaId, deletePersonaFile,
   createMessage,
@@ -145,7 +146,7 @@ import {
   pickClarifications,
 } from "@shared/clarify";
 import { normalizeImperfectionDrafts } from "@shared/imperfection-draft";
-import { normalizeStyleProfile } from "@shared/style-profile";
+import { effectiveStyleProfile, normalizeStyleProfile } from "@shared/style-profile";
 import { collectEvidence } from "@shared/evidence-map";
 import type { PersonaData } from "./_core/persona-schema";
 import { isChatImportFileType, startImport } from "./importers";
@@ -519,7 +520,7 @@ async function readDistillationMaterial(
  */
 function hasDistillationMaterial(material: DistillationMaterial): boolean {
   const uploadedText = material.files
-    .filter((f) => f.fileType === "chat_txt" || f.fileType === "chat_csv")
+    .filter((f) => f.fileType === "chat_txt" || f.fileType === "chat_csv" || f.fileType === "chat_export")
     .filter((f) => !isMonologueFile(f))
     .map((f) => f.extractedMemory || "")
     .join("\n")
@@ -633,7 +634,7 @@ async function startPersonaDistillation(params: {
     const material = params.material ?? (await readDistillationMaterial(personaId, userId));
     const files = material.files;
     const uploadedText = files
-      .filter((f) => f.fileType === "chat_txt" || f.fileType === "chat_csv")
+      .filter((f) => f.fileType === "chat_txt" || f.fileType === "chat_csv" || f.fileType === "chat_export")
       // A monologue is read from its records, for content only; its raw
       // text must not become a chat transcript (C1.8).
       .filter((f) => !isMonologueFile(f))
@@ -2467,7 +2468,27 @@ export const appRouter = router({
         // comes back as "not found" rather than being silently wiped.
         const persona = await getPersonaById(input.id, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
-        assertPersonaWritable(persona, ctx.locale);
+        /**
+         * A member's own row is theirs (C7.2).
+         *
+         * The identity is the owner's, but the conversations, memories and
+         * letters in the member's row were written by the member — the page
+         * promises they can take them out or delete them. The delete was
+         * refused for every shared row, so after the owner stopped sharing,
+         * the one thing the member could not do with their own row was
+         * delete it. While the share is still active the route keeps
+         * refusing: leaving is the way out of a live share, and it keeps the
+         * row and its conversations.
+         */
+        if (persona.sharedFromPersonaId) {
+          const active = await getActiveShareForMemberPersona(persona.id, ctx.user.id);
+          if (active) throw new TRPCError({
+            code: "FORBIDDEN",
+            message: copy(ctx.locale, "errors.sharedReadOnly"),
+          });
+        } else {
+          assertPersonaWritable(persona, ctx.locale);
+        }
         const deleted = await softDeletePersona(input.id, ctx.user.id);
         if (!deleted) throw new TRPCError({ code: "NOT_FOUND" });
         return { success: true };
@@ -4025,8 +4046,17 @@ export const appRouter = router({
           const persona = await getPersonaById(input.personaId, ctx.user.id);
           if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
           const { prosodyDirection } = await import("./chat/voice-note");
+          /**
+           * The effective profile, like every other read path (C10.6).
+           *
+           * This was the one read-aloud path still reading the raw
+           * style profile — so a voice measurement the user had turned
+           * off (「不用这一项」) kept setting the pace and the pauses.
+           */
           const direction = prosodyDirection(
-            (persona as { styleProfile?: unknown }).styleProfile,
+            effectiveStyleProfile(
+              persona as { styleProfile?: unknown; settings?: unknown },
+            ),
             input.locale,
           );
           if (direction) {

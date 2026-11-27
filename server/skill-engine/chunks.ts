@@ -376,6 +376,16 @@ export function renderChunkBody(
   return parts.join("\n");
 }
 
+/**
+ * How many structured rows the chunked map stage needs (B1.1).
+ *
+ * Below it the analysis makes one call over the start of the transcript;
+ * at or above it the blocks are cut, sampled and mapped. The estimate and
+ * the pipeline have to use the same number, or the upload page promises a
+ * map stage the run will not make.
+ */
+export const MIN_RECORDS_FOR_CHUNKED = 200;
+
 /** The seed that makes the same record pick the same blocks again. */
 export function distillChunkSeed(personaId: number, chunkCount: number): string {
   return `distill:${personaId}:${chunkCount}`;

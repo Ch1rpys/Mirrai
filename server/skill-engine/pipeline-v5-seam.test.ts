@@ -223,6 +223,30 @@ describe("the v5 seam on a named transcript", () => {
     );
   }, 60_000);
 
+  it("reads the records in the small-history analysis path too (B1.1)", async () => {
+    // Below two hundred rows the pipeline still makes a single analyser
+    // call instead of the chunked map stage. It used to read only
+    // `chatContent`, which the upload entry point no longer fills with
+    // the records — so a 120-row persona was analysed from nothing.
+    const small = fixture.slice(0, 120);
+    await runSkillPipeline({
+      ...baseInput,
+      chatContent: "",
+      records: small.map((row) => ({
+        id: row.id,
+        role: row.role,
+        content: row.content,
+        timestamp: row.timestamp,
+        kind: row.kind,
+      })),
+    });
+    const requests = invoke.mock.calls.map((call) => payloadText(call[0])).join("\n");
+    const sample = small.find((row) => row.role === "assistant" && row.content.trim().length >= 4);
+    expect(sample).toBeTruthy();
+    expect(requests).toContain(sample!.content.trim());
+    expect(requests).not.toContain("暂无聊天记录");
+  }, 60_000);
+
   it("mines the same layers from structured records, with the fixture's own times", async () => {
     await runSkillPipeline({
       ...baseInput,

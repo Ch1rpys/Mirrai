@@ -86,7 +86,13 @@ import { parseExportTime } from "../importers/normalize";
 import { copy, type CopyKey, type Locale } from "@shared/copy";
 import { extractMemories } from "../chat/memory-extract";
 import { storageToDataUrl } from "../storage";
-import { chunkRecords, renderChunkForModel, type RecordLine } from "./chunks";
+import {
+  MIN_RECORDS_FOR_CHUNKED,
+  chunkRecords,
+  renderChunkBody,
+  renderChunkForModel,
+  type RecordLine,
+} from "./chunks";
 import { DistillationMapFailed, mapObservationCards } from "./observations";
 import { confirmHarmFromRecords } from "./harm";
 import { mergeHarmDecision } from "@shared/harm";
@@ -105,8 +111,7 @@ import { registerSkillPrompts } from "@shared/copy/skill-prompts";
  * given a window, not the whole file.
  */
 const MEMORY_EXTRACTION_MESSAGE_LIMIT = 50;
-/** Below this, the analysis still reads the start of the transcript. */
-const MIN_RECORDS_FOR_CHUNKED = 200;
+/* The threshold lives in `chunks.ts` so the estimate uses the same one. */
 
 // The prompt dictionary is assembled in `shared/copy/index.ts`. Registering it
 // here as well means `copy()` finds these keys whether or not that wiring
@@ -1541,6 +1546,24 @@ async function runSkillPipelineOnce(
       } else {
         const analyzerPrompt = loadPrompt(characterFamily, "persona_analyzer", effectiveProfile);
         const chatSample = chatContent.slice(0, preset.chatSampleLimit);
+        /**
+         * The start of the records, when the history is short (B1.1).
+         *
+         * Below two hundred rows the block map never runs, and the one
+         * analyser call read `chatContent` alone. The upload entry point
+         * no longer puts the record table into `chatContent`, so a
+         * persona imported through the wizard or the CLI — the normal
+         * way to get 1–199 rows — was analysed from nothing. This is the
+         * same stretch of conversation the older transcript path read:
+         * the beginning, capped by the preset.
+         */
+        const recordsSample = recordChunks.length > 0
+          ? renderChunkBody(recordChunks[0], {
+              locale,
+              timeZone: input.timeZone,
+              themName: name,
+            }).slice(0, preset.chatSampleLimit)
+          : "";
         const chatBlock = writtenOnlyMaterial
           ? [
               copy(locale, "skillPrompts.pipeline.writtenOnlyAnalysis", { name }),
@@ -1552,7 +1575,7 @@ async function runSkillPipelineOnce(
                 }),
               ),
             ].join("\n\n")
-          : chatSample || copy(locale, "skillPrompts.pipeline.noChatBlock");
+          : recordsSample || chatSample || copy(locale, "skillPrompts.pipeline.noChatBlock");
         const analysisMaterial = research
           ? [
               chatBlock,

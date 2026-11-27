@@ -10,6 +10,7 @@ import {
 } from "@shared/distillation-modes";
 import * as db from "../db";
 import {
+  MIN_RECORDS_FOR_CHUNKED,
   chunkRecords,
   distillChunkSeed,
   takeChunkBudget,
@@ -145,6 +146,29 @@ export async function estimateDistillationForPersona(params: {
       const line = asRecordLine(row as Parameters<typeof asRecordLine>[0]);
       if (line) rows.push(line);
     }
+  }
+  const preset = getDistillationPreset(params.mode);
+  /**
+   * The small-history path is not the chunked path (B1.1).
+   *
+   * Below two hundred rows the run makes one analyser call over the
+   * start of the transcript and no map/reduce calls. Estimating it as if
+   * the blocks were mapped promised "reads 1 block, calls the model 5
+   * times" for a run that did neither.
+   */
+  if (rows.length > 0 && rows.length < MIN_RECORDS_FOR_CHUNKED) {
+    const chunks = chunkRecords(rows, {
+      timeZone: params.timeZone,
+      themName: params.themName,
+    });
+    const first = chunks[0];
+    return {
+      chunks: first ? 1 : 0,
+      chars: first ? Math.min(first.chars, preset.chatSampleLimit) : 0,
+      mapCalls: 0,
+      reduceCalls: 0,
+      calls: preset.approxCalls,
+    };
   }
   const chunks = chunkRecords(rows, {
     timeZone: params.timeZone,

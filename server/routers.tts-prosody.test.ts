@@ -91,6 +91,23 @@ describe("reading aloud with prosody", () => {
     expect(generateTTS).toHaveBeenCalledWith("在吗", undefined, 1, {});
   });
 
+  it("reads neutrally when the user turned the voice measurement off (C10.6)", async () => {
+    // 「不用这一项」 means this measured habit is not used on any read
+    // path. The read-aloud was the one place that still read the raw
+    // style profile, so a disabled voice measurement kept shaping the
+    // pace and the pauses.
+    getPersonaById.mockResolvedValue({
+      ...persona,
+      settings: { disabledProfiles: ["voice"] },
+    });
+    await appRouter.createCaller(ctxFor(1)).chat.tts({
+      text: "在吗 我到家了...",
+      personaId: 5,
+      locale: "zh",
+    });
+    expect(generateTTS).toHaveBeenCalledWith("在吗 我到家了...", undefined, 1, {});
+  });
+
   it("does not read somebody else's persona", async () => {
     getPersonaById.mockResolvedValue(undefined);
     await expect(

@@ -305,6 +305,28 @@ describe("distilling a persona", () => {
     expect(estimate.mapCalls).toBe(chunks.length);
   });
 
+  it("does not claim map calls the small-history path will not make (B1.1)", async () => {
+    // Under two hundred rows the run makes one analyser call, not a map
+    // call per block. The estimate used to compute the chunked cost for
+    // every history size, so the upload page promised "reads 1 block,
+    // calls the model 5 times" for a run that called it 4 times and did
+    // no map stage at all.
+    const { buildXiaomanRecords } = await import("./test-fixtures/xiaoman");
+    const small = buildXiaomanRecords().slice(0, 120);
+    iterateRecords.mockImplementation(async function* () {
+      for (const row of small) yield row;
+    });
+
+    const estimate = await appRouter
+      .createCaller(ctxFor(1))
+      .skillEngine.estimate({ personaId: 5, mode: "deep" });
+
+    expect(estimate.mapCalls).toBe(0);
+    expect(estimate.reduceCalls).toBe(0);
+    expect(estimate.chunks).toBe(1);
+    expect(estimate.calls).toBe(4);
+  });
+
   it("refuses a run that would go over MAX_DISTILL_CALLS", async () => {
     const previous = process.env.MAX_DISTILL_CALLS;
     process.env.MAX_DISTILL_CALLS = "1";

@@ -413,3 +413,45 @@ describe.skipIf(!DATABASE_URL)("a shared persona's owner deletes it", () => {
     }
   });
 });
+
+describe.skipIf(!DATABASE_URL)("a member's own row after the share ends (C7.2)", () => {
+  it("is theirs to delete once the owner has stopped sharing", async () => {
+    const stamp = Date.now() + Math.floor(Math.random() * 10_000);
+    const ownerId = await createUser({ username: `share-del2-owner-${stamp}`, passwordHash: "x", name: "主人" });
+    const memberId = await createUser({ username: `share-del2-member-${stamp}`, passwordHash: "x", name: "家人" });
+    const ownerPersonaId = await createPersona({ userId: ownerId, name: "小满", analysisStatus: "ready" });
+    let memberPersonaId: number | undefined;
+    try {
+      const token = `token-del2-${stamp}`;
+      await createPersonaShare({
+        ownerUserId: ownerId,
+        personaId: ownerPersonaId,
+        tokenHash: hashToken(token),
+        status: "invited",
+        expiresAt: new Date(Date.now() + 86_400_000),
+      } as never);
+      const accepted = await acceptPersonaShare(hashToken(token), memberId);
+      expect(accepted).toBeTruthy();
+      memberPersonaId = accepted!.personaId;
+
+      // While the share is active the member leaves; they do not delete.
+      const memberCaller = appRouter.createCaller(ctxFor(memberId));
+      await expect(
+        memberCaller.persona.delete({ id: memberPersonaId! }),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+      // The owner stops sharing. The member's row, and the conversations
+      // in it, are theirs — the promise is that they can export or
+      // delete it.
+      const share = await listPersonaShares(ownerPersonaId, ownerId);
+      expect(await revokePersonaShare(share[0]!.id, ownerId)).toBe(true);
+      await expect(
+        memberCaller.persona.delete({ id: memberPersonaId! }),
+      ).resolves.toEqual({ success: true });
+      expect(await getPersonaById(memberPersonaId!, memberId)).toBeFalsy();
+    } finally {
+      if (memberPersonaId) await purgePersona(memberPersonaId, memberId).catch(() => undefined);
+      await purgePersona(ownerPersonaId, ownerId).catch(() => undefined);
+    }
+  }, 30_000);
+});
