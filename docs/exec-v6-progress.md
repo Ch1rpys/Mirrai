@@ -191,7 +191,7 @@
 | C10.4 | ✅ | 796cb87 | `server/no-surveillance.test.ts` 5 通过：调度器不 import 采集器；`server/records/**`、`record.ts`、`style.ts` 不 import 采集器/通道/微信；`channels`/`wechat` 不调用 `importRecords`；`CollectorSourceId` 恰为五个；`schema.ts` 没有 `lastSeen`/`onlineStatus`/`readReceipt`/`liveLocation` 列。把 `import "../collectors/jobs"` 追加进 `server/scheduler/index.ts` 后 1 条红（`never starts a collector from the scheduler`），删掉后绿。文档：`docs/product-concept.md` 5.1 有守则、5.8 表有落地行；README 伦理节有链接。 |
 | C10.5 | ✅ | 1d93e00 | `server/safety/usage-monitor.test.ts` 32 通过（新增 2 条）：上海 02:30、会话 46 分钟 → `lateNight: true`；同长度在 14:30 → false；02:00 但只聊了 10 分钟 → false；同一个 UTC 时刻（18:30Z）按 `Asia/Shanghai` 是深夜、按 `America/New_York` 是下午 → true/false。`server/chat/service.test.ts` 100 通过（新增 3 条）：凌晨 3 小时会话、画像 p90 是 240 分钟（按普通规则不会到点）→ 这一轮 `metadata.closing` 为 true、`done.lateNight` 为 true、`done.careNote.kind` 是 `long_session` 但 `text` 为空、落库文本不含 `labels.care.longSession`、`createSafetyEvent` 仍被调用；分身上没有 sessions 画像 → `careNote.text` 非空、落库文本含系统那句、`metadata.closing` 未设；收尾后 35 分钟再发 → `done.careNote` 是 `long_session` 且文本非空、落库消息 `metadata.systemContinuation` 为 true，第三次（再 +15 分钟）`careNote` 为空、不再重复。`client/src/pages/Chat.test.tsx` 11 通过（新增 1 条）：初始 `.chat-root` 无 `data-night`，`done` 事件带 `lateNight: true` 后变成 `data-night="true"`。免打扰：现有 `proactive-sweep.test.ts`「stays quiet in the quiet hours」与 `reply-jobs.test.ts`「cancels in quiet hours」通过；默认 `REMINDER_QUIET_HOURS=23:00-08:00` 覆盖 0–5，主动开口与追一句两条路都经过 `isQuietHour`，不需要改。样式：`[data-night="true"]` 压暗并去掉所有 animation/transition，`typing-dot`/`breathing-dot` 不再跳；GIF 表情在 `MessageBubble` 里用 canvas 画第一帧成静态图（CSS 停不了 GIF），canvas 不可用时保留原图。闸门：`690 passed \| 25 skipped (715)` 文件、`5836 passed \| 122 skipped (5958)` 用例、`all six steps passed`；相对 C10.3 收尾（690/25/715、5830/122/5952）用例 +6，跳过不变。 |
 | C10.6 | ✅ | 3a24703 (filter/chat); 6982579 (view/page) | `server/inference/list.test.ts` 9 通过：`STYLE_PROFILE_KEYS_MATCH_INTERFACE` 为真且名单冻结成 28 个；每个键在中英两侧都有说明且不是键名本身；全键 styleProfile 夹具的每一条测量都有条目（`disabled` 标记与 `toggleStyleKey` 动作）；`people`/`stances`/`lexicon`/`microRules`/`suppressions`/`lifeEvents` 六类候选都有条目，未确认的 `source: "mined"` 带 `rejectCandidate`、已确认的 `source: "confirmed"`；人设散文段是 `written` + `editPersona`；记忆按 `them`/`me`/`said` 分到正确标签且都有 `deleteMemory`；关于我含称呼与边界、userSide、mirror、心情打卡、聊完之后的回答、安全事件、关于我的记忆、轨迹评估；空 persona 返回空 section 而不是隐藏；两个分身的数据不串。`server/routers-v6/inference.test.ts` 5 通过：`inference.list` 只回调用者自己的分身（两个账号各自只看到自己那个）、`disabledProfiles` 随分身返回、`rejectCandidate` 只删指定候选并走 `withPersonaDataLock`、别人的分身与不存在的候选都是 `NOT_FOUND`。`server/chat/style-profile-access.test.ts` 2 通过：`server/chat/**/*.ts` 生产文件里没有 `persona.styleProfile` 直读（构造的直读行能被扫描到，证明测试会红）。`server/chat/generate.test.ts` 77 通过（新增 1 条）：`settings.disabledProfiles: ["conflict"]` 时 distant 的提示词里没有 `prompt.coldLinesHeading` 和「哦。」，恢复后又有，两次只差这一个开关。`client/src/pages/Inferences.test.tsx` 8 通过：两块标题、四种来源徽标、读失败显示重试而不是空、展开看内容与依据、删记忆、拒绝候选、停用与恢复、去改人设。实现上 `effectiveStyleProfile` 现在真的按 `settings.disabledProfiles` 去掉键；`server/chat` 里 5 处直接读 `persona.styleProfile` 的地方（语音条、照片、表情、打电话、service 里传入 helper 的四处）改成读它；`shared/style-profile.ts` 加了编译期「接口 = `STYLE_PROFILE_KEYS`」断言。`inference.list` 一次返回「关于我」+ 每个分身两块；`inference.rejectCandidate` 是新增的写路由；停用/恢复复用 `persona.updateSettings` 的 `disabledProfiles`。闸门：`694 passed \| 25 skipped (719)` 文件、`5861 passed \| 122 skipped (5983)` 用例、`all six steps passed`；相对 C10.5 收尾（690/25/715、5836/122/5958）：文件 +4、用例 +25、跳过不变。 |
-| C10.7 | ⬜ |  |  |
+| C10.7 | ✅ | c95c483 | `server/records/provenance.test.ts` 8 通过：固定回法整条标成 `[0, len]` 并带记录 id 与日期；记录被删（搜索为空）时用已知的 `forcedRecordId` 兜底；模型三句里只有一句与记录逐字相同 → 只有那句被标、偏移正确；什么都不匹配 → 空数组；1–3 个字的句子不会因为「被包含」而被标，「我想你了」四个字才会（C2.3 规则）；写入用 `updateMessageMetadata`；查询抛错 → 返回 `null`、不写、不抛。`server/chat/service.test.ts` 103 通过（新增 3 条）：固定回法的助手消息拿到覆盖整条的 provenance（`start: 0`、`end: content.length`、`recordId: 11`）且 `invokeWithProvider` 一次都没调；模型回复「今天下雨了。我想你了。晚安」只标「我想你了」那一句、`recordId: 12`，模型只被调用 1 次（这一步 0 次）；查询抛错时消息照常落库、没有 provenance 写入。`server/chat/reply-jobs.test.ts` 39 通过（新增 1 条）：追一句落库后整条标成记录里的原话（`recordId` 来自字面检索）、模型调用次数不变。`client/src/components/MessageBubble.test.tsx` 41 通过（新增 4 条）：设置关着没有 `.provenance-word`、打开后只有「我想你了」带虚线下划线、其余文字照旧；`title` 含名字与 2023 的年月日、`href` 指到 `/persona/5/records?at=12`；存储的偏移已过时（消息被改短）时整条照常显示、不标。`client/src/pages/Chat.test.tsx` 13 通过（新增 2 条）：localStorage 的 `mirrai.provenance` 关着没有图例、开了出现「带下划线的是 小A 真的说过的」；从「更多操作」菜单打开后写进 localStorage 并立刻出现图例。实现：`shared/provenance.ts`（类型、`provenanceFromMetadata`、`provenanceSegments`）；`server/records/provenance.ts`（字面检索，不调模型/嵌入；失败只少一条下划线）；落库后对每条消息算一次，`done` 与 `/api/chat/stream` 的 `done` 把这条的 spans 带给客户端，历史轮询从 `metadata.provenance` 读。闸门：`695 passed \| 25 skipped (720)` 文件、`5879 passed \| 122 skipped (6001)` 用例、`all six steps passed`；相对 C10.6 收尾（694/25/719、5861/122/5983）：文件 +1、用例 +18、跳过不变。 |
 | P18.1 | ⬜ |  |  |
 | P18.2 | ⬜ |  |  |
 | P18.3 | ⬜ |  |  |
@@ -798,6 +798,9 @@
 | 573 | C10.6 | 「路由 `inference.list()`，一次返回」 | `list` 按手册返回两块；「候选 → 拒绝」新增 `inference.rejectCandidate`（手册没点名路由），「记忆 → 删除」复用 `memory.delete`，「不用这一项/恢复」复用 `persona.updateSettings` 的 `disabledProfiles`，「人设 → 跳到编辑页」是纯前端跳转 | 记忆与设置本来就有各自的路由；只有「拒绝候选」没有现成的通用写法，所以补一个只做这件事的路由。 |
 | 574 | C10.6 | 「每一项带：从哪来的（自动量的 / 自动挖的待确认 / 你确认的 / 你写的）」 | 有 `verified`/`source` 的挖掘物按真实状态标（`mined` / `confirmed` / `written`）；人设散文段（性格、说话方式等）没有逐字段的来源记录，统一标「你写的」；StyleProfile 全部标「从记录里量的」 | 数据库里没有「这段是谁写的」这一列；人设段落是用户可编辑的文档，标成写的比编一个来源诚实。这一点记在这里，若之后要精确到字段，得先加来源列。 |
 | 575 | C10.6 | 提交建议三个 | 实际两个：`3a24703` 生效的 profile 与 chat 侧改动；`6982579` copy 键 + 推断视图后端与页面 | 「新增 copy 键必须真的被读到」这条测试要求键和服务端/客户端读取在同一个可编译状态里；只含服务端的中间提交会因为 `inference.action.*` 还没人读而红。两个提交都能单独过 tsc/测试。 |
+| 576 | C10.7 | 做法 1「消息落库之后，后台算一次」 | 落库之后 `await` 算完再继续（失败吞掉、不影响消息），不是脱离请求的后台任务 | `done` 事件要把这条消息的 provenance 带给正在显示的气泡；彻底后台算的话新气泡要等下一次轮询才有下划线。消息已经落库，所以这一步失败只损失下划线。 |
+| 577 | C10.7 | 「固定回法、追一句、改错字补的那句：整条都是原话」 | 固定回法用 `plan.ritual.recordId` 直接整条标；追一句用字面检索找到记录 id 后整条标；改错字那句（`*正确词`）按「整条是原话」提交，但字面检索找不到 4 字以上的证据时不标 | 追一句的候选行和改错字对都没有携带记录 id，只有文本；字面检索是唯一不调模型的来源。 |
+| 578 | C10.7 | 做法 2「悬停或点按显示日期和『在记录里看』」 | 带下划线的片段是链接：`title` 是「{{name}} 在 {{date}} 说过这句」，点按/回车跳到 `/persona/:id/records?at=<recordId>`（阅读器定位到那条记录）；图例只在开关打开时出现 | 一个元素同时承担悬停提示与点按跳转；jsdom 里没有真正的悬停，测试断言 `title` 与 `href`。 |
 
 
 
@@ -930,6 +933,7 @@
 | C10.2 | 语义危机层的阈值（0.72/0.05）是照经验定的：本机没有 Ollama、没有嵌入模型，只用假嵌入验证了「余弦 ≥ 下限且比无害组高 0.05」这套规则的行为。真实 `bge-m3`（或 `OLLAMA_EMBED_MODEL`）下两组句子能否分开、阈值该取多少没量过 | 本机起 Ollama 并装嵌入模型，跑 `corepack pnpm crisis:semantic-thresholds`；按输出的 VERDICT 把 `server/safety/crisis-semantic.ts` 的 `CRISIS_FLOOR`/`SAFE_MARGIN` 调进分离区间，重跑 `server/safety/crisis-semantic.test.ts`。两组句子就是该文件的 `CRISIS_EXEMPLARS` 与 `SAFE_EXEMPLARS` | 有本机 Ollama 与嵌入模型的人 |
 | C10.3 | 真实浏览器里的同意流程：jsdom 只验到页面渲染、按钮接线与路由返回；没有在浏览器里真正打开一条 `/consent/<token>`、点「不可以」、再看到聊天关闭与档案页的彻底删除卡，也没有把导出的 HTML 在浏览器里打开过（自包含只用字符串断言） | 起应用（临时库）→ 档案页导出说明页并用浏览器打开；生成链接后开一个无痕窗口打开 `/consent/<token>`，点「不可以」→ 回档案页确认状态变「说不可以」、聊天页不能再发；再打开同一条链接应看到「这个链接已经不能用了」 | 有图形浏览器的人 |
 | C10.5 | 深夜保护在真实屏幕上的观感：jsdom 只验证了 `data-night` 的切换与 CSS 规则存在；配色是否真的「更暗但不影响可读性」、GIF 表情在夜间是否真的停在第一帧、去掉动效后有没有别处难看，都没有在浏览器里看过 | 起应用（临时库）→ 在设置里把时区改成能让「现在」落在 00:00–05:00 的时区（或直接改 `users.timezone`）→ 聊满 46 分钟（可把 `messages.createdAt` 改早来造）→ 看聊天页是否变暗、打字点是否不跳、贴纸表情是否静止；再在白天聊一轮对照 | 有图形浏览器和真实记录的人 |
+| C10.7 | 真实浏览器里的下划线与跳转：jsdom 只验证了类名、`title` 与 `href`；没有在浏览器里看过虚线的粗细/颜色、悬停提示的实际观感、点按后记录阅读器是否真的定位到那条记录，也没有看过长消息里多段下划线挨在一起的样子 | 起应用（有真实记录的分身）→ 聊天页「更多操作」里打开「在分身的话里标出 {{name}} 的原话」→ 聊到一条固定回法（例如说「晚安」），看整条下划线；再找一条模型回复里恰好重复了原话的，点下划线看是否跳到阅读器中该记录；最后看图例与关闭后的样子 | 有真实记录与图形浏览器的人 |
 
 ## 待用户决定
 
@@ -949,6 +953,17 @@
 
 
 ## 批次日志
+
+### WP16 · 实现会话 · 2026-11-27 · C10.7 重建标记
+
+按 WP16 的 C10.7 做；分支 `exec/v6`，这一条开工 HEAD `c6d3bf4`；没有 push、没有合并、没有切分支、没有动 `mirrai_live`、没有改 `docs/exec-v6.md`。
+
+- `shared/provenance.ts`：`ProvenanceSpan`、`provenanceFromMetadata`、`provenanceSegments`（越界/重叠的旧偏移丢弃但不丢字）。
+- `server/records/provenance.ts`：`computeProvenance` 走 C2.3 同一套规范化与「4 字以上才按包含算」规则，只用 `candidateRecordsByOverlap` 的字面检索，不调模型、不调嵌入；`attachMessageProvenance` 落库后写 `metadata.provenance`，任何失败只记 warn。
+- 接线：`runConversationTurn` 每条落库消息算一次（固定回法、追一句、改错字用整条兜底），`done` 与 SSE `done` 带这条的 spans；`reply-jobs.ts` 的追一句在落库后标整条；聊天页从历史 metadata 读，开关在「更多操作」里（localStorage，默认关），打开后有图例；`MessageBubble` 按 spans 画虚线下划线并链到记录阅读器。
+- 提交：`c95c483`（手册建议一个）。
+- 闸门（不带 `--fast`、不带 `DATABASE_URL`）：`695 passed | 25 skipped (720)` 文件、`5879 passed | 122 skipped (6001)` 用例、`all six steps passed`；相对 C10.6 收尾（694/25/719、5861/122/5983）文件 +1、用例 +18，跳过不变。
+- 偏差 576–578；未验证清单 +1 行（C10.7 真实浏览器）；「待用户决定」无新增。
 
 ### WP16 · 实现会话 · 2026-11-27 · C10.6 全局推断视图
 
