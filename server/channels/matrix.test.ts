@@ -33,10 +33,15 @@ vi.mock("./commands", () => ({
 }));
 
 import {
+  handleMatrixInbound,
   handleMatrixMessage,
   interpretMatrixSync,
+  matrixRoomIsDirect,
+  matrixRoomMemberCount,
+  normalizeHomeserverUrl,
   runMatrixSync,
   sendMatrixMessage,
+  type MatrixCredentials,
   type MatrixMessage,
 } from "./matrix";
 
@@ -185,6 +190,80 @@ describe("sending", () => {
     expect(init.method).toBe("PUT");
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer syt_token");
     expect(JSON.parse(String(init.body))).toEqual({ msgtype: "m.text", body: "在的呀" });
+  });
+});
+
+describe("one-to-one rooms", () => {
+  const credentials: MatrixCredentials = {
+    homeserverUrl: "https://matrix.example.org",
+    accessToken: "tok",
+  };
+
+  function membersResponse(keys: string[]): Response {
+    return new Response(JSON.stringify({
+      chunk: keys.map((key) => ({
+        type: "m.room.member",
+        state_key: key,
+        content: { membership: "join" },
+      })),
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+
+  it("normalises a homeserver typed without a scheme", () => {
+    expect(normalizeHomeserverUrl("matrix.example.org")).toBe("https://matrix.example.org");
+    expect(normalizeHomeserverUrl("matrix.example.org/")).toBe("https://matrix.example.org");
+    expect(normalizeHomeserverUrl("http://localhost:8008")).toBe("http://localhost:8008");
+    expect(normalizeHomeserverUrl("")).toBe("");
+  });
+
+  it("counts the joined members of a room", async () => {
+    const fetchImpl = vi.fn(async () => membersResponse(["@bot:example.org", "@bob:example.org"]));
+    await expect(matrixRoomMemberCount(fetchImpl as never, credentials, "!abc:example.org")).resolves.toBe(2);
+    expect(String((fetchImpl.mock.calls[0] as unknown[])[0])).toContain(
+      "/_matrix/client/v3/rooms/!abc%3Aexample.org/members?membership=join",
+    );
+    await expect(
+      matrixRoomMemberCount(vi.fn(async () => new Response("no", { status: 403 })) as never, credentials, "!r:x"),
+    ).resolves.toBeNull();
+  });
+
+  it("treats only a room with exactly two members as a direct conversation", async () => {
+    await expect(
+      matrixRoomIsDirect(vi.fn(async () => membersResponse(["@bot:x", "@bob:x"])) as never, credentials, "!r:x"),
+    ).resolves.toBe(true);
+    await expect(
+      matrixRoomIsDirect(
+        vi.fn(async () => membersResponse(["@bot:x", "@bob:x", "@carol:x"])) as never,
+        credentials,
+        "!r:x",
+      ),
+    ).resolves.toBe(false);
+  });
+
+  it("drops a group room before the binding rule or a reply", async () => {
+    binding = { id: 1, personaId: 7, isActive: true };
+    const sent: string[] = [];
+    const groupFetch = vi.fn(async () => membersResponse(["@bot:x", "@bob:x", "@carol:x"]));
+    await handleMatrixInbound({
+      userId: 1,
+      message: message(),
+      credentials,
+      sendText: async (_room, text) => { sent.push(text); },
+      fetchImpl: groupFetch as never,
+    });
+    expect(handleChannelChat).not.toHaveBeenCalled();
+    expect(sent).toEqual([]);
+
+    const directFetch = vi.fn(async () => membersResponse(["@bot:x", "@bob:x"]));
+    await handleMatrixInbound({
+      userId: 1,
+      message: message(),
+      credentials,
+      sendText: async (_room, text) => { sent.push(text); },
+      fetchImpl: directFetch as never,
+    });
+    expect(handleChannelChat).toHaveBeenCalledTimes(1);
+    expect(sent).toEqual(["在的呀"]);
   });
 });
 

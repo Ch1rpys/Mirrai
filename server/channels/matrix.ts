@@ -10,9 +10,13 @@
  *   https://spec.matrix.org/latest/client-server-api/#sending-messages
  *   https://spec.matrix.org/latest/client-server-api/#direct-messaging
  *
- * Direct conversations are the rooms listed in the user's `m.direct`
- * account data — the spec's own way of saying "these rooms are DMs". A
- * room the bot is invited to is joined when the invite appears in `/sync`.
+ * Direct conversations are the joined rooms with exactly two members:
+ * the bot and one person. A bot cannot read the person's own `m.direct`
+ * account data (account data is per account and the spec only lets a
+ * user read their own), so that list is not a usable criterion here — an
+ * earlier version read the bot's own, which was always empty and made
+ * the channel drop every message. A room the bot is invited to is joined
+ * when the invite appears in `/sync`.
  */
 import { randomUUID } from "node:crypto";
 import { decryptSecret, encryptSecret } from "../_core/crypto";
@@ -35,9 +39,23 @@ const CHANNEL_ID = "matrix" as const;
 export const MATRIX_SYNC_TIMEOUT_MS = 30_000;
 export const MATRIX_RETRY_MS = 3_000;
 
-interface MatrixCredentials {
+export interface MatrixCredentials {
   homeserverUrl: string;
   accessToken: string;
+}
+
+/**
+ * A homeserver address, with a scheme.
+ *
+ * People type `matrix.example.org` into the settings field; `fetch` needs
+ * `https://` in front of it. The stored value is normalised once so every
+ * later request works.
+ */
+export function normalizeHomeserverUrl(value: unknown): string {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) return "";
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  return withScheme.replace(/\/+$/, "");
 }
 
 export interface MatrixMessage {
@@ -64,7 +82,7 @@ async function readCredentials(userId: number): Promise<MatrixCredentials | null
     const parsed = JSON.parse(plain) as MatrixCredentials;
     if (!parsed?.homeserverUrl || !parsed?.accessToken) return null;
     return {
-      homeserverUrl: parsed.homeserverUrl.replace(/\/+$/, ""),
+      homeserverUrl: normalizeHomeserverUrl(parsed.homeserverUrl),
       accessToken: parsed.accessToken,
     };
   } catch {
@@ -78,7 +96,7 @@ export async function setMatrixCredentials(
 ): Promise<void> {
   const current = await readCredentials(userId);
   const next: MatrixCredentials = {
-    homeserverUrl: credentials.homeserverUrl?.trim().replace(/\/+$/, "") || current?.homeserverUrl || "",
+    homeserverUrl: normalizeHomeserverUrl(credentials.homeserverUrl) || current?.homeserverUrl || "",
     accessToken: credentials.accessToken?.trim() || current?.accessToken || "",
   };
   if (!next.homeserverUrl || !next.accessToken) return;
@@ -243,24 +261,69 @@ export async function matrixWhoAmI(
   return body.user_id;
 }
 
-/** The rooms the user marked as direct messages. */
-export async function matrixDirectRooms(
+/**
+ * How many people are joined to a room, or `null` when Matrix could not
+ * answer.
+ *
+ * A bot cannot see the person's own `m.direct` list, so "is this a direct
+ * conversation" is answered the only way a bot can observe it: a joined
+ * room with exactly two members is the bot and one person.
+ */
+export async function matrixRoomMemberCount(
   fetchImpl: typeof fetch,
   credentials: MatrixCredentials,
-  ownUserId: string,
-): Promise<Set<string>> {
+  roomId: string,
+): Promise<number | null> {
   const response = await fetchImpl(
-    `${credentials.homeserverUrl}/_matrix/client/v3/user/${encodeURIComponent(ownUserId)}/account_data/m.direct`,
+    `${credentials.homeserverUrl}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/members?membership=join`,
     { headers: { Authorization: `Bearer ${credentials.accessToken}` } },
   );
-  if (!response.ok) return new Set();
-  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  const rooms = new Set<string>();
-  for (const list of Object.values(body ?? {})) {
-    if (!Array.isArray(list)) continue;
-    for (const room of list) if (typeof room === "string") rooms.add(room);
+  if (!response.ok) return null;
+  const body = (await response.json().catch(() => ({}))) as { chunk?: unknown };
+  if (!Array.isArray(body.chunk)) return null;
+  const members = new Set<string>();
+  for (const event of body.chunk) {
+    const row = event as { type?: unknown; state_key?: unknown; content?: { membership?: unknown } };
+    if (row?.type !== "m.room.member") continue;
+    if (row.content?.membership !== "join") continue;
+    if (typeof row.state_key === "string") members.add(row.state_key);
   }
-  return rooms;
+  return members.size;
+}
+
+/** Whether this is a one-to-one room (the bot and one person). */
+export async function matrixRoomIsDirect(
+  fetchImpl: typeof fetch,
+  credentials: MatrixCredentials,
+  roomId: string,
+): Promise<boolean> {
+  return (await matrixRoomMemberCount(fetchImpl, credentials, roomId)) === 2;
+}
+
+/**
+ * The inbound path: a room the bot is not in a one-to-one conversation
+ * with is ignored entirely, then the ordinary binding rule applies.
+ */
+export async function handleMatrixInbound(params: {
+  userId: number;
+  message: MatrixMessage;
+  credentials: MatrixCredentials;
+  sendText: (roomId: string, text: string) => Promise<void>;
+  locale?: Locale;
+  fetchImpl?: typeof fetch;
+}): Promise<void> {
+  const direct = await matrixRoomIsDirect(
+    params.fetchImpl ?? fetch,
+    params.credentials,
+    params.message.roomId,
+  );
+  if (!direct) return;
+  await handleMatrixMessage({
+    userId: params.userId,
+    message: params.message,
+    sendText: params.sendText,
+    locale: params.locale,
+  });
 }
 
 /** Joins a room the bot was invited to. */
@@ -363,19 +426,13 @@ export const matrixAdapter: ChannelAdapter = {
       ownUserId,
       signal: controller.signal,
       initialSince: cursor.cursor ?? null,
-      onMessage: async (message) => {
-        // Only rooms the user marked as direct conversations are handled;
-        // a room the bot was invited to and joined becomes one as soon as
-        // the user marks it, which is the spec's own rule.
-        const direct = await matrixDirectRooms(fetch, credentials, ownUserId);
-        if (!direct.has(message.roomId)) return;
-        await handleMatrixMessage({
-          userId,
-          message,
-          sendText: (roomId, text) => sendMatrixMessage(fetch, credentials, roomId, text),
-          locale,
-        });
-      },
+      onMessage: (message) => handleMatrixInbound({
+        userId,
+        message,
+        credentials,
+        sendText: (roomId, text) => sendMatrixMessage(fetch, credentials, roomId, text),
+        locale,
+      }),
       onSync: (since) => rememberMatrixSince(userId, since),
       onError: (error) => {
         void db

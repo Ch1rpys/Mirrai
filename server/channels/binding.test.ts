@@ -220,6 +220,9 @@ describe("every bot adapter gates its inbound path", () => {
     const discord = readFileSync(resolve(ROOT, "server/channels/discord.ts"), "utf-8");
     expect(discord).toContain("if (event.guild_id) return null;");
     const matrix = readFileSync(resolve(ROOT, "server/channels/matrix.ts"), "utf-8");
-    expect(matrix).toContain("m.direct");
+    // A bot cannot read the person's m.direct account data; a one-to-one
+    // room is observed as a joined room with exactly two members.
+    expect(matrix).toContain("matrixRoomIsDirect");
+    expect(matrix).toContain("membership=join");
   });
 });
