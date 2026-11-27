@@ -3261,6 +3261,49 @@ describe("runConversation", () => {
     );
     expect(storedRecall?.metadata?.kind).toBe("recall");
     expect(storedRows.some((row) => String(row.content ?? "").includes(String(recall?.text)))).toBe(false);
+    // A turn that shows a recalled rejected line does not also store the
+    // rerank scores on the chosen bubble: the metadata would contradict
+    // the line the user is looking at.
+    const replyRow = storedRows.find(
+      (row) => row.role === "assistant" && row.content === "在的呀",
+    ) as { metadata?: { rerank?: unknown } } | undefined;
+    expect(replyRow?.metadata?.rerank).toBeUndefined();
+    expect((storedRecall as { metadata?: { rerank?: unknown } } | undefined)?.metadata?.rerank).toBeUndefined();
+  });
+
+  it("stores the rerank decision on the chosen line when no recall is shown (B3.3)", async () => {
+    const corpus = Array.from({ length: 40 }, () => "在的呀");
+    iterateRecords.mockImplementation(async function* () {
+      for (const text of corpus) {
+        yield { role: "assistant", content: text, kind: "text" };
+      }
+    });
+    const spy = vi.spyOn(rerankModel, "getRerankModel").mockResolvedValue(buildRerankModel(corpus));
+    invokeWithProvider
+      .mockResolvedValueOnce("候选一")
+      .mockResolvedValueOnce("在的呀")
+      .mockResolvedValueOnce("候选三")
+      .mockResolvedValueOnce("候选四");
+    for await (const _event of runConversation({
+      persona: quirksPersona({
+        typoFixes: [],
+        typoRate: 0,
+        recallRate: 0,
+        patAfter: {},
+      }, { rerankEnabled: true }),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+    })) {
+      /* drain */
+    }
+    spy.mockRestore();
+    const storedRows = createMessage.mock.calls.map(
+      (call) => call[0] as { role?: string; metadata?: { rerank?: { text?: string; scores?: unknown[] } } },
+    );
+    const reply = storedRows.find((row) => row.role === "assistant");
+    expect(typeof reply?.metadata?.rerank?.text).toBe("string");
+    expect(Array.isArray(reply?.metadata?.rerank?.scores)).toBe(true);
   });
 
   it("pats before the reply when that user act used to be tapped", async () => {

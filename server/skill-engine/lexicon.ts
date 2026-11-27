@@ -75,7 +75,9 @@ function materialFor(candidates: LexiconCandidate[]): string {
     candidates.map((row) => ({
       term: row.term,
       count: row.count,
-      examples: row.examples.map((item) => item.snippet),
+      // Two lines per word, as the manual asks; the stored entry keeps
+      // three, but the material sent to the model does not need them.
+      examples: row.examples.slice(0, 2).map((item) => item.snippet),
     })),
     null,
     2,

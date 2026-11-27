@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { collectLexiconCandidates, mergeLexicon } from "@shared/lexicon";
+import { collectLexiconCandidates, dropLexiconFragments, mergeLexicon } from "@shared/lexicon";
 import { buildXiaomanRecords } from "../test-fixtures/xiaoman";
 import { mineLexicon } from "./lexicon";
 
@@ -66,6 +66,24 @@ describe("counting the private lexicon", () => {
     expect(sent).not.toContain("今天");
   });
 
+  it("sends two example lines per word, not three (B3.7)", async () => {
+    // The manual asks for two examples per word in the material; the
+    // stored entry keeps three, but the list going to the model does not.
+    let sent: Array<{ term?: string; examples?: string[] }> = [];
+    const invoke = vi.fn(async (messages: any[]) => {
+      const body = (messages as Array<{ role: string; content: string }>)
+        .find((row) => row.role === "user")?.content ?? "";
+      sent = JSON.parse(body.slice(body.indexOf("["), body.lastIndexOf("]") + 1)) as typeof sent;
+      return JSON.stringify([{ term: "咕咕", gloss: "放鸽子" }]);
+    });
+    const mined = await mineLexicon({ personaId: 1, userId: 1, records: guguRows(), invoke });
+    expect(mined.length).toBeGreaterThan(0);
+    expect(sent.length).toBeGreaterThan(0);
+    for (const row of sent) {
+      expect(row.examples?.length ?? 0, row.term).toBeLessThanOrEqual(2);
+    }
+  });
+
   it("does not send everyday words to the model", async () => {
     const invoke = vi.fn(async () => JSON.stringify([{ term: "咕咕", gloss: "放鸽子" }]));
     await mineLexicon({
@@ -102,6 +120,17 @@ describe("counting the private lexicon", () => {
     expect(terms).toContain("咕咕");
     expect(terms).not.toContain("又咕咕了");
     expect(terms).not.toContain("又咕咕");
+  });
+
+  it("does not keep a two-character fragment of a longer term it just dropped", () => {
+    // 咕咕了 is dropped as a wrapper around 咕咕; 咕了 only existed
+    // inside it, so it must not survive as a word of its own (B3.7).
+    const kept = dropLexiconFragments(new Map([
+      ["咕咕", 10],
+      ["咕了", 6],
+      ["咕咕了", 8],
+    ]));
+    expect(kept).toEqual(["咕咕"]);
   });
 
   it("counts a word twice when one line says it twice", () => {

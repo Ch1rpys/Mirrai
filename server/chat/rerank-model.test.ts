@@ -62,6 +62,20 @@ describe("getRerankModel", () => {
     expect(recentRecordTexts).toHaveBeenCalledTimes(2);
   });
 
+  it("evicts the least recently used persona (B3.3)", async () => {
+    // The cache holds eight models; a ninth persona pushes the oldest
+    // out, and asking for it again re-reads its lines.
+    getRecordsVersion.mockImplementation(async (personaId: number) => `${personaId}:v`);
+    yieldTexts(Array.from({ length: 40 }, (_, i) => `嗯${i}`));
+    for (let personaId = 1; personaId <= 9; personaId += 1) {
+      await getRerankModel(personaId, 1);
+    }
+    yieldTexts(Array.from({ length: 40 }, () => "新的一行"));
+    recentRecordTexts.mockClear();
+    await getRerankModel(1, 1);
+    expect(recentRecordTexts).toHaveBeenCalledWith(1, 1, RERANK_TEXT_CAP);
+  });
+
   it("keeps only the most recent five thousand lines", async () => {
     // The reader is what enforces the cap now: the model is handed the
     // newest lines only, in reading order.

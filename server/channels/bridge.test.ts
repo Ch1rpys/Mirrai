@@ -178,6 +178,45 @@ describe("the bridge", () => {
     expect(reply?.gapsMs[1]).toBe(fallbackChannelGapMs("在"));
   });
 
+  it("passes a crisis line through the ordinary conversation (WP12)", async () => {
+    // The channel is not a way around the safety layer: the same
+    // runConversation reads the message, so the support answer comes
+    // from the same place as on the web.
+    const support = copy("zh", "safety.crisisStop");
+    runConversation.mockImplementation(async function* () {
+      yield { type: "delta", text: support };
+      yield { type: "done", messageId: 1, graduationSuggested: false };
+    });
+    const reply = await handleChannelChat({
+      userId: 1,
+      conversationKey: "oc_1",
+      personaId: 5,
+      messageText: "我不想活了",
+      channel: "feishu",
+    });
+    expect(runConversation).toHaveBeenCalledWith(expect.objectContaining({
+      message: "我不想活了",
+      channel: "feishu",
+    }));
+    expect(reply?.parts.join("")).toContain(support);
+  });
+
+  it("returns nothing for a deferred turn (B5.8)", async () => {
+    // The reply will come later as the job's own message; the channel
+    // must not send half of it now.
+    runConversation.mockImplementation(async function* () {
+      yield { type: "deferred", jobId: 3, dueAt: new Date().toISOString(), reason: "delay" };
+    });
+    const reply = await handleChannelChat({
+      userId: 1,
+      conversationKey: "oc_1",
+      personaId: 5,
+      messageText: "在吗",
+      channel: "feishu",
+    });
+    expect(reply).toBeNull();
+  });
+
   it("keeps a single line as one part", async () => {
     runConversation.mockImplementation(() => answers("在的。"));
 

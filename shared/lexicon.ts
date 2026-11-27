@@ -242,6 +242,14 @@ export function dropLexiconFragments(counts: Map<string, number>): string[] {
     return (counts.get(b) ?? 0) - (counts.get(a) ?? 0);
   });
   const kept: string[] = [];
+  /**
+   * Longer terms dropped as a wrapper around a shorter word.
+   *
+   * A two-character piece of such a wrapper is not a word of its own —
+   * 咕了 existed only inside 咕咕了 — so the removed long term takes its
+   * fragments with it (B3.7).
+   */
+  const dropped: Array<{ term: string; core: string }> = [];
   for (const term of terms) {
     const count = counts.get(term) ?? 0;
     const wrapperOf = kept.find((short) => {
@@ -250,7 +258,10 @@ export function dropLexiconFragments(counts: Map<string, number>): string[] {
       const shortCount = counts.get(short) ?? 0;
       return longCount >= shortCount * 0.8 && isWrapperLeftover(leftoverAfter(term, short));
     });
-    if (wrapperOf) continue;
+    if (wrapperOf) {
+      dropped.push({ term, core: wrapperOf });
+      continue;
+    }
     const fragments = kept.filter((short) => {
       if (term === short || !term.includes(short)) return false;
       const shortCount = counts.get(short) ?? 0;
@@ -267,6 +278,16 @@ export function dropLexiconFragments(counts: Map<string, number>): string[] {
     });
     if (insideCompound) continue;
     kept.push(term);
+  }
+  for (const { term, core } of dropped) {
+    for (const fragment of [...kept]) {
+      if (fragment === core || !term.includes(fragment)) continue;
+      // A fragment that is at least as common as the wrapper may be a
+      // word in its own right; only a piece carried by the wrapper goes.
+      if ((counts.get(fragment) ?? 0) > (counts.get(term) ?? 0)) continue;
+      const i = kept.indexOf(fragment);
+      if (i >= 0) kept.splice(i, 1);
+    }
   }
   return kept;
 }
