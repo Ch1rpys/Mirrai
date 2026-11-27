@@ -49,11 +49,65 @@ function listedFiles(): Set<string> {
   return new Set(CALL_SITES.map((row) => row.file));
 }
 
+/**
+ * The source with comments removed.
+ *
+ * The guard asks a source-level question ("is there a call in this
+ * file?"), so a comment that mentions `fetch(` must not answer it. The
+ * scanner respects string and template literals while stripping, and
+ * leaves strings in place: a call spelled inside a string is still
+ * reported, because reporting too much is the safe direction for an
+ * outbound inventory.
+ */
+function withoutComments(source: string): string {
+  let out = "";
+  let quote: "'" | '"' | "`" | null = null;
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index] ?? "";
+    const next = source[index + 1] ?? "";
+    if (quote) {
+      out += char;
+      if (char === "\\") {
+        out += next;
+        index += 1;
+      } else if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (char === "'" || char === '"' || char === "`") {
+      quote = char;
+      out += char;
+      continue;
+    }
+    if (char === "/" && next === "/") {
+      while (index < source.length && source[index] !== "\n") index += 1;
+      out += "\n";
+      continue;
+    }
+    if (char === "/" && next === "*") {
+      index += 2;
+      while (index < source.length && !(source[index] === "*" && source[index + 1] === "/")) {
+        index += 1;
+      }
+      index += 1;
+      out += " ";
+      continue;
+    }
+    out += char;
+  }
+  return out;
+}
+
+function hasCall(source: string): boolean {
+  return CALL_PATTERN.test(withoutComments(source));
+}
+
 function filesWithCalls(): string[] {
   const hits: string[] = [];
   for (const full of walk(SERVER)) {
     const source = readFileSync(full, "utf8");
-    if (!CALL_PATTERN.test(source)) continue;
+    if (!hasCall(source)) continue;
     hits.push(relative(ROOT, full).replaceAll("\\", "/"));
   }
   return hits.sort();
@@ -64,7 +118,7 @@ function unlistedCallSites(
   listed: Set<string>,
 ): string[] {
   return files
-    .filter((file) => CALL_PATTERN.test(file.source) && !listed.has(file.file))
+    .filter((file) => hasCall(file.source) && !listed.has(file.file))
     .map((file) => file.file)
     .sort();
 }
@@ -91,6 +145,20 @@ describe("the outbound inventory", () => {
     }));
     files.push({ file: "server/invented-egress.ts", source: 'fetch("https://example.com")' });
     expect(unlistedCallSites(files, listedFiles())).toEqual(["server/invented-egress.ts"]);
+  });
+
+  it("does not treat a mention in a comment as an outbound call", () => {
+    // P18.4 found the old scanner answering "yes" for a file whose only
+    // `fetch(` was inside a comment. The inventory should describe what
+    // the process connects to, not what its prose talks about.
+    const commented = [
+      '// this comment mentions fetch("https://example.com") but calls nothing',
+      '/* createTransport({}) is only described here */',
+      "export const nothing = 1;",
+    ].join("\n");
+    expect(unlistedCallSites([{ file: "server/commented.ts", source: commented }], listedFiles())).toEqual(
+      [],
+    );
   });
 
   it("fails when a new unlisted socket appears", () => {
