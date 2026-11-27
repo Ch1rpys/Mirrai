@@ -8922,12 +8922,21 @@ export async function recentRecordTexts(
   const rows = await db
     .select({ content: collectedMessages.content, kind: collectedMessages.kind })
     .from(collectedMessages)
+    /*
+     * The private register only: a public post is written for everyone,
+     * and the reranker is a measurement of how the person writes to one
+     * person. `iterateRecords` defaulted to the same filter.
+     */
     .where(
       and(
-        eq(collectedMessages.personaId, personaId),
+        // Written out as well as inside recordsWhere: the isolation
+        // scanner reads this function's own arguments, and a reader
+        // should see the ownership bound here.
         eq(collectedMessages.userId, userId),
-        eq(collectedMessages.role, "assistant"),
-        eq(collectedMessages.kind, "text"),
+        recordsWhere(personaId, userId, {
+          role: "assistant",
+          kinds: ["text"],
+        }),
       ),
     )
     .orderBy(desc(spokenAt), desc(collectedMessages.id))
