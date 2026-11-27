@@ -235,6 +235,22 @@ describe("the message bubble", () => {
     expect(button.getAttribute("title")).not.toContain("微软");
   });
 
+  it("hides the voice picker when the engine has no names to pick (B7.6)", () => {
+    // A local piper model or a local speech endpoint has its own voice;
+    // offering Edge voice names there would be offering buttons that do
+    // nothing.
+    voiceInfo.value = { voices: [], enabled: true, leavesMachine: false };
+    render(
+      <MessageBubble
+        msg={makeMessage({ role: "assistant", content: "在的" })}
+        personaName="小A"
+        showMood={false}
+      />,
+    );
+    expect(screen.getByLabelText(translate("zh", "chat.tts"))).toBeInTheDocument();
+    expect(screen.queryByLabelText(translate("zh", "chat.ttsVoice"))).toBeNull();
+  });
+
   it("does not offer to read a sticker aloud", () => {
     render(
       <MessageBubble

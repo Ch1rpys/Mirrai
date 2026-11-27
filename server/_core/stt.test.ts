@@ -86,6 +86,14 @@ describe("the transcription engines", () => {
     // The WAV path is one argument of its own, never part of a string.
     expect(args.filter((item) => item.includes("audio.wav"))).toHaveLength(1);
     expect(args[args.indexOf("-f") + 1]).toBe(args.find((item) => item.endsWith("audio.wav")));
+    // The binary gets a stripped environment (B7.2): it reads a file of
+    // somebody's voice, and it has no business seeing the app's secrets.
+    const options = whisperCall[2] as { env?: NodeJS.ProcessEnv };
+    expect(options.env).toBeTruthy();
+    expect(options.env?.PATH).toBeTruthy();
+    expect(options.env?.OPENAI_API_KEY).toBeUndefined();
+    expect(options.env?.DATABASE_URL).toBeUndefined();
+    expect(options.env?.JWT_SECRET).toBeUndefined();
   });
 
   it("passes the language when one was named", async () => {

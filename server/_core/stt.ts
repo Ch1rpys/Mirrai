@@ -4,6 +4,7 @@ import path from "node:path";
 import { hasFfmpeg, toWav16k } from "./ffmpeg";
 import { assertLocalEndpoint, isLocalEndpoint } from "./local-endpoint";
 import { runBinary } from "./run-binary";
+import { subprocessEnvironment } from "./subprocess-env";
 import { llmService } from "../llm";
 import type { LLMProvider } from "../llm/types";
 import type { Locale } from "@shared/copy";
@@ -161,7 +162,12 @@ async function transcribeWithWhisper(input: TranscribeInput): Promise<string | n
     if (language !== "auto") args.push("-l", language);
     args.push("--no-timestamps", "--no-prints");
 
-    const { stdout } = await runBinary(bin, args);
+    /**
+     * The binary gets the same stripped environment as the other local
+     * tools (B7.2): a whisper.cpp process has no business seeing the
+     * session key or the provider keys.
+     */
+    const { stdout } = await runBinary(bin, args, { env: subprocessEnvironment() });
     const text = cleanWhisperOutput(stdout);
     return text.length > 0 ? text : null;
   } finally {
