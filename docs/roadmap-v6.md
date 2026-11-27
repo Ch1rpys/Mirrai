@@ -352,10 +352,10 @@ WP0–WP3 全部 ✅，没有 🟡。按「缺什么」粗分（未验证清单�
 
 | 编号 | 一句话 | 状态 | 落点 | 验收依据 |
 |---|---|---|---|---|
-| P18.1 | 文档对齐 | ✅ | `README.md`、`README.en.md`、`.env.example`、`docs/roadmap-v6.md`、`scripts/check-doc-links.mjs` | 提交 395162f、36f4c68、1b1800e；`server/env-example.test.ts` 3 通过、`server/egress.test.ts` 5 通过；闸门七步全绿（725 文件 / 6081 用例 / 122 跳过） |
+| P18.1 | 文档对齐 | ✅ | `README.md`、`README.en.md`、`.env.example`、`docs/roadmap-v6.md`、`scripts/check-doc-links.mjs` | 提交 395162f、36f4c68、1b1800e；`server/env-example.test.ts` 3 通过、`server/egress.test.ts` 5 通过；闸门七步全绿（725 文件 / 6080 用例 / 122 跳过） |
 | P18.2 | 一次从头到尾的冒烟 | ✅ | `scripts/live-stub-model.mjs`、`docs/exec-v6-progress.md` | 草稿库 `mirrai_v6_p182` 上七步全走完；「晚安」桩请求 +0、第二分身记录 4904=4904；提交 5990358（只有批次日志） |
 | P18.3 | 整体复验 | ✅ | `scripts/gate-all.mjs`、`docs/exec-v6-progress.md` | 干净树 `fd3cdd7` 上重跑：闸门七步、数据库四步（84 条迁移 / `--replay` / `--rollback 1`）、带库全量 725 文件 6081 用例 0 跳过、静态项全过；发现并修测试隔离问题（e198858）；提交 053f17f |
-| P18.4 | 独立抽查 | ✅ | `docs/exec-v6-progress.md` | 2026-11-27 由独立验收会话完成：19 个工作包各抽 3 条（`sha256("exec-v6\|WP<n>\|<编号>")` 升序）+ 14 条必查，去重 66 条从头重跑全部通过；开工/收尾闸门 725 文件 6081 用例 122 跳过；无条目降级；4 条低影响跟进项同日修复（提交 738b228、02b25d6、b5e402d、da7ce1d，偏差 605–608）；名单、38 条边界试验与发现见进度文件批次日志 |
+| P18.4 | 独立抽查 | ✅ | `docs/exec-v6-progress.md` | 2026-11-27 由独立验收会话完成：19 个工作包各抽 3 条（`sha256("exec-v6\|WP<n>\|<编号>")` 升序）+ 14 条必查，去重 66 条从头重跑全部通过；开工/收尾闸门 725 文件 6081 用例 122 跳过；无条目降级；4 条低影响跟进项同日修复（提交 738b228、02b25d6、b5e402d、da7ce1d，偏差 605–608）；名单、38 条抽样/必查集里的边界试验（B3.5 无记录，可核 37/38）与发现见进度文件批次日志 |
 | P18.5 | 交接 | ✅ | `docs/releases/v1.4.0-draft.md`、`docs/exec-v6-progress.md` | 发布说明草稿、给用户的摘要（状态条数/未验证清单全文/待决定全文/核心命令）、最终确认；提交见进度表 P18.5 行 |
 
 ---

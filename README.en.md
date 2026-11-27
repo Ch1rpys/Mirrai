@@ -54,7 +54,7 @@ Per-item evidence lives in [`docs/exec-v6-progress.md`](docs/exec-v6-progress.md
 
 **Records and import**
 
-- ✅ One record table for every source — uploads, collectors, screenshots, oral accounts, group chats — carrying message kind, original speaker, source file, line number and per-kind metadata (A1–A4); 17 built-in import formats — WeChat (two TXT shapes, CSV, JSON), QQ (TXT, MHT), Telegram, WhatsApp, LINE, KakaoTalk, Instagram/Messenger, Discord, Android SMS, iMessage database, generic line, column mapping, monologue — plus `.zip` archive unpacking, with a wizard that detects the format, asks who is who and previews the counts before writing, and re-imports that only add the new tail (C1.1–C1.3, C1.5).
+- ✅ One record table for every source — uploads, collectors, screenshots, oral accounts, group chats — carrying message kind, original speaker, source file, line number and per-kind metadata (A1–A4); 17 built-in import formats — WeChat (two TXT shapes, CSV, JSON), QQ (TXT, MHT), Telegram, WhatsApp, LINE, KakaoTalk, Instagram/Messenger, Discord, Android SMS, iMessage database, generic line, column mapping, monologue — plus `.zip` archive unpacking, with a wizard that detects the format, asks who is who and previews the counts before writing, and re-imports that only add the new tail (C1.1–C1.3, C1.5). Records from different sources share one timeline and one scene, the upload page lists each record's source, and the same words on two platforms at the same moment are kept as two messages (C1.4).
 - ✅ Stickers, images, voice, video, location, links, transfers, red packets, pats, recalls, calls, files and system messages all enter the table as language-neutral tokens; optional redaction before import, and deleting a source deletes the records it brought in (C1.3, C1.6, C1.7).
 - 🟡 Import paths beyond chat logs: interviews (typed or recorded), diaries and articles, screenshots read into records, video (frames plus transcript), and public posts with their own measured register (C1.8, B7.10–B7.12; effect not yet measured on real records).
 
@@ -94,6 +94,7 @@ Per-item evidence lives in [`docs/exec-v6-progress.md`](docs/exec-v6-progress.md
 - 🟡 Rehearsal room (only action-level possibilities, no promise-shaped conclusions), role reversal (time-boxed, once a day), wording helper (three rewrites, applied only when you take one), "read this line", the wait gauge (C3.1, C3.2, C3.4, C3.6, C4.4; effect not yet measured on real records).
 - 🟡 The mirror: your side measured and shown only to you; trends and graduation conditions stated without scores; a printable summary for a counsellor or for yourself (C4.1, C4.3, C4.6; effect not yet measured on real records).
 - ✅ A check-in after a long conversation, your own journal and personal timeline; the "no surveillance" rule is a structural test (C4.2, C4.5, C10.4).
+- ✅ On the meeting day and the day contact resumes, the "things to say when they are back" list is put in front of you — one line, no dialog, no notification (C3.7).
 
 **Distance, farewell, memorial**
 
@@ -106,7 +107,7 @@ Per-item evidence lives in [`docs/exec-v6-progress.md`](docs/exec-v6-progress.md
 
 - ✅ A global inbox, complete backup and restore (a backup is required before encryption can be enabled; restore goes into an empty instance only; local folder / WebDAV / S3), app lock (PIN, passkey, idle lock) and encryption at rest for database text; recycle bin with undo, marks / pins / quoted records, one-click diagnostics (19 checks), accessibility settings, Traditional Chinese UI and English emotion trigger words (C8.2–C8.5, C8.10–C8.12, C8.14).
 - 🟡 Web push (notifications while the app is closed), native shells (macOS menu bar, Windows tray, PWA share target), a cost panel (tokens and spend, with prices you enter), the scene panel (talk inside a stretch of records or one day) (C8.1, C8.8, C8.9, C8.13; effect not yet measured on real records).
-- ✅ Safety and ethics: harm-line detection and filtering, a consent tool (a "no" purges that persona's records and keeps no content), late-night protection (the chat dims and animations stop), the inference view, provenance underlines (C10.1, C10.3, C10.5–C10.7).
+- ✅ Safety and ethics: harm-line detection and filtering, a consent tool (a "no" purges that persona's records and keeps no content), late-night protection (the chat dims and animations stop), the inference view, provenance underlines; the persona's own words never become facts about the real person, and the crisis numbers were checked one by one (A8, A9, C10.1, C10.3, C10.5–C10.7).
 - 🟡 Semantic crisis recognition: indirect wording plus local embedding similarity, alongside the keyword table (C10.2; effect not yet measured on real records).
 
 **Channels and ecosystem**
