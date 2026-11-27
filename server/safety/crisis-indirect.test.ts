@@ -179,6 +179,27 @@ describe("detectIndirectCrisis", () => {
     expect(result.indirectFamilies).toContain("cant_wake");
   });
 
+  it("hears the hopeful ways of saying they do not want to wake up (C10.2)", async () => {
+    const hopeful = [
+      "我希望明天不用醒来",
+      "真希望自己明天不用睁开眼睛",
+      "我好像醒不过来了",
+      "我不想再睁开眼睛",
+    ];
+    for (const text of hopeful) {
+      const detection = detectIndirectCrisis(text);
+      expect(detection.families, `"${text}" should belong to cant_wake`).toContain("cant_wake");
+      const result = await detectCrisisExtended(text, { semantic: false });
+      expect(result.crisis || result.weakSignal, `"${text}" should raise a signal`).toBe(true);
+    }
+    // The same shapes of sentence about ordinary life are not this family.
+    for (const text of ["希望明天不用上班", "我希望明天不用早起", "他喝多了醒不过来"]) {
+      expect(detectIndirectCrisis(text).families, `"${text}" should match no family`).toEqual([]);
+      const result = await detectCrisisExtended(text, { semantic: false });
+      expect(result.crisis, `"${text}" should not be a crisis`).toBe(false);
+    }
+  });
+
   it("does not fire on ordinary daily lines", async () => {
     const ordinary = [
       "今天加班到九点",

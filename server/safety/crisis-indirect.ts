@@ -80,6 +80,22 @@ const FAMILY_PATTERNS: Record<IndirectFamily, FamilyPatterns> = {
       /睡(?:过去|下去)(?:就)?(?:好了|算了|别醒)/,
       /不想(?:再)?(?:睁开眼)?(?:面对|看见)(?:明早|明天|第二天|新的一天)/,
       /睡(?:下去|过去)(?:就)?(?:不用|不会)(?:再)?醒(?:来)?/,
+      /**
+       * The hopeful way it is written (C10.2 acceptance finding).
+       *
+       * "我希望明天不用醒来" and "真希望明天不用睁开眼睛" are the same
+       * statement as "我不想醒来"; they were the one phrasing of this
+       * family the layer did not hear, even though they are in its own
+       * semantic exemplar group. The pattern stays narrow — the wish
+       * has to be about waking — so "希望明天不用上班" is not a match.
+       */
+      /希望(?:自己|我)?(?:明天|明早|第二天|一觉醒来)?(?:再也)?(?:不用|不要|不能|无法)(?:再)?(?:醒来|醒过来|醒|睁开?眼(?:睛)?)/,
+      /**
+       * "我好像醒不过来了" — a first-person statement, so a story about
+       * somebody else ("他喝多了醒不过来") is not a match.
+       */
+      /(?:我|自己)(?:好像|感觉|真的|已经)?(?:再也)?(?:要|会|快)?醒不过来/,
+      /不想(?:再)?睁开(?:眼|眼睛)/,
     ],
     en: [
       /(?:don'?t|do not) want to wake up/,
