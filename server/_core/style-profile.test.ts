@@ -596,7 +596,7 @@ describe("measureStyleProfile", () => {
     // page reads it back from the profile (C4.1).
     expect(written?.mirror).toBeTruthy();
     expect(written?.mirror).toEqual(measured.mirror);
-    const mirror = written.mirror as {
+    const mirror = written?.mirror as {
       starts: { me: number; them: number };
       shortReplies: unknown[];
     };
