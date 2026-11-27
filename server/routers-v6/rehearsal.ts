@@ -90,7 +90,9 @@ export const rehearsalRouter = router({
           ? "chat.closedWeekend"
           : chat.reason === "letters_only"
             ? "chat.closedLettersOnly"
-            : "chat.closedSealed";
+            : chat.reason === "consent"
+              ? "chat.closedConsent"
+              : "chat.closedSealed";
         throw new TRPCError({
           code: "FORBIDDEN",
           message: copy(ctx.locale, key, { name: persona.name }),

@@ -105,6 +105,27 @@ describe("the persona's own state (WP13)", () => {
     });
   });
 
+  it("closes the chat when the other person said no, before any other rule", () => {
+    // The consent answer is not the owner's own step-down: no symptom of
+    // the taper or the seal may open a door the other person closed.
+    const denied = persona({
+      consent: "asked_no",
+      taper: { stage: 2, overrideDay: "2026-03-04" },
+    });
+    expect(mayChatNow(denied, new Date("2026-03-04T12:00:00Z"), shanghai)).toEqual({
+      ok: false,
+      reason: "consent",
+    });
+    expect(mayChatNow(persona({ consent: "asked_yes" }), new Date("2026-03-04T12:00:00Z"), shanghai)).toEqual({
+      ok: true,
+    });
+    // Not asked yet and "cannot ask" both keep the chat open: the first is
+    // the state every persona starts in, the second is the owner saying no
+    // answer was possible.
+    expect(mayChatNow(persona({ consent: "not_asked" }), new Date(), shanghai)).toEqual({ ok: true });
+    expect(mayChatNow(persona({ consent: "cannot_ask" }), new Date(), shanghai)).toEqual({ ok: true });
+  });
+
   it("counts the days to the meeting on the user's calendar", () => {
     const meeting = persona({ ldr: { nextMeetAt: "2026-03-02", weather: false } });
     expect(meetCountdown(meeting, new Date("2026-03-01T12:00:00Z"), shanghai)).toEqual({

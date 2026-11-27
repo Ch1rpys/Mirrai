@@ -33,6 +33,7 @@ import { storagePut, storageDelete, storageDeleteTree } from "./storage";
 import {
   createPersona, getPersonasByUserId, getPersonaById, updatePersona,
   softDeletePersona, restorePersona, listDeletedPersonas, purgePersona,
+  createConsentRemoval,
   getPersonaByIdIncludingDeleted,
   getPersonasWithStats, getUserStats, getUserMilestones, getRecentActivity, getDailyChatCounts,
   createPersonaFile, getFilesByPersonaId, deletePersonaFile,
@@ -204,6 +205,8 @@ import { lockRouter } from "./routers-v6/lock";
 import { encryptionRouter } from "./routers-v6/encryption";
 import { pluginsRouter } from "./routers-v6/plugins";
 import { groupRouter } from "./routers-v6/group";
+import { consentRouter } from "./routers-v6/consent";
+import { purgeForConsent } from "./consent/purge";
 import { mineMicroRules } from "./skill-engine/micro-rules";
 import { stateRulesFromTranscript } from "./skill-engine/state-rules";
 import { normalizeBehaviorProfile } from "@shared/behavior-profile";
@@ -2453,6 +2456,40 @@ export const appRouter = router({
     listDeleted: protectedProcedure.query(async ({ ctx }) => {
       return { personas: await listDeletedPersonas(ctx.user.id) };
     }),
+
+    /**
+     * Deletes a persona now because the other person said no (C10.3).
+     *
+     * The ordinary delete is the owner taking the persona back, and it
+     * gives thirty days to change their mind. This one is a promise made
+     * to somebody else: it happens at once, the bin never sees it, and
+     * nothing can be restored. The name has to be typed in confirmation.
+     */
+    purgeForConsent: protectedProcedure
+      .input(z.object({ personaId: z.number(), confirmName: z.string().max(120) }))
+      .mutation(async ({ ctx, input }) => {
+        const outcome = await purgeForConsent(
+          {
+            personaId: input.personaId,
+            userId: ctx.user.id,
+            confirmName: input.confirmName,
+          },
+          {
+            getPersonaById,
+            purgePersona,
+            createConsentRemoval,
+            locale: ctx.locale,
+          },
+        );
+        if (outcome.status === "not_found") throw new TRPCError({ code: "NOT_FOUND" });
+        if (outcome.status === "name_mismatch") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: outcome.message ?? copy(ctx.locale, "errors.consentNameMismatch"),
+          });
+        }
+        return { removed: true };
+      }),
 
     /**
      * Deletes a persona from the recycle bin now, without waiting thirty
@@ -8206,6 +8243,7 @@ export const appRouter = router({
   encryption: encryptionRouter,
   plugins: pluginsRouter,
   group: groupRouter,
+  consent: consentRouter,
 
   scene: router({
     list: protectedProcedure.query(async ({ ctx }) => {

@@ -1585,6 +1585,40 @@ describe("runConversation", () => {
     expect(createMessage).not.toHaveBeenCalled();
   });
 
+  it("refuses the chat when the other person said no (C10.3)", async () => {
+    await expect(
+      (async () => {
+        for await (const _ of runConversation({
+          persona: persona({ settings: { consent: "asked_no" } }),
+          userId: 1,
+          message: "在吗",
+          mode: "once",
+        })) {
+          // Drain the generator.
+        }
+      })(),
+    ).rejects.toThrow(/说了不可以/);
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+    // The closed door does not leave the user's message in the transcript.
+    expect(createMessage).not.toHaveBeenCalled();
+  });
+
+  it("does not let the consent gate be overridden by a taper exception (C10.3)", async () => {
+    await expect(
+      (async () => {
+        for await (const _ of runConversation({
+          persona: persona({ settings: { consent: "asked_no", taper: { stage: 2, overrideDay: "2026-03-04" } } }),
+          userId: 1,
+          message: "在吗",
+          mode: "once",
+          now: new Date("2026-03-04T12:00:00Z"),
+        })) {
+          // Drain the generator.
+        }
+      })(),
+    ).rejects.toThrow(/说了不可以/);
+  });
+
   it("refuses the chat on the letters-only step (C6.1)", async () => {
     await expect(
       (async () => {

@@ -336,6 +336,19 @@ export const RATE_LIMITS = {
     windowMs: 15 * 60_000,
     scope: "ip",
   } as RateLimitRule,
+  /**
+   * The consent page (C10.3).
+   *
+   * The page is opened by somebody with no account, so the limit is by
+   * IP. It is a read and a single answer; five a minute is far more than
+   * a person needs and too slow to guess a 32-byte token with.
+   */
+  consentPage: {
+    name: "consent-page",
+    limit: 5,
+    windowMs: 60_000,
+    scope: "ip",
+  } as RateLimitRule,
 };
 
 /**

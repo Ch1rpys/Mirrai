@@ -1281,7 +1281,9 @@ async function* admitUserMessage(
       ? "chat.closedWeekend"
       : chat.reason === "letters_only"
         ? "chat.closedLettersOnly"
-        : "chat.closedSealed";
+        : chat.reason === "consent"
+          ? "chat.closedConsent"
+          : "chat.closedSealed";
     throw new ChatClosedError(copy(locale, key, { name: persona.name }));
   }
 

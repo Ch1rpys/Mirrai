@@ -87,7 +87,7 @@ export function sealState(
   return "sealed";
 }
 
-export type ChatClosedReason = "weekend_only" | "letters_only" | "sealed";
+export type ChatClosedReason = "weekend_only" | "letters_only" | "sealed" | "consent";
 
 export type MayChat =
   | { ok: true }
@@ -105,6 +105,16 @@ export function mayChatNow(
   now: Date,
   timeZone?: string | null,
 ): MayChat {
+  /**
+   * The person the persona was rebuilt from said no (C10.3).
+   *
+   * This is not the owner's own step-down: there is no exception day and
+   * no way round it from the chat page. Removing the persona is the only
+   * thing left, and it is on the owner's profile page.
+   */
+  if (personaSettingsOf(persona).consent === "asked_no") {
+    return { ok: false, reason: "consent" };
+  }
   if (sealState(persona, now, timeZone) === "sealed") {
     return { ok: false, reason: "sealed" };
   }

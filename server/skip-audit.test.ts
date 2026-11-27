@@ -54,6 +54,7 @@ const DATABASE_TEST_FILES = new Set([
   "server/db-search.test.ts",
   "server/db-stickers.test.ts",
   "server/db-soft-delete.test.ts",
+  "server/consent/purge-db.test.ts",
   "server/db-unique-indexes.test.ts",
   "server/lock-db.test.ts",
   "server/backup-db.test.ts",

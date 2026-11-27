@@ -517,6 +517,8 @@ describe("the structure the guard relies on", () => {
       "server/_core/systemRouter.ts#notifyOwner (adminProcedure)",
       "server/routers-v6/blind.ts#guestAnswer (publicProcedure)",
       "server/routers-v6/blind.ts#guestLoad (publicProcedure)",
+      "server/routers-v6/consent.ts#answer (publicProcedure)",
+      "server/routers-v6/consent.ts#getByToken (publicProcedure)",
       "server/routers-v6/share.ts#preview (publicProcedure)",
       "server/routers.ts#logout (publicProcedure)",
       "server/routers.ts#me (publicProcedure)",
