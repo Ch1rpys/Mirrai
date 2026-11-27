@@ -558,10 +558,19 @@ describe("表情包", () => {
 describe("语音", () => {
   it("makes 5% of warm TA turns a 12-second voice note with a transcript", () => {
     /*
-     * A voice note replaces the round's reply, so the denominator is the
-     * turns in the ordinary warm scenes where that branch can run.
-     * Morning, Wednesday and goodnight turns are not candidates and used
-     * to inflate the denominator.
+     * A voice note replaces the round's own reply, so the denominator is
+     * the ordinary warm turns where that branch can run. Morning,
+     * Wednesday and goodnight turns are not candidates and used to
+     * inflate the denominator.
+     *
+     * `locked` rows are the designed special lines (the 晚安/早/在吗
+     * replies, follow-ups, typo corrections, conflict preludes, and the
+     * fixed lines for people/facts/words). They are not drawn from the
+     * ordinary branch either, so counting them would understate the rate —
+     * P0.5's independent re-verification found the special rows still in
+     * this denominator. The voice notes themselves are `locked` too, and
+     * they stay in the denominator: the 5% draw happens before they replace
+     * the round's reply.
      */
     const warmTurns = records.filter(
       (row) =>
@@ -569,7 +578,8 @@ describe("语音", () => {
         row.truth.state === "warm" &&
         (row.truth.slot === "evening" || row.truth.slot === "noon" || row.truth.slot === "afternoon") &&
         (row.truth.burstIndex == null || row.truth.burstIndex === 0) &&
-        row.kind !== "sticker",
+        row.kind !== "sticker" &&
+        (!row.truth.locked || row.kind === "voice"),
     );
     const voices = records.filter((row) => row.kind === "voice");
     expect(voices.every((row) => row.truth.state === "warm")).toBe(true);
