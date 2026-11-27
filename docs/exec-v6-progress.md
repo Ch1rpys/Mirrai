@@ -189,7 +189,7 @@
 | C10.2 | 🟡 | af75aec (layers/wiring); bbf04ad (threshold script) | `crisis-indirect.test.ts` 10 通过：六个家族中英各 5 句都进对应家族；单个家族至少 weakSignal（其中 10 句词表不认识的单家族判 weakSignal 而非 crisis）；两个不同家族 → crisis（`raisedBy: "families"`，中英各一）；一个家族+计划 → crisis（`raisedBy: "plan"`，中英各一）；计划单独 → weakSignal；繁体「我不想再醒過來了」→ weakSignal；30 句日常话（含 10 句英文）既无家族也无信号。`crisis-semantic.test.ts` 8 通过：单位向量 0.9/0.436 → matched（余弦 0.9 ≥ 0.72、差 0.464 ≥ 0.05）；0.69/0.724 → below_floor；0.73/0.683（差 0.047）→ too_close；嵌入 null → unavailable 且 `detectCrisisExtended` 与 `semantic: false` 逐字段相等；嵌入不响应时 20ms 超时返回 timeout 且总耗时 < 300ms；空消息 unavailable；maxCosine 单测。`crisis-false-positive.test.ts` 4 通过：40 句中文 + 40 句英文带「死/die/kill/dead」的无害日常在 base 与 extended 下都不 crisis，weakSignal 合计 0 条（≤ 3）；「想死你了」无任何信号而「我想死」仍 crisis。60 条原有 `crisis.test.ts` 的关键词正例在 `detectCrisisExtended` 下仍是 crisis 且 `raisedBy: "keyword"`；`crisis.test.ts` 41 条一行未改全过。四文件合计 63 通过。`server/egress.test.ts` 5 通过，`docs/egress.md` 与 `shared/egress.ts` 的 ollama-embed 行补上「每条用户消息（语义危机识别只发这一句）」。接线：`admitUserMessage` 改用 `detectCrisisExtended`，`ConversationOptions` 增 `admittedCrisis`，`runConversation` 把接收阶段的判定传下去，回合里不重复嵌入；`server/chat/service.test.ts` 95 通过。`package.json` 增 `crisis:semantic-thresholds`，`scripts/crisis-semantic-thresholds.ts` 本机实跑输出 `the local embedding model is not available (no_ollama)`、退出码 1（没有填任何数字）。闸门：`685 passed \| 24 skipped (709)` 文件、`5788 passed \| 120 skipped (5908)` 用例、`all six steps passed`；相对开工（682/24/706、5764/120/5884）：文件 +3、用例 +24、跳过不变。语义阈值等真模型，见未验证清单。 |
 | C10.3 | ✅ | ef49f9c (schema/db); 8840df8 (server); de777bc (client) | 临时库 `mirrai_v6_wp16`（用完已 `dropdb`，`mirrai_live` 未连接）：`push --force` 后 `migrate` 应用到 `0086_consent_removals`；`--replay` `replayed 84 migration(s)`；`--rollback 1` 后表与索引消失；再 `migrate` 回来；升级路径（DROP 表+索引，删 `schema_migrations` 的 `0086_consent_removals`，再 `migrate`）后对象回来。该库上 `server/consent/purge-db.test.ts` 2 通过：按 schema 逐张扫 30 张带 `personaId` 的表该分身行数全 0、`personas/<u>/<p>` 与 `chat/<u>/<p>` 目录都不存在、回收站 `listDeletedPersonas` 里没有它、`consent_removals` +1、同账号另一个分身不受影响；名字不对时全都不动。`server/routers-v6/consent.test.ts` 10 通过：别人的分身 `NOT_FOUND`；`status` 只回状态与到期/回答日期、不回 token 哈希；`setStatus` 写入 `asked_no`；`createLink` 返回 32 字节 hex 的路径、库里只存哈希、30 天；`exportPage` 含名字且无外部链接；无效/过期/已答三种令牌的 `getByToken` 都抛 `NOT_FOUND` 且 message 同为 `errors.consentLinkInvalid`；公开返回恰为 `{ name }`（键集合断言）；`answer` 写入 `consent` 与 `answeredAt`；第二次回答被拒；`persona.purgeForConsent` 名字不对 `BAD_REQUEST` 且没删、名字对才删并写墓碑。`server/consent/page.test.ts` 7 通过：自包含（无 `http(s)://`/`<script`/`<link`/`<img`/`@import`/`url(`/`href=`）、中英两种、名字转义（`<img src=x onerror=…>` 变成实体）、`noindex`、令牌 32 字节只存哈希、30 天过期与坏日期按过期。`server/consent/purge.test.ts` 4 通过。`server/chat/service.test.ts` 97 通过（+2）：`settings.consent = "asked_no"` 时 `runConversation` 抛 `/说了不可以/`、不调 provider、不落用户消息；带 `taper.overrideDay` 也拦得住。`shared/persona-state.test.ts` 新增 1 条：`asked_no` 先于封存/减量判定，`asked_yes`/`not_asked`/`cannot_ask` 仍可聊。客户端 `ConsentTools.test.tsx` 9 通过（加载中/读失败带重试不冒充「还没问」/状态四种/手记答案/生成链接并显示/只有 `asked_no` 才出彻底删除卡、要输名字/链接到期日/下载说明页）；`Consent.test.tsx` 6 通过（noindex、四段说明、两个按钮、提交答案、答后致谢、无效链接同一提示）；`ClosedComposer.test.tsx` 新增 consent 用例（无破例按钮、有求助入口与「去档案页处理」）。`server/lock.test.ts` 的 public 程序白名单补了 `consent.ts#getByToken` 与 `#answer`。`server/skip-audit.test.ts` 清单加入新 DB 测试文件。闸门：`690 passed \| 25 skipped (715)` 文件、`5830 passed \| 122 skipped (5952)` 用例、`all six steps passed`；相对开工（682/24/706、5764/120/5884）：文件 +8、用例 +66、跳过 +2（新增 `server/consent/purge-db.test.ts` 的两条 DB 用例，文件已登记）。 |
 | C10.4 | ✅ | 796cb87 | `server/no-surveillance.test.ts` 5 通过：调度器不 import 采集器；`server/records/**`、`record.ts`、`style.ts` 不 import 采集器/通道/微信；`channels`/`wechat` 不调用 `importRecords`；`CollectorSourceId` 恰为五个；`schema.ts` 没有 `lastSeen`/`onlineStatus`/`readReceipt`/`liveLocation` 列。把 `import "../collectors/jobs"` 追加进 `server/scheduler/index.ts` 后 1 条红（`never starts a collector from the scheduler`），删掉后绿。文档：`docs/product-concept.md` 5.1 有守则、5.8 表有落地行；README 伦理节有链接。 |
-| C10.5 | ⬜ |  |  |
+| C10.5 | ✅ | 1d93e00 | `server/safety/usage-monitor.test.ts` 32 通过（新增 2 条）：上海 02:30、会话 46 分钟 → `lateNight: true`；同长度在 14:30 → false；02:00 但只聊了 10 分钟 → false；同一个 UTC 时刻（18:30Z）按 `Asia/Shanghai` 是深夜、按 `America/New_York` 是下午 → true/false。`server/chat/service.test.ts` 100 通过（新增 3 条）：凌晨 3 小时会话、画像 p90 是 240 分钟（按普通规则不会到点）→ 这一轮 `metadata.closing` 为 true、`done.lateNight` 为 true、`done.careNote.kind` 是 `long_session` 但 `text` 为空、落库文本不含 `labels.care.longSession`、`createSafetyEvent` 仍被调用；分身上没有 sessions 画像 → `careNote.text` 非空、落库文本含系统那句、`metadata.closing` 未设；收尾后 35 分钟再发 → `done.careNote` 是 `long_session` 且文本非空、落库消息 `metadata.systemContinuation` 为 true，第三次（再 +15 分钟）`careNote` 为空、不再重复。`client/src/pages/Chat.test.tsx` 11 通过（新增 1 条）：初始 `.chat-root` 无 `data-night`，`done` 事件带 `lateNight: true` 后变成 `data-night="true"`。免打扰：现有 `proactive-sweep.test.ts`「stays quiet in the quiet hours」与 `reply-jobs.test.ts`「cancels in quiet hours」通过；默认 `REMINDER_QUIET_HOURS=23:00-08:00` 覆盖 0–5，主动开口与追一句两条路都经过 `isQuietHour`，不需要改。样式：`[data-night="true"]` 压暗并去掉所有 animation/transition，`typing-dot`/`breathing-dot` 不再跳；GIF 表情在 `MessageBubble` 里用 canvas 画第一帧成静态图（CSS 停不了 GIF），canvas 不可用时保留原图。闸门：`690 passed \| 25 skipped (715)` 文件、`5836 passed \| 122 skipped (5958)` 用例、`all six steps passed`；相对 C10.3 收尾（690/25/715、5830/122/5952）用例 +6，跳过不变。 |
 | C10.6 | ⬜ |  |  |
 | C10.7 | ⬜ |  |  |
 | P18.1 | ⬜ |  |  |
@@ -792,6 +792,9 @@
 | 567 | C10.3 | 「用户下次打开时看到一张卡片，一个按钮：彻底清除」 | 卡片在档案页（`ConsentTools`）；聊天页关闭输入框另给一个「去档案页处理」按钮 | 档案页是管理分身设置的地方；聊天页只负责说明与入口，避免在聊天页再放一次删除逻辑。 |
 | 568 | C10.3 | 做法 4「所有这一阶段新表里它的行」 | `purgePersona` 原先只删文件、不删空目录；补 `removePersonaDirectories`，删 `personas/<userId>/<personaId>` 与 `chat/<userId>/<personaId>` 两个目录 | 验收要求「上传目录里它的文件夹不存在」。这同时改了 C8.11 的彻底删除行为（多删两个空目录），不影响任何数据。 |
 | 569 | C10.3 | 「一页可以给 TA 看的说明」文案只写了一份 | 导出的 HTML 用 `shared/copy/v6.ts` 的 `consentPage.*`；公开网页版另存在 `client/src/i18n` 的 `consent.link.*` | 导出页必须自包含、不能依赖界面字典；网页版要跟随界面语言（含 zh-Hant）。两处是同一段话的两个副本，会一起改。 |
+| 570 | C10.5 | 做法 4「收尾之后用户又继续了 30 分钟：系统的提示出现一次」 | 条件是「最后一条带 `metadata.closing` 的消息在本会话内，且距现在 ≥ 30 分钟」；用后一条消息的 `metadata.systemContinuation` 作为「已经说过」的标记 | 安全事件的枚举加值退不回去（1.3 节），而这里只需要一次提示、不需要一种新事件；标记和消息一起落库，重启也不会重复。 |
+| 571 | C10.5 | 做法 2「动图表情停在第一帧」 | `MessageBubble` 在 `night` 时用 canvas 把图片第一帧画成静态 PNG 再显示；canvas 拿不到上下文（如 jsdom、被跨域污染的图）时保留原图 | CSS 不能暂停 GIF/APNG；这是浏览器里唯一不改文件的办法。 |
+| 572 | C10.5 | 现状里 `evaluateUsage` 在回复生成之后调用 | 把用量评估挪到 `planTurn` 之前，`lateNight` 作为 `TurnInput` 传入；回复落地前的 care note 逻辑不变 | 「TA 说晚安优先于系统提示」要进这一轮的提示词，必须在拼提示词前知道是不是深夜。代价是每次会话多一次早于回复的用量读取。 |
 
 
 
@@ -923,6 +926,7 @@
 | C9.8 | 真实浏览器与真实群导出文件：本机只用 `buildGroupFixture()` 渲染成 `generic-line` 走过导入，页面与对话框只跑过 jsdom；没有打开过浏览器看排版，也没有拿微信/QQ 的群聊导出文件试过 | 起应用 → 用真实群导出文件走导入向导并勾「这是一个群聊」→ 打开大厅顶栏的群聊入口、建群、进 `/group/:id` 发几句（含 @ 与危机词），看固定说明、成员旁注解、危机卡与移动端排版 | 有真实群导出文件、愿意在浏览器里点一遍的人 |
 | C10.2 | 语义危机层的阈值（0.72/0.05）是照经验定的：本机没有 Ollama、没有嵌入模型，只用假嵌入验证了「余弦 ≥ 下限且比无害组高 0.05」这套规则的行为。真实 `bge-m3`（或 `OLLAMA_EMBED_MODEL`）下两组句子能否分开、阈值该取多少没量过 | 本机起 Ollama 并装嵌入模型，跑 `corepack pnpm crisis:semantic-thresholds`；按输出的 VERDICT 把 `server/safety/crisis-semantic.ts` 的 `CRISIS_FLOOR`/`SAFE_MARGIN` 调进分离区间，重跑 `server/safety/crisis-semantic.test.ts`。两组句子就是该文件的 `CRISIS_EXEMPLARS` 与 `SAFE_EXEMPLARS` | 有本机 Ollama 与嵌入模型的人 |
 | C10.3 | 真实浏览器里的同意流程：jsdom 只验到页面渲染、按钮接线与路由返回；没有在浏览器里真正打开一条 `/consent/<token>`、点「不可以」、再看到聊天关闭与档案页的彻底删除卡，也没有把导出的 HTML 在浏览器里打开过（自包含只用字符串断言） | 起应用（临时库）→ 档案页导出说明页并用浏览器打开；生成链接后开一个无痕窗口打开 `/consent/<token>`，点「不可以」→ 回档案页确认状态变「说不可以」、聊天页不能再发；再打开同一条链接应看到「这个链接已经不能用了」 | 有图形浏览器的人 |
+| C10.5 | 深夜保护在真实屏幕上的观感：jsdom 只验证了 `data-night` 的切换与 CSS 规则存在；配色是否真的「更暗但不影响可读性」、GIF 表情在夜间是否真的停在第一帧、去掉动效后有没有别处难看，都没有在浏览器里看过 | 起应用（临时库）→ 在设置里把时区改成能让「现在」落在 00:00–05:00 的时区（或直接改 `users.timezone`）→ 聊满 46 分钟（可把 `messages.createdAt` 改早来造）→ 看聊天页是否变暗、打字点是否不跳、贴纸表情是否静止；再在白天聊一轮对照 | 有图形浏览器和真实记录的人 |
 
 ## 待用户决定
 
@@ -942,6 +946,19 @@
 
 
 ## 批次日志
+
+### WP16 · 实现会话 · 2026-11-27 · C10.5 深夜保护
+
+按 WP16 的 C10.5 做；分支 `exec/v6`，这一条开工 HEAD `cb0659a`；没有 push、没有合并、没有切分支、没有动 `mirrai_live`、没有改 `docs/exec-v6.md`。
+
+- `UsageSignals` 加 `lateNight`（用户时区 0–5 点且会话 > 45 分钟），`evaluateUsage` 里用 `zonedHour` 判；`LATE_NIGHT_SESSION_MS`、`LATE_NIGHT_CONTINUATION_MS` 常量。
+- 用量评估从「回复生成之后」挪到 `planTurn` 之前，`TurnInput.lateNight` 传入；`closingForTurn` 在深夜且有收尾原话、且本会话没已收尾时直接收尾（不再等 p90）。没有收尾画像时不改行为，系统那句照旧。
+- 收尾之后的续聊：`db.getLastClosingMessageAt` 找最后一条带 `metadata.closing` 的助手消息，半小时后仍在同一会话里则由系统说一次 `long_session`，消息带 `metadata.systemContinuation` 去重。
+- `ChatEvent.done` 与 `/api/chat/stream` 的 `done` 事件带 `lateNight`；聊天页拿到后在根容器加 `data-night="true"`，CSS 压暗 + 去掉 animation/transition；`MessageBubble` 新增 `night`，把贴纸 GIF 画成首帧静态图。
+- 免打扰：主动开口（`proactive-sweep.ts`）与追一句（`reply-jobs.ts`）都走 `isQuietHour`，默认 `23:00-08:00` 已覆盖 0–5，未改代码；两处「quiet hours」测试通过。
+- 提交：`1d93e00`（手册建议一个提交）。
+- 闸门（不带 `--fast`、不带 `DATABASE_URL`）：`690 passed | 25 skipped (715)` 文件、`5836 passed | 122 skipped (5958)` 用例、`all six steps passed`；相对 C10.3 收尾（690/25/715、5830/122/5952）用例 +6，跳过不变。
+- 偏差 570–572；未验证清单 +1 行（C10.5 真实屏幕观感）；「待用户决定」无新增。
 
 ### WP16 · 实现会话 · 2026-11-27 · C10.3 同意工具
 
