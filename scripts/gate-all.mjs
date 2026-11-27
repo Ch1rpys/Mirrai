@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * The six-step gate, as one command.
+ * The seven-step gate, as one command.
  *
  * Typecheck, the full test suite, the copy audit, the fidelity structure
- * gate, the client build, and the server bundle. Each step is the same
- * `node` invocation as docs/exec-v6.md §2.1. None of them go through a
- * shell.
+ * gate, the client build, the server bundle, and the documentation links.
+ * Each step is the same `node` invocation as docs/exec-v6.md §2.1 (the
+ * doc-links step is WP18's P18.1). None of them go through a shell.
  *
  * `--fast` skips the two builds, for mid-work checks. A commit still
  * needs the full run.
@@ -54,6 +54,10 @@ const STEPS = [
       "--outdir=dist",
     ],
   },
+  {
+    name: "doc-links",
+    args: ["scripts/check-doc-links.mjs"],
+  },
 ];
 
 const BUILD_STEPS = new Set(["client-build", "server-bundle"]);
@@ -94,4 +98,4 @@ if (fast) log("fast: skipping client-build and server-bundle");
 
 for (const step of steps) runStep(step);
 
-log(fast ? "fast gate passed" : "all six steps passed");
+log(fast ? "fast gate passed" : "all seven steps passed");

@@ -113,11 +113,43 @@ describe("the outbound inventory", () => {
   });
 
   it("keeps the markdown table in lockstep with the inventory", () => {
+    // The document, the settings panel and this guard read the same array.
+    // A row that drifts (an address that moved, a payload that grew) makes
+    // the promise the settings page shows different from the one the
+    // document makes, so every cell is compared, not just the id.
     const docs = readFileSync(join(ROOT, "docs/egress.md"), "utf8");
-    const rows = docs.split("\n").filter((line) => /^\| [a-z0-9]+-[a-z0-9-]* \|/.test(line));
-    expect(rows).toHaveLength(EGRESS_ITEMS.length);
+    const lines = docs.split("\n");
+    const start = lines.findIndex((line) => line.startsWith("| id |"));
+    expect(start, "docs/egress.md must contain the table header").toBeGreaterThanOrEqual(0);
+
+    // One table, not two: every row must follow the header contiguously.
+    let end = start;
+    while (end < lines.length && lines[end].startsWith("|")) end += 1;
+    // Header, the `---` separator, then one row per item: a blank line in
+    // the middle would end the block early.
+    expect(end - start).toBe(EGRESS_ITEMS.length + 2);
+
+    const rows = new Map<string, string[]>();
+    for (const line of lines.slice(start + 1, end)) {
+      if (/^\|\s*-+/.test(line)) continue;
+      const cells = line
+        .replace(/^\|/, "")
+        .replace(/\|$/, "")
+        .split("|")
+        .map((cell) => cell.trim());
+      rows.set(cells[0], cells);
+    }
+    expect([...rows.keys()].sort()).toEqual(EGRESS_ITEMS.map((item) => item.id).sort());
     for (const item of EGRESS_ITEMS) {
-      expect(docs).toContain(`| ${item.id} |`);
+      expect(rows.get(item.id)).toEqual([
+        item.id,
+        item.destination.zh,
+        item.payload.zh,
+        item.when.zh,
+        item.defaultOn ? "开" : "关",
+        item.offHow.zh,
+        item.side,
+      ]);
     }
   });
 });

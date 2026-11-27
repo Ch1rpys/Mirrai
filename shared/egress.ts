@@ -32,7 +32,7 @@ export const EGRESS_ITEMS: EgressItem[] = [
       en: "The map tile server set by the operator in MAP_TILE_URL (none by default)",
     },
     payload: {
-      zh: "正在看的那一片地图的图片请求。不发送记录内容、地名或坐标以外的任何东西",
+      zh: "正在看的那一片地图的图片请求。不发送记录内容；只有瓦片坐标",
       en: "The image requests for the part of the map being viewed. No record content is sent; only the tile coordinates",
     },
     when: {
@@ -133,16 +133,16 @@ export const EGRESS_ITEMS: EgressItem[] = [
     id: "ollama-embed",
     side: "server",
     destination: {
-      zh: "本机 Ollama 的 /api/embed（地址来自 OLLAMA_URL，通常是 http://127.0.0.1:11434）",
-      en: "This machine's Ollama at /api/embed (OLLAMA_URL, usually http://127.0.0.1:11434)",
+      zh: "本机 Ollama 的 /api/embed 和状态查询 /api/tags（地址来自 OLLAMA_URL，通常是 http://127.0.0.1:11434）",
+      en: "This machine's Ollama at /api/embed and the /api/tags status query (OLLAMA_URL, usually http://127.0.0.1:11434)",
     },
     payload: {
-      zh: "要检索的那一句、每一轮 TA 回复之前用户那一轮的原文，以及每条用户消息（语义危机识别只发这一句）。连本机时数据不出这台机器",
-      en: "The query, the user burst that came before each of their turns, and each user message on its own (the semantic crisis check sends only that line). A local URL does not leave this machine",
+      zh: "要检索的那一句、每一轮 TA 回复之前用户那一轮的原文，以及每条用户消息（语义危机识别只发这一句）；状态查询只读模型列表。连本机时数据不出这台机器",
+      en: "The query, the user burst that came before each of their turns, and each user message on its own (the semantic crisis check sends only that line); the status query only reads the model list. A local URL does not leave this machine",
     },
     when: {
-      zh: "本机 Ollama 装着嵌入模型时：测量画像之后给记录建向量、检索示范时，以及每轮收到用户消息时判一次语义危机",
-      en: "When local Ollama has an embedding model: after measuring the style profile, when retrieving exemplars, and once per received message for the semantic crisis check",
+      zh: "本机 Ollama 装着嵌入模型时：测量画像之后给记录建向量、检索示范时、每轮收到用户消息时判一次语义危机；设置页显示语义检索状态时",
+      en: "When local Ollama has an embedding model: after measuring the style profile, when retrieving exemplars, once per received message for the semantic crisis check, and when Settings shows the semantic search status",
     },
     defaultOn: false,
     offHow: {

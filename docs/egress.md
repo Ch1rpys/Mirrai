@@ -28,8 +28,7 @@
 | ldr-weather | Open-Meteo 的天气接口 api.open-meteo.com | 四舍五入到小数点后两位的经纬度。不带城市名、记录内容或用户标识 | 用户打开「显示 TA 那边的天气」之后，最多每 30 分钟一次 | 关 | 关掉「显示 TA 那边的天气」；或环境变量 WEATHER_ENABLED=false | server |
 | letter-email | 用户自己填的 SMTP 邮件服务器 | 分身回信的全文，以及收件地址（用户自己的邮箱）。不带记录、不带图片、不带追踪像素 | 用户为这个分身打开「回信也发到我的邮箱」，并且一封信被回信时 | 关 | 关掉「回信也发到我的邮箱」，或清掉设置里的邮件服务器 | server |
 | channel-telegram | Telegram Bot API（api.telegram.org） | 长轮询的更新请求（没有内容）；发出的回复文本；机器人 token 在 URL 路径里 | 用户自己启动 Telegram 通道之后，持续发生 | 关 | 在设置里停止这个通道，或清掉它的机器人 token | server |
-| channel-discord | Discord Gateway（wss://gateway.discord.gg）与 Discord REST API（discord.com/api） | Gateway 连接（心跳与事件）；收到和发出的私信文本；机器人 token 在 Authorization 头与 identify 负载里 | 用户自己启动 Discord 通道之后，持续发生 | 关 | 在设置里停止这个通道，或清掉它的机器人 token | server |
+| channel-discord | Discord Gateway（wss://gateway.discord.gg）与 Discord REST API（discord.com/api） | Gateway 的长连接（心跳与事件）；收到和发出的私信文本；机器人 token 在 Authorization 头与 identify 负载里 | 用户自己启动 Discord 通道之后，持续发生 | 关 | 在设置里停止这个通道，或清掉它的机器人 token | server |
 | channel-matrix | 用户自己填的 Matrix homeserver | /sync 长轮询与发出的 m.room.message；私信文本；访问令牌在 Authorization 头里 | 用户自己启动 Matrix 通道之后，持续发生 | 关 | 在设置里停止这个通道，或清掉它的访问令牌 | server |
-
 | backup-webdav | 用户自己填的 WebDAV 服务器 | 加密后的备份文件本身，以及它的文件名。Basic 认证的用户名和密码在请求头里 | 用户打开了定时备份、目标是 WebDAV，并且到了那天 | 关 | 关掉定时备份，或把目标改成本机的一个文件夹 | server |
 | backup-s3 | 用户自己填的 S3 兼容存储端点 | 加密后的备份文件本身，以及对象名。SigV4 签名的请求头和访问密钥标识在请求里，密钥本身不外发 | 用户打开了定时备份、目标是 S3 兼容存储，并且到了那天 | 关 | 关掉定时备份，或把目标改成本机的一个文件夹 | server |
