@@ -59,7 +59,7 @@ WP0–WP3 全部 ✅，没有 🟡。按「缺什么」粗分（未验证清单�
 | P0.2 | 一条命令的总闸门 | ✅ | `scripts/gate-all.mjs` | 提交 b298550；`server/gate-script.test.ts` 3 通过 |
 | P0.3 | 黄金快照 | ✅ | `shared/copy/prompt.ts` | 提交 e506484；`server/chat/prompt-golden.test.ts` 10 通过 |
 | P0.4 | `personas.settings` 与 `styleProfile` 两列 | ✅ | `shared/persona-settings.ts`、`drizzle/schema.ts`、`drizzle/0044_persona_settings_and_style_profile.sql` | 提交 1e44f5d、e59ec6d；`shared/persona-settings.test.ts` 5 通过、`server/routers.persona-settings.test.ts` 3 通过；临时库四步与升级路径通过 |
-| P0.5 | 夹具人物「小满」 | ✅ | `server/test-fixtures/xiaoman.ts`、`server/test-fixtures/render.ts`、`server/test-fixtures/seed-db.ts` | 提交 b1fe349、c785e6a、34f5564；`xiaoman.test.ts` 35 通过 |
+| P0.5 | 夹具人物「小满」 | ✅ | `server/test-fixtures/xiaoman.ts`、`server/test-fixtures/render.ts`、`server/test-fixtures/seed-db.ts` | 提交 b1fe349、c785e6a、34f5564、ae2918e（验收修复）；2026-11-27 独立复验通过（41 通过、构建 76–100ms、往返 4904/4904），语音分母收紧 428d709；`xiaoman.test.ts` 41 通过 |
 | P0.6 | 生成路径收拢 | ✅ | `server/chat/service.ts`、`server/eval/run.ts`、`server/chat/generate.ts` | 提交 1588608、b089be8、58d1123；`server/chat/service.test.ts` 通过、`stream.test.ts` 通过；闸门 266 passed |
 | P0.7 | 出站清单 | ✅ | `shared/egress.ts`、`client/src/components/v6/EgressList.tsx`、`docs/egress.md` | 提交 16ad889、e6e22c1；`server/egress.test.ts` 4 通过、`EgressList.test.tsx` 通过 |
 
@@ -366,6 +366,6 @@ WP0–WP3 全部 ✅，没有 🟡。按「缺什么」粗分（未验证清单�
 - 「落点」取自每条建议的「做法」和进度表证据里出现的模块，只列 1–3 个最关键的，不是完整改动清单；测试文件放在「验收依据」里，不占落点。
 - 🟡 的 81 条逐条缺什么、该跑哪条命令、谁来跑，在进度文件的「未验证清单」；本机为什么最高只能到 🟡，见上一节。
 - 还没定的九处在进度文件的「待用户决定」：A7 毕业资格里的连续天数、C8.3 首次启动的「新建还是还原」、C8.8 手机原生壳与系统推送、C8.5 加密账号下的家庭共享、C9.1 QQ 与企业微信、C9.7 插件通道的枚举值、C9.8 群聊加密与每天条数上限、B9.1/B9.2 是否另开阶段做本地适配器。
-- 实现与手册不一致的地方在进度文件的「偏差表」（608 条）；影响大的几条按 P18.5 的摘要再列一次。
+- 实现与手册不一致的地方在进度文件的「偏差表」（609 条）；影响大的几条按 P18.5 的摘要再列一次。
 - WP18 的 P18.4（独立抽查）已在 2026-11-27 完成：不带实施上下文，按工作包各抽 3 条（SHA-256 种子）重新跑验收，并必查 A1、A2、A8、B1.1、B2.1、B2.2、B5.1、B5.2、C7.2、C8.3、C8.5、C8.11、C10.1、C10.3；去重后 66 条全部通过，没有条目降级，详细名单与逐条证据在进度文件的批次日志。P18.5 照 [`v1.3.0.md`](releases/v1.3.0.md) 的写法写了发布说明草稿，没改版本号、没打标签。
 - 盲测记录按 [`baseline.md`](eval/baseline.md) 的约定；本阶段还没有真人被试做过盲测，「真人盲测命中率」这一项仍是未验证。
