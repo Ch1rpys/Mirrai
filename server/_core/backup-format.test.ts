@@ -221,13 +221,17 @@ describe("the backup archive", () => {
         const complete = await fs.readFile(out);
         const cutPath = path.join(directory, `${label}-cut`);
         await fs.writeFile(cutPath, complete.subarray(0, Math.floor(complete.length * 0.8)));
-        await expect(
-          extractBackupToStaging({
-            filePath: cutPath,
-            passphrase,
-            stagingDir: path.join(directory, `${label}-staging`),
-          }),
-        ).rejects.toBeInstanceOf(Error);
+        // A download that stopped is a broken file, not a crash: the
+        // caller turns this into "the bundle is corrupt" (and the route
+        // answers 400), so the kind of error matters, and so does the
+        // sentence it carries.
+        const truncatedError = await extractBackupToStaging({
+          filePath: cutPath,
+          passphrase,
+          stagingDir: path.join(directory, `${label}-staging`),
+        }).catch((thrown: unknown) => thrown);
+        expect(truncatedError).toBeInstanceOf(BackupFormatError);
+        expect((truncatedError as Error).message.length).toBeGreaterThan(0);
       }
     } finally {
       await fs.rm(directory, { recursive: true, force: true });
