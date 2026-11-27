@@ -3218,6 +3218,7 @@ export const zhHant = {
     "saved": "記下了。",
     "cleared": "清掉了。",
     "upcoming": "還有 {{n}} 天見面（{{date}}）",
+    "upcomingShort": "{{n}} 天后見面",
     "today": "今天見面",
     "askPast": "{{date}} 那天，見到了嗎？",
     "met": "見到了",

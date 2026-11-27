@@ -3284,6 +3284,7 @@ export const zh = {
     saved: "记下了。",
     cleared: "清掉了。",
     upcoming: "还有 {{n}} 天见面（{{date}}）",
+    upcomingShort: "{{n}} 天后见面",
     today: "今天见面",
     askPast: "{{date}} 那天，见到了吗？",
     met: "见到了",

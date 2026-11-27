@@ -50,6 +50,15 @@ describe("the meeting countdown (C5.1)", () => {
     expect(screen.getByText("还有 3 天见面（2026-03-04）")).toBeInTheDocument();
   });
 
+  it("keeps a short countdown in the header on a narrow screen (C5.1)", () => {
+    // The line was `hidden sm:inline`: on a phone the countdown simply
+    // did not exist, and the manual asks the header to show it.
+    render(
+      <MeetCountdown personaId={5} nextMeetAt="2026-03-04" timezone="Asia/Shanghai" now={now} />,
+    );
+    expect(screen.getByText("3 天后见面")).toBeInTheDocument();
+  });
+
   it("says you meet today on the day", () => {
     render(
       <MeetCountdown personaId={5} nextMeetAt="2026-03-01" timezone="Asia/Shanghai" now={now} />,

@@ -3268,6 +3268,7 @@ export const en = {
     saved: "Saved.",
     cleared: "Cleared.",
     upcoming: "{{n}} days until you meet ({{date}})",
+    upcomingShort: "{{n}}d to meet",
     today: "You meet today",
     askPast: "Did you meet on {{date}}?",
     met: "We met",

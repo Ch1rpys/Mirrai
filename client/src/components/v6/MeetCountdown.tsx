@@ -57,14 +57,19 @@ export default function MeetCountdown({
   if (mode === "inline") {
     if (countdown.state === "upcoming") {
       return (
-        <span className="text-[0.625rem] text-muted-subtle flex-shrink-0 hidden sm:inline">
-          {t("ldr.upcoming", { n: countdown.days, date: countdown.date })}
+        // The full line needs the width a phone does not have; the short
+        // one is what fits there. Both say when (C5.1).
+        <span className="text-[0.625rem] text-muted-subtle flex-shrink-0 truncate">
+          <span className="sm:hidden">{t("ldr.upcomingShort", { n: countdown.days })}</span>
+          <span className="hidden sm:inline">
+            {t("ldr.upcoming", { n: countdown.days, date: countdown.date })}
+          </span>
         </span>
       );
     }
     if (countdown.state === "today") {
       return (
-        <span className="text-[0.625rem] text-muted-subtle flex-shrink-0 hidden sm:inline">
+        <span className="text-[0.625rem] text-muted-subtle flex-shrink-0">
           {t("ldr.today")}
         </span>
       );

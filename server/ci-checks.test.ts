@@ -66,6 +66,19 @@ describe("the schema check in the build", () => {
   });
 });
 
+describe("the database tests in the build", () => {
+  it("runs them one file at a time, because they share one database", () => {
+    /**
+     * The database tests truncate the tables they use. Run in parallel
+     * they deadlock each other — the acceptance pass hit it, and CI was
+     * the place it would have failed intermittently. The flag is the
+     * fix; without it the job is a coin toss.
+     */
+    const test = step("Test");
+    expect(test).toMatch(/pnpm test -- --no-file-parallelism/);
+  });
+});
+
 describe("the idempotency check in the build", () => {
   it("runs the SQL again, not the script", () => {
     /**

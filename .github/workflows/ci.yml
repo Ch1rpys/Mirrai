@@ -78,8 +78,12 @@ jobs:
       - name: Apply schema
         run: pnpm exec drizzle-kit push --force
 
+      # The database tests truncate the tables they use, so running them
+      # in parallel makes them deadlock each other. One file at a time on
+      # the machine that has a database; the gate's own runs stay parallel
+      # because they skip these files without DATABASE_URL.
       - name: Test
-        run: pnpm test
+        run: pnpm test -- --no-file-parallelism
 
   schema:
     name: Schema check
