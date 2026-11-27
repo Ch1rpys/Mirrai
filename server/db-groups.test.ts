@@ -157,3 +157,64 @@ describe.skipIf(!DATABASE_URL)("group chat in postgres", () => {
     expect(await db.setUserFeatures(userId, { groupChat: false })).toEqual({ groupChat: false });
   });
 });
+
+/**
+ * Group lines count as the user's activity that day (C9.8).
+ *
+ * The manual's safety paragraph says the room's messages count toward the
+ * user's usage for the day. The room keeps its lines away from `messages`,
+ * so the counters that read `messages` — the lobby's "today" number, the
+ * calendar — were blind to the whole feature: a day spent in a room looked
+ * like a day the user had not opened the app.
+ */
+describe.skipIf(!DATABASE_URL)("group chat counts toward the day's usage", () => {
+  it("adds the room's lines to today's numbers", async () => {
+    const stamp = Math.floor(Math.random() * 1_000_000);
+    const usageUserId = await db.createUser({
+      username: `group-usage-${stamp}`,
+      passwordHash: "x",
+      name: "阿树",
+    });
+    try {
+      const usagePersonaId = await db.createPersona({
+        userId: usageUserId,
+        name: "小满",
+        analysisStatus: "ready",
+      } as never);
+      const room = await db.createGroupRoom(usageUserId, "今天的群");
+      expect(room).not.toBeNull();
+      await db.addGroupRoomMember(room!.id, usageUserId, usagePersonaId);
+
+      const beforeStats = await db.getUserStats(usageUserId, "Asia/Shanghai");
+      const beforeDaily = await db.getDailyChatCounts(usageUserId, 30, "Asia/Shanghai");
+      const beforeToday = beforeDaily.find(
+        (row) => row.date === new Date().toISOString().slice(0, 10),
+      );
+
+      await db.createGroupMessage({
+        roomId: room!.id,
+        userId: usageUserId,
+        role: "user",
+        personaId: null,
+        content: "大家早",
+      } as never);
+      await db.createGroupMessage({
+        roomId: room!.id,
+        userId: usageUserId,
+        role: "assistant",
+        personaId: usagePersonaId,
+        content: "早",
+      } as never);
+
+      const afterStats = await db.getUserStats(usageUserId, "Asia/Shanghai");
+      expect(afterStats.todayChats).toBe(beforeStats.todayChats + 2);
+
+      const afterDaily = await db.getDailyChatCounts(usageUserId, 30, "Asia/Shanghai");
+      const afterToday = afterDaily.find((row) => row.date === (beforeToday?.date ?? new Date().toISOString().slice(0, 10)));
+      expect(Number(afterToday?.count ?? 0)).toBe(Number(beforeToday?.count ?? 0) + 2);
+      expect(Number(afterToday?.userCount ?? 0)).toBe(Number(beforeToday?.userCount ?? 0) + 1);
+    } finally {
+      await db.deleteUserAccount(usageUserId);
+    }
+  }, 30_000);
+});

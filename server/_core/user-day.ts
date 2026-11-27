@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { messages } from "../../drizzle/schema";
 import { dayShiftMinutes } from "@shared/timezone";
 
@@ -120,7 +121,17 @@ export function sqlZoneName(zone: string | null | undefined): string | null {
  * Postgres knows the offset of every date, so the zone names are used
  * and the offset is worked out per row.
  */
-export function userDayColumn(timezone?: string | null) {
+export function userDayColumn(
+  timezone?: string | null,
+  /**
+   * The timestamp column to read.
+   *
+   * Almost every caller wants `messages.createdAt`; the group rooms keep
+   * their own timestamps in `group_messages` and count toward the same
+   * days (C9.8), so the column is a parameter.
+   */
+  column: AnyPgColumn = messages.createdAt,
+) {
   const userZone = sqlZoneName(timezone);
   const serverZone = sqlZoneName(serverZoneName()) ?? "UTC";
   if (!userZone) {
@@ -132,7 +143,7 @@ export function userDayColumn(timezone?: string | null) {
      * zone the runtime does not know.
      */
     const shift = dayShiftMinutes(timezone);
-    return sql<string>`TO_CHAR(${messages.createdAt} + (${sql.raw(String(shift))} * INTERVAL '1 minute'), 'YYYY-MM-DD')`;
+    return sql<string>`TO_CHAR(${column} + (${sql.raw(String(shift))} * INTERVAL '1 minute'), 'YYYY-MM-DD')`;
   }
-  return sql<string>`TO_CHAR(${messages.createdAt} AT TIME ZONE ${sql.raw(`'${serverZone}'`)} AT TIME ZONE ${sql.raw(`'${userZone}'`)}, 'YYYY-MM-DD')`;
+  return sql<string>`TO_CHAR(${column} AT TIME ZONE ${sql.raw(`'${serverZone}'`)} AT TIME ZONE ${sql.raw(`'${userZone}'`)}, 'YYYY-MM-DD')`;
 }

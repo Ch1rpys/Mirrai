@@ -67,6 +67,7 @@ import { charBigrams } from "@shared/act-clusters";
 import { queryLexemes, searchTokens, toTsQuery } from "@shared/search-tokens";
 import { MAX_EMBEDDED_TURNS } from "@shared/records";
 import { normalizeLockSettings, type LockSettings } from "@shared/lock";
+import { MAX_MESSAGE_PINS } from "@shared/message-marks";
 import { mergeUserFeatures, normalizeUserFeatures, type UserFeatures } from "@shared/user-features";
 import { normalizeUserEncryption } from "@shared/encryption";
 import {
@@ -2061,11 +2062,23 @@ export async function getUserStats(userId: number, timezone?: string | null) {
   const today = zonedDayStart(new Date(), timezone);
   const [todayCount] = await db.select({ c: count() }).from(messages)
     .where(and(isNull(messages.deletedAt), eq(messages.userId, userId), gte(messages.createdAt, today)));
+  /**
+   * The room's lines are the user's day too (C9.8).
+   *
+   * A group room keeps its lines in `group_messages` so it cannot touch a
+   * pair's conversation, memories or chat count. But "today" on the lobby
+   * and the calendar are about the person, not about one conversation, and
+   * they read `messages` alone — so a day spent in a room counted as a day
+   * the app was never opened. The manual's safety paragraph says the room's
+   * messages count toward the day's usage.
+   */
+  const [groupTodayCount] = await db.select({ c: count() }).from(groupMessages)
+    .where(and(eq(groupMessages.userId, userId), gte(groupMessages.createdAt, today)));
   const [userRow] = await db.select({ createdAt: users.createdAt }).from(users).where(eq(users.id, userId));
   return {
     totalPersonas: personaCount?.c || 0,
     totalChats: Number(chatSum?.s) || 0,
-    todayChats: todayCount?.c || 0,
+    todayChats: (todayCount?.c || 0) + (groupTodayCount?.c || 0),
     memberSince: userRow?.createdAt || new Date(),
   };
 }
@@ -3621,8 +3634,34 @@ export async function markPushFailure(userId: number, endpoint: string): Promise
  */
 export const REPLY_JOB_CLAIM_STALE_MS = 15 * 60_000;
 
+/**
+ * How far down an error's `cause` chain a SQLSTATE is looked for.
+ *
+ * The chain is normally two links — Drizzle's `DrizzleQueryError` wrapping
+ * the driver's error — and a loop that a buggy adapter built by accident
+ * must not hang the catch.
+ */
+const PG_ERROR_CAUSE_DEPTH = 5;
+
+/**
+ * Whether Postgres refused a row because of a unique index.
+ *
+ * Drizzle 0.45 does not re-throw the driver's error: a failed statement
+ * becomes a `DrizzleQueryError`, and the pg error — with the `code` on it —
+ * is kept at `error.cause`. Reading only the top level therefore never
+ * sees `23505` for a real insert, and `createReplyJob`'s fallback stopped
+ * running. The whole chain is walked, so the check holds for the wrapped
+ * error the real driver produces, for a plain pg-shaped error, and for
+ * one wrapped more than once.
+ */
 function isPgUniqueViolation(error: unknown): boolean {
-  return (error as { code?: unknown })?.code === "23505";
+  let current: unknown = error;
+  for (let depth = 0; depth <= PG_ERROR_CAUSE_DEPTH; depth += 1) {
+    if (!current || typeof current !== "object") return false;
+    if ((current as { code?: unknown }).code === "23505") return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }
 
 export async function createReplyJob(data: InsertReplyJob): Promise<ReplyJob> {
@@ -5543,7 +5582,46 @@ export async function getDailyChatCounts(userId: number, days = 30, timezone?: s
     .from(messages)
     .where(and(isNull(messages.deletedAt), eq(messages.userId, userId), gte(messages.createdAt, since)))
     .groupBy(day);
-  return rows;
+  /**
+   * The group rooms' lines belong to the same days (C9.8).
+   *
+   * They are stored apart from `messages` on purpose, but the calendar and
+   * the streak are about the user's days, not about one conversation. The
+   * two queries are merged by day, so a day the user only spent in a room
+   * still shows up.
+   */
+  const groupDay = userDayColumn(timezone, groupMessages.createdAt);
+  const groupRows = await db.select({
+    date: groupDay,
+    count: count(),
+    userCount: sql<number>`count(*) FILTER (WHERE ${groupMessages.role} = 'user')`,
+  })
+    .from(groupMessages)
+    .where(and(eq(groupMessages.userId, userId), gte(groupMessages.createdAt, since)))
+    .groupBy(groupDay);
+  const byDate = new Map<string, { date: string; count: number; userCount: number }>();
+  for (const row of rows) {
+    byDate.set(String(row.date), {
+      date: String(row.date),
+      count: Number(row.count),
+      userCount: Number(row.userCount),
+    });
+  }
+  for (const row of groupRows) {
+    const key = String(row.date);
+    const existing = byDate.get(key);
+    if (existing) {
+      existing.count += Number(row.count);
+      existing.userCount += Number(row.userCount);
+    } else {
+      byDate.set(key, {
+        date: key,
+        count: Number(row.count),
+        userCount: Number(row.userCount),
+      });
+    }
+  }
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 // ─── WeChat Bot State helpers ───────────────────────────────────────────────
@@ -6936,7 +7014,56 @@ export async function restoreMessage(
       ...(personaId === undefined ? [] : [eq(messages.personaId, personaId)]),
     ))
     .returning({ id: messages.id });
-  return restored.length > 0;
+  if (restored.length === 0) return false;
+  await trimPinsAfterRestore(messageId, userId).catch((error) => {
+    console.warn("[db] The restored message's pin could not be trimmed:", error);
+  });
+  return true;
+}
+
+/**
+ * A restored message cannot take the pins past the limit (C8.11).
+ *
+ * A pin on a message in the bin is kept so the undo can bring it back,
+ * but it does not count against the three-in-front limit while it is
+ * hidden. So a fourth pin can be added during the undo window; when the
+ * message comes back, the restored pin is the oldest of the four and is
+ * the one that does not come back with it. The message itself returns —
+ * the undo is about the message.
+ */
+async function trimPinsAfterRestore(messageId: number, userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const mine = await db
+    .select({ id: messageMarks.id })
+    .from(messageMarks)
+    .where(and(
+      eq(messageMarks.messageId, messageId),
+      eq(messageMarks.userId, userId),
+      eq(messageMarks.kind, "pin"),
+    ));
+  if (mine.length === 0) return;
+  const [others] = await db
+    .select({ c: count() })
+    .from(messageMarks)
+    .innerJoin(messages, and(
+      eq(messages.id, messageMarks.messageId),
+      isNull(messages.deletedAt),
+    ))
+    .where(and(
+      eq(messageMarks.userId, userId),
+      eq(messageMarks.kind, "pin"),
+      ne(messageMarks.messageId, messageId),
+      eq(messages.userId, userId),
+    ));
+  const room = Math.max(0, MAX_MESSAGE_PINS - Number(others?.c ?? 0));
+  if (mine.length <= room) return;
+  const excess = mine.slice(room).map((row) => row.id);
+  if (excess.length === 0) return;
+  await db.delete(messageMarks).where(and(
+    eq(messageMarks.userId, userId),
+    inArray(messageMarks.id, excess),
+  ));
 }
 
 /**
@@ -11444,6 +11571,17 @@ export async function getMaterialCounts(
       ),
     )
     .groupBy(sql`COALESCE(${collectedMessages.kind}, 'text')`);
+  /**
+   * The states of their *text* lines (B8.10).
+   *
+   * `measureFingerprint` builds its `perState` from text rows alone: a
+   * sticker or a voice note that carries an emotion label says how the
+   * persona felt, not how they wrote in that state. Counting every kind
+   * here used to tell a record with twenty stickers per state that the
+   * per-state layer was ready, while the fingerprint could not measure a
+   * single state. The report and the measurement must read the same
+   * rows.
+   */
   const emotionRows = await db
     .select({
       emotion: collectedMessages.emotion,
@@ -11455,6 +11593,7 @@ export async function getMaterialCounts(
         eq(collectedMessages.personaId, personaId),
         eq(collectedMessages.userId, userId),
         eq(collectedMessages.role, "assistant"),
+        sql`COALESCE(${collectedMessages.kind}, 'text') = 'text'`,
         sql`${collectedMessages.emotion} IS NOT NULL AND ${collectedMessages.emotion} <> ''`,
         filter,
       ),

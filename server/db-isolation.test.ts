@@ -61,6 +61,7 @@ const purgePersona = vi.fn(async (id: number, userId: number) => {
 });
 
 vi.mock("./db", () => ({
+  getActiveShareForMemberPersona: vi.fn().mockResolvedValue(undefined),
   getSkillJobById: (id: number, userId: number) => getSkillJobById(id, userId),
   getSceneById: (id: number, userId: number) => getSceneById(id, userId),
   deleteScene: (id: number, userId: number) => deleteScene(id, userId),

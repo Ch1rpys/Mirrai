@@ -11,6 +11,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { copy } from "@shared/copy";
 import { protectedProcedure, router } from "../_core/trpc";
+import { MAX_MESSAGE_PINS } from "@shared/message-marks";
 import {
   addMessageMark,
   countMessageMarks,
@@ -22,7 +23,7 @@ import {
 } from "../db";
 
 /** Every conversation keeps at most this many messages in front. */
-export const MAX_PINS = 3;
+export const MAX_PINS = MAX_MESSAGE_PINS;
 
 const MARK_KINDS = ["star", "pin", "topic"] as const;
 

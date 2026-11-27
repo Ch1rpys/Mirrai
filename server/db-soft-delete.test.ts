@@ -639,12 +639,15 @@ describe.skipIf(!DATABASE_URL)("pins on messages that are gone", () => {
       const visible = await caller.mark.list({ personaId, kind: "pin" });
       expect(visible.marks).toHaveLength(3);
 
-      // The undo brings the old pin back.
+      // The undo brings the message back. There are three pins visible
+      // and the conversation only keeps three in front (C8.10), so the
+      // restored message's pin is the one that does not come back: the
+      // pin was created before the one that filled its slot.
       await restoreMessage(ids[0]!, userId, personaId);
       const afterUndo = await caller.mark.list({ personaId, kind: "pin" });
-      // The restored pin joins the three that were visible.
+      expect(afterUndo.marks).toHaveLength(3);
       expect(afterUndo.marks.map((row) => row.messageId).sort()).toEqual(
-        [...ids, fourth].sort(),
+        [...ids.slice(1), fourth].sort(),
       );
     } finally {
       await deleteUserAccount(userId).catch(() => undefined);
