@@ -61,6 +61,34 @@ describe("useTypingReveal", () => {
     }
   });
 
+  it("reads the typing list the server really sends, one per gap (B5.5)", async () => {
+    // The server sends `typingMs` with one entry per gap — three texts
+    // have two gaps — and the bubble test used one entry per text, so
+    // the production shape was never exercised.
+    vi.useFakeTimers();
+    try {
+      let appearances = 0;
+      const shown: string[][] = [];
+      const running = revealBurst({
+        texts: ["嗯", "好", "在"],
+        gapsMs: [1_000, 1_000],
+        typingMs: [200, 600],
+        setDots: (on) => {
+          if (on) appearances += 1;
+        },
+        show: (texts) => {
+          shown.push(texts);
+        },
+      });
+      await vi.advanceTimersByTimeAsync(10_000);
+      await running;
+      expect(appearances).toBe(2);
+      expect(shown).toEqual([["嗯"], ["嗯", "好"], ["嗯", "好", "在"]]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not change any state after the turn is aborted", async () => {
     vi.useFakeTimers();
     try {

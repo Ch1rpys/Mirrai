@@ -601,6 +601,21 @@ describe("queued replies", () => {
     expect(jobs[0]?.status).toBe("done");
   });
 
+  it("answers from the in-process timer when the moment comes (B5.2)", async () => {
+    // The queued-reply timers are what make a deferred answer arrive
+    // without a sweep running; the tests only ever called
+    // `runReplyJob` by hand.
+    pushToUser.mockClear();
+    const events = await drain(persona(), "在吗");
+    expect(events[0]?.type).toBe("deferred");
+    expect(jobs[0]?.status).toBe("pending");
+    const wait = jobs[0]!.dueAt.getTime() - Date.now();
+    expect(wait).toBeGreaterThan(0);
+    await vi.advanceTimersByTimeAsync(wait + 1);
+    expect(jobs[0]?.status).toBe("done");
+    expect(pushToUser).toHaveBeenCalledWith(1, expect.objectContaining({ kind: "reply" }));
+  });
+
   it("computes busy as the window end plus the delay, capped", () => {
     const now = NOW;
     const busyUntil = new Date(now.getTime() + 40 * 60_000);

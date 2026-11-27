@@ -251,6 +251,36 @@ describe("the message bubble", () => {
     expect(screen.queryByLabelText(translate("zh", "chat.ttsVoice"))).toBeNull();
   });
 
+  it("offers 'did they say this' on a text reply, and not on a notice (C2.3)", () => {
+    // The entry lived only in the SaidBefore component test; nothing
+    // checked that the bubble itself carries the button, or that a
+    // system notice does not.
+    const bubble = render(
+      <MessageBubble
+        msg={makeMessage({ role: "assistant", content: "在的", messageType: "text" })}
+        personaName="小A"
+        personaId={5}
+        showMood={false}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: translate("zh", "chat.saidBefore", { name: "小A" }) }),
+    ).toBeInTheDocument();
+    bubble.unmount();
+
+    render(
+      <MessageBubble
+        msg={makeMessage({ role: "assistant", content: "对方撤回了一条消息", origin: "system-notice" } as never)}
+        personaName="小A"
+        personaId={5}
+        showMood={false}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: translate("zh", "chat.saidBefore", { name: "小A" }) }),
+    ).toBeNull();
+  });
+
   it("does not offer to read a sticker aloud", () => {
     render(
       <MessageBubble
