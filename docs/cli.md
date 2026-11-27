@@ -100,8 +100,9 @@ non-zero when any check failed.
 
 ## Caveats
 
-- An account with encrypted storage: the command line process has no data key,
-  so the guarded routes answer with the "encrypted content is locked" error.
-  Unlock in the app, or use the app.
+- An account with encrypted storage: the data key lives only in the app's own
+  memory and never reaches this separate process, so the guarded routes answer
+  with the "encrypted content is locked" error. There is no unlock step for the
+  command line; use the app itself for an encrypted account.
 - `--user` is the account id (`users.id`), not a username.
 - `distill` waits for the run; that can be an hour for a very large history.

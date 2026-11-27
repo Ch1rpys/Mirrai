@@ -38,7 +38,7 @@ export default {
 
 ### 导入器插件（kind: "importer"）
 
-返回一个对象，满足 [`server/importers/types.ts`](../server/importers/types.ts)
+返回一个对象，满足 `server/importers/types.ts`
 里的 `Importer` 接口：
 
 ```js
@@ -58,13 +58,13 @@ export default {
 `lineNo`、可选 `meta`）。插件被注册后，导入向导的格式列表和自动识别都会看到
 它，和内置格式走同一条 `startImport` 写入路径。
 
-最小的例子：[`examples/plugins/echo-importer`](../examples/plugins/echo-importer)，
+最小的例子：`examples/plugins/echo-importer`，
 一个读 `speaker: message` 文本行的导入器。把它整个目录复制到
 `<数据目录>/plugins/` 就能用。
 
 ### 通道插件（kind: "channel"）
 
-返回一个对象，满足 [`server/channels/types.ts`](../server/channels/types.ts)
+返回一个对象，满足 `server/channels/types.ts`
 里的 `ChannelAdapter` 接口（`label`、`requiresCredentials`、`start`、`stop`、
 `status`、`send`、`setDefaultPersona`；`labelForLocale`、`stopAll`、`restore`
 可选）。注册时 id 同样加前缀 `plugin:<插件名>:`。

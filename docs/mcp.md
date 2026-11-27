@@ -21,10 +21,12 @@ in your own client; Mirrai does not make it for you. If that is not acceptable,
 do not connect the client.
 
 There is one more thing the server will not do: it never reads an account whose
-content is encrypted and unlocked. If the app's encryption is on and this
-process has no key (it is a separate process, so it usually has none), every
-tool answers with an explanation instead of ciphertext. Unlock the account in
-the app first; a process started afterwards can read it until it exits.
+content is encrypted. The data key lives only in the app's own memory and is
+never written to disk or handed to another process, and this server is a child
+of your AI client — not of the app — so it cannot have that key. If the app's
+encryption is on, every tool answers with an explanation instead of ciphertext.
+There is no unlock step for the MCP server; to read an encrypted account, use
+the app itself.
 
 ## Setup
 
@@ -86,9 +88,10 @@ text is quoted material, and the client's model is told so.
 | `read_report` | `personaId` | the numbers of the annual report, if one was generated on the records page |
 
 Dates are written as `YYYY-MM-DD HH:MM`. The search is the same literal
-search the records page uses (C8.6), so an encrypted account can only be
-searched after it is unlocked in this process — and then only with at least two
-characters, because the blind index is built on pairs of characters.
+search the records page uses (C8.6). An account with encryption on cannot be
+searched from here at all (see above); for an unencrypted account the query
+needs at least two characters, because the blind index is built on pairs of
+characters.
 
 A persona locked in the app (C8.4) is treated the same way: `list_personas`
 leaves it out and the four per-persona tools answer with an unlock sentence

@@ -55,12 +55,12 @@ export default defineConfig({
   },
 
   /**
-   * Dead links stay checked; only two kinds are ignored:
-   * the release notes that link to `http://localhost:3000`, and links that
-   * deliberately point at a repository file outside `docs/` (the plugin
-   * docs point at the interfaces and the example plugin).
+   * Dead links stay checked. The only exception is the release notes that
+   * link to `http://localhost:3000` (a local install address, not a page
+   * of this site). Links to repository files outside `docs/` are written
+   * as code, not as links, so the site has none of those.
    */
-  ignoreDeadLinks: [/^https?:\/\/localhost/, /^(?:\.\/)?\.\.\//],
+  ignoreDeadLinks: [/^https?:\/\/localhost/],
 
   themeConfig: {
     nav: [

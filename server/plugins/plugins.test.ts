@@ -181,6 +181,30 @@ describe("importer plugins", () => {
     );
   });
 
+  it("registers into the real importer registry, not just an injected port", async () => {
+    // The loader's own tests pass an injected `registerImporter`; this one
+    // loads with the real default so "the plugin was registered" is a fact
+    // about the app's registry (C9.7), not about a test double.
+    const root = makeRoot();
+    writePlugin(root, "registry-importer", importerPlugin.replaceAll("sample-importer", "registry-importer"));
+    const result = await loadPlugins({ env: { MIRRAI_PLUGINS: "on" }, dataRoot: root });
+    expect(result.failed).toEqual([]);
+    const { IMPORTERS, importerById } = await import("../importers/registry");
+    const id = "plugin:registry-importer:sample";
+    try {
+      const importer = importerById(id);
+      expect(importer).toBeDefined();
+      expect(importer!.detect({
+        fileName: "x.txt",
+        bytes: new Uint8Array(),
+        text: "SAMPLE-EXPORT\nme: 你好",
+      })).toMatchObject({ id });
+    } finally {
+      const index = IMPORTERS.findIndex((row) => row.id === id);
+      if (index >= 0) IMPORTERS.splice(index, 1);
+    }
+  });
+
   it("skips a plugin whose shape is wrong and says why in one line", async () => {
     const root = makeRoot();
     writePlugin(
