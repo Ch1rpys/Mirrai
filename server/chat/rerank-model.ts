@@ -6,9 +6,8 @@
  * floor; more than five thousand is wasted. The cache key is the
  * records version, so an import rebuilds and a second turn does not.
  */
-import { isTextRecord } from "@shared/records";
 import { RERANK_MIN_ASSISTANT_LINES } from "@shared/eval-limits";
-import { getRecordsVersion, iterateRecords } from "../db";
+import { getRecordsVersion, recentRecordTexts } from "../db";
 import { buildCharNgramModel, type CharNgramModel } from "../eval/metrics";
 
 export const RERANK_TEXT_CAP = 5000;
@@ -86,28 +85,16 @@ export async function getRerankModel(
 }
 
 async function collectRecentTexts(personaId: number, userId: number): Promise<string[]> {
-  const ring: string[] = [];
-  let offset = 0;
   try {
-    for await (const row of iterateRecords(personaId, userId, {
-      role: "assistant",
-      kinds: ["text"],
-    })) {
-      if (!isTextRecord(row)) continue;
-      const text = String(row.content ?? "").trim();
-      if (!text) continue;
-      if (ring.length < RERANK_TEXT_CAP) {
-        ring.push(text);
-      } else {
-        ring[offset] = text;
-        offset = (offset + 1) % RERANK_TEXT_CAP;
-      }
-    }
+    /**
+     * One ordered query with a limit: the reranker scores against the
+     * most recent lines only (C8.7). Walking the table used to happen on
+     * the first turn after a restart.
+     */
+    return await recentRecordTexts(personaId, userId, RERANK_TEXT_CAP);
   } catch {
     return [];
   }
-  if (ring.length < RERANK_TEXT_CAP) return ring;
-  return [...ring.slice(offset), ...ring.slice(0, offset)];
 }
 
 function remember(key: string, model: RerankModel | null): void {

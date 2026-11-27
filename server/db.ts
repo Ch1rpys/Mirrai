@@ -8903,6 +8903,41 @@ function recordsWhere(
  * The default register is private. Moments, letters, and group chats
  * have to ask for themselves.
  */
+/**
+ * The most recent assistant text lines, newest last (C8.7).
+ *
+ * The rerank model only needs the last few thousand lines it will score
+ * against, but the first turn after a restart used to walk the whole
+ * record table to find them. The reader is a plain ordered query with a
+ * limit, so a normal conversation never reads the whole table.
+ */
+export async function recentRecordTexts(
+  personaId: number,
+  userId: number,
+  limit: number,
+): Promise<string[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const spokenAt = spokenAtColumn();
+  const rows = await db
+    .select({ content: collectedMessages.content, kind: collectedMessages.kind })
+    .from(collectedMessages)
+    .where(
+      and(
+        eq(collectedMessages.personaId, personaId),
+        eq(collectedMessages.userId, userId),
+        eq(collectedMessages.role, "assistant"),
+        eq(collectedMessages.kind, "text"),
+      ),
+    )
+    .orderBy(desc(spokenAt), desc(collectedMessages.id))
+    .limit(Math.max(1, limit));
+  return decryptRows("collected_messages", rows)
+    .map((row) => String(row.content ?? "").trim())
+    .filter((text) => text.length > 0)
+    .reverse();
+}
+
 export async function* iterateRecords(
   personaId: number,
   userId: number,

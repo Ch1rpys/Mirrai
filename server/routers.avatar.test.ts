@@ -135,6 +135,28 @@ describe("uploading an avatar", () => {
     expect(storageDelete).toHaveBeenCalledWith("personas/1/5/old-bg.png");
   });
 
+  it("does not let a family member change a shared persona's background (B7.15)", async () => {
+    // The background is part of the persona's own look: the owner's,
+    // like the avatar and the profile. The route was missing the guard.
+    getPersonaById.mockResolvedValue({
+      id: 5,
+      userId: 1,
+      name: "小满",
+      sharedFromPersonaId: 9,
+    });
+    await expect(
+      appRouter.createCaller(ctxFor()).persona.uploadBackground({
+        personaId: 5,
+        base64: PNG_DATA_URL,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(storagePut).not.toHaveBeenCalled();
+    await expect(
+      appRouter.createCaller(ctxFor()).persona.clearBackground({ personaId: 5 }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(setPersonaBackground).not.toHaveBeenCalled();
+  });
+
   it("refuses a background over two megabytes and an SVG", async () => {
     const big = Buffer.concat([PNG, Buffer.alloc(2 * 1024 * 1024)]);
     await expect(

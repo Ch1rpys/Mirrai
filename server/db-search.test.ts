@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { sql } from "drizzle-orm";
 import {
   createCollectedMessage,
@@ -11,13 +11,33 @@ import {
   searchMessages,
   searchRecordsLexical,
   updateRecordMeta,
+  searchRecordsSemantic,
+  upsertRecordEmbedding,
+  recentRecordTexts,
 } from "./db";
 import { backfillSearchTokens } from "./records/backfill-tokens";
 import { seedXiaoman } from "./test-fixtures/seed-db";
+import { packEmbedding } from "./chat/embeddings";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
 const DATABASE_URL = process.env.DATABASE_URL;
+
+/**
+ * A fake embedding model for the semantic half (C8.6).
+ *
+ * The real one is Ollama. The search's ranking is what has to be
+ * exercised here: which stored line is close to the query, through the
+ * same `searchRecordsSemantic` the route calls.
+ */
+vi.mock("./chat/embeddings", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./chat/embeddings")>();
+  return {
+    ...actual,
+    embedTexts: async (texts: string[]) => texts.map(() => [1, 0]),
+    embedModelName: () => "fake-embedding-model",
+  };
+});
 
 async function makePersona(): Promise<{ userId: number; personaId: number }> {
   const userId = 9_930_000 + Math.floor(Math.random() * 10_000);
@@ -333,6 +353,124 @@ describe.skipIf(!DATABASE_URL)("searchAll across users", () => {
     } finally {
       await purgePersona(mine, userId);
       await purgePersona(theirs, otherUserId);
+    }
+  });
+});
+
+describe.skipIf(!DATABASE_URL)("the rerank reader (C8.7)", () => {
+  it("returns the newest assistant text lines, newest last and bounded", async () => {
+    // The reader is ordered and limited, so a conversation never walks
+    // the whole table to find the last lines the reranker scores.
+    const userId = 9_911_000 + Math.floor(Math.random() * 10_000);
+    const personaId = await createPersona({ userId, name: "rerank" });
+    try {
+      for (let i = 0; i < 4; i++) {
+        await createCollectedMessage({
+          userId,
+          personaId,
+          source: "generic",
+          role: "assistant",
+          content: `第${i}句`,
+          timestamp: new Date(`2022-08-0${i + 1}T12:00:00.000Z`),
+          kind: "text",
+          speaker: "小满",
+        });
+      }
+      await createCollectedMessage({
+        userId,
+        personaId,
+        source: "generic",
+        role: "user",
+        content: "用户的话不算",
+        timestamp: new Date("2022-08-05T12:00:00.000Z"),
+        kind: "text",
+        speaker: "阿树",
+      });
+      await createCollectedMessage({
+        userId,
+        personaId,
+        source: "generic",
+        role: "assistant",
+        content: "[sticker:狗狗]",
+        timestamp: new Date("2022-08-05T12:00:00.000Z"),
+        kind: "sticker",
+        speaker: "小满",
+      });
+      expect(await recentRecordTexts(personaId, userId, 2)).toEqual(["第2句", "第3句"]);
+      expect(await recentRecordTexts(personaId, userId, 100)).toEqual([
+        "第0句",
+        "第1句",
+        "第2句",
+        "第3句",
+      ]);
+    } finally {
+      await purgePersona(personaId, userId);
+    }
+  });
+});
+
+describe.skipIf(!DATABASE_URL)("semantic search with a fake embedding model (C8.6)", () => {
+  it("finds the line whose meaning is close, through searchRecordsSemantic", async () => {
+    // The checklist said a fake embedding function would find 「海边」
+    // for 「沙滩」; only the ranking helper had a test. This runs the
+    // real search: stored vectors, the ownership check, the date range
+    // and the role filter, with a query embedding that is close to one
+    // line and far from another.
+    const userId = 9_912_000 + Math.floor(Math.random() * 10_000);
+    const personaId = await createPersona({ userId, name: "semantic" });
+    try {
+      const beach = await createCollectedMessage({
+        userId,
+        personaId,
+        source: "generic",
+        role: "assistant",
+        content: "海边风好大，下次一起去",
+        timestamp: new Date("2022-07-01T12:00:00.000Z"),
+        kind: "text",
+        speaker: "小满",
+      });
+      const work = await createCollectedMessage({
+        userId,
+        personaId,
+        source: "generic",
+        role: "assistant",
+        content: "今天开会到很晚",
+        timestamp: new Date("2022-07-02T12:00:00.000Z"),
+        kind: "text",
+        speaker: "小满",
+      });
+      const beachId = Number(beach);
+      const workId = Number(work);
+      await upsertRecordEmbedding({
+        userId,
+        personaId,
+        recordId: beachId!,
+        model: "fake-embedding-model",
+        dim: 2,
+        vec: packEmbedding([1, 0]),
+      });
+      await upsertRecordEmbedding({
+        userId,
+        personaId,
+        recordId: workId!,
+        model: "fake-embedding-model",
+        dim: 2,
+        vec: packEmbedding([0, 1]),
+      });
+      const result = await searchRecordsSemantic(personaId, userId, { q: "沙滩", k: 5 });
+      expect(result).not.toBeNull();
+      expect(result!.hits[0]?.content).toBe("海边风好大，下次一起去");
+      expect(result!.hits.map((hit) => hit.content)).not.toContain("今天开会到很晚");
+
+      // The date range belongs to the semantic half too.
+      const ranged = await searchRecordsSemantic(personaId, userId, {
+        q: "沙滩",
+        k: 5,
+        from: new Date("2022-07-02T00:00:00.000Z"),
+      });
+      expect(ranged?.hits).toHaveLength(0);
+    } finally {
+      await purgePersona(personaId, userId);
     }
   });
 });

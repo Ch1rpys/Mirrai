@@ -1737,6 +1737,8 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        // A shared persona's look belongs to the owner (B7.15/C7.2).
+        assertPersonaWritable(persona, ctx.locale);
         const buffer = decodeBase64Image(input.base64, MAX_BACKGROUND_BYTES);
         if (!buffer) {
           const decoded = decodeBase64Image(input.base64, Number.MAX_SAFE_INTEGER);
@@ -1770,6 +1772,8 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        // Clearing the look is changing it (B7.15/C7.2).
+        assertPersonaWritable(persona, ctx.locale);
         const oldBackground = normalizePersonaSettings(persona.settings).skin?.background ?? null;
         await setPersonaBackground(input.personaId, ctx.user.id, null);
         const oldKey = uploadKeyOf(oldBackground);
