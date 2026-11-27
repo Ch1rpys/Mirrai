@@ -68,6 +68,7 @@ const getUserById = vi.fn();
 const getRecentUserMood = vi.fn();
 const getRelationshipEvents = vi.fn();
 const updateMessageMetadata = vi.fn();
+const candidateRecordsByOverlap = vi.fn();
 const searchRecordsLexical = vi.fn();
 const createFidelityPair = vi.fn();
 const clearMessagePendingChoice = vi.fn();
@@ -198,6 +199,7 @@ vi.mock("../db", () => ({
   getRecentUserMood: (...a: unknown[]) => getRecentUserMood(...a),
   getRelationshipEvents: (...a: unknown[]) => getRelationshipEvents(...a),
   updateMessageMetadata: (...a: unknown[]) => updateMessageMetadata(...a),
+  candidateRecordsByOverlap: (...a: unknown[]) => candidateRecordsByOverlap(...a),
   searchRecordsLexical: (...a: unknown[]) => searchRecordsLexical(...a),
   createFidelityPair: (...a: unknown[]) => createFidelityPair(...a),
   clearMessagePendingChoice: (...a: unknown[]) => clearMessagePendingChoice(...a),
@@ -403,6 +405,7 @@ describe("queued replies", () => {
     resolveProviderForPurpose.mockImplementation((...a: unknown[]) => resolveProviderForUser(...a));
     invokeWithProvider.mockResolvedValue("在的。");
     updateMessageMetadata.mockResolvedValue(true);
+    candidateRecordsByOverlap.mockResolvedValue([]);
     searchRecordsLexical.mockResolvedValue([]);
     createFidelityPair.mockResolvedValue({ id: 1 });
     clearMessagePendingChoice.mockResolvedValue(true);
@@ -800,6 +803,40 @@ describe("a follow-up after they go quiet", () => {
     }));
     expect(stored.filter((row) => row.origin === "proactive")).toHaveLength(0);
     expect(pushToUser).not.toHaveBeenCalledWith(1, expect.objectContaining({ kind: "proactive" }));
+  });
+
+  it("marks the follow-up as the record's own line (C10.7)", async () => {
+    candidateRecordsByOverlap.mockImplementation(async (
+      _personaId: number,
+      _userId: number,
+      params: { text: string },
+    ) => [{
+      id: 77,
+      content: params.text,
+      timestamp: new Date("2023-03-04T12:00:00.000Z"),
+      role: "assistant",
+      speaker: "小满",
+      coverage: 1,
+    }]);
+    await drain(followPersona(), "在吗");
+    expect(jobs).toHaveLength(1);
+    vi.setSystemTime(jobs[0]!.dueAt);
+    await runReplyJob(jobs[0]!.id, 1);
+    const follow = stored.filter((row) => row.origin === "followup");
+    expect(follow).toHaveLength(1);
+    const marked = updateMessageMetadata.mock.calls.filter(
+      (call: unknown[]) => (call[3] as { provenance?: unknown[] } | undefined)?.provenance,
+    ).at(-1);
+    expect(marked).toBeTruthy();
+    const provenance = (marked![3] as { provenance: Array<{ start: number; end: number; recordId: number }> }).provenance;
+    expect(provenance).toHaveLength(1);
+    expect(provenance[0]!.start).toBe(0);
+    expect(provenance[0]!.recordId).toBe(77);
+    // The whole stored line is covered.
+    const markedMessage = stored.find((row) => row.id === marked![0]!);
+    expect(provenance[0]!.end).toBe(String(markedMessage?.content ?? "").length);
+    // Picking the line is not a model call.
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
   });
 
   it("does not queue when late replies are off, even if follow-up was left on", async () => {

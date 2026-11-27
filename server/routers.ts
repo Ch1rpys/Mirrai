@@ -3446,6 +3446,7 @@ export const appRouter = router({
         let careNote = null;
         let crisis = false;
         let lateNight = false;
+        let provenance: Array<{ start: number; end: number; recordId: number; at?: string | null }> = [];
         let choice: { options: [string, string]; replyToMessageId: number } | null = null;
         let failure: string | null = null;
         /**
@@ -3510,6 +3511,7 @@ export const appRouter = router({
               careNote = event.careNote;
               crisis = event.crisis;
               lateNight = event.lateNight === true;
+              if (event.provenance) provenance = event.provenance;
               if (event.extra && event.extra.length > 0) extra = event.extra;
               if (event.voice) {
                 voice = event.voice;

@@ -816,3 +816,59 @@ describe("the check-in marker (C9.4)", () => {
     expect(screen.queryByText(/记着问的/)).toBeNull();
   });
 });
+
+describe("the words they really said (C10.7)", () => {
+  const marked = () => makeMessage({
+    content: "今天下雨了。我想你了。",
+    provenance: [{ start: 6, end: 10, recordId: 12, at: "2023-03-04T12:00:00.000Z" }],
+  });
+
+  it("draws no underline while the setting is off", () => {
+    const { container } = render(
+      <MessageBubble msg={marked()} personaName="小满" showMood={false} personaId={5} />,
+    );
+    expect(container.querySelector(".provenance-word")).toBeNull();
+    expect(screen.getByText("今天下雨了。我想你了。")).toBeInTheDocument();
+  });
+
+  it("underlines only the stretch from the record when it is on", () => {
+    const { container } = render(
+      <MessageBubble msg={marked()} personaName="小满" showMood={false} personaId={5} provenanceOn />,
+    );
+    const underline = container.querySelector(".provenance-word");
+    expect(underline).toBeTruthy();
+    expect(underline?.textContent).toBe("我想你了");
+    // The rest of the message is still there, unmarked.
+    expect(container.textContent).toContain("今天下雨了。");
+    expect(container.textContent).toContain("我想你了");
+    expect(container.querySelectorAll(".provenance-word")).toHaveLength(1);
+  });
+
+  it("shows the date and where to read it when hovered", () => {
+    const { container } = render(
+      <MessageBubble msg={marked()} personaName="小满" showMood={false} personaId={5} provenanceOn />,
+    );
+    const underline = container.querySelector(".provenance-word") as HTMLAnchorElement;
+    expect(underline.getAttribute("title")).toContain("小满");
+    expect(underline.getAttribute("title")).toContain("2023");
+    expect(underline.getAttribute("href")).toContain("/persona/5/records");
+    expect(underline.getAttribute("href")).toContain("at=12");
+  });
+
+  it("keeps the message whole when a stored span no longer fits", () => {
+    const { container } = render(
+      <MessageBubble
+        msg={makeMessage({
+          content: "被改短了",
+          provenance: [{ start: 40, end: 60, recordId: 12, at: null }],
+        })}
+        personaName="小满"
+        showMood={false}
+        personaId={5}
+        provenanceOn
+      />,
+    );
+    expect(container.textContent).toContain("被改短了");
+    expect(container.querySelector(".provenance-word")).toBeNull();
+  });
+});

@@ -21,6 +21,7 @@ import {
 } from "@shared/double-text";
 import { loadBehaviorProfile, seededRandom } from "../_core/behavior-profile";
 import { detectCrisis } from "../safety/crisis";
+import { attachMessageProvenance } from "../records/provenance";
 import { EMOTION_TRIGGER_PATTERNS } from "@shared/emotion-triggers";
 import { toSimplified } from "@shared/han-normalize";
 import { isQuietHour } from "../scheduler/reminders";
@@ -458,7 +459,7 @@ async function runFollowUpJob(job: ReplyJob, userId: number): Promise<boolean> {
   const text = pickFollowUpLine(profile, seededRandom(`followup-line:${afterMessageId}`));
   if (!text) return cancel();
 
-  await db.createMessage({
+  const followUpMessageId = await db.createMessage({
     personaId: persona.id,
     userId,
     role: "assistant",
@@ -466,6 +467,18 @@ async function runFollowUpJob(job: ReplyJob, userId: number): Promise<boolean> {
     emotionalState: persona.emotionalState,
     channel: job.channel === "wechat" || job.channel === "feishu" ? job.channel : "web",
     origin: "followup",
+  });
+  /**
+   * A follow-up is one of the person's own lines, picked from the
+   * record (C10.7) — so the whole bubble is underlined, with the record
+   * it came from.
+   */
+  await attachMessageProvenance({
+    messageId: followUpMessageId,
+    personaId: persona.id,
+    userId,
+    text,
+    wholeTextIsVerbatim: true,
   });
   if (!(await deliverReply(job, persona, [text], "followup"))) {
     await failDelivery(job);

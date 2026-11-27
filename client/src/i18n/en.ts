@@ -182,6 +182,10 @@ export const en = {
   },
 
   chat: {
+    provenanceHint: "{{name}} said this on {{date}}",
+    provenanceSee: "See it in the records",
+    provenanceToggle: "Underline the words {{name}} really said",
+    provenanceLegend: "Underlined words are what {{name}} really said. Everything else is rebuilt.",
     taperOverride: "Make an exception today",
     taperHelp: "Where to get help",
     scheduledSend: "Send later",

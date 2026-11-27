@@ -7,7 +7,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import {
   ArrowLeft, Send, ChevronDown, Trash2, MoreVertical,
   Plus, Image, Mic, X, Clock, BarChart3, Search, BookOpen, Theater,
-  Download, Check, HeartCrack, UserRound, Moon, CornerUpLeft, CalendarClock, Star,
+  Download, Check, HeartCrack, UserRound, Moon, CornerUpLeft, CalendarClock, Star, Quote,
 } from "lucide-react";
 import { PersonaAvatar } from "@/components/PersonaAvatar";
 import { MessageBubble, emotionOf, type Message } from "@/components/MessageBubble";
@@ -29,6 +29,7 @@ import DigitalPersonaBadge from "@/components/DigitalPersonaBadge";
 import TimeBar from "@/components/v6/TimeBar";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import { mayChatNow } from "@shared/persona-state";
+import { provenanceFromMetadata } from "@shared/provenance";
 import { EMOTIONS, EMOTION_KEYS, emotionColor, type EmotionKey } from "@/lib/emotions";
 import { useConfirm } from "@/components/ConfirmDialog";
 import MemoryReview from "@/components/v6/MemoryReview";
@@ -357,10 +358,37 @@ export default function Chat() {
    * it is not remembered: it belongs to this conversation tonight.
    */
   const [nightMode, setNightMode] = useState(false);
+  /**
+   * Whether the persona's own words are underlined (C10.7).
+   *
+   * It is a reading preference, not a persona setting: it lives in
+   * localStorage, it defaults to off, and it does not change what the
+   * server sends.
+   */
+  const [provenanceOn, setProvenanceOn] = useState(() => {
+    try {
+      return localStorage.getItem("mirrai.provenance") === "on";
+    } catch {
+      return false;
+    }
+  });
   useEffect(() => {
     // A different conversation is a different night.
     setNightMode(false);
   }, [personaId]);
+
+  const toggleProvenance = useCallback(() => {
+    setProvenanceOn((on) => {
+      const next = !on;
+      try {
+        localStorage.setItem("mirrai.provenance", next ? "on" : "off");
+      } catch {
+        // A browser that refuses storage still gets the switch for this
+        // visit.
+      }
+      return next;
+    });
+  }, []);
 
   const [showStatePanel, setShowStatePanel] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -765,6 +793,7 @@ export default function Chat() {
       routine: routineFromMetadata(m.metadata),
       claims: claimsFromMetadata(m.metadata),
       photoAt: photoAtFromMetadata(m.metadata),
+      provenance: provenanceFromMetadata(m.metadata),
       quotedRecords: Array.isArray(m.quotedRecords) ? m.quotedRecords : [],
     }));
 
@@ -1054,6 +1083,7 @@ export default function Chat() {
                     createdAt: new Date(),
                     isStreaming: false,
                     recalled: info.recalled,
+                    provenance: info.provenance ?? undefined,
                     routine: info.routine ?? null,
                     claims: (info.claims ?? []).map((row) => ({
                       text: row.text,
@@ -2040,6 +2070,11 @@ export default function Chat() {
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors">
                       <Search className="w-4 h-4 text-muted-foreground" />{t("chat.search")}
                     </button>
+                    <button onClick={() => { toggleProvenance(); setShowMenu(false); }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors text-left">
+                      <Quote className="w-4 h-4 text-muted-foreground" />
+                      {t("chat.provenanceToggle", { name: displayName || t("common.them") })}
+                    </button>
                     <button onClick={() => { setShowMarks(true); setShowMenu(false); }}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-muted/60 rounded-md transition-colors text-left">
                       <Star className="w-4 h-4 text-muted-foreground" />{t("chat.marksEntry")}
@@ -2347,6 +2382,14 @@ export default function Chat() {
               </button>
             </div>
           )}
+          {/* What the underlines mean (C10.7). It is only shown while
+              they are on — the legend explains a claim the page is
+              actually making. */}
+          {provenanceOn && (
+            <p className="text-[11px] text-muted-subtle text-center px-4 pb-2">
+              {t("chat.provenanceLegend", { name: displayName || t("common.them") })}
+            </p>
+          )}
           {(() => {
             // The mood of the last message that had one, as the list is
             // walked. It is what the chip is compared against.
@@ -2394,6 +2437,7 @@ export default function Chat() {
                 showMood={showMood}
                 personaId={personaId}
                 night={nightMode}
+                provenanceOn={provenanceOn}
                 onRegenerate={handleRegenerate}
                 onEdit={handleEditMessage}
                 onDelete={handleDeleteMessage}

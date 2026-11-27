@@ -176,6 +176,10 @@ export const zh = {
   },
 
   chat: {
+    provenanceHint: "{{name}} 在 {{date}} 说过这句",
+    provenanceSee: "在记录里看",
+    provenanceToggle: "在分身的话里标出 {{name}} 的原话",
+    provenanceLegend: "带下划线的是 {{name}} 真的说过的。其余是重建的。",
     taperOverride: "今天破例",
     taperHelp: "求助信息",
     scheduledSend: "定时发送",

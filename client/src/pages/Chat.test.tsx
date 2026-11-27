@@ -249,6 +249,25 @@ describe("Chat", () => {
     });
   });
 
+  it("shows the underline legend only when the setting is on (C10.7)", async () => {
+    const off = render(<Chat />);
+    expect(screen.queryByText(/带下划线的是 小A 真的说过的/)).toBeNull();
+    off.unmount();
+
+    localStorage.setItem("mirrai.provenance", "on");
+    render(<Chat />);
+    expect(screen.getByText(/带下划线的是 小A 真的说过的/)).toBeInTheDocument();
+  });
+
+  it("toggles the underline setting from the more menu (C10.7)", async () => {
+    const user = userEvent.setup();
+    render(<Chat />);
+    await user.click(screen.getByRole("button", { name: "更多操作" }));
+    await user.click(screen.getByRole("button", { name: "在分身的话里标出 小A 的原话" }));
+    expect(localStorage.getItem("mirrai.provenance")).toBe("on");
+    expect(screen.getByText(/带下划线的是 小A 真的说过的/)).toBeInTheDocument();
+  });
+
   it("puts the recordings entry in the header only for a memorial persona (C7.3)", () => {
     const label = translate("zh", "media.voicesEntry", { name: "小A" });
     const first = render(<Chat />);

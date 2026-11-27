@@ -270,6 +270,8 @@ async function handleChatStream(req: Request, res: Response): Promise<void> {
             // (C10.5). The flag rides on `done` because only the turn
             // that just happened knows the session's length.
             ...(event.lateNight ? { lateNight: true } : {}),
+            // The stretches that were said before (C10.7).
+            ...(event.provenance && event.provenance.length > 0 ? { provenance: event.provenance } : {}),
             // Which memories went into this turn. The client reads them,
             // and the stream was the only place they were live — so the
             // chip that says what the persona recalled never appeared

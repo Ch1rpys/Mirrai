@@ -34,6 +34,8 @@ import { effectiveStyleProfile } from "@shared/style-profile";
 import { retrieveMemories } from "./retrieval";
 import { buildCrisisResponse, buildGentleCheckIn, detectCrisis } from "../safety/crisis";
 import { detectCrisisExtended, type ExtendedCrisisDetection } from "../safety/crisis-extended";
+import { attachMessageProvenance } from "../records/provenance";
+import type { ProvenanceSpan } from "@shared/provenance";
 import {
   evaluateUsage,
   pickCareNote,
@@ -157,6 +159,11 @@ export type ChatEvent =
        * (C10.5).
        */
       lateNight?: boolean;
+      /**
+       * The stretches of this reply that were said before, in the
+       * person's own words (C10.7). Missing when nothing was.
+       */
+      provenance?: ProvenanceSpan[];
       /**
        * Messages the reply carried besides its words: a sticker today,
        * a photograph in B7.9. They are stored after the text, and the
@@ -2508,6 +2515,11 @@ async function* runConversationTurn(
     }
   }
   let messageId = 0;
+  /**
+   * The stored replies, so their own words can be marked after they are
+   * in the transcript (C10.7).
+   */
+  const storedReplies: Array<{ messageId: number; text: string; typoFix: boolean }> = [];
   if (voiceNote) {
     messageId = await db.createMessage({
       personaId: persona.id,
@@ -2522,6 +2534,7 @@ async function* runConversationTurn(
       recalledMemoryIds: recalled.length > 0 ? JSON.stringify(recalled.map((m) => m.id)) : null,
       metadata: { ...storedTurnMeta, kind: "voice-note" },
     });
+    storedReplies.push({ messageId, text: spoken, typoFix: false });
   } else {
     for (const part of parts) {
       messageId = await db.createMessage({
@@ -2536,7 +2549,31 @@ async function* runConversationTurn(
         recalledMemoryIds: recalled.length > 0 ? JSON.stringify(recalled.map((m) => m.id)) : null,
         metadata: storedTurnMeta,
       });
+      storedReplies.push({ messageId, text: part, typoFix: Boolean(typoStar) && part === typoStar });
     }
+  }
+  /**
+   * Mark the words that were said before (C10.7).
+   *
+   * The fixed replies and follow-ups are the record's own words by
+   * construction; a typo fix is the corrected word from it; everything
+   * else is checked sentence by sentence against the record, literally.
+   * This runs after the messages are stored and never fails the turn.
+   */
+  let lastProvenance: ProvenanceSpan[] = [];
+  for (const stored of storedReplies) {
+    const ritualVerbatim = plan.kind === "ritual"
+      && Boolean(plan.ritual)
+      && stored.text.trim() === String(plan.ritual?.reply ?? "").trim();
+    const spans = await attachMessageProvenance({
+      messageId: stored.messageId,
+      personaId: persona.id,
+      userId,
+      text: stored.text,
+      forcedRecordId: ritualVerbatim ? plan.ritual?.recordId ?? null : null,
+      wholeTextIsVerbatim: ritualVerbatim || stored.typoFix,
+    });
+    if (spans) lastProvenance = spans;
   }
   if (messageId && !immediate) {
     await maybeScheduleFollowUp({
@@ -2880,6 +2917,7 @@ async function* runConversationTurn(
     careNote,
     crisis: false,
     lateNight: signals?.lateNight === true,
+    ...(lastProvenance.length > 0 ? { provenance: lastProvenance } : {}),
     recalled,
     ...(plan.routine ? { routine: plan.routine } : {}),
     ...(claims && claims.length > 0 ? { claims } : {}),

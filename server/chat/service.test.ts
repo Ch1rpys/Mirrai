@@ -601,6 +601,119 @@ describe("runConversation", () => {
     expect(events.some((event) => event.type === "emotion" && event.state === "warm")).toBe(true);
   });
 
+  it("marks a fixed reply as the record's own words (C10.7)", async () => {
+    candidateRecordsByOverlap.mockImplementation(async (
+      _personaId: number,
+      _userId: number,
+      params: { text: string },
+    ) => [{
+      id: 11,
+      content: params.text,
+      timestamp: new Date("2023-03-04T12:00:00.000Z"),
+      role: "assistant",
+      speaker: "小满",
+      coverage: 1,
+    }]);
+    for await (const _ of runConversation({
+      persona: persona({
+        styleProfile: {
+          version: 1,
+          measuredAt: "2026-01-15T12:00:00.000Z",
+          recordsVersion: "100:100",
+          rituals: [
+            {
+              trigger: "晚安",
+              variants: ["晚安"],
+              n: 100,
+              coverage: 1,
+              replies: [
+                { text: "晚安", n: 60, recordId: 11 },
+                { text: "安", n: 25, recordId: 12 },
+                { text: "睡啦", n: 15, recordId: 13 },
+              ],
+            },
+          ],
+        },
+      }),
+      userId: 1,
+      message: "晚安",
+      mode: "once",
+    })) {
+      // Drain the generator.
+    }
+    const marked = updateMessageMetadata.mock.calls.find(
+      (call: unknown[]) => (call[3] as { provenance?: unknown[] } | undefined)?.provenance,
+    );
+    expect(marked).toBeTruthy();
+    const provenance = (marked![3] as { provenance: Array<{ start: number; end: number; recordId: number }> }).provenance;
+    expect(provenance).toHaveLength(1);
+    expect(provenance[0]!.start).toBe(0);
+    expect(provenance[0]!.recordId).toBe(11);
+    const assistant = createMessage.mock.calls.find(
+      (call: unknown[]) => (call[0] as { role?: string }).role === "assistant",
+    )?.[0] as { content: string };
+    expect(provenance[0]!.end).toBe(assistant.content.length);
+    // The check is literal: it never calls the model.
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+  });
+
+  it("marks only the sentence a model reply really repeated (C10.7)", async () => {
+    invokeWithProvider.mockResolvedValue("今天下雨了。我想你了。晚安");
+    candidateRecordsByOverlap.mockImplementation(async (
+      _personaId: number,
+      _userId: number,
+      params: { text: string },
+    ) => (params.text.replace(/。$/, "") === "我想你了"
+      ? [{ id: 12, content: "我想你了", timestamp: new Date("2023-03-04T12:00:00.000Z"), role: "assistant", speaker: "小满", coverage: 1 }]
+      : []));
+    for await (const _ of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+    })) {
+      // Drain the generator.
+    }
+    const assistant = createMessage.mock.calls.find(
+      (call: unknown[]) => (call[0] as { role?: string }).role === "assistant",
+    )?.[0] as { content: string };
+    expect(assistant.content).toBe("今天下雨了。我想你了。晚安");
+    const marked = updateMessageMetadata.mock.calls.find(
+      (call: unknown[]) => (call[3] as { provenance?: unknown[] } | undefined)?.provenance,
+    );
+    const provenance = (marked![3] as { provenance: Array<{ start: number; end: number; recordId: number }> }).provenance;
+    expect(provenance).toHaveLength(1);
+    expect(provenance[0]!.start).toBe(assistant.content.indexOf("我想你了"));
+    expect(provenance[0]!.recordId).toBe(12);
+    // One model call for the reply, none for the provenance check.
+    expect(invokeWithProvider).toHaveBeenCalledTimes(1);
+  });
+
+  it("stores the reply normally when the provenance check fails (C10.7)", async () => {
+    invokeWithProvider.mockResolvedValue("在的呀");
+    candidateRecordsByOverlap.mockRejectedValue(new Error("the records table is down"));
+    const events = [];
+    for await (const event of runConversation({
+      persona: persona(),
+      userId: 1,
+      message: "在吗",
+      mode: "once",
+    })) {
+      events.push(event);
+    }
+    expect(events.some((event) => event.type === "done")).toBe(true);
+    const assistant = createMessage.mock.calls.find(
+      (call: unknown[]) => (call[0] as { role?: string }).role === "assistant",
+    )?.[0] as { content: string };
+    expect(assistant.content).toBe("在的呀");
+    // A failed check marks nothing; it does not fail the message.
+    expect(
+      updateMessageMetadata.mock.calls.some(
+        (call: unknown[]) => (call[3] as { provenance?: unknown[] } | undefined)?.provenance,
+      ),
+    ).toBe(false);
+  });
+
   it("keeps a distant stretch that has only lasted 30 minutes", async () => {
     const now = new Date("2026-01-15T12:00:00.000Z");
     inferEmotionalState.mockResolvedValue({ state: "happy", source: "heuristic" });

@@ -18,6 +18,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import SaidBefore from "@/components/v6/SaidBefore";
 import { FEEDBACK_REASONS } from "@shared/speech-acts";
 import { renderRecordContent } from "@shared/records";
+import { provenanceSegments, type ProvenanceSpan } from "@shared/provenance";
 
 /**
  * A message in the conversation.
@@ -57,6 +58,11 @@ export interface Message {
     content: string;
     timestamp?: string | null;
   }>;
+  /**
+   * Stretches of this reply that were said before (C10.7). Offsets are
+   * into `content`.
+   */
+  provenance?: ProvenanceSpan[];
   /** The memories that were injected into this turn. */
   recalled?: Array<{
     id: number;
@@ -397,6 +403,7 @@ export function MessageBubble({
   starred,
   pinned,
   night,
+  provenanceOn,
 }: {
   msg: Message;
   personaName: string;
@@ -447,6 +454,11 @@ export function MessageBubble({
    * around them is darker.
    */
   night?: boolean;
+  /**
+   * The user turned "mark their own words" on (C10.7). The spans are
+   * stored on the message either way.
+   */
+  provenanceOn?: boolean;
 }) {
   const { t, locale } = useLocale();
   const [unlikeOpen, setUnlikeOpen] = useState(false);
@@ -686,6 +698,40 @@ export function MessageBubble({
     }
     if (isUser) return <span>{msg.content}</span>;
     if (isNotice) return <span className="text-muted-foreground">{msg.content}</span>;
+    /**
+     * The underlined words, when the user asked to see them (C10.7).
+     *
+     * The message is rendered as plain text in this mode: the underline
+     * is a per-character fact, and markdown would move the characters
+     * around it. A dotted underline is the whole claim — everything
+     * without one is rebuilt.
+     */
+    if (provenanceOn && msg.provenance && msg.provenance.length > 0) {
+      return (
+        <p className="whitespace-pre-wrap">
+          {provenanceSegments(msg.content, msg.provenance).map((segment, index) => {
+            if (!segment.span) return <span key={index}>{segment.text}</span>;
+            const at = segment.span.at
+              ? formatInstantInZone(segment.span.at, locale)
+              : null;
+            const label = String(at
+              ? t("chat.provenanceHint", { name: personaName, date: at })
+              : t("chat.provenanceSee"));
+            return (
+              <a
+                key={index}
+                href={`/persona/${personaId ?? ""}/records?at=${segment.span.recordId}`}
+                title={label}
+                data-provenance-record={segment.span.recordId}
+                className="provenance-word underline decoration-dotted decoration-1 underline-offset-4"
+              >
+                {segment.text}
+              </a>
+            );
+          })}
+        </p>
+      );
+    }
     return (
       <Streamdown
         className="letter-prose letter-prose--chat"

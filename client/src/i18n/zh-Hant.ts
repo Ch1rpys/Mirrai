@@ -280,6 +280,10 @@ export const zhHant = {
     "title": "哪句更像 {{name}}"
   },
   "chat": {
+    "provenanceHint": "{{name}} 在 {{date}} 說過這句",
+    "provenanceSee": "在記錄裡看",
+    "provenanceToggle": "在分身的話裡標出 {{name}} 的原話",
+    "provenanceLegend": "帶下劃線的是 {{name}} 真的說過的。其餘是重建的。",
     "taperOverride": "今天破例",
     "taperHelp": "求助信息",
     "scheduledSend": "定時發送",

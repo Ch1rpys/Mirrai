@@ -47,6 +47,8 @@ export interface StreamDoneInfo {
    * running for a while (C10.5). The chat page turns itself down.
    */
   lateNight?: boolean;
+  /** Stretches of this reply that were said before (C10.7). */
+  provenance?: Array<{ start: number; end: number; recordId: number; at?: string | null }>;
   /**
    * Messages the reply carried besides its words (B7.1 stickers).
    *
