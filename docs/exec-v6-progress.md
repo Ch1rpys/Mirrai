@@ -1,5 +1,221 @@
 # 第六阶段进度
 
+## 给用户的摘要
+
+> 2026-11-27 · WP18 收尾交给用户。这一节是整份进度文件的入口：状态条数、还没验的东西和你该跑的命令、要你决定的事、影响最大的偏差。逐条证据在下面的进度表与批次日志里。
+>
+> 这份文件由实施会话写成，**不代替独立验收**：WP18 的 P18.4（独立抽查）留给另开的验收会话做，本会话没有做。
+
+### 一、各状态的条数
+
+进度表共 **176 行**（164 条建议 + WP0 的 7 条准备项 + WP18 的 5 条收尾项）：
+
+| 状态 | 条数 | 说明 |
+|---|---|---|
+| ✅ 已实现并有测试 | **91** | 其中 164 条建议里 80 条，另加 P0 的 7 条准备项和 P18.1–P18.3、P18.5 的 4 条收尾项 |
+| 🟡 机器验收通过、真实效果未量 | **81** | 大多是「更像 TA」的层：要真实记录 + 真实模型（或真人盲测/真机/真实外部账号）才量得出效果，详见下一节 |
+| ⛔ 本阶段决定不做 | **1** | B7.7 音色克隆（用户决定；用 B7.3 原声带与 B7.5 韵律参数代替） |
+| 🔒 条件未满足，不执行 | **2** | B9.1 本地适配器、B9.2 浅融合：只做了只读的 `--unlock-check`，没有训练任何东西 |
+| ⬜ 未做 | **1** | P18.4 独立抽查（由另开的验收会话做） |
+
+所以这个阶段的状态是：**能机器验的都验了，效果类的都还没有真实数字**。没有一条 🟡 被写成「已验证效果」。
+
+### 二、未验证清单（全文，117 行）
+
+每一行写了缺什么、该跑的命令、谁来跑。完整版就在本节；下面第三节是其中最核心的几条命令（按手册要求的顺序）。
+
+| 条目 | 缺什么 | 该跑的命令 | 谁来跑 |
+|---|---|---|---|
+| C1.1 | `wechat-html` 没有稳定静态 schema，未实现 | 若之后有静态 HTML 样本：对照样本写 `formats/wechat-html.ts`，再进注册表 | 有真实 WeChat HTML 导出的人 |
+| B8.1 | 判别器在真实评测对子上的 AUC。本机没有非 stub 的模型，合成「句末加句号」测的是算法，不是这个分身 | `corepack pnpm eval -- --persona <id> --user <id> --discriminator --k 3` | 配了真实模型、并且该分身已有分层标答的人 |
+| B8.5 | 真实模型下每层消融的贡献。本机没有非 stub 的模型；表格逻辑和调用次数已用桩数据/计划验证 | `corepack pnpm eval -- --persona <id> --user <id> --ablate --yes` | 配了真实模型、并且该分身已有分层标答的人 |
+| B8.2 | 真人盲测的命中率。本机没有非 stub 的模型，也没有真人被试；合成对子只证明路由和页面 | 先用 `corepack pnpm eval -- --persona <id> --user <id> --k 3` 生成对子，再在 `/persona/:id/blind-test` 完成一场 12 组盲测 | 有真实模型、真实记录和一位被试的人 |
+| B8.3 | 真实模型跑 50 轮后的漂移斜率。测试里的桩模型只证明窗口和斜率算法 | `corepack pnpm eval -- --persona <id> --user <id> --drift --turns 50` | 配了真实模型、并且该分身有 `userSide.sampleLines` 的人 |
+| B8.4 | 真实候选模型的试镜排名。三个 mock provider 只证明综合分和错误处理 | `corepack pnpm eval -- --persona <id> --user <id> --audition` | 配了两个以上真实模型、并且该分身已有分层标答的人 |
+| B8.8 | 真实二选一选择训练出的 `rerankWeights` 是否让重排更像 TA。30 行合成数据只证明字数权重会为负 | 在应用里打开「偶尔让我二选一」，完成 30 次选择后在保真面板执行 `style.measure`，再跑一次 `--compare fingerprintRerank` | 有真实模型、愿意做 30 次二选一的人 |
+| B2.7 | 长度上限有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare lengthCap --k 3` | 配了真实模型、并且该分身已有指纹和分层标答的人 |
+| B3.4 | 标点投影有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare projection --k 3` | 配了真实模型、并且该分身已有指纹和分层标答的人 |
+| B3.3 | 指纹重排有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare fingerprintRerank --k 3` | 配了真实模型、并且该分身已有指纹和分层标答的人 |
+| B3.7 | 专属词进提示词有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare lexicon --k 3` | 配了真实模型、并且该分身已确认词和分层标答的人 |
+| B3.8 | 称呼行改成最近一季最常用的称呼之后，生成有没有更像 TA。本机没有非 stub 的模型。称呼史没有单独的层，不能 `--compare` | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身已重测过称呼史、已有分层标答的人 |
+| B2.3 | 示范改成按轮检索、并可选本机嵌入之后，生成有没有更像 TA。本机没有非 stub 的模型。示范没有单独的 `--compare` 层 | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身已有记录和分层标答的人 |
+| B2.1 | 开口前放几句原话之后，生成有没有更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare seededTurns --k 3` | 配了真实模型、并且该分身已有记录和分层标答的人 |
+| B2.2 | 固定回法有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare ritual --k 3` | 配了真实模型、并且该分身已量出仪式表、已有分层标答的人 |
+| B2.6 | 风格样本和漂移提醒有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare styleReminder --k 3` | 配了真实模型、并且该分身已量出样本池和指纹、已有分层标答的人 |
+| B2.5 | 不像/像对照段有没有让生成更像 TA。本机没有非 stub 的模型。对照属于 exemplars 层 | `corepack pnpm eval -- --persona <id> --user <id> --compare exemplars --k 3` | 配了真实模型、并且该分身已有带改写的不像标记和分层标答的人 |
+| B2.4 | 先定内容再换嗓子有没有让生成更像 TA。本机没有非 stub 的模型。`--compare` 仍是原来的四路对比（偏差 13），要量这一层需把 `layers.twoStage` 打开再 `--without twoStage` | `corepack pnpm eval -- --persona <id> --user <id> --compare twoStage --k 3` | 配了真实模型、并且该分身已打开两步生成、已有分层标答的人 |
+| B2.8 | 按调用点分工、分身采样、extraBody、`--tune` 有没有让生成更像 TA。本机没有非 stub 的模型。`--tune` 只打印最好的一组和应用命令，不写入 | `corepack pnpm eval -- --persona <id> --user <id> --tune --yes` ；`corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身已有分层标答的人 |
+| B2.9 | 换成 cache 布局之后生成有没有更像 TA。本机没有非 stub 的模型。默认仍是 classic | 先 `PROMPT_LAYOUT=classic corepack pnpm eval -- --persona <id> --user <id> --save`，再 `PROMPT_LAYOUT=cache corepack pnpm eval -- --persona <id> --user <id> --gate`（或 `--compare`） | 配了真实模型、并且该分身已有分层标答的人 |
+| B4.1 | 按「我做了什么」抽动作之后生成有没有更像 TA。本机没有非 stub 的模型。邻接对没有单独的层，走 `act` | `corepack pnpm eval -- --persona <id> --user <id> --compare act --k 3` | 配了真实模型、并且该分身已标过用户动作、已有分层标答的人 |
+| B4.2 | 动作下面挂原话簇之后生成有没有更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare actClusters --k 3` | 配了真实模型、并且该分身已量出动作簇、已有分层标答的人 |
+| B4.3 | 情绪惯性有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare emotionInertia --k 3` | 配了真实模型、并且该分身已量出情绪动力学、已有分层标答的人 |
+| B4.4 | 冲突剧本（冷话、到点强制和好）有没有让生成更像 TA。本机没有非 stub 的模型。和 B4.3、B4.5 同一层 | `corepack pnpm eval -- --persona <id> --user <id> --compare emotionInertia --k 3` | 配了真实模型、并且该分身已量出冲突画像、已有分层标答的人 |
+| B4.5 | 雷区表进提示词有没有让生成更像 TA。本机没有非 stub 的模型。和 B4.3、B4.4 同一层 | `corepack pnpm eval -- --persona <id> --user <id> --compare emotionInertia --k 3` | 配了真实模型、并且该分身已量出雷区、已有分层标答的人 |
+| B4.6 | 会收尾的 TA 有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare closing --k 3` | 配了真实模型、并且该分身已量出会话画像、已有分层标答的人 |
+| B4.7 | 只接半句的减法进提示词有没有让生成更像 TA。本机没有非 stub 的模型。属于 suppressions 层 | `corepack pnpm eval -- --persona <id> --user <id> --compare suppressions --k 3` | 配了真实模型、并且该分身已确认 multi_point、已有分层标答的人 |
+| B4.8 | 会话内顺带起话头有没有让生成更像 TA。本机没有非 stub 的模型。属于 `act` 层 | `corepack pnpm eval -- --persona <id> --user <id> --compare act --k 3` | 配了真实模型、并且该分身已量出 inSession、已确认生活事件或未结事项、已有分层标答的人 |
+| B6.1 | 提到的人进提示词有没有让生成更像 TA。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare people --k 3` | 配了真实模型、并且该分身已确认人物、已有分层标答的人 |
+| B6.2 | 提到的喜恶进提示词有没有让生成更像 TA。本机没有非 stub 的模型。喜恶属于 `people` 层 | `corepack pnpm eval -- --persona <id> --user <id> --compare people --k 3` | 配了真实模型、并且该分身已确认立场、已有分层标答的人 |
+| B6.3 | 作息进时间感知、主动开口和会话内起话头之后生成有没有更像 TA。本机没有非 stub 的模型。作息不是单独的层 | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身已确认作息、已有分层标答的人 |
+| B6.4 | 知识边界减法进提示词有没有让生成更像 TA。本机没有非 stub 的模型。属于 suppressions 层 | `corepack pnpm eval -- --persona <id> --user <id> --compare suppressions --k 3` | 配了真实模型、并且该分身已确认 knowledge_boundary、已有分层标答的人 |
+| B6.5 | 选了时期之后提示词只知道那段时间。本机没有非 stub 的模型。时期不是单独的层 | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身已切出时期、已有带 `periodId` 的分层标答的人 |
+| B6.6 | 事实核查标注和重写有没有让生成更像 TA、少编往事。本机没有非 stub 的模型 | `corepack pnpm eval -- --persona <id> --user <id> --compare factRewrite --k 3` | 配了真实模型、并且该分身已打开事实重写或标注、已有分层标答的人 |
+| B6.9 | 账本标记有没有让分身前后说法一致。本机没有非 stub 的模型。不是单独的层 | `corepack pnpm eval -- --persona <id> --user <id> --k 3` | 配了真实模型、并且该分身在应用里说过可核对的话、已有分层标答的人 |
+| C2.4 | 真实记录上的年报数字是否与本人记忆一致。夹具证明计数和分桶，但没有真实聊天记录；每年高频词在真实语料上是否可读也没量 | 在真实分身上打开 `/persona/<id>/report`，与导出的原始记录人工对一遍 span、每月条数、最长沉默、最长一次聊天 | 有真实记录的人 |
+| C2.5 | 真实记录上自动找出的转折是否有意义。夹具只证明算法在设计的静默处找到长度变化；真实关系里的转折要人来判断 | 在真实分身上打开报告的心电图分页，逐条看「记下来 / 不对」，记下命中率 | 有真实记录的人 |
+| C2.8 | 真机地图：配置 `MAP_TILE_URL` 后在浏览器里打开底图、看瓦片请求与空白底图上的点 | `MAP_TILE_URL=https://<tile-host>/{z}/{x}/{y}.png` 起应用，打开「去过的地方」，先看空白底图，再打开开关 | 有地图瓦片服务和图形浏览器的人 |
+| C2.9 | 打印版式：jsdom 只证明 HTML、转义和页脚；真实浏览器的 `@media print` 分页与中文字体没看过 | 在浏览器里打开说明书 → 打印预览，检查分节、页脚和字体 | 有图形浏览器的人 |
+| C6.3 | 真实浏览器的纪念册打印：jsdom 与 CSS 文件只证明 `@media print` 和 `.book-document` 存在，分页、图片与中文字体没看过 | 在浏览器里打开 `/persona/<id>/book`，分别用普通版和分享版打印预览，检查分页、照片尺寸和页脚 | 有图形浏览器和真实记录的人 |
+| C7.2 | 真实两个账号在浏览器里走一遍邀请、接受、撤销、删除：机器测试用 tRPC caller 和临时库覆盖了同一条链路，界面只到 jsdom | 开两个浏览器会话，A 在 `PersonaEdit` 生成链接，B 登录后打开 `/share/<token>` 接受，聊一轮；A 撤销后 B 再发消息看说明，打开历史与导出；A 删除分身后再看 B 那一行 | 有两个账号和图形浏览器的人 |
+| C8.6 | 语义检索的真实召回：本机没有 Ollama/bge-m3，只在手造向量上验证了排序与 0.55 阈值；真实记录上「沙滩」能否召回「海边」、60,000 轮截断后的体验未量 | 装好 Ollama 与 `bge-m3` 后，在真实分身上执行 `style.measure` 让 B2.3 建向量，再在记录页搜一个不含原词的近义说法并核对前几条 | 有本机 Ollama 和真实记录的人 |
+| C8.7 | 示范改成查询之后，生成是否更像 TA。夹具只证明新旧路径选出的前四名高度重合，不证明模型输出更像 | `corepack pnpm eval -- --persona <id> --user <id> --k 3`（与改动前的运行对比） | 配了真实模型、该分身已有记录和分层标答的人 |
+| C8.1 | 真机没有收到通知。需要 HTTPS 或 localhost 上的真实浏览器，本机这次没有做订阅 | 在 localhost 打开设置，点「应用关着的时候也提醒我」，允许通知，再点「发一条试试」 | 有图形浏览器、并且服务以 localhost 或 HTTPS 跑着的人 |
+| B5.2 | 真实的多小时等待。本机单元测试用假定时器，没有把页面开着等到点 | 打开 `asyncDelivery`，发一条会抽到 >90 秒延迟的消息，关掉页面，等到 `dueAt` 之后看对话里是否出现回复，开了推送的话是否收到 `kind: "reply"` | 有真模型、并且该分身已打开「可以晚点回」的人 |
+| B5.8 | 真实微信、飞书上的连发间隔、延迟后逐条送达、追一句、同一天第二次沉默。本机只跑了单元测试和假定时器 | 绑好通道后连发三条，看是否合成一轮且回复拆成多条气泡；等到延迟任务的 `dueAt` 之后看是否逐条到达；追一句是否走同一通道；同一天第二次沉默是否不再发「没回」 | 绑了微信或飞书通道的人 |
+| B5.3–B5.7 | 真实记录上量出的延迟分桶、睡眠窗、打字节奏、改错/撤回/拍一拍、追一句，是否与本人一致；夹具只证明算法。本机没有真实记录，也没有非 stub 的模型 | 在真实分身上执行 `style.measure` 后，用同一批记录重算 `shared/reply-delay.ts` / `routine-profile.ts` / `typing-profile.ts` / `quirks-profile.ts` / `double-text.ts` 的产出，再跑 `corepack pnpm eval -- --persona <id> --user <id> --k 3` 看整体保真 | 有真实记录和模型的人 |
+
+| B7.1 | 真实记录上的表情时机与选择：夹具证明的是算法按测量值抽，不是「这个人在这个时候会不会发表情」。本机没有真实记录，表情也不进 `pnpm eval`（不改变回复文字） | 在真实分身上跑 `style.measure`，在应用里聊 20 轮，观察表情落点与频次；或导出 `styleProfile.stickers` 与人工统计对照 | 有真实聊天记录（带表情）的人 |
+| B7.2 | 真的用 whisper.cpp 跑一段录音。本机没装 whisper.cpp，`--no-timestamps`/`--no-prints` 只按手册和检索结果写进代码 | 装好 whisper.cpp 后：`STT_ENGINE=whisper-cpp WHISPER_CPP_BIN=<bin> WHISPER_CPP_MODEL=<model> corepack pnpm dev`，在聊天里发一条语音，看气泡里的转写 | 装了 whisper.cpp 的人 |
+| B7.2/B7.3 | 真实微信/QQ 导出里的 `.silk` 转写。SILK 是微信自有编码，ffmpeg 解不了，代码按「没听清」处理，README 写明要先转码 | 先在外部把 `.silk` 转成 wav/mp3，再导入，跑 `media.transcribe`，看语音页是否出现转写 | 有带语音的微信导出的人 |
+| B7.4 | 真实记录上的语音条频率与时长，以及合成出来的语音听感（是否 4 字/秒估算得住、TTS 音色是否可接受）。本机没有真实语音，也没有配 piper/本机 TTS | 真实分身上 `style.measure` 后打开「{{name}} 有时候发语音」，聊 20 轮听一遍；本地引擎可用时用 `TTS_ENGINE=piper` | 有真实语音记录、装了本机 TTS 的人 |
+| B7.5 | 韵律映射的听感：`ratePercent` 的 ±30% 钳位与空格→逗号是否真的更像 TA。本机没有真实录音、没有 ffmpeg 以外的听感验证 | 在真实分身上 `media.measureProsody`，再点朗读 / 收语音条，和本人的原声对照 | 有真实录音和本机 TTS 的人 |
+| B7.6 | 真的装 piper 听一遍。本机没装 piper，单元测试 mock 了 `execFile` | 装好 piper 后 `TTS_ENGINE=piper PIPER_BIN=<bin> PIPER_MODEL=<model>` 起应用，点一次朗读，确认有声音、语速按 `ratePercent` 变化 | 装了 piper 的人 |
+| B7.13 | 真实记录上的电话习惯（谁打得多、一般打多久、通常什么钟点接）是否与本人一致。夹具只证明算法 | 在真实分身上执行 `style.measure` 后查看 `styleProfile.calls`，或与手机通话记录人工对照 | 有真实通话记录的人 |
+| B7.8 | 真实手机照片的 EXIF（拍摄时间、GPS、方向）与真实人脸的聚类效果。本机只用一张生成的 4×4 样本验证了标签读取，没有真实照片，也没有在浏览器里跑过 face-api | 在有真实照片的分身上打开编辑页，选一张照片裁剪成头像；再点「帮我找出 {{name}} 的脸」，看分组是否把人认成同一组 | 有真实照片、有图形浏览器的人 |
+| B7.9 | 真实记录上「聊到这件事时会不会发照片」的时机、以及 30 天不重发是否符合这个人的习惯。夹具没有图片，服务端测试用合成记忆与照片 | 在真实记录上执行 `style.measure`，给几条记忆挂照片，打开开关聊 20 轮，看落点与频次 | 有真实带图记录、并愿意挂照片的人 |
+| B7.10 | 真实视频的画面描述与声音转写。本机用 ffmpeg 跑过 5 秒 640×360 的测试视频（3 帧 data URL、时长与尺寸正确），但没有视觉模型描述画面，也没有本机转写引擎听声音 | 配一个能看图的模型并（可选）装 whisper.cpp 后，上传一段真实视频再蒸馏，看「视频里的画面」和「视频里说的话」两段材料 | 有真实视频、配了视觉模型的人 |
+| B7.11 | 真实截图的识别率：本机没有视觉模型，测试用桩 provider 证明提示词、JSON 解析、失败隔离和校对页；没有真实聊天截图 | 配一个能看图的模型后，选一组真实截图导入，逐条校对，记录识别错的条数 | 有真实截图和视觉模型的人 |
+| B7.12 | 真实动态上的公开语气描述是否像本人、以及公开动态的截图识别率。本机没有真实记录、没有视觉模型 | 在真实分身上导入 60 条动态后跑蒸馏，看档案页的「对所有人说话的样子」；再把它与本人动态人工对照 | 有真实动态、配了视觉模型的人 |
+| B7.15 | 三种版式在真实浏览器与真实数据上的观感（气泡尾巴、头像间距、背景图可读性）。本机 jsdom 只能证明 `data-skin`、组件与结构测试 | 在浏览器里打开同一段对话，依次切三种版式、设备注名、换一张背景图，检查 `classic` 与改动前一致 | 有图形浏览器的人 |
+| B7.14 | 真实通话的延迟、打断手感、麦克风能量阈值（0.035）与 700 毫秒静音是否合适、合成语音是否可听。本机用 mock 的转写/合成/模型验证协议，没有真人对着麦克风说话 | 配好本机或 provider 的转写与朗读后，在浏览器打开 `/persona/<id>/call`，说三五轮，试一次打断和一次挂断，记下延迟与误触发 | 有麦克风、图形浏览器和可用转写/朗读引擎的人 |
+
+| C3.1 | 真实记录上量出的分时段回复延迟是否与本人一致；夹具只证明算法 | 在真实分身上执行 `style.measure` 后打开「{{name}} 一般多久回」，与本人回消息习惯对照 | 有真实记录的人 |
+| C3.4 | 真实记录上的先例检索与「之后」统计是否有用 | 在真实分身上把 TA 最近一句贴进「读懂这一句」，核对先例、上下文和间隔 | 有真实记录的人 |
+| C5.5 | 真的通过 SMTP 发出去一封：本机没有邮件服务器，`nodemailer` 的 transport 全部是 mock；TLS、认证方式、国内邮箱的反垃圾策略都没在真服务器上试过 | 在设置里填一个真实 SMTP（例如本机 Postfix 或邮箱的 SMTP），点「发一封测试信」，再打开某个分身的「回信也发到我的邮箱」，等一封回信到后看收件箱 | 有可用 SMTP 账号的人 |
+| C5.3 | 真实的「到点」：单元测试用直接调 `sweepScheduledItems(now)` 和假 dueAt，没有把应用开着等到真实时间过去；推送也只在 mock 里验证 | 在应用里定一条 2 分钟后的消息、关掉页面等到点，看对话里是否多一条用户消息与回复、开了推送是否收到 `kind:"reply"` | 有真模型、有图形浏览器的人 |
+| C3.2 | 排练出的几种可能是否像 TA 的真实反应；本机没有非 stub 模型 | 配真实模型后，在真实分身上排练 5 句常见的话，人工判断三种可能是否成立 | 配了真实模型和真实记录的人 |
+| C3.6 | 三种改写是否真的更直接/更轻/更短、是否保留原意；本机没有非 stub 模型 | 配真实模型后在出口清单里对 10 句用「换个说法试试」，逐条判断 | 配了真实模型的人 |
+| C4.1 | 镜子的数在真实记录上是否描述了本人（短回复、变短、延迟、和解、开口） | 真实分身 `style.measure` 后打开镜子，与本人或记录人工对照 | 有真实记录的人 |
+| C4.3 | 真实数据上的趋势与毕业条件是否读得懂 | 在真实分身上打开分析页，核对四周对比与条件清单 | 有真实记录的人 |
+| C4.4 | 按记录重建的「你」像不像本人；本机没有非 stub 模型 | 配真实模型后在真实分身上换一次位置，人工判断重建的「我」像不像 | 配了真实模型和真实记录的人 |
+| C4.6 | 打印版式与真实数据的可读性；jsdom 只证明 HTML、转义与不含原文 | 在浏览器里打开导出的摘要 → 打印预览，逐项核对曲线、日期、页脚 | 有图形浏览器和真实记录的人 |
+| C7.4 | 真实模型从真实口述里抽出的说法是否成立、引用校验在长口述上的命中率。本机没有非 stub 的模型 | 主人在档案页写一段口述（或让一个家人账号写并提交），点「整理成记忆」，逐条核对标题、讲述人和原话；再点一次确认不重复 | 有真实模型和真实口述的人 |
+| C7.4 | 真实录音的转写：本机没有麦克风、也没有配置转写引擎，路由只用 mock 验证到 `transcribeAudio({ purpose: "chat" })` | 在档案页点「说一段」，录十几秒，看文字是否进到写作框、能不能改完再提交 | 有麦克风、装了 whisper.cpp 或配了转写 provider 的人 |
+| C7.4 | 浏览器里两个账号走完整条链路（邀请 → 家人提交 → 主人整理 → 裁决冲突）；机器测试走 tRPC caller 和临时库 | 两个浏览器会话：A 邀请 B；B 在档案页提交一段；A 看到并点「整理成记忆」；两边说法不同时 A 在冲突区点「采用这一条」 | 有两个账号和图形浏览器的人 |
+| C6.5 | 「让分身试着把它说完」续写的那一句是否成立、是否像 TA；本机没有非 stub 的模型，单测只验证到围栏、承诺类过滤和不落库 | 配真实模型后在告别页对一条「算了」或未结事项点「让分身试着把它说完」，读续写是否成立；再确认没有新增消息、记忆或出口清单条目 | 配了真实模型和真实记录的人 |
+| C6.6 | 四种结局写出来的信是否真的各说各的那件事；本机没有非 stub 的模型，`farewell.test.ts` 只验证到指令段与默认快照 | 配真实模型后对同一个分身分别选四种结局各写一次，读信是否落在该结局上、有没有替真人说现在怎么想 | 配了真实模型和真实记录的人 |
+
+| C8.9 | 金额与供应商真实账单是否一致：账本记的是 provider 上报的 token（或本地估算）乘用户填的单价，没有和任何真实账单核对过 | 用真实 provider 跑一段对话与一次蒸馏，填上实际单价，在面板里读金额，再到供应商控制台核对同一时段的用量与费用 | 有真实 provider 账单的人 |
+| C8.9 | 蒸馏估价的准确度：估价按「输入 ≈ 字符数、输出 ≈ 调用次数 × 400」算，本机只验证了数字链路，没有和真实蒸馏的实际 token 对照过 | 一次真实蒸馏前后对比 `usage.summary` 的 `lastDistill` 与实际账单，记下偏差 | 有真实 provider 和真实记录的人 |
+| C8.11 | 真实浏览器里走一遍删除→撤销、回收站恢复/彻底删除：本机用 jsdom 组件测试覆盖了按钮、10 秒计时、确认文案与失败重试，没有在真实浏览器里点过 | 起应用后在大厅删一个分身、点「撤销」；再删一个进设置「数据管理」的回收站，分别点恢复和彻底删除；删一条消息、一条记忆各撤销一次 | 有图形浏览器的人 |
+| C8.11 | 真实的 30 天等待与进程重启后的清扫：本机用传入的 `now` 验证第 29/31 天与节流，没有让应用真实跑过 30 天，也没验证重启后首次 tick 会立刻清扫 | 把库里的 `personas.deletedAt` 直接改到 31 天前并重启应用，等第一次 scheduler tick 后确认行与上传文件都没了 | 有可改数据库与重启应用权限的人 |
+| C8.12 | 真实环境里的诊断：本机没有真实 provider、Ollama、whisper.cpp、piper、采集器 Python，也没有在浏览器里点过；19 项检查的真实响应（含一次极小模型请求、真实磁盘/数据库大小、VAPID 与订阅数、通道状态）都只在 mock 依赖上验证过 | 配好一个真实 provider（可选 Ollama/Python）后打开设置 → 数据 → 点「检查一遍」，逐项核对结果与真实状态；用真实浏览器点一次「复制报告」看剪贴板内容 | 配了真实 provider、有图形浏览器的人 |
+| C8.13 | 真实浏览器里的场景面板与横幅、以及真实模型下用一段记录语境聊一轮：jsdom 只证明表单预填、按钮接线与横幅文案；「那几天」的边界在真实模型身上读起来是否自然、6–12 句是否够用没量过 | 在浏览器里打开阅读器选一天 →「按这段的语境聊」→ 在聊天页发一轮，读回复是否落在那段时间；再打开场景面板编辑一次名字与开场白 | 有真实记录、真实模型和图形浏览器的人 |
+| C8.14 | 真实浏览器里的可访问性与繁体：字号、高对比、减少动效的 CSS 观感只在 jsdom 里验证属性与规则；繁体字典是机器转出的，没有人逐句读过台湾用词（如「服务器」vs「伺服器」）；少数旧组件直接调 `shared/copy` 在 zh-Hant 下仍显示简体 | 在浏览器里切三档字号、高对比与减少动效，刷新后看是否保持；切到繁體中文逐页看一遍用词；打开一个会调 `shared/copy` 的旧面板确认差异 | 有图形浏览器与中文母语读者的人 |
+| C1.8 | 真实模型下的访谈质量与描述人设是否像本人：本机没有非 stub 模型，访谈提问与“人设生成的每句话”都只在 mock 上验证到围栏、子串校验与字段映射 | 配真实模型后对一个真人做一次完整访谈（每个方面两轮），读生成的描述是否成立、提问是否自然；再把这个分身聊十轮看像不像 | 配了真实模型且有真人愿意受访的人 |
+| C1.8 | 真实麥克风与真实浏览器里的单向文字导入：本机没有麥克风/转写引擎，访谈录音只验证到 `transcribeAudio({ purpose: "chat" })` 的调用与“先给人看”；monologue 导入只到导入器 + 向导组件层 | 有麥克风与转写引擎的人录一段访谈；在浏览器里选 monologue 格式导入一份日记，看表单说明与导入后的记录 | 有麥克风、安装了转写引擎、有图形浏览器的人 |
+
+| C8.3 | 换机器 / 换 `JWT_SECRET` 的真实还原：自动化与手工两库都在同一台机器、同一个 dev `JWT_SECRET` 上。账号密码是加盐哈希，原样可登录；但通道 token、模型 API key、SMTP 密码等 `encryptSecret` 包着的凭证换实例后要重填，这一点只在 `docs/backup.md` 写明，没有真的跨机器验过 | 在新机器上 `createdb` → `push --force` → `scripts/backup.ts restore --in …`，用备份里的账号登录，打开一个带照片的分身确认文件可读，再检查设置里旧的 provider/通道凭证是否需要重填 | 有第二台机器或可换 `JWT_SECRET` 的部署的人 |
+| C8.3 | 真实 WebDAV / S3 兼容存储上的定时备份：SigV4 与 PUT/DELETE 只在 mock `fetch` 上验证过，没有对真实服务端跑过；5 GiB 上限也没有造过超大备份 | 在设置里填一个真实 WebDAV（或 MinIO 一类的 S3 兼容端点），打开每日定时备份，把 `users.backupSettings.lastRunAt` 改到一天前让调度器下一 tick 跑一次，确认对象出现在服务器上、旧的第 8 份被删；再用 `scripts/backup.ts verify` 校验下载回来的文件 | 有真实 WebDAV / S3 账号并愿意配一次的人 |
+| C8.3 | 真实浏览器里的下载与首次还原：jsdom 只验证到 fetch/blob/下载点击与表单状态；没有在浏览器下载过一份带上传文件的真实备份，也没有在真机上走「从备份还原」 | 起应用 → 设置 → 数据 →「下载完整备份」（带照片的分身），用命令行 `verify` 确认文件完整；再以 `MIRRAI_BOOTSTRAP_ADMIN=manual` 起一个空实例，打开登录页用同一份文件还原并登录 | 有图形浏览器和真实数据的人 |
+
+| C8.4 | 真机通行密钥：注册与解锁只用 mock 的 `@simplewebauthn/server` 验证过（含 counter 回退被拒），没有在 Touch ID / 安全钥匙上真的注册过一把；`@simplewebauthn/browser` 的 `startRegistration`/`startAuthentication` 也没有在真浏览器里跑过 | 用 localhost 起应用 → 设置 → 数据 → 应用锁 → 设置 PIN → 「添加通行密钥」（用本机 Touch ID）→ 锁定 → 用通行密钥解锁；再在第二把安全钥匙上重复一次 | 有图形浏览器、支持 WebAuthn 的机器与一把真实通行密钥的人 |
+| C8.4 | 真实浏览器里的锁屏与空闲上锁：jsdom 只验证了状态、标题、按钮接线与双重 Esc；没有真的把页面放着超过 idleMinutes 再回来，也没有在此浏览器里点过顶栏「立即锁定」 | 起应用，设置 PIN 与 1 分钟空闲，打开一个对话页放 2 分钟，再点任意按钮看是否出锁屏；点顶栏锁图标与按两次 Esc 各试一次；确认 `/uploads` 的图片在锁屏时也打不开 | 有图形浏览器和真实数据的人 |
+| C8.4 | 两进程共用的解锁状态：`initAppLockStore` 共用 Redis，只有进程内 Map 被单测覆盖；没有在真实 Redis 上跑两个 Mirrai 进程验证一个进程解锁后另一个也认 | 配好 `REDIS_URL` 起两个 Mirrai（不同 PORT、同一 DATABASE_URL 与 REDIS_URL），在 A 里输 PIN 解锁，再在 B 的会话里请求受保护路由，确认 B 也认为已解锁、空闲到期后两边同时失效 | 有可跑两个进程和真实 Redis 的部署的人 |
+
+| C8.8 | macOS 菜单栏外壳的实际运行：只验证到 `swiftc -parse-as-library` 编译通过与 build 脚本的静态断言；菜单项、⌥⌘M 全局快捷键、状态项图标、「退出」是否真的结束 start.sh 及其 Node/PostgreSQL 子进程，都没有在图形会话里跑过 | 在 Mac 上跑一次 `bash scripts/build-macos-app.sh`（或直接把编好的 `MirraiMenu` 放进现成 bundle），双击打开；依次点「打开 Mirrai」「看日志」「退出」，再试 ⌥⌘M；退出后 `ps aux | grep -E "postgres|dist/index.js"` 应无残留 | 有图形 macOS 会话、能跑完整打包的人 |
+| C8.8 | Windows 托盘与快捷键：本机不能编译 Windows 启动器（无 .NET Windows SDK），改动只做了代码审读，没有 `dotnet publish`、没有在 Windows 上跑 | 在 Windows 构建机上 `powershell -ExecutionPolicy Bypass -File scripts\build-windows-app.ps1`，双击 Mirrai.exe：关窗口应缩进托盘且服务不断；托盘菜单三项各试一次；Ctrl+Alt+M 打开浏览器；托盘「退出」后服务与 PostgreSQL 都停 | 有 Windows 构建机的人 |
+| C8.8 | 真机上的系统分享：`share_target` 与 `sw.js` 的 POST 处理只用 Node 里跑的假 Cache API 和手工 FormData 验证过；没有在真实手机或桌面系统上从分享菜单发给 Mirrai | 在支持 Web Share Target 的设备上安装 PWA，从相册/文件应用分享一个 `.csv` 或 `.zip` 给 Mirrai，看是否落到 `/share-inbox`、选分身导入后能否出现角色识别向导 | 有真实手机（iOS 不支持这条，需 Android/ChromeOS/桌面 Chrome）与真实文件的人 |
+| C8.8 | 完整 macOS 打包链：`build-macos-app.sh` 会下载 Node、复制 PostgreSQL/Redis、签名、打 DMG，本机这次只跑了它里面的 swiftc 步与 `macos-start.test.ts`，没有跑完整脚本 | 在 Mac 上跑 `bash scripts/build-macos-app.sh`，确认 `build-macos/Mirrai.app/Contents/MacOS/Mirrai` 是编译产物、`codesign --verify --deep --strict` 通过、DMG 能打开应用 | 有 macOS 构建环境的人 |
+
+| C8.5 | 真实浏览器里的加密存储流程：jsdom 只覆盖了启用/停用/解锁/恢复码表单与解锁浮层的接线；没有在真实浏览器里走「启用 → 等后台任务 → 重启服务 → 刷新页面输密码解锁 → 读回旧消息」，也没有下载过一次真实的全量备份 | 起应用（临时库）→ 设置 → 数据 → 勾选两项并用账号密码启用 → 等进度到 100% → 重启服务 → 刷新任意页面，在解锁浮层输密码 → 打开一个旧分身读一条消息；再下载一次完整备份并用 `scripts/backup.ts verify` 校验 | 有图形浏览器与真实数据的人 |
+| C8.5 | 分批迁移在超大库上的耗时：500 行一批的逻辑只在夹具规模（几十行）和 8 条 DB 用例上验证；100 万条记录上限的分身没有量过总耗时、中断点与调度器每 tick 的预算 | 用夹具放大到 10 万行写进草稿库，启用加密并计时到完成，记录总时长、每批耗时、中断后 resume 的位置 | 有草稿库与时间的实现者（可选） |
+| C9.4 | 真实模型会不会在没有提示的情况下真的去调那三件工具（时机、参数是否合理），以及到点那句像不像本人。本机没有非 stub 的 provider：请求体、回传、围栏、三条限制、调度取消/安静时段/危机/悼念都用桩与结构测试钉住了，但模型的选择本身量不了 | 配一个支持 tool calling 的 provider，给分身打开 `tools`：聊「我到家跟你说」后看 `scheduled_items` 里出现一行 `kind='check_in'`、到点后聊天里出现带标记的一句；在挂过照片的记忆上聊那件事，看是否收到那张照片；打开 `ldr.weather` 后问「你那边天气怎么样」 | 配了真实 provider、真实记录与真实照片的人 |
+| C9.2 | 用一个真实第三方 OpenAI 客户端（Python `openai`、某个编辑器插件）连一次 `/v1`：本机的测试只用 `fetch` 按官方形状逐字段核对，没有真的装客户端；非流式与流式的连接、超时、`Authorization` 头由客户端自己拼的过程没跑过 | 起应用 → 设置里建一把 `chat` 密钥 → 用 `openai` 客户端（`base_url="http://localhost:3000/v1"`、`api_key="mk_…"`）跑一次 `chat.completions.create` 与 `stream=True`，看两边的 content 都是分身的回复 | 有真实第三方客户端、愿意装一次的人 |
+| C9.3 | 在真实的 AI 客户端里配置并读一次：本机只用 SDK 的 `StdioClientTransport` 从命令行拉起了真进程（握手、`listTools`、`list_personas` 都通），没有在 Claude Desktop / Cursor 一类客户端里填过配置；客户端自己的启动方式（`corepack pnpm --dir …`）、它的日志位置、它对 `stderr` 的显示都没验 | 按 `docs/mcp.md` 的 JSON 把 `mirrai` 加进客户端的 mcpServers，重启客户端，让它「读一下我有几个分身」并看工具调用结果；再故意删掉 `read` 权限看客户端是否显示原因 | 装了 MCP 客户端、愿意填一次配置的人 |
+| C9.5 | 真的换一台机器（不同 uploads 根、不同数据库、可能不同版本）导入一次：本机两个测试库与同一个 uploads 根下往返过，跨实例/跨版本的路径与迁移差异没验过；真机上点一遍导出/导入对话框也没做过 | 在第二台机器上装同版本 → 在 A 机导出带记录和口令的分身包 → 在 B 机「设置 → 数据 → 分身包」导入 → 打开聊天看提示词、记录页看条数、表情与照片能否显示；再用 A 机上同一份文件重复导入一次（应当得到第二个新分身，不覆盖） | 有第二台机器的人 |
+| C9.5 | 大分身（十万条以上记录、上千张照片/表情）的导出耗时与内存：本机夹具是 120 条记录；`bundle-db.test.ts` 只证明正确性，没有测试大数据量。导出目前把整行读进内存（偏差 496） | 在一个有 10 万条以上记录、带若干媒体的分身上跑导出，记录耗时、峰值内存与文件大小；再导入同一份文件核对条数 | 有真实大数据分身的人 |
+| C9.6 | 加密账号下的命令行：`measure`/`distill`/`doctor` 会经过 `encryptionGuard`，而命令行进程里没有数据密钥，会得到「加密内容锁着」；`import`/`export` 走的是非 tRPC 的 helper，行为未在加密账号上验过。本机没有加密账号可测（要真口令），代码路径只按守卫实现推断 | 在临时库上建一个账号、启用加密并迁移完 → `mirrai measure --persona <id> --user <id>`，期望得到 423/「加密内容锁着」而不是密文；再看 `docs/cli.md` 的说明是否够 | 有加密账号环境的开发者 |
+| C9.6 | 转发到 `scripts/eval-run.ts` 与 `scripts/backup.ts` 的真实运行：测试只断言了转发参数与退出码，没有在草稿库上真的跑一次 `eval`（需要真实 provider 才有意义）或 `backup`（备份已由 C8.3 自己的命令行测试覆盖） | `mirrai backup create --out /tmp/x.zip --passphrase-file …` 在草稿库上跑一次并 `verify`；`mirrai eval --persona <id> --user <id>` 在配了真模型的分身上跑 | 配了真实模型/需要备份的人 |
+| C9.1 | 真实的 Telegram 机器人：本机没有 bot token，也没有可用的 Telegram 网络。协议、绑定、长轮询 offset、发送与失败处理都只用假 `fetch` 验证过 | 在 @BotFather 建一个 bot 拿 token → 设置里填 token、启动、抄下六位口令 → 在 Telegram 里给 bot 发 `/bind <口令>`，确认回「我是数字分身」→ 再发一句，确认回复来自分身；把 token 改坏重启，确认状态里出现错误、进程不崩 | 有 Telegram 账号、能访问 api.telegram.org 的人 |
+| C9.1 | 真实的 Discord 机器人：本机没有 bot token。Gateway 握手、心跳、RESUME 都用假 socket 验证过；真实开发者门户里的 intents 设置、邀请 bot、429 限流没跑过 | 在 Discord Developer Portal 建应用与 bot → 关掉特权 intents（适配器只要 DIRECT_MESSAGES）→ 邀请到一个测试服务器 → 设置里填 token 启动 → 私信 bot 发 `/bind <口令>` 并聊一句；再断网 20 秒看是否自动重连并继续回话 | 有 Discord 开发者账号的人 |
+| C9.1 | 真实的 Matrix 机器人：本机没有 homeserver 与 access token。`/sync`、按 joined 成员数判私聊、`PUT send` 都用假 `fetch` 验证过；真实 homeserver 的登录流程、房间邀请自动 join、跨设备 token 没跑过 | 在任意 homeserver（matrix.org 或自建）登录一个 bot 账号拿 access token → 设置里填服务器地址与 token 启动 → 在 Matrix 客户端里和 bot 建一个只有两人的房间（适配器按「joined 成员恰好 2 人」判私聊，不读用户的 `m.direct`）→ 发 `/bind <口令>`；再重启应用看 `since` 是否接着走 | 有 Matrix 账号的人 |
+
+| C9.7 | 插件在**真实启动**的应用里被读到：本机只在测试里用临时目录跑过加载器与例子插件，没有起过一次 `MIRRAI_PLUGINS=on` 的应用、把插件放进真实数据目录、再看设置页是不是列出了它 | `mkdir -p <数据目录>/plugins && cp -R examples/plugins/echo-importer <数据目录>/plugins/ && MIRRAI_PLUGINS=on corepack pnpm dev`，看日志里 `[Plugins] Loaded echo-importer@1.0.0 (importer) as plugin:echo-importer:echo`，再打开 设置 → 数据管理 →「已加载的插件」 | 有真实数据目录、愿意把例子插件放进去的人 |
+| C9.7 | 文档站在真实浏览器里的样子：本机只验证了 `docs:build` 退出码 0 与产物 HTML（导航文本、291 处 `{{` 保留、34 页），没有打开浏览器看排版、搜索和侧边栏折叠 | `corepack pnpm docs:dev`，浏览器打开 `http://localhost:5173/` 顺着导航点一遍；或对 `docs/.vitepress/dist` 起一个静态服务器打开 | 想本地读文档的人 |
+
+| C9.8 | 群聊「像不像」：接话时机、被点名时的回应、几个人先后说话的分寸、群里说话的长度像不像本人——本机没有真实记录、没有非 stub 模型，全部规则与提示词只用合成夹具和桩验证 | 有真实群聊记录和真实模型后：导入一份真实群导出（向导勾「这是一个群聊」）→ `style.measure` 量出 `styleProfile.group` → 在 `/group/:id` 里聊二十轮，人工对照本人当时在群里的样子；一对一的对照仍用 `corepack pnpm eval -- --persona <id> --user <id> --compare act --k 3` | 有真实群聊记录、配了真实模型的人 |
+| C9.8 | 真实浏览器与真实群导出文件：本机只用 `buildGroupFixture()` 渲染成 `generic-line` 走过导入，页面与对话框只跑过 jsdom；没有打开过浏览器看排版，也没有拿微信/QQ 的群聊导出文件试过 | 起应用 → 用真实群导出文件走导入向导并勾「这是一个群聊」→ 打开大厅顶栏的群聊入口、建群、进 `/group/:id` 发几句（含 @ 与危机词），看固定说明、成员旁注解、危机卡与移动端排版 | 有真实群导出文件、愿意在浏览器里点一遍的人 |
+| C10.2 | 语义危机层的阈值（0.72/0.05）是照经验定的：本机没有 Ollama、没有嵌入模型，只用假嵌入验证了「余弦 ≥ 下限且比无害组高 0.05」这套规则的行为。真实 `bge-m3`（或 `OLLAMA_EMBED_MODEL`）下两组句子能否分开、阈值该取多少没量过 | 本机起 Ollama 并装嵌入模型，跑 `corepack pnpm crisis:semantic-thresholds`；按输出的 VERDICT 把 `server/safety/crisis-semantic.ts` 的 `CRISIS_FLOOR`/`SAFE_MARGIN` 调进分离区间，重跑 `server/safety/crisis-semantic.test.ts`。两组句子就是该文件的 `CRISIS_EXEMPLARS` 与 `SAFE_EXEMPLARS` | 有本机 Ollama 与嵌入模型的人 |
+| C10.3 | 真实浏览器里的同意流程：jsdom 只验到页面渲染、按钮接线与路由返回；没有在浏览器里真正打开一条 `/consent/<token>`、点「不可以」、再看到聊天关闭与档案页的彻底删除卡，也没有把导出的 HTML 在浏览器里打开过（自包含只用字符串断言） | 起应用（临时库）→ 档案页导出说明页并用浏览器打开；生成链接后开一个无痕窗口打开 `/consent/<token>`，点「不可以」→ 回档案页确认状态变「说不可以」、聊天页不能再发；再打开同一条链接应看到「这个链接已经不能用了」 | 有图形浏览器的人 |
+| C10.5 | 深夜保护在真实屏幕上的观感：jsdom 只验证了 `data-night` 的切换与 CSS 规则存在；配色是否真的「更暗但不影响可读性」、GIF 表情在夜间是否真的停在第一帧、去掉动效后有没有别处难看，都没有在浏览器里看过 | 起应用（临时库）→ 在设置里把时区改成能让「现在」落在 00:00–05:00 的时区（或直接改 `users.timezone`）→ 聊满 46 分钟（可把 `messages.createdAt` 改早来造）→ 看聊天页是否变暗、打字点是否不跳、贴纸表情是否静止；再在白天聊一轮对照 | 有图形浏览器和真实记录的人 |
+| C10.7 | 真实浏览器里的下划线与跳转：jsdom 只验证了类名、`title` 与 `href`；没有在浏览器里看过虚线的粗细/颜色、悬停提示的实际观感、点按后记录阅读器是否真的定位到那条记录，也没有看过长消息里多段下划线挨在一起的样子 | 起应用（有真实记录的分身）→ 聊天页「更多操作」里打开「在分身的话里标出 {{name}} 的原话」→ 聊到一条固定回法（例如说「晚安」），看整条下划线；再找一条模型回复里恰好重复了原话的，点下划线看是否跳到阅读器中该记录；最后看图例与关闭后的样子 | 有真实记录与图形浏览器的人 |
+| B9.3 | `logit_bias` 与 `grammar` 的真实效果：本机没有配置任何 LLM provider，也没有真实记录；单测只证明字段按 provider 能力发出、token id 与 GBNF 文本算得对，没有证明回复因此更像 TA。grammar 还只在快照和独立校验函数上验过，没有真的 llama.cpp 服务端 | `corepack pnpm eval -- --persona <id> --user <id> --without logitBias --k 3`（对比默认与关掉）；grammar 还要在设置 → AI 的「请求格式约束」里打开 grammar、并把某个 OpenAI 兼容行的地址指向 llama.cpp 服务端 | 配了真实模型（或 llama.cpp）且有真实记录与分层标答的人 |
+| B9.1/B9.2 | 解锁条件是否真的满足：本机只有夹具合成记录与手工造的盲测摘要，没有真实分身、没有真人盲测；判定规则与输出已验证，真实数字没量过 | `corepack pnpm eval -- --unlock-check --persona <id> --user <id>` | 有真实分身（≥1000 条 TA 文本行）并且请认识 TA 的人做过应用内盲测的人 |
+
+### 三、核心命令（按这个顺序，在你自己的机器、有真实记录和真实模型的分身上跑）
+
+```bash
+# 1. 把已有的上传文件补进记录表（A1）
+corepack pnpm mirrai measure --persona <id> --user <id>
+# 2. 基线
+corepack pnpm eval -- --persona <id> --user <id> --k 3
+# 3. 逐层看有没有用（每一层一行；没变好的那一层关掉）
+corepack pnpm eval -- --persona <id> --user <id> --ablate --yes
+# 4. 判别器和试镜
+corepack pnpm eval -- --persona <id> --user <id> --discriminator
+corepack pnpm eval -- --persona <id> --user <id> --audition
+# 5. 盲测：打开 /persona/<id>/blind-test，自己做一轮，再请认识 TA 的人做一轮
+```
+
+这五条命令在收尾时都在草稿库上用桩模型试跑过（能跑通；结果没有意义，见批次日志 P18.5 一节）。**桩模型的数字不是效果**：真实数字要你在自己机器上跑出来才算。
+
+### 四、待用户决定（全文，9 条）
+
+下面每一条都写了两个（或三个）选项各自的后果。这些不是施工缺漏，是**产品决定**，本阶段按手册的边界没有替你做。
+
+| 条目 | 问题 | 两个选项各自的后果 |
+|---|---|---|
+| A7 | 亲密度 `computeIntimacy` 里含连续对话天数（`consecutiveDays * 10`，最高 100 分），是否拿掉 | 拿掉：毕业门槛少这一项输入，已有分身的亲密度分数会下降，可能改变毕业建议。留着：大厅已经没有打卡，分数里仍奖励连续聊。手册 A7 边界写明这一条不动它，等决定。 |
+| C8.3 | 默认安装第一次启动会自动建一个 `admin` 账号，所以「从备份还原」在界面上基本看不到入口（要 `MIRRAI_BOOTSTRAP_ADMIN=manual` 才出现）。要不要让首次启动直接问「新建还是还原」 | 选项一：保持现状——命令行还原，界面只在手动模式下出现（不丢任何东西，但换机器的人得会命令行）。选项二：允许在「只有自动建的那个 admin、没有任何业务数据」时从备份还原，代价是删掉那个 admin 账号和它的首次凭据文件。选项三：把首次启动的创建顺序改成先问「新建还是还原」，再建账号（改动在 `server/bootstrap/bootstrap.ts` 与首次页面，属于 WP18 收尾或本条的后续）。 |
+| C8.8 | 手机原生外壳与系统推送做不做：`docs/native-shells.md` 写了两条路——PWA 加壳（零账号零中转，但没有系统推送）与真原生壳 + APNs/FCM（要苹果/谷歌开发者账号、年费、签名，通知元数据会经过苹果或谷歌中转）。现阶段的实现建议是不做，只保留 PWA | 选项一：不做（现状）——手机用 PWA 打开、分享文件、快捷入口都有，缺后台通知。选项二：做真原生壳 + 系统推送——要开账号、决定服务器地址与 HTTPS、把推送登记进出站清单；通知默认不带正文。选项三：只做「打开应用时同步」的壳，不做推送——成本最低，但没有后台提醒 |
+
+| C8.5 | 家庭共用的分身遇上加密账号时怎么处理：成员实时读到的身份字段（personaData/styleProfile/name 等）来自主人那行，需要这个服务进程里正好有主人的数据密钥（主人登录过）；没有时成员看到的是接受邀请时复制到成员行里的副本，主人之后的规则更新不会同步。三个选项 | 选项一（现状）：保持这样并在 `docs/encryption.md` 写明；不丢数据，但成员可能看到旧规则。选项二：加密账号不能把分身分享给别人（开启分享时拒绝）；行为明确，但拿掉了已有功能。选项三：共享身份字段改成成员自己的一份副本、主人更新不再同步；实现简单，但改变共享的语义。 |
+
+| C9.1 | QQ 与企业微信通道做不做：两家的官方机器人协议都要平台侧账号（企业微信自建应用要企业管理员建应用、可信域名/公网回调并审核；QQ 开放平台要创建应用、过审、配公网回调或官方 SDK 鉴权），本机没有账号也没有公网回调，无法核对到当前可用协议，因此没有实现、也没有在设置页列出 | 选项一（现状）：不做，文档里把这两家写在「未实现」，用户仍可用 Telegram/Discord/Matrix。选项二：做，但需要用户提供企业微信/QQ 开放平台的账号与一个可公网访问的回调地址（或接受只做官方 SDK 的长连接模式并同样要账号），实现后按 C9.1 的七条补齐测试与出站登记。 |
+| C9.7 | 插件通道要不要有自己的数据库 `channel` 枚举值：现在的通道插件注册后只能借用已有通道名（`web`/`wechat`/…）落消息，`messages.channel` 里看不出它来自插件 | 选项一（现状）：插件通道复用已有通道名，`docs/plugins.md` 写明；不动迁移。选项二：加一个 `plugin` 枚举值（新迁移，PostgreSQL 只能加不能删），插件消息标 `plugin`，但「是哪个插件」仍要另存；需要决定值名与是否把插件 id 写进 metadata。 |
+| C9.8 | 群聊内容要不要纳入静态加密（C8.5）：现在 `group_messages.content` 不在 `ENCRYPTED_TABLES` 里，开了静态加密的账号，群聊内容仍以明文存在库中 | 选项一（现状）：保持明文，与 C8.5 的「内容加密」承诺有缺口；改动小。选项二：把 `group_messages.content` 加进加密列清单，同时改加密迁移任务、`encrypted-db.test.ts` 的列清单与造数、群聊写入/读取路径（约一天工作量，但承诺一致）；需要决定是否把群聊也纳入「内容不出明文」的范围。 |
+| C9.8 | 群聊要不要有单独的「每日消息条数」上限：现在只有 `RATE_LIMITS.llm` 的 30 次/分钟与用量账本，没有日限额 | 选项一（现状）：靠分钟级限流与账本，成本可见但不拦一天的总量；选项二：给群聊（或所有聊天）加每日条数闸门，要定义额度、用户能否改、超限时说什么；会改变现有产品行为。 |
+| B9.1/B9.2 | 本地适配器与浅融合做不做：v5 的解锁条件原样保留，本阶段只做了只读的 `--unlock-check`，没有训练任何东西。如果用户在自己机器上跑出 `unlocked: true`，要不要真的开始做 | 选项一（现状）：本阶段到此为止，只在进度文件与 README 里写明「条件是否满足、由谁的机器量」；不引入训练框架、不改变产品行为，成本为零。选项二：另开一个阶段做本地适配器/浅融合——要引入训练依赖（白名单之外，需用户批准）、要 GPU 与训练时间，做完还要用 `pnpm eval` 重新量一遍确认真的变好；不做的话这些成本都不发生 |
+
+### 五、偏差表里影响最大的几条
+
+完整偏差表在下面的「偏差表」一节（共 604 条）。这里挑 12 条最可能影响你判断的：
+
+| 13 | P0.6 | 第 3.6 节 `--compare <层>` | CLI 的 `--compare` 仍是原来的四路对比开关；新增的是 `--without a,b` | P0.6「做法」第 3 步只要求 `--without` 和旧 `--variant` 别名；`compare-cli.test.ts` 不许改。 |
+| 31 | C1.1 | 每种文本类格式走 `renderFixture` 往返 | `imessage-db` 走 `formats/imessage-db.test.ts`，不进 `roundtrip.test.ts` | chat.db 是 SQLite，不是文本。 |
+| 46 | A4/A2 | `periods.length === 2`，边界落在 2023-07-05 | 独立验收时切出 12 段、边界在 2023-07-12。`c46b0d7` 改回：除那段静默外活跃日间隔不超过 13 天，静默后第一天是 2023-07-05；`findPeriodSplits` 按说话时间排序。测试断言正好两段，边界在 2023-07-05 | 按数组顺序切会把后补的早场当成另一段静默。 |
+| 133 | B6.9 | 应用内抽取提示词仍写「分身的话不是事实来源」 | `prompts.memoryExtractionInApp` 仍说是重建出来的，但允许提取，应用记成「分身说过的」 | A8 那句会让模型根本不抽分身说的话，账本填不满。存储路径仍强制 `subject: "said"`、`category: "memory"`。 |
+| 134 | B6.9 | A8 的 `listFromPersona` / `keepFromPersona` 并入记忆面板 | 面板改按 `memory.list` 的 `subject` 分成三组；「这是真的」走 `memory.update`。那两个 procedure 仍在 | 已有路由测试和 `db-behaviour` 还在用它们。分组后不再靠 `messageId` 指向 assistant 行来识别。 |
+| 254 | 全部 | 手册 §2.1「跳过数不能增加」 | 2026-11-20 用户拍板：改成「已有测试不得改成跳过；跳过只允许来自 §2.3 新增的 `describe.skipIf(!DATABASE_URL)` 数据库测试，每次变化记进度」 | §2.2 的基线本身就有 2 个文件 8 条数据库跳过，§2.3 又要求继续新增这类测试，两条规则从写下起就互斥；`server/skip-audit.test.ts` 把「只允许四种环境条件、禁止无条件 `.skip`/`.todo`/`.only`、数据库测试文件清单固定」变成结构测试，放宽的只是数字，实质没有松。 |
+| 496 | C9.5 | 大分身的导出 | 导出把记录/记忆/对话的整行读进内存再写 zip（归档本身是流式写盘的，但行集合在内存里）。1M 条记录的分身会占用大量内存。 | 手册没给上限；分页流式写 NDJSON 要改 `writePersonaBundle` 的 entry 接口，风险大于收益。写进未验证清单。 |
+| 590 | B9.3 | 手册只写「provider 配置的 `extraConfig.supportsLogitBias` 为真」，没说没有 turn 级配置的生成路径（评测、群聊、排练、漂移）怎么拿到它 | 给 `LLMProvider` 加可选 `extraConfig`；`buildUserProvider` 把配置行的 `extraConfig` 挂到它构建的实例上（缓存 key 也带上它）；`structuredOutputForTurn` 在 turn 没带配置时回退到实例的 | 评测这些路径不读 `llm_configs`；各写一遍读取会把同一个判断复制四处，挂到实例上还有 `baseUrl` 的先例 |
+| 591 | 3.3（`style.measure`） | 3.3 只说路由照 `behavior.get`/`behavior.measure` 写，没说 `recordsVersion` 没变时显式测量要不要重量 | `style.measure` 传 `force: true`，显式测量总是重量 | `behavior.measure` 就是每次都量；B9.3 的 `never` 只在重量时写入，不 force 的话老分身手动测量也拿不到 |
+| 600 | P18.2 | 第 7 步验收「`mirrai_live` 从头到尾没有被连接过（检查这一步用到的每条命令的 DATABASE_URL）」 | 七步命令的 `DATABASE_URL` 全部是草稿库；但清理后为取证额外跑了一条指向 `mirrai_live` 的只读 `pg_stat_database` 查询，建立 1 次连接、未写未读用户表（`xact_commit` 31637→31638 即这次连接本身） | 如实记录这次多余连接：取证命令不该指向 `mirrai_live`；七步本身与验收口径（每条命令的 DATABASE_URL）都满足，草稿库已删除 |
+| 602 | P18.3 | 「用配置了 `DATABASE_URL` 的环境把需要数据库的测试全部跑一遍」 | 这个口径下发现 `server/backup-schedule.test.ts` 的一个单元测试会读真实数据库：`runScheduledBackups` 内部直接调 `isEncryptionLocked`（读 `users.encryption`），而模块注释承诺「所有碰数据库/网络的东西都是注入的」；带库顺序跑全量时，加密测试留下的 id=2 加密账号让这个测试把用户 2 当「锁着」跳过，断言 `expected { ran: 0, failed: 1 } to deeply equal { ran: 1, failed: 1 }`。修法：`ScheduledBackupDeps` 加 `locked`（默认仍是 `isEncryptionLocked`），测试注入 `async () => false`，并新增「锁着的账号被推迟」用例；`server/encryption/lock.test.ts` 的结构断言标记随之改成 `const locked = deps?.locked ?? isEncryptionLocked` | 生产行为不变（调度器不传 `locked`）；改的是测试隔离，否则 CI（`.github/workflows/ci.yml` 的 test job 带 `DATABASE_URL`）会随文件执行顺序偶发红 |
+| 603 | P18.3 | 验收项「分支没有被推送、没有被合并：`git branch -r --contains exec/v6` 为空」 | 该命令确实输出空、本会话没有 push 也没有合并；但远端存在一个陈旧的 `origin/exec/v6` 引用（`fc1e77f`，2026-11-22 13:33 的 WP14 提交），是当前 `exec/v6` 的祖先、落后 101 个提交 | 如实记录：这个远端引用不是本会话建的，本会话没有 push，也无法确认 11 月 22 日是谁推的；没有删除它（不碰远端）。验收命令按手册口径通过 |
+
+### 六、交接边界
+
+- 分支：`exec/v6`。本会话没有 push、没有合并、没有切回 `main`；`main` 仍是 `f71e77b`（没有被动过）。**注意**：远端存在一个陈旧的 `origin/exec/v6` 引用（`fc1e77f`，2026-11-22 的 WP14 提交，落后 101 个提交），不是本会话建的，也没有删除——见偏差 603。
+- 版本号：`package.json` 的 `version` 仍是 `1.3.0`；没有打新标签。发布说明草稿在 [`releases/v1.4.0-draft.md`](releases/v1.4.0-draft.md)。
+- 独立验收：P18.4（独立抽查，从每个工作包随机抽 3 条从头重跑 + 必查清单）**还没有做**，需要另开一个不带实施上下文的会话。
+- 数据：整个过程只用临时草稿库（用完都 `dropdb`）；`mirrai_live` 没有被写过。P18.2 冒烟取证时多跑了一条只读统计查询、连过一次 `mirrai_live`，见偏差 600。
+- 手册：`docs/exec-v6.md` 只在 2026-11-20 按用户拍板改过 §2.1/§2.3 的跳过规则（偏差 254）；本阶段之后没有再改。`docs/ideas-v6.md` 自建起未改。
+
+---
+
+
 ## 基线（2026-11-16，提交 b3710ef；对照 main @ 4adc434 / 当前 main HEAD f71e77b）
 
 在 `exec/v6` 上、提交两份文档之后、改任何生产代码之前跑的。命令与手册第 2.1 / 2.3 节相同。
@@ -196,7 +412,7 @@
 | P18.2 | ✅ | 5990358（只有本进度文件的批次日志，无代码改动） | 草稿库 `mirrai_v6_p182`（用完已 `dropdb`）+ 桩模型 3122 + 服务 3222，七步全走完、命令退出码 0：① `createdb` → `drizzle-kit push --force` → `migrate`（journal 84 行，0002→0086）→ 再 `migrate` 全部 `already applied`；② `renderFixture(buildXiaomanRecords(), "generic-line")` → 5126 条渲染成 4904 行 / 252029 字节 → `mirrai import` 写入 **4904** 条（3112 助手 / 1792 用户）→ `mirrai measure` 写入 `recordsVersion "4904:4904"`、fingerprint 16 键、rituals 3 → `mirrai distill --mode fast --yes` → `ready 100%`、`The persona was rebuilt.`、桩收到 30 次 chat/completions；③ 服务起在 3222（`system.health` 200），造一把 `api_keys`（scope chat+read）后 `POST /v1/chat/completions`：普通一句 200 且桩 +2；**「晚安」200、返回固定回法「晚安」、桩请求数 32→32（+0）**；连发后续两轮均 200；④ `corepack pnpm eval -- --persona 1 --user 1 --k 2` 退出码 0：`4904 records → 60 held-out cases`、`overlap 0.0000 \| likelihood -84.5117 \| length dist 7.82 \| emotion 0.0% \| actMatch 83.3% \| residue 0.0% \| style 0.3919`；⑤ `record.report`（status ready、me 1792 / them 3112、span 2022-03-01→2024-10-31、160 活跃天、最长沉默 25 天）、`record.onThisDay`（当天 0 行——夹具没有 11-27；同一函数传 2023-03-01 → 2022-03-01 6 行）、`style.get`（19 键、fingerprint 17 键、never 36 项）、`inference.list`（2 sections / 48 items）都 200；⑥ `mirrai export --with-records` 97602 字节 → `PUT /api/persona/import-bundle` 201 → 第二分身 **4904 条 = 第一分身 4904 条**（角色分布一致）；`scripts/backup.ts create` → 673030 字节 / 10056 行 / 1 文件 encrypted，`verify` → `is intact: 61 tables, 10056 rows, 1 files`；⑦ 停进程、`dropdb mirrai_v6_p182` 退出 0、`/tmp/p182-*` 全删。验收四项：七步走完 ✅；「晚安」请求数 +0 ✅；第二分身条数相等 ✅；草稿库已删 ✅、七步每条命令的 `DATABASE_URL` 都是草稿库 ✅（另有清理后一次只读取证连接了 `mirrai_live`，见偏差 600）。没有需要修的代码缺陷。 |
 | P18.3 | ✅ | e198858（复验发现的测试隔离修复）; fd3cdd7（P18.2 提交号的补记）; 本进度文件 P18.3 提交 | 在干净检出上（`git status` 空、`git stash` 0）、HEAD `fd3cdd7` 从第一项重跑（第一次跑发现一处测试隔离问题，修完从第一项重来，见偏差 602）。① `corepack pnpm gate`（不带 `--fast`）退出码 0、`all seven steps passed`；`725` 个文件（`700 passed | 25 skipped`）、`6081` 个用例（`5959 passed | 122 skipped`）。与基线（259 文件 / 2494 用例 / 8 跳过）比：文件 +466、用例 +3587、跳过 +114（全部是 §2.3 的数据库测试，`server/skip-audit.test.ts` 与进度表逐文件记录）；相对本会话开工（724 / 699·25 / 6077 / 5955·122）文件 +1、用例 +4、跳过不变。② 数据库四步从空库 `mirrai_v6_p183` 起：`createdb` → `drizzle-kit push --force` → `migrate` 应用 **84** 条（0002→0086；本阶段 43 条迁移 0044–0086 全在 journal 里，43 个文件都有 idempotent 头与 down 段）→ `--replay` → `replayed 84 migration(s)` → `--rollback 1` 后 `consent_removals` 消失、journal 83、表 62→61 → 再 `migrate` 对象与 journal 84 回来；库已 `dropdb`。③ 带 `DATABASE_URL` 顺序跑全量（`--no-file-parallelism`，一个共享库时整库备份类测试不能与其他文件并行）：`725 passed (725)` 文件、`6081 passed (6081)` 用例、**0 跳过**。④ 静态项：黄金快照只有 `e506484` 一个提交；`git log exec/v6 --not main --format=%B | grep -ci co-authored-by` = 0；`git diff main --stat -- server/wechat/ilink` 空；`drizzle/` 相对 main 只有 43 个新增迁移 + `schema.ts` 的 M；`git branch -r --contains exec/v6` 空、未合并进 main、main 仍 `f71e77b`、无 v1.4 标签（远端有一个陈旧的 `origin/exec/v6` 引用，见偏差 603）；新增依赖 14 个全在白名单（11 个运行时 + 2 个 `@types/*` + vitepress）。⑤ `egress`/`no-surveillance`/`db-isolation`/`db-delete-coverage`/`schema-coverage`/`schema-parity` 6 文件 44 通过。⑥ 进度表 176 行、每行有状态；✅/🟡 行都有提交号与验收证据（P18.2 的提交号在本项复验时补成 `5990358`）；81 条 🟡 都在「未验证清单」里有对应行（按 id 与区间行展开核对）。P18.4 按用户安排由独立验收会话做；手册 `docs/exec-v6.md` 在 `224dac3`（2026-11-20，用户拍板的跳过规则）之后没有被再改（偏差 604）。 |
 | P18.4 | ⬜ |  |  |
-| P18.5 | ⬜ |  |  |
+| P18.5 | ✅ | 211743e（发布说明草稿与文档站导航）; 本进度文件 P18.5 提交 | **验收三项都跑过**。① `docs/releases/v1.4.0-draft.md` 存在（226 行 / 27634 字节），照 `v1.3.0.md` 的写法分三段：一段「做完并验过的」（13 个主题，脚本核对 164 条里 80 条 ✅ 全部出现）、二段「做完但效果没在真实数据上量过的」（16 组覆盖全部 81 条 🟡，没填任何未跑出来的数字，给出 5 条核心命令与盲测页面）、三段「没做的和为什么」（⛔ B7.7 音色克隆与生成脸、🔒 B9.1/B9.2 只做解锁检查、⬜ P18.4、其他语言/`wechat-html`/手机原生壳/QQ 企业微信、6 组「本机没条件验」、8 项留给用户定）。`package.json` 的 `version` 仍是 `1.3.0`（与 `main` 相同），`git tag` 没有新增。② 进度文件顶部新增「给用户的摘要」：状态条数表（✅ 91 · 🟡 81 · ⛔ 1 · 🔒 2 · ⬜ 1）、未验证清单**全文** 117 行（每行自带该跑的命令与谁来跑）、按手册顺序的 5 条核心命令、待用户决定**全文** 9 条（每条两个/三个选项的后果）、偏差表里影响最大的 12 条、交接边界（分支/main/版本/临时库/P18.4 未做）。③ 摘要里的命令逐条在草稿库 `mirrai_v6_p185` 上试跑（桩模型 3122，导入夹具 4904 条；库用完已 `dropdb`）：`mirrai measure` 退出码 0（1s，`Measured the style of persona 1.`）、`eval --k 3` 退出码 0（20s，`4904 records → 60 held-out cases`、`cases scored : 60`）、`eval --ablate --yes` 退出码 0（50s，`ablation would make 12 runs × 60 cases × 1 = 720 calls`、11 层表）、`eval --discriminator` 退出码 0（14s，`discriminator AUC : 1.0000 ± 0.0000  (n=60)`）、`eval --audition` 退出码 0（42s，两行表；Ollama 候选不可达属环境限制，未验证清单 B8.4 已写明要两个以上真实 provider）。没有代码 bug 需要修。④ 最终确认：`git branch -r --contains exec/v6` 空；`git branch --merged main` 里没有 `exec/v6`；`main` 仍是 `f71e77b`；`package.json` 版本与 main 相同（1.3.0）；无 v1.4 标签。⑤ 闸门（不带 `--fast`）：`corepack pnpm gate` 退出码 0、`all seven steps passed`；`725` 个文件（`700 passed | 25 skipped`）、`6081` 个用例（`5959 passed | 122 skipped`）；`doc-links` 94 条链接 / 37 个文件全部解析。P18.4 维持 ⬜（由独立验收会话做）。 |
 
 ## 偏差表
 
@@ -979,6 +1195,18 @@
 
 
 ## 批次日志
+
+### WP18 · 实现会话 · 2026-11-27 · P18.5 交接
+
+按 WP18 的 P18.5 做交接；分支 `exec/v6`，开工 HEAD `053f17f`，`git status --porcelain` 空；没有 push、没有合并、没有切分支、没有动 `mirrai_live`；没有改 `docs/exec-v6.md` / `docs/ideas-v6.md`。P18.4（独立抽查）按用户安排由另开的验收会话做，本会话不做，进度表维持 ⬜。
+
+- **发布说明草稿 `211743e`**：`docs/releases/v1.4.0-draft.md`（226 行 / 27634 字节），照 `v1.3.0.md` 的写法分三段——第一段「做完并验过的」按 13 个主题写 80 条 ✅（脚本核对每条 ✅ 编号都在第一节出现）；第二段「做完但效果没在真实数据上量过的」用 16 组覆盖全部 81 条 🟡，逐组写「机器验收通过的是什么 / 还没量的是什么」，不填任何未跑出来的数字，给出 measure / eval --k 3 / --ablate / --discriminator / --audition 五条命令与 `/persona/:id/blind-test`、`/blind/:token` 页面；第三段「没做的和为什么」写 ⛔ B7.7 音色克隆与生成脸（用原声带/韵律/真实照片代替）、🔒 B9.1/B9.2 只做只读解锁检查且 `unlocked: true` 也不代表可以做、⬜ P18.4 由独立验收会话做、明确没做的（其他界面语言、`wechat-html`、手机原生壳、QQ/企业微信）与 6 组「本机没条件验」，最后列 8 项留给用户定。结尾四条：版本号仍是 1.3.0、无标签、无发布日期、发不发由用户定。文档站导航加了这篇草稿（`docs/.vitepress/config.ts`）。
+- **给用户的摘要（本进度文件顶部）**：状态条数表（✅ 91 · 🟡 81 · ⛔ 1 · 🔒 2 · ⬜ 1）；未验证清单**全文** 117 行（每行本来就写了缺什么、该跑的命令、谁来跑）；按手册顺序的 5 条核心命令；待用户决定**全文** 9 条（每条两/三个选项的后果）；偏差表里影响最大的 12 条（13、31、46、133、134、254、496、590、591、600、602、603）；交接边界（分支/main/版本/临时库/P18.4 未做/手册改动史）。
+- **摘要里的命令逐条试跑（草稿库 `mirrai_v6_p185`，用完已 `dropdb`）**：`createdb` → `drizzle-kit push --force` → `migrate`（`all migrations applied`）；造 user 1 + persona 1，`renderFixture(buildXiaomanRecords(), "generic-line")` → 4904 行导入 `Imported 4904 records.`；桩模型 3122。五条命令全部退出码 0：① `mirrai measure --persona 1 --user 1` 1s，`Measured the style of persona 1.`（styleProfile 19 键、`recordsVersion "4904:4904"`）；② `eval -- --k 3` 20s，`4904 records → 60 held-out cases`、`cases scored : 60`、`no baseline run to compare against`；③ `eval -- --ablate --yes` 50s，`ablation would make 12 runs × 60 cases × 1 = 720 calls`，11 层表格全部「在噪声之内」（桩模型下数字无意义，只证管道）；④ `eval -- --discriminator` 14s，`discriminator AUC : 1.0000 ± 0.0000  (n=60)` + 12 条 tells；⑤ `eval -- --audition` 42s，两行对比表（`Ollama · llama3` 与 `OpenAI · stub`），本机没有 Ollama 服务，逐 case 打 `fetch failed`/重试约 120 行但命令仍出表、退出码 0——属未验证清单 B8.4 已写明的「要两个以上真实模型」的环境限制，不是代码 bug。没有改任何代码。
+- **最终确认**：`git branch -r --contains exec/v6` 空；`git branch --merged main` 里没有 `exec/v6`；`main` 仍 `f71e77b`；`git show main:package.json` 与当前 `package.json` 的 `version` 都是 `1.3.0`；`git tag` 最新仍是 `v1.3.0`（无 v1.4）。远端那个陈旧的 `origin/exec/v6` 引用见偏差 603，本会话没有 push。
+- **闸门（不带 `--fast`、不带 `DATABASE_URL`，提交前树）**：`corepack pnpm gate` 退出码 0、`all seven steps passed`；`725` 个文件（`700 passed | 25 skipped`）、`6081` 个用例（`5959 passed | 122 skipped`）；`doc-links` 第七步 `94 relative link(s) in 37 file(s), all resolve.`。
+- 状态改动：P18.5 ⬜→✅；`docs/roadmap-v6.md` 的 P18 五行改成 ✅ 4 · ⬜ 1（P18.4），偏差表条数引用 591→604。偏差、未验证清单、待用户决定本轮无新增。
+- 收尾：本进度文件与 `docs/roadmap-v6.md` 单独提交，提交后交给用户做独立验收（P18.4）。
 
 ### WP18 · 实现会话 · 2026-11-27 · P18.3 整体复验
 
