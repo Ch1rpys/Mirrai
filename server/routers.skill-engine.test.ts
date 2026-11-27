@@ -56,6 +56,7 @@ vi.mock("./skill-engine/pipeline", () => ({
 }));
 
 import { appRouter } from "./routers";
+import { rateLimiter } from "./_core/rate-limit";
 
 function ctxFor(userId: number): TrpcContext {
   return {
@@ -90,8 +91,12 @@ const persona = {
 } as any;
 
 describe("distilling a persona", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    // The start-pipeline route is rate limited; each test starts from a
+    // clean bucket instead of the previous test's count.
+    await rateLimiter.reset?.();
+    await Promise.resolve();
     getPersonaById.mockResolvedValue(persona);
     // There has to be something to distil — the analysis trigger says so
     // before it starts anything.
@@ -342,4 +347,20 @@ describe("distilling a persona", () => {
       else process.env.MAX_DISTILL_CALLS = previous;
     }
   });
+  it("gives the pipeline the persona's own clock for the routine mining (B6.3)", async () => {
+    // 「周三下午上课」 was mined in the *user's* clock because the entry
+    // point only passed the user's zone, and the prompt then read the
+    // hours in the persona's own zone — two clocks around one schedule.
+    getPersonaById.mockResolvedValue({ ...persona, timezone: "America/New_York" });
+    await appRouter
+      .createCaller(ctxFor(1))
+      .skillEngine.startPipeline({ personaId: 5, characterFamily: "relationship" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const input = runSkillPipeline.mock.calls[0][0] as Record<string, unknown>;
+    expect(input.personaTimeZone).toBe("America/New_York");
+    // The user's zone still goes along: it is what periods and the day
+    // keys of the transcript are read in.
+    expect(input.timeZone).toBe("Asia/Shanghai");
+  });
+
 });

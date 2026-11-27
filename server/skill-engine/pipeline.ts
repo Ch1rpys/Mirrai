@@ -193,6 +193,15 @@ export type PipelineInput = {
    * not in the process zone, so a UTC server does not shift the day.
    */
   timeZone?: string | null;
+  /**
+   * The persona's own clock, for the routine mining (B6.3).
+   *
+   * 「周三下午上课」 is a fact about the persona's week, so the weekday and
+   * the hour are read in the clock the persona lives in — the same clock
+   * the prompt later uses when it says "you are usually in class now".
+   * The transcript-day keys stay on `timeZone` (the user's).
+   */
+  personaTimeZone?: string | null;
   /** Image URLs to describe and fold into the persona memories. */
   imageUrls?: string[];
   /** Video frames as data URLs (B7.10); described with their own cap. */
@@ -1911,7 +1920,9 @@ async function runSkillPipelineOnce(
     ];
     const minedLifeEvents = [
       ...mineOpenLoops({ messages: transcriptRows }),
-      ...mineRoutines(transcriptRows, input.timeZone, { locale }),
+      ...mineRoutines(transcriptRows, input.personaTimeZone ?? input.timeZone, {
+        locale,
+      }),
     ];
     /**
      * Labelling writes back to `collected_messages`, which only exists

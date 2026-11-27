@@ -578,6 +578,13 @@ async function startPersonaDistillation(params: {
   name: string;
   characterFamily: "colleague" | "relationship" | "celebrity";
   /**
+   * The persona's own time zone (B6.3).
+   *
+   * The routine mining counts weekdays and hours in the clock the persona
+   * lives in — the same clock the prompt later reads the schedule in.
+   */
+  personaTimeZone?: string | null;
+  /**
    * The celebrity research profile, e.g. "budget-unfriendly".
    *
    * Without it the celebrity family falls back to the ordinary three-stage
@@ -740,6 +747,7 @@ async function startPersonaDistillation(params: {
       // the person is using.
       locale,
       timeZone: timezone,
+      personaTimeZone: params.personaTimeZone ?? null,
     });
   } catch (e) {
     // The persona must never be left stuck in "pending" — the upload page
@@ -2873,6 +2881,8 @@ export const appRouter = router({
           // The provider the persona is pinned to — the chat path
           // honours it, and the distillation did not.
           provider: (persona as any).llmProvider ?? undefined,
+          // The clock the routine is mined in (B6.3).
+          personaTimeZone: (persona as any).timezone ?? null,
           userId: ctx.user.id,
           name: persona.name,
           characterFamily: input.characterFamily,
@@ -5427,6 +5437,8 @@ export const appRouter = router({
           // persona set to a local model was distilled with the user's
           // default provider instead, and the material went there.
           provider: (persona as any).llmProvider ?? undefined,
+          // The clock the routine is mined in (B6.3).
+          personaTimeZone: (persona as any).timezone ?? null,
           userId: ctx.user.id,
           name: persona.name,
           characterFamily: input.characterFamily,
