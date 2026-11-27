@@ -16,6 +16,7 @@ import { normalizeDescribedStatements } from "@shared/described";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import { shouldInstructHarm } from "@shared/harm";
 import { normalizeAddressHistory, pickThemToMeAddress } from "@shared/address-history";
+import { effectiveStyleProfile } from "@shared/style-profile";
 import { normalizeLexicon, renderLexicon, type LexiconEntry } from "@shared/lexicon";
 import { relationshipIsOver } from "@shared/relationship-ended";
 import { currentRoutines, normalizeLifeEvents, renderRoutineNowLine } from "@shared/life-events";
@@ -966,16 +967,21 @@ const MATERIAL_CLOSE = "</persona_data>";
  * and everything after them was read as the app's own instructions.
  */
 function nicknameForPrompt(
-  persona: { styleProfile?: unknown; personaData?: unknown },
+  persona: { styleProfile?: unknown; personaData?: unknown; settings?: unknown },
   stored: string,
   periodId: string | null | undefined,
   locale: Locale,
 ): string {
-  const history = normalizeAddressHistory(
-    persona.styleProfile && typeof persona.styleProfile === "object"
-      ? (persona.styleProfile as { addressHistory?: unknown }).addressHistory
-      : undefined,
-  );
+  /**
+   * The profile the user has not turned off (C10.6).
+   *
+   * Reading the stored profile directly here left the nickname in the
+   * prompt even after the owner switched `addressHistory` off in the
+   * inference view — the switch worked for every layer that read the
+   * profile through `effectiveStyleProfile`, and this one silently did
+   * not.
+   */
+  const history = normalizeAddressHistory(effectiveStyleProfile(persona).addressHistory);
   const periods = Array.isArray((persona.personaData as { periods?: unknown } | undefined)?.periods)
     ? ((persona.personaData as { periods: Array<{ id?: string; from?: string; to?: string }> }).periods)
     : [];

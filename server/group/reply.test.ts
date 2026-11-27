@@ -196,6 +196,21 @@ describe("composeGroupReply", () => {
     expect(input.groupStyle.fingerprint).toBeNull();
   });
 
+  it("stops using the group measurements the owner turned off (C10.6)", async () => {
+    /**
+     * The room's surface is measured from `publicFingerprint` and
+     * `group`, and the inference view offers a switch for both. Reading
+     * the stored profile here ignored it.
+     */
+    const off = persona({
+      settings: { disabledProfiles: ["publicFingerprint", "group"] },
+    } as unknown as Partial<Persona>);
+    await composeGroupReply(params({ persona: off }));
+    const input = planTurn.mock.calls[0]![0] as Record<string, any>;
+    expect(input.groupStyle.fingerprint).toBeNull();
+    expect(input.groupStyle.maxChars).toBeNull();
+  });
+
   it("measures the room's length from the group profile", async () => {
     const long = persona({
       styleProfile: {

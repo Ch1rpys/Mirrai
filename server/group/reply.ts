@@ -13,7 +13,7 @@ import type { GroupMessage, Persona } from "../../drizzle/schema";
 import { planTurn, executePlan } from "../chat/generate";
 import { resolveProviderForPurpose } from "../llm/user-provider";
 import { copy, type Locale } from "@shared/copy";
-import { normalizeStyleProfile } from "@shared/style-profile";
+import { effectiveStyleProfile } from "@shared/style-profile";
 import { normalizeGroupStats } from "@shared/group-stats";
 import { normalizePersonaSettings } from "@shared/persona-settings";
 import { isMemorial } from "@shared/persona-state";
@@ -107,7 +107,7 @@ export async function composeGroupReply(
   }).catch(() => undefined);
   if (!provider) return null;
 
-  const profile = normalizeStyleProfile(persona.styleProfile);
+  const profile = effectiveStyleProfile(persona);
   const groupStats = normalizeGroupStats(profile.group);
   const overlay = groupOverlayText({
     locale,

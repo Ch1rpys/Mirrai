@@ -18,6 +18,21 @@ import { join, relative } from "node:path";
  */
 
 const CHAT_DIR = join(__dirname);
+const ROOT = join(__dirname, "..", "..");
+
+/**
+ * The rest of the generation path: one persona's line in a room, the
+ * room's own measurement, and the prompt the persona is given.
+ *
+ * The first version of this test only scanned `server/chat/**`, which
+ * is why the group path and the prompt's nickname lookup kept reading
+ * the stored profile after the switch was added.
+ */
+const OTHER_GENERATION_FILES = [
+  "server/group/reply.ts",
+  "server/routers-v6/group.ts",
+  "server/_core/persona-utils.ts",
+];
 
 function chatSources(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -53,6 +68,15 @@ describe("the chat path and the style profile switch", () => {
       for (const line of lines) {
         offenders.push(`${relative(CHAT_DIR, file)}:${line}`);
       }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("never reaches into persona.styleProfile outside the chat directory", () => {
+    const offenders: string[] = [];
+    for (const file of OTHER_GENERATION_FILES) {
+      const source = readFileSync(join(ROOT, file), "utf8");
+      for (const line of directReads(source)) offenders.push(`${file}:${line}`);
     }
     expect(offenders).toEqual([]);
   });

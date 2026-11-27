@@ -2183,6 +2183,63 @@ describe("persona sampling on the reply", () => {
     expect(String(onPlan.messages[0]?.content ?? "")).toContain(copy("zh", "prompt.coldLinesHeading"));
   });
 
+  it("stops using a measured address history the owner turned off (C10.6)", async () => {
+    /**
+     * The switch has to reach the prompt, not only the layers that call
+     * `effectiveStyleProfile` themselves. The nickname lookup read the
+     * stored profile directly, so "don't use this" changed nothing the
+     * user could see.
+     */
+    const withHistory = () => {
+      const next = persona();
+      next.personaData = {
+        ...next.personaData,
+        speakingStyle: "短句",
+        catchphrases: [],
+        nickname: "宝贝",
+      };
+      next.styleProfile = {
+        version: 1,
+        measuredAt: NOW.toISOString(),
+        recordsVersion: "10:10",
+        addressHistory: [
+          { form: "陈树", direction: "them_to_me", total: 20, byQuarter: {}, byState: {} },
+        ],
+      };
+      return next;
+    };
+
+    const enabled = withHistory();
+    enabled.settings = { disabledProfiles: [] };
+    const enabledPlan = await planTurn({
+      persona: enabled,
+      userId: 1,
+      userMessage: "在吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "address:c10.6",
+      exclude: { texts: [HELD_OUT] },
+    });
+    expect(String(enabledPlan.messages[0]?.content ?? "")).toContain("陈树");
+
+    const disabled = withHistory();
+    disabled.settings = { disabledProfiles: ["addressHistory"] };
+    const disabledPlan = await planTurn({
+      persona: disabled,
+      userId: 1,
+      userMessage: "在吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh",
+      seed: "address:c10.6",
+      exclude: { texts: [HELD_OUT] },
+    });
+    const prompt = String(disabledPlan.messages[0]?.content ?? "");
+    expect(prompt).not.toContain("陈树");
+    expect(prompt).toContain("宝贝");
+  });
+
   it("forces a repair after nine hours of a freeze", async () => {
     const plan = await planTurn({
       persona: personaWithConflict("distant", 9 * 60),
