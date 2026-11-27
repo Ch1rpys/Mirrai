@@ -589,9 +589,19 @@ describe("measureStyleProfile", () => {
     expect(measured.userSide?.samples).toBe(40);
     expect(measured.userSide?.sampleLines).toHaveLength(12);
     const written = setPersonaStyleProfile.mock.calls.at(-1)?.[2] as
-      | { userSide?: { samples?: number } }
+      | { userSide?: { samples?: number }; mirror?: unknown }
       | undefined;
     expect(written?.userSide?.samples).toBe(40);
+    // The mirror is measured and stored in the same write; the Mirror
+    // page reads it back from the profile (C4.1).
+    expect(written?.mirror).toBeTruthy();
+    expect(written?.mirror).toEqual(measured.mirror);
+    const mirror = written.mirror as {
+      starts: { me: number; them: number };
+      shortReplies: unknown[];
+    };
+    expect(mirror.starts.me + mirror.starts.them).toBeGreaterThan(0);
+    expect(Array.isArray(mirror.shortReplies)).toBe(true);
   });
 
   it("measures the group register and stores it without touching the chat voice (C9.8)", async () => {

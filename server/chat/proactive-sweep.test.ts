@@ -13,6 +13,7 @@ const getUserById = vi.fn();
 const getMemoriesByPersonaId = vi.fn();
 const getLastExtractionAt = vi.fn();
 const getUserMessageCountForPersonaSince = vi.fn();
+const getUserEncryption = vi.fn();
 
 vi.mock("../db", () => ({
   getProactivePersonas: (...a: unknown[]) => getProactivePersonas(...a),
@@ -28,6 +29,7 @@ vi.mock("../db", () => ({
   getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
   getLastExtractionAt: (...a: unknown[]) => getLastExtractionAt(...a),
   getUserMessageCountForPersonaSince: (...a: unknown[]) => getUserMessageCountForPersonaSince(...a),
+  getUserEncryption: (...a: unknown[]) => getUserEncryption(...a),
   getUserLocale: (...a: unknown[]) => getUserLocale(...a),
   getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
   getMessagesByPersonaId: async () => [],
@@ -74,6 +76,10 @@ vi.mock("../channels", () => ({
 
 import { runProactiveSweep } from "./proactive-sweep";
 import { ENV } from "../_core/env";
+import {
+  forgetAllEncryptionStates,
+  setEncryptionEnabled,
+} from "../_core/encrypted-values";
 
 const DEFAULT_QUIET_HOURS = ENV.reminderQuietHours;
 
@@ -102,6 +108,35 @@ const persona = {
 } as any;
 
 describe("the sweep that lets the persona speak first", () => {
+  afterEach(() => {
+    forgetAllEncryptionStates();
+  });
+
+  it("skips a locked account's row until its key is back (C8.5)", async () => {
+    // An encrypted account whose key is not in this process: the sweep
+    // must not write, and must not spend a model call on ciphertext.
+    getUserEncryption.mockResolvedValue({
+      enabled: true,
+      wrappedKey: "v1:x:y:z",
+      salt: "salt",
+      kdf: "scrypt",
+    });
+    setEncryptionEnabled(1, true);
+    getProactivePersonas.mockResolvedValue([{
+      id: 1,
+      userId: 1,
+      name: "小A",
+      lastChatAt: new Date("2026-05-01T12:00:00Z"),
+      presence: "active",
+      graduationStatus: null,
+      analysisStatus: "ready",
+      proactiveFrequencyHours: 24,
+    }]);
+    expect(await runProactiveSweep(new Date("2026-06-01T12:00:00Z"))).toBe(0);
+    expect(createMessage).not.toHaveBeenCalled();
+    expect(invokeWithProvider).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     invokeWithProvider.mockResolvedValue("今天怎么样？");
@@ -116,6 +151,7 @@ describe("the sweep that lets the persona speak first", () => {
     getChannelBindingsByUserId.mockResolvedValue([]);
     getLastExtractionAt.mockResolvedValue(null);
     getUserMessageCountForPersonaSince.mockResolvedValue(0);
+    getUserEncryption.mockResolvedValue(null);
   });
 
   it("says nothing when the user never asked it to", async () => {

@@ -24,11 +24,13 @@ vi.mock("../_core/push", () => ({
 
 const getUserLocale = vi.fn();
 const getUserTimezone = vi.fn();
+const getUserEncryption = vi.fn();
 getUserTimezone.mockResolvedValue(null);
 
 vi.mock("../db", () => ({
   getUserLocale: (...a: unknown[]) => getUserLocale(...a),
   getUserTimezone: (...a: unknown[]) => getUserTimezone(...a),
+  getUserEncryption: (...a: unknown[]) => getUserEncryption(...a),
   getAllPersonasForReminders: (...a: unknown[]) => getAllPersonasForReminders(...a),
   getMemoriesByPersonaId: (...a: unknown[]) => getMemoriesByPersonaId(...a),
   getAnniversaryMemories: (...a: unknown[]) => getAnniversaryMemories(...a),
@@ -644,6 +646,37 @@ describe("runReminderSweep", () => {
     getAnniversaryMemories.mockResolvedValue([]);
     getPhotoReminderCandidates.mockResolvedValue([]);
     getAllPersonasForReminders.mockResolvedValue([persona()]);
+    getUserEncryption.mockResolvedValue(null);
+  });
+
+  it("leaves a locked account's reminders alone (C8.5)", async () => {
+    // The sweep had only a source-string check for this; run it against
+    // an encrypted account with no key in this process.
+    getUserEncryption.mockResolvedValue({
+      enabled: true,
+      wrappedKey: "v1:x:y:z",
+      salt: "salt",
+      kdf: "scrypt",
+    });
+    getAnniversaryMemories.mockResolvedValue([
+      {
+        id: 1,
+        personaId: 1,
+        userId: 1,
+        title: "第一次见面",
+        description: null,
+        category: "anniversary",
+        date: "05-20",
+        messageId: null,
+        importance: 1,
+        isPinned: false,
+        lastRecalledAt: null,
+        factKey: null,
+      },
+    ]);
+    expect(await runReminderSweep(new Date(2024, 4, 20, 10, 0))).toBe(0);
+    expect(hasReminderDelivery).not.toHaveBeenCalled();
+    expect(recordReminder).not.toHaveBeenCalled();
   });
 
   it("does not push a reminder into a conversation bound to another persona", async () => {
