@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useLocale } from "@/contexts/LocaleContext";
 import { dismissOnboarding } from "@/lib/onboarding";
+import ConsentTools from "@/components/v6/ConsentTools";
 
 type Step = "provider" | "persona" | "done";
 
@@ -366,6 +367,11 @@ export default function Onboarding() {
                   {t("consent.accept")}
                 </span>
               </label>
+              {/* The other person can be asked. The page or link is
+                  generated on the next step, when the persona exists. */}
+              <p className="text-xs text-muted-subtle mt-2 leading-relaxed">
+                {t("consent.askLater")}
+              </p>
             </div>
 
             {/**
@@ -447,9 +453,20 @@ export default function Onboarding() {
             </div>
             <div className="flex flex-col gap-2">
               {createdPersonaId && (
-                <Button className="w-full" onClick={() => navigate(`/upload/${createdPersonaId}`)}>
-                  {t("onboarding.toUpload")}
-                </Button>
+                <>
+                  <Button className="w-full" onClick={() => navigate(`/upload/${createdPersonaId}`)}>
+                    {t("onboarding.toUpload")}
+                  </Button>
+                  {/**
+                   * The two ways to ask, right where the persona was just
+                   * created (C10.3). The owner does not have to find the
+                   * profile page first.
+                   */}
+                  <ConsentTools
+                    personaId={createdPersonaId}
+                    name={personaName.trim() || t("common.them")}
+                  />
+                </>
               )}
               <Button variant="ghost" className="w-full" onClick={() => navigate("/")}>
                 {t("onboarding.toLobby")}

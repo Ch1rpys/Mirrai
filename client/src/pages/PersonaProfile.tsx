@@ -33,6 +33,7 @@ import VoicesEntry from "@/components/v6/VoicesEntry";
 import ReunionSummary from "@/components/v6/ReunionSummary";
 import OralAccounts from "@/components/v6/OralAccounts";
 import DescribedStatements from "@/components/v6/DescribedStatements";
+import ConsentTools from "@/components/v6/ConsentTools";
 import { normalizeDescribedStatements } from "@shared/described";
 
 /**
@@ -352,6 +353,14 @@ export default function PersonaProfile() {
             prosody={styleProfile.voice?.prosody}
           />
         </motion.section>
+
+        {/* The other person's answer (C10.3). Asking is part of the
+            product promise; the answer decides whether the chat works. */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.114 }}
+        >
+          <ConsentTools personaId={personaId} name={persona.name} />
+        </motion.div>
 
         {(data.publicVoice || styleProfile.publicFingerprint) && (
           <motion.section

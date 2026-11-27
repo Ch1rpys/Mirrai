@@ -70,6 +70,24 @@ describe("the closed composer (C6.1)", () => {
     expect(onRefetch).toHaveBeenCalled();
   });
 
+  it("says the other person said no, with no exception button (C10.3)", () => {
+    const onOpenProfile = vi.fn();
+    render(
+      <ClosedComposer
+        personaId={5}
+        name="小满"
+        reason="consent"
+        onRefetch={onRefetch}
+        onOpenProfile={onOpenProfile}
+      />,
+    );
+    expect(screen.getByText("小满 说了不可以。这个分身不能再聊了。")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "今天破例" })).toBeNull();
+    expect(screen.getByRole("button", { name: "求助信息" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "去档案页处理" }));
+    expect(onOpenProfile).toHaveBeenCalled();
+  });
+
   it("keeps the support entrance in every closed state", () => {
     const { rerender } = render(
       <ClosedComposer personaId={5} name="小满" reason="sealed" onRefetch={onRefetch} />,

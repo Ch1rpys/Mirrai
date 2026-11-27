@@ -51,6 +51,15 @@ vi.mock("@/lib/trpc", () => ({
         useQuery: () => ({ data: null, isLoading: false, isError: false, refetch: vi.fn() }),
       },
       updateSettings: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      purgeForConsent: {
+        useMutation: () => ({
+          mutate: vi.fn(),
+          isPending: false,
+          isError: false,
+          error: null,
+          reset: vi.fn(),
+        }),
+      },
       evidence: {
         useQuery: () => ({
           data: { dimensions: evidenceDimensions },
@@ -58,6 +67,19 @@ vi.mock("@/lib/trpc", () => ({
           isError: false,
         }),
       },
+    },
+    consent: {
+      status: {
+        useQuery: () => ({
+          data: { consent: "not_asked", link: null },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+      setStatus: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      exportPage: { useQuery: () => ({ refetch: vi.fn(), isFetching: false }) },
+      createLink: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
     },
     style: {
       get: {
@@ -76,7 +98,11 @@ vi.mock("@/lib/trpc", () => ({
       },
     },
     useUtils: () => ({
-      persona: { get: { invalidate: vi.fn() } },
+      persona: {
+        get: { invalidate: vi.fn() },
+        list: { invalidate: vi.fn() },
+        purgeForConsent: { invalidate: vi.fn() },
+      },
     }),
     memory: {
       list: { useQuery: () => ({ data: { items: memoryItems, total: memoryTotal } }) },

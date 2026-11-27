@@ -177,6 +177,19 @@ vi.mock("@/lib/trpc", () => ({
       create: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
       revoke: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
     },
+    consent: {
+      status: {
+        useQuery: () => ({
+          data: { consent: "not_asked", link: null },
+          isLoading: false,
+          isError: false,
+          refetch: vi.fn(),
+        }),
+      },
+      setStatus: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      exportPage: { useQuery: () => ({ refetch: vi.fn(), isFetching: false }) },
+      createLink: { useMutation: () => ({ mutateAsync: vi.fn(), isPending: false }) },
+    },
     plugins: {
       // The loaded-plugins panel is mounted in the data tab (C9.7).
       list: {
@@ -241,6 +254,15 @@ vi.mock("@/lib/trpc", () => ({
       getIntimacy: { useQuery: () => ({ data: null }) },
       graduationMode: { useQuery: () => ({ data: { mode: "suggest" } }) },
       updateSettings: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      purgeForConsent: {
+        useMutation: () => ({
+          mutate: vi.fn(),
+          isPending: false,
+          isError: false,
+          error: null,
+          reset: vi.fn(),
+        }),
+      },
       graduate: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       declineGraduation: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       exportManual: {

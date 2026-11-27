@@ -15,18 +15,21 @@ import { zonedDateKey } from "@shared/timezone";
 import { Button } from "@/components/ui/button";
 import CrisisCard from "@/components/CrisisCard";
 
-export type ClosedReason = "weekend_only" | "letters_only" | "sealed";
+export type ClosedReason = "weekend_only" | "letters_only" | "sealed" | "consent";
 
 export default function ClosedComposer({
   personaId,
   name,
   reason,
   onRefetch,
+  onOpenProfile,
 }: {
   personaId: number;
   name: string;
   reason: ClosedReason;
   onRefetch: () => void;
+  /** Where the owner can remove the persona, for the consent state. */
+  onOpenProfile?: () => void;
 }) {
   const { t, locale } = useLocale();
   const { user } = useAuth();
@@ -40,7 +43,9 @@ export default function ClosedComposer({
     ? "chat.closedWeekend"
     : reason === "letters_only"
       ? "chat.closedLettersOnly"
-      : "chat.closedSealed";
+      : reason === "consent"
+        ? "chat.closedConsent"
+        : "chat.closedSealed";
 
   return (
     <div className="rounded-lg border border-border bg-muted/40 px-3.5 py-3 space-y-2">
@@ -66,6 +71,11 @@ export default function ClosedComposer({
             }
           >
             {t("chat.taperOverride")}
+          </Button>
+        )}
+        {reason === "consent" && onOpenProfile && (
+          <Button size="sm" variant="outline" className="bg-transparent" onClick={onOpenProfile}>
+            {t("consent.openProfile")}
           </Button>
         )}
         <Button size="sm" variant="ghost" onClick={() => setShowHelp(true)}>

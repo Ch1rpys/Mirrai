@@ -31,6 +31,7 @@ const Interview = lazy(() => import("./pages/Interview"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const BlindTest = lazy(() => import("./pages/BlindTest"));
 const BlindGuest = lazy(() => import("./pages/BlindGuest"));
+const Consent = lazy(() => import("./pages/Consent"));
 const Voices = lazy(() => import("./pages/Voices"));
 const Records = lazy(() => import("./pages/Records"));
 const Report = lazy(() => import("./pages/Report"));
@@ -90,6 +91,7 @@ function Router() {
           <Route path="/chat/last" component={ChatLast} />
           <Route path="/share/:token" component={ShareAccept} />
           <Route path="/blind/:token" component={BlindGuest} />
+          <Route path="/consent/:token" component={Consent} />
           <Route path="/persona/:id/graduation" component={Graduation} />
           <Route path="/upload/:id" component={Upload} />
           <Route path="/chat/:id" component={Chat} />

@@ -2506,6 +2506,7 @@ export default function Chat() {
               name={displayName || t("common.them")}
               reason={chatState.reason}
               onRefetch={() => refetchPersona()}
+              onOpenProfile={() => navigate(`/persona/${personaId}/profile`)}
             />
           ) : (
             /*
