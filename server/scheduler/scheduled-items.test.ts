@@ -276,6 +276,24 @@ describe("the reminder the persona agreed to bring up (C9.4)", () => {
     expect(createMessage).not.toHaveBeenCalled();
   });
 
+  it("holds it while the person asked to be left quiet", async () => {
+    getPersonaById.mockResolvedValue(persona({ presence: "quiet" }));
+    const result = await sweepScheduledItems(NOW);
+    expect(result).toEqual({ delivered: 0, cancelled: 0 });
+    expect(releaseScheduledItem).toHaveBeenCalledWith(7, 1);
+    expect(composeCheckInMessage).not.toHaveBeenCalled();
+    expect(createMessage).not.toHaveBeenCalled();
+  });
+
+  it("holds it during a taper", async () => {
+    getPersonaById.mockResolvedValue(persona({ settings: { taper: { stage: 1 } } }));
+    const result = await sweepScheduledItems(NOW);
+    expect(result).toEqual({ delivered: 0, cancelled: 0 });
+    expect(releaseScheduledItem).toHaveBeenCalledWith(7, 1);
+    expect(composeCheckInMessage).not.toHaveBeenCalled();
+    expect(createMessage).not.toHaveBeenCalled();
+  });
+
   it("is cancelled in a memorial persona", async () => {
     getPersonaById.mockResolvedValue(persona({ settings: { mode: "memorial" } }));
     const result = await sweepScheduledItems(NOW);

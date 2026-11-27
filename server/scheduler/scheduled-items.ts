@@ -10,7 +10,7 @@ import * as db from "../db";
 import { getEffectivePresence } from "../_core/graduation";
 import { ENV } from "../_core/env";
 import { normalizePersonaSettings } from "@shared/persona-settings";
-import { isMemorial, mayChatNow } from "@shared/persona-state";
+import { isMemorial, mayChatNow, taperStage } from "@shared/persona-state";
 import { resolveReplyAt } from "@shared/letters";
 import { detectCrisis } from "../safety/crisis";
 import { pushToUser } from "../_core/push";
@@ -91,6 +91,19 @@ export async function sweepScheduledItems(
       * tool was called.
       */
     if (item.kind === "check_in") {
+      /**
+       * A check-in is the persona reaching out, so the states that mean
+       * "do not reach out" hold it: `quiet` (the person asked for space)
+       * and any taper stage above zero (the relationship is winding
+       * down; the first word belongs to the user).
+       *
+       * It is released rather than cancelled: these states can change,
+       * and the reminder was the user's own request.
+       */
+      if (presence === "quiet" || taperStage(persona) > 0) {
+        await db.releaseScheduledItem(item.id, item.userId);
+        continue;
+      }
       const lastUser = await db.getLastUserMessageAt(persona.id, item.userId);
       const setAt = item.createdAt ? new Date(item.createdAt).getTime() : 0;
       if (lastUser && new Date(lastUser).getTime() >= setAt) {
