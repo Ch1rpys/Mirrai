@@ -14,6 +14,11 @@
  * messages arrive with their text when the DIRECT_MESSAGES intent is
  * requested. It is marked unverified in the progress file because there
  * is no real Discord account on this machine to try it with.
+ *
+ * "Only private messages" needs two checks: a guild id rules out server
+ * channels, and a group DM has no guild id either. The channel's own type
+ * (DM = 1, group DM = 3) is therefore fetched over REST and cached for
+ * the connection; only type 1 is answered.
  */
 import { randomUUID } from "node:crypto";
 import { decryptSecret, encryptSecret } from "../_core/crypto";
@@ -128,6 +133,63 @@ export function interpretDiscordMessage(event: any): DiscordMessage | null {
     authorId: typeof event.author?.id === "string" ? event.author.id : null,
     text: event.content,
   };
+}
+
+/**
+ * The channel's Discord type, or `null` when Discord could not answer.
+ *
+ * MESSAGE_CREATE does not carry the channel type, so a group DM (no
+ * `guild_id`, like a 1:1 DM) has to be told apart over REST. Failing to
+ * read the type is treated as "not a direct message": the safe answer is
+ * to stay quiet rather than to answer into a group.
+ */
+export async function discordChannelType(
+  fetchImpl: typeof fetch,
+  token: string,
+  channelId: string,
+): Promise<number | null> {
+  const response = await fetchImpl(`${REST_BASE}/channels/${channelId}`, {
+    headers: { Authorization: `Bot ${token}` },
+  });
+  if (!response.ok) return null;
+  const body = (await response.json().catch(() => ({}))) as { type?: unknown };
+  return typeof body.type === "number" ? body.type : null;
+}
+
+/** Whether the channel is a one-to-one direct message (Discord type 1). */
+export async function discordChannelIsDm(
+  fetchImpl: typeof fetch,
+  token: string,
+  channelId: string,
+): Promise<boolean> {
+  return (await discordChannelType(fetchImpl, token, channelId)) === 1;
+}
+
+/**
+ * The inbound path: only a one-to-one direct message reaches the binding
+ * rule. A group DM has no `guild_id` but is still a group, and is dropped
+ * here.
+ */
+export async function handleDiscordInbound(params: {
+  userId: number;
+  message: DiscordMessage;
+  token: string;
+  sendText: (channelId: string, text: string) => Promise<void>;
+  locale?: Locale;
+  fetchImpl?: typeof fetch;
+}): Promise<void> {
+  const dm = await discordChannelIsDm(
+    params.fetchImpl ?? fetch,
+    params.token,
+    params.message.channelId,
+  );
+  if (!dm) return;
+  await handleDiscordMessage({
+    userId: params.userId,
+    message: params.message,
+    sendText: params.sendText,
+    locale: params.locale,
+  });
 }
 
 /**
@@ -296,6 +358,17 @@ export async function runDiscordGateway(params: {
             socket.close();
             return;
           }
+          if (payload?.op === 9) {
+            /**
+             * The session is invalid: it cannot be resumed any more.
+             * Forget it so the next connection identifies from scratch
+             * rather than resuming the dead session for ever.
+             */
+            sessionId = null;
+            seq = 0;
+            socket.close();
+            return;
+          }
           if (payload?.t === "READY") {
             sessionId = typeof payload?.d?.session_id === "string" ? payload.d.session_id : null;
             return;
@@ -344,9 +417,10 @@ export const discordAdapter: ChannelAdapter = {
       token: credentials.botToken,
       signal: controller.signal,
       onMessage: (message) =>
-        handleDiscordMessage({
+        handleDiscordInbound({
           userId,
           message,
+          token: credentials.botToken,
           sendText: (channelId, text) =>
             sendDiscordMessage(fetch, credentials.botToken, channelId, text),
           locale,

@@ -34,7 +34,9 @@ vi.mock("./commands", () => ({
 
 import {
   DISCORD_INTENTS,
+  discordChannelType,
   discordIdentify,
+  handleDiscordInbound,
   handleDiscordMessage,
   interpretDiscordMessage,
   runDiscordGateway,
@@ -201,6 +203,63 @@ describe("a bound Discord conversation", () => {
   });
 });
 
+describe("one-to-one direct messages", () => {
+  function channelResponse(type: number): Response {
+    return new Response(JSON.stringify({ id: "222", type }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  it("reads the channel type over REST", async () => {
+    const fetchImpl = vi.fn(async () => channelResponse(1));
+    await expect(discordChannelType(fetchImpl as never, "tok", "222")).resolves.toBe(1);
+    expect(String((fetchImpl.mock.calls[0] as unknown[])[0])).toContain("/channels/222");
+  });
+
+  it("answers a one-to-one DM and drops a group DM", async () => {
+    binding = { id: 1, personaId: 7, isActive: true };
+    const sent: string[] = [];
+    const dmFetch = vi.fn(async () => channelResponse(1));
+    await handleDiscordInbound({
+      userId: 1,
+      message: dm(),
+      token: "tok",
+      sendText: async (_c, text) => { sent.push(text); },
+      fetchImpl: dmFetch as never,
+    });
+    expect(handleChannelChat).toHaveBeenCalledTimes(1);
+    expect(sent).toEqual(["在的呀"]);
+
+    sent.length = 0;
+    handleChannelChat.mockClear();
+    // A group DM (type 3) has no guild_id either; it must not be answered.
+    const groupFetch = vi.fn(async () => channelResponse(3));
+    await handleDiscordInbound({
+      userId: 1,
+      message: dm(),
+      token: "tok",
+      sendText: async (_c, text) => { sent.push(text); },
+      fetchImpl: groupFetch as never,
+    });
+    expect(handleChannelChat).not.toHaveBeenCalled();
+    expect(sent).toEqual([]);
+  });
+
+  it("stays quiet when the channel type cannot be read", async () => {
+    binding = { id: 1, personaId: 7, isActive: true };
+    const fetchImpl = vi.fn(async () => new Response("no", { status: 403 }));
+    await handleDiscordInbound({
+      userId: 1,
+      message: dm(),
+      token: "tok",
+      sendText: async () => undefined,
+      fetchImpl: fetchImpl as never,
+    });
+    expect(handleChannelChat).not.toHaveBeenCalled();
+  });
+});
+
 describe("the gateway loop", () => {
   it("reconnects after the socket closes", async () => {
     const sockets: FakeSocket[] = [];
@@ -242,6 +301,37 @@ describe("the gateway loop", () => {
     sockets[1].dispatch({ op: 10, d: { heartbeat_interval: 45_000 } });
     const resume = sockets[1].sent.map((line) => JSON.parse(line)).find((payload) => payload.op === 6);
     expect(resume?.d).toMatchObject({ session_id: "session", seq: 2 });
+    controller.abort();
+    sockets[1].close();
+    await done;
+  });
+
+  it("identifies again after an invalid session instead of resuming it", async () => {
+    const sockets: FakeSocket[] = [];
+    const controller = new AbortController();
+    const factory = vi.fn((_url: string) => {
+      const socket = new FakeSocket(`socket-${sockets.length}`);
+      sockets.push(socket);
+      return socket;
+    });
+    const done = runDiscordGateway({
+      token: "bot-token",
+      signal: controller.signal,
+      socketFactory: factory,
+      reconnectDelayMs: 0,
+      onMessage: async () => undefined,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    sockets[0].dispatch({ op: 10, d: { heartbeat_interval: 45_000 } });
+    sockets[0].dispatch({ op: 0, t: "READY", s: 1, d: { session_id: "session" } });
+    // Discord says the session cannot be resumed.
+    sockets[0].dispatch({ op: 9, d: false });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(sockets.length).toBe(2);
+    sockets[1].dispatch({ op: 10, d: { heartbeat_interval: 45_000 } });
+    const ops = sockets[1].sent.map((line) => JSON.parse(line));
+    expect(ops.some((payload) => payload.op === 2)).toBe(true);
+    expect(ops.some((payload) => payload.op === 6)).toBe(false);
     controller.abort();
     sockets[1].close();
     await done;
