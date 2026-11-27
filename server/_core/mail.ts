@@ -94,9 +94,17 @@ export function buildLetterEmail(params: {
   locale?: Locale;
 }): { subject: string; text: string } {
   const locale = params.locale ?? "zh";
+  /**
+   * A header is one line (P18.4).
+   *
+   * A persona name is user input, and a name with CR/LF made the subject
+   * multi-line. Nodemailer encodes the header, so this was never header
+   * injection; a subject is still meant to be a single line.
+   */
+  const name = params.personaName.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
   return {
     subject: params.config.subjectWithName
-      ? copy(locale, "mail.subjectWithName", { name: params.personaName })
+      ? copy(locale, "mail.subjectWithName", { name })
       : copy(locale, "mail.subject"),
     // The footer is fixed and always there: the reader has to know the
     // letter was rebuilt, whichever mailbox it landed in.

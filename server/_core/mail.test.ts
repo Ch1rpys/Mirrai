@@ -69,6 +69,20 @@ describe("the letter email (C5.5)", () => {
     expect(mail.subject).toBe("小满 的回信");
   });
 
+  it("keeps the subject on one line when the persona's name has a newline", () => {
+    // P18.4: a name with a CR/LF made the subject multi-line. Nodemailer
+    // encodes the header, so this was never header injection, but a
+    // subject should still be a single line.
+    const mail = buildLetterEmail({
+      config: { subjectWithName: true },
+      personaName: "小满\nBcc: evil@example.test",
+      body: "回信正文",
+    });
+    expect(mail.subject).not.toMatch(/[\r\n]/);
+    expect(mail.subject).toContain("Bcc: evil@example.test");
+    expect(mail.subject.startsWith("小满 Bcc:")).toBe(true);
+  });
+
   it("sends plain text, with the fixed footer and no tracking", async () => {
     getChannelState.mockResolvedValue({
       credentialsEnc: await import("./crypto").then((module) =>
