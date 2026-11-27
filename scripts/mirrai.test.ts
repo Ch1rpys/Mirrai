@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,6 +29,7 @@ vi.mock("../server/_core/env", async (importOriginal) => {
   return { ...actual, ENV: { ...actual.ENV, uploadDir: uploadRoot } };
 });
 
+import { ENV } from "../server/_core/env";
 import { parseArgs, runMirrai, USAGE, type MirraiDeps } from "./mirrai";
 
 let dir: string;
@@ -44,11 +45,15 @@ afterAll(() => {
 
 function output() {
   const lines: string[] = [];
+  const outLines: string[] = [];
+  const errLines: string[] = [];
   return {
     lines,
+    outLines,
+    errLines,
     io: {
-      out: (line: string) => lines.push(line),
-      err: (line: string) => lines.push(line),
+      out: (line: string) => { lines.push(line); outLines.push(line); },
+      err: (line: string) => { lines.push(line); errLines.push(line); },
     },
   };
 }
@@ -67,6 +72,7 @@ function deps(overrides: Partial<MirraiDeps> = {}) {
     getPersonaById: vi.fn().mockResolvedValue({ id: 3, name: "小满", analysisStatus: "ready" }),
     createCaller: vi.fn().mockReturnValue(caller),
     createPersonaFile: vi.fn().mockResolvedValue(11),
+    deletePersonaFile: vi.fn().mockResolvedValue(true),
     startImport: vi.fn().mockResolvedValue({ status: "done", written: 2 }),
     exportPersonaBundle: vi.fn().mockResolvedValue({
       bytes: 1024,
@@ -101,6 +107,16 @@ describe("the arguments", () => {
     expect(parsed.flags.get("user")).toBe("1");
     expect(parsed.flags.get("me")).toBe("阿树");
     expect(parsed.json).toBe(true);
+  });
+
+  it("reads the equals form of a flag", () => {
+    const parsed = parseArgs([
+      "import", "chat.txt", "--persona=3", "--user=1", "--passphrase=secret",
+    ]);
+    expect(parsed.flags.get("persona")).toBe("3");
+    expect(parsed.flags.get("user")).toBe("1");
+    // The inline value stays visible so the passphrase rule can refuse it.
+    expect(parsed.flags.get("passphrase")).toBe("secret");
   });
 
   it("keeps the tail of a forwarded command exactly as typed", () => {
@@ -154,6 +170,7 @@ describe("the subcommands call the function behind the route", () => {
       userId: 1,
       fileType: "chat_export",
       originalName: "chat.txt",
+      extractedMemory: expect.stringContaining("在吗"),
     }));
     expect(base.startImport).toHaveBeenCalledWith(expect.objectContaining({
       fileId: 11,
@@ -283,6 +300,137 @@ describe("the subcommands call the function behind the route", () => {
       expect(jsonLine).toBeDefined();
       expect(() => JSON.parse(jsonLine!)).not.toThrow();
     }
+  });
+
+  it("import: refuses a locked persona without writing anything", async () => {
+    const { base } = deps({
+      getPersonaById: vi.fn().mockResolvedValue({ id: 3, settings: { locked: true } }),
+    });
+    const { lines, io } = output();
+    const code = await runMirrai(
+      ["import", chatFile("locked.txt"), "--persona", "3", "--user", "1"],
+      base,
+      io,
+    );
+    expect(code).not.toBe(0);
+    expect(lines.join("\n")).toContain("锁着");
+    expect(base.createPersonaFile).not.toHaveBeenCalled();
+    expect(base.startImport).not.toHaveBeenCalled();
+  });
+
+  it("import: refuses a shared read-only persona", async () => {
+    const { base } = deps({
+      getPersonaById: vi.fn().mockResolvedValue({ id: 3, sharedFromPersonaId: 9 }),
+    });
+    const { lines, io } = output();
+    const code = await runMirrai(
+      ["import", chatFile("shared.txt"), "--persona", "3", "--user", "1"],
+      base,
+      io,
+    );
+    expect(code).not.toBe(0);
+    expect(lines.join("\n")).toContain("家人共用");
+    expect(base.createPersonaFile).not.toHaveBeenCalled();
+  });
+
+  it("import: a failed import cleans up the uploaded file and its row", async () => {
+    const { base } = deps({
+      startImport: vi.fn().mockRejectedValue(new Error("the importer exploded")),
+    });
+    const { lines, io } = output();
+    const code = await runMirrai(
+      ["import", chatFile("cleanup.txt"), "--persona", "3", "--user", "1"],
+      base,
+      io,
+    );
+    expect(code).not.toBe(0);
+    expect(lines.join("\n")).toContain("the importer exploded");
+    expect(base.deletePersonaFile).toHaveBeenCalledWith(11, 1);
+    const folder = path.join(ENV.uploadDir, "personas", "1", "3");
+    const remaining = existsSync(folder) ? readdirSync(folder) : [];
+    // Other tests may leave their own uploads here; only this file matters.
+    expect(remaining.filter((name) => name.endsWith("-cleanup.txt"))).toEqual([]);
+  });
+
+  it("import: a needs_roles stop exits non-zero and says why", async () => {
+    const { base } = deps({
+      startImport: vi.fn().mockResolvedValue({ status: "needs_roles", written: 0 }),
+    });
+    const { errLines, io } = output();
+    const code = await runMirrai(
+      ["import", chatFile("needs-roles.txt"), "--persona", "3", "--user", "1"],
+      base,
+      io,
+    );
+    expect(code).not.toBe(0);
+    expect(errLines.join("\n")).toContain("needs_roles");
+  });
+
+  it("export: refuses a locked persona", async () => {
+    const { base } = deps({
+      getPersonaById: vi.fn().mockResolvedValue({ id: 3, settings: { locked: true } }),
+    });
+    const { lines, io } = output();
+    const code = await runMirrai(
+      ["export", "--persona", "3", "--user", "1", "--out", path.join(dir, "locked.mirrai-persona")],
+      base,
+      io,
+    );
+    expect(code).not.toBe(0);
+    expect(lines.join("\n")).toContain("锁着");
+    expect(base.exportPersonaBundle).not.toHaveBeenCalled();
+  });
+
+  it("export: refuses the equals form of a passphrase argument", async () => {
+    const { base } = deps();
+    const { lines, io } = output();
+    const code = await runMirrai(
+      [
+        "export", "--persona", "3", "--user", "1",
+        "--out", path.join(dir, "arg-equals.mirrai-persona"),
+        "--passphrase=secret",
+      ],
+      base,
+      io,
+    );
+    expect(code).not.toBe(0);
+    expect(base.exportPersonaBundle).not.toHaveBeenCalled();
+    expect(lines.join("\n")).toContain("--passphrase-file");
+  });
+
+  it("export: reads the equals form of --passphrase-file", async () => {
+    const passphraseFile = path.join(dir, "passphrase-equals.txt");
+    writeFileSync(passphraseFile, "a long passphrase\n");
+    const { base } = deps();
+    const { io } = output();
+    const code = await runMirrai(
+      [
+        "export", "--persona", "3", "--user", "1",
+        "--out", path.join(dir, "equals.mirrai-persona"),
+        `--passphrase-file=${passphraseFile}`,
+      ],
+      base,
+      io,
+    );
+    expect(code).toBe(0);
+    expect(base.exportPersonaBundle).toHaveBeenCalledWith(expect.objectContaining({
+      passphrase: "a long passphrase",
+    }));
+  });
+
+  it("distill: --json is exactly one JSON line", async () => {
+    const { base } = deps();
+    const { outLines, io } = output();
+    const code = await runMirrai(
+      ["distill", "--persona", "3", "--user", "1", "--yes", "--json"],
+      base,
+      io,
+    );
+    expect(code).toBe(0);
+    expect(outLines).toHaveLength(1);
+    const parsed = JSON.parse(outLines[0]!);
+    expect(parsed.estimate).toEqual({ chars: 1200, calls: 3 });
+    expect(parsed.status).toBe("ready");
   });
 
   it("forwards eval and backup to their own scripts", async () => {

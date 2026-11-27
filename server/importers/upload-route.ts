@@ -8,7 +8,7 @@
  * stack.
  */
 import { createWriteStream } from "node:fs";
-import { mkdir, open, unlink } from "node:fs/promises";
+import { mkdir, unlink } from "node:fs/promises";
 import path from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -30,9 +30,8 @@ import {
 import { RATE_LIMITS, rateLimiter, resolveRateLimitKey } from "../_core/rate-limit";
 import { createPersonaFile, getPersonaById } from "../db";
 import { maxImportFileBytes } from "./archive";
+import { excerptHead } from "./excerpt";
 import { isChatImportFileType, startImport } from "./index";
-
-const MAX_EXTRACTED_CHARS = 500_000;
 
 class ImportTooLargeError extends Error {
   constructor() {
@@ -58,18 +57,6 @@ function queryValue(req: Request, key: string): string {
 
 function fileTypeFor(kind: "chat" | "archive"): "chat_export" | "archive" {
   return kind === "archive" ? "archive" : "chat_export";
-}
-
-async function excerptHead(absPath: string): Promise<string | undefined> {
-  const handle = await open(absPath, "r");
-  try {
-    const buf = Buffer.alloc(MAX_EXTRACTED_CHARS);
-    const { bytesRead } = await handle.read(buf, 0, buf.length, 0);
-    if (bytesRead <= 0) return undefined;
-    return buf.subarray(0, bytesRead).toString("utf8").slice(0, MAX_EXTRACTED_CHARS);
-  } finally {
-    await handle.close();
-  }
 }
 
 async function removeQuietly(absPath: string | null): Promise<void> {

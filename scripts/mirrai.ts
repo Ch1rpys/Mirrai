@@ -25,13 +25,19 @@
  * the same way `pnpm eval` does.
  */
 import "dotenv/config";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync, readFileSync, statSync } from "node:fs";
+import { unlink } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { nanoid } from "nanoid";
 import { appRouter } from "../server/routers";
+import { copy } from "@shared/copy";
+import { normalizePersonaSettings } from "@shared/persona-settings";
+import { personaLocked } from "../server/_core/app-lock";
+import { assertPersonaWritable } from "../server/_core/persona-access";
+import { excerptHead } from "../server/importers/excerpt";
 import type { TrpcContext } from "../server/_core/context";
 import { ENV } from "../server/_core/env";
 import { resolveUploadPath, sanitizeFileName, importEntryKind, checkFileExtension } from "../server/_core/filename";
@@ -123,15 +129,28 @@ export function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
     if (token.startsWith("--")) {
-      const name = token.slice(2);
+      /**
+       * Both `--name value` and `--name=value` are read.
+       *
+       * The equals form matters for the passphrase rule: a person who
+       * types `--passphrase=secret` must get the refusal, not a silently
+       * written plaintext file. Keeping the inline value on the flag is
+       * what lets `runExport` see it.
+       */
+      const body = token.slice(2);
+      const equals = body.indexOf("=");
+      const name = equals === -1 ? body : body.slice(0, equals);
+      const inline = equals === -1 ? undefined : body.slice(equals + 1);
       if (VALUE_FLAGS.has(name)) {
-        const value = rest[index + 1];
-        if (!value || value.startsWith("--")) {
+        const value = inline ?? rest[index + 1];
+        if (inline === undefined && (!value || String(value).startsWith("--"))) {
           flags.set(name, true);
         } else {
-          flags.set(name, value);
-          index += 1;
+          flags.set(name, value as string);
+          if (inline === undefined) index += 1;
         }
+      } else if (inline !== undefined) {
+        flags.set(name, inline);
       } else {
         flags.set(name, true);
       }
@@ -167,9 +186,16 @@ export interface MirraiDeps {
   getPersonaById(
     id: number,
     userId: number,
-  ): Promise<{ id: number; name?: string | null; analysisStatus?: string | null } | undefined>;
+  ): Promise<{
+    id: number;
+    name?: string | null;
+    analysisStatus?: string | null;
+    settings?: unknown;
+    sharedFromPersonaId?: number | null;
+  } | undefined>;
   createCaller(context: TrpcContext): any;
   createPersonaFile(input: Record<string, unknown>): Promise<number>;
+  deletePersonaFile(fileId: number, userId: number): Promise<unknown>;
   startImport(input: Record<string, unknown>): Promise<{ status: string; written: number }>;
   exportPersonaBundle(input: {
     personaId: number;
@@ -203,6 +229,7 @@ export function defaultDeps(): MirraiDeps {
     createCaller: (context) => appRouter.createCaller(context),
     createPersonaFile: async (input) =>
       db.createPersonaFile(input as never),
+    deletePersonaFile: (fileId, userId) => db.deletePersonaFile(fileId, userId),
     startImport: async (input) => startImport(input as never),
     exportPersonaBundle: async (input) => exportPersonaBundle(input),
     forward: (script, argv) => {
@@ -275,6 +302,21 @@ async function runImport(args: ParsedArgs, deps: MirraiDeps, io: CliIo, userId: 
 
   const persona = await deps.getPersonaById(personaId, userId);
   if (!persona) return fail(io, `No persona ${personaId} for user ${userId}.`);
+  /**
+   * The upload route's checks, in the same order: a read-only shared
+   * persona does not take records (C7.2), and a locked persona does not
+   * either (C8.4). The command line has no PIN, so a lock means the
+   * person has to unlock in the app — but this process has no session,
+   * so it refuses rather than pretending.
+   */
+  try {
+    assertPersonaWritable(persona, "zh");
+  } catch (error) {
+    return fail(io, error instanceof Error ? error.message : String(error));
+  }
+  if (await personaLocked(normalizePersonaSettings(persona.settings), null)) {
+    return fail(io, copy("zh", "lock.personaCli"));
+  }
 
   const safeName = sanitizeFileName(path.basename(filePath));
   const kind = importEntryKind(safeName);
@@ -290,41 +332,81 @@ async function runImport(args: ParsedArgs, deps: MirraiDeps, io: CliIo, userId: 
   }
 
   // The upload route's own sequence: copy the file into the uploads
-  // directory, create the persona_file row, then run the importer.
+  // directory, create the persona_file row (with the readable excerpt),
+  // then run the importer.
   const fileKey = `personas/${userId}/${personaId}/${nanoid()}-${safeName}`;
   const absPath = resolveUploadPath(ENV.uploadDir, fileKey);
-  const { mkdirSync, copyFileSync } = await import("node:fs");
   mkdirSync(path.dirname(absPath), { recursive: true });
   copyFileSync(filePath, absPath);
 
-  const fileId = await deps.createPersonaFile({
-    personaId,
-    userId,
-    fileType,
-    originalName: safeName,
-    fileKey,
-    fileUrl: `/uploads/${fileKey}`,
-    fileSize: bytes,
-    processStatus: "done",
-  });
+  let extractedMemory: string | undefined;
+  if (fileType === "chat_export") {
+    extractedMemory = await excerptHead(absPath).catch(() => undefined);
+  }
+
+  let fileId: number;
+  try {
+    fileId = await deps.createPersonaFile({
+      personaId,
+      userId,
+      fileType,
+      originalName: safeName,
+      fileKey,
+      fileUrl: `/uploads/${fileKey}`,
+      fileSize: bytes,
+      extractedMemory,
+      processStatus: "done",
+    });
+  } catch (error) {
+    await unlink(absPath).catch(() => undefined);
+    return fail(io, error instanceof Error ? error.message : String(error));
+  }
+
   const me = flag(args, "me");
   const them = flag(args, "them");
   const format = flag(args, "format") as ImportFormatId | undefined;
-  const result = await deps.startImport({
-    fileId,
-    userId,
-    locale: "zh",
-    ...(format ? { format } : {}),
-    ...(me ? { me: [me] } : {}),
-    ...(them ? { them: [them] } : {}),
-  });
+  let result: Awaited<ReturnType<MirraiDeps["startImport"]>>;
+  try {
+    result = await deps.startImport({
+      fileId,
+      userId,
+      locale: "zh",
+      ...(format ? { format } : {}),
+      ...(me ? { me: [me] } : {}),
+      ...(them ? { them: [them] } : {}),
+    });
+  } catch (error) {
+    /**
+     * A failed import must not leave the uploaded bytes or a file row
+     * behind — the route cleans up the same way. `needs_*` returns are
+     * not exceptions: they are the wizard's states and keep the file so
+     * the app can continue.
+     */
+    await unlink(absPath).catch(() => undefined);
+    await deps.deletePersonaFile(fileId, userId).catch(() => undefined);
+    return fail(io, error instanceof Error ? error.message : String(error));
+  }
   if (args.json) {
     io.out(JSON.stringify({ fileId, fileKey, status: result.status, written: result.written }));
-  } else {
-    io.out(`Imported ${result.written} records (${result.status}).`);
-    io.out(`fileId ${fileId}`);
   }
-  return result.status === "failed" ? 1 : 0;
+  if (result.status === "done") {
+    if (!args.json) {
+      io.out(`Imported ${result.written} records.`);
+      io.out(`fileId ${fileId}`);
+    }
+    return 0;
+  }
+  /**
+   * The wizard's intermediate states cannot be finished from a terminal:
+   * report them as a failure, with the reason on standard error. The file
+   * and the row stay so the app can pick the import up.
+   */
+  return fail(
+    io,
+    args.json
+      ? `The import stopped at ${result.status}; finish it in the app.`
+      : `Imported ${result.written} records, but the import stopped at ${result.status}; finish it in the app.`,
+  );
 }
 
 async function runDistill(args: ParsedArgs, deps: MirraiDeps, io: CliIo, userId: number): Promise<number> {
@@ -340,16 +422,12 @@ async function runDistill(args: ParsedArgs, deps: MirraiDeps, io: CliIo, userId:
     ...(mode ? { mode } : {}),
   });
   const estimateLine = `This run reads about ${estimate.chars} characters and makes about ${estimate.calls} model calls.`;
-  if (args.json) {
-    io.out(JSON.stringify({ estimate }));
-  } else {
-    io.out(estimateLine);
-  }
+  if (!args.json) io.out(estimateLine);
   if (!boolFlag(args, "yes")) {
     const answer = await deps.ask("Start the distillation? [y/N] ");
     if (answer == null || !/^y(es)?$/i.test(answer.trim())) {
-      if (!args.json) io.out("Not started.");
-      return 1;
+      if (args.json) io.out(JSON.stringify({ estimate, started: false }));
+      return fail(io, "Not started.");
     }
   }
   await caller.skillEngine.startPipeline({
@@ -373,7 +451,12 @@ async function runDistill(args: ParsedArgs, deps: MirraiDeps, io: CliIo, userId:
     }
     if (status === "ready" || status === "error") {
       if (args.json) {
-        io.out(JSON.stringify({ personaId, status, message: (row as { analysisMessage?: string }).analysisMessage ?? null }));
+        io.out(JSON.stringify({
+          estimate,
+          personaId,
+          status,
+          message: (row as { analysisMessage?: string }).analysisMessage ?? null,
+        }));
       } else {
         io.out(status === "ready" ? "The persona was rebuilt." : "The distillation failed.");
       }
@@ -401,6 +484,12 @@ async function runMeasure(args: ParsedArgs, deps: MirraiDeps, io: CliIo, userId:
 async function runExport(args: ParsedArgs, deps: MirraiDeps, io: CliIo, userId: number): Promise<number> {
   const personaId = requiredNumber(args, "persona");
   if (personaId == null) return fail(io, "export needs --persona <id>.");
+  const persona = await deps.getPersonaById(personaId, userId);
+  if (!persona) return fail(io, `No persona ${personaId} for user ${userId}.`);
+  /** The download route refuses a locked persona (C8.4); so does this. */
+  if (await personaLocked(normalizePersonaSettings(persona.settings), null)) {
+    return fail(io, copy("zh", "lock.personaCli"));
+  }
   const out = flag(args, "out");
   if (!out) return fail(io, "export needs --out <path>.");
   const passphraseFile = flag(args, "passphrase-file");

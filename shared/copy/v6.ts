@@ -1936,6 +1936,10 @@ export const V6 = {
     zh: "这个分身锁着。输入 PIN 解锁。",
     en: "This persona is locked. Enter the PIN to unlock it.",
   },
+  "lock.personaCli": {
+    zh: "这个分身锁着，命令行访问不了。请先在应用里解锁它；锁着的分身不能用命令行导入或导出。",
+    en: "This persona is locked and cannot be reached from the command line. Unlock it in the app first; a locked persona cannot be imported into or exported from the CLI.",
+  },
 
   /**
    * The line the persona writes when a reminder it set comes due (C9.4).
