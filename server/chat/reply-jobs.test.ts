@@ -252,7 +252,10 @@ vi.mock("../_core/push", () => ({
 const send = vi.fn();
 vi.mock("../channels", () => ({
   getChannelAdapter: (id: string) => (
-    id === "feishu" || id === "wechat" ? { send } : undefined
+    ["feishu", "wechat", "telegram", "discord", "matrix"].includes(id)
+      ? { send: (userId: number, targetId: string, text: string, locale?: string) =>
+          send(userId, targetId, text, locale) }
+      : undefined
   ),
 }));
 
@@ -803,6 +806,47 @@ describe("a follow-up after they go quiet", () => {
     }));
     expect(stored.filter((row) => row.origin === "proactive")).toHaveLength(0);
     expect(pushToUser).not.toHaveBeenCalledWith(1, expect.objectContaining({ kind: "proactive" }));
+  });
+
+  it("sends a deferred line on the channel it came from (B5.2/B5.8)", async () => {
+    // A reply that is written later used to go out as a web push on every
+    // channel except WeChat and Feishu: the person was talking on
+    // Telegram and got nothing there. The row now carries the real
+    // channel, and the adapter for it does the sending.
+    getPersonaById.mockImplementation(async () => followPersona());
+    stored.push(
+      { id: 1, role: "user", content: "在吗", createdAt: new Date(NOW.getTime() - 120_000) },
+      { id: 2, role: "assistant", content: "在的。", createdAt: NOW },
+    );
+    nextMessageId = 3;
+    const job = await createReplyJob({
+      userId: 1,
+      personaId: 1,
+      kind: "followup",
+      status: "pending",
+      reason: "followup",
+      dueAt: NOW,
+      channel: "telegram",
+      targetId: "chat-9",
+      locale: "zh",
+      periodId: null,
+      attempts: 0,
+      payload: { afterMessageId: 2 },
+    });
+    pushToUser.mockClear();
+    send.mockClear();
+    await runReplyJob(job.id, 1);
+    expect(send).toHaveBeenCalledWith(
+      1,
+      "chat-9",
+      expect.stringMatching(/人呢|？/),
+      "zh",
+    );
+    expect(pushToUser).not.toHaveBeenCalled();
+    // The line belongs to the conversation it was spoken in, so the
+    // stored row says so too.
+    const follow = stored.find((row) => row.origin === "followup");
+    expect(follow?.channel).toBe("telegram");
   });
 
   it("marks the follow-up as the record's own line (C10.7)", async () => {

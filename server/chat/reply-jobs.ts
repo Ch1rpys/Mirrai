@@ -54,6 +54,38 @@ const IN_PROCESS_HORIZON_MS = 24 * 60 * 60 * 1000;
 
 export type ReplyReason = "delay" | "asleep" | "busy";
 
+type StoredChannel =
+  | "web"
+  | "wechat"
+  | "feishu"
+  | "telegram"
+  | "discord"
+  | "matrix"
+  | "api";
+
+/** The channels a stored message can name (the schema's closed set). */
+const MESSAGE_CHANNELS = new Set<string>([
+  "web",
+  "wechat",
+  "feishu",
+  "telegram",
+  "discord",
+  "matrix",
+]);
+
+/**
+ * The channel a deferred job belongs to (B5.2, B5.8).
+ *
+ * It used to be "wechat or feishu, otherwise web": every deferred reply
+ * and follow-up on Telegram, Discord or Matrix was recorded as a web
+ * turn and delivered as a web push, so the person waiting on that
+ * channel never got the line there.
+ */
+function channelOfJob(job: { channel?: string | null }): StoredChannel {
+  const channel = job.channel || "web";
+  return MESSAGE_CHANNELS.has(channel) ? (channel as StoredChannel) : "web";
+}
+
 export interface DeferDecision {
   jobId: number;
   dueAt: Date;
@@ -277,10 +309,9 @@ async function deliverReply(
 ): Promise<boolean> {
   const bubbles = parts.map((text) => text.trim()).filter(Boolean);
   if (bubbles.length === 0) return true;
-  const channel = job.channel || "web";
-  if (channel === "wechat" || channel === "feishu") {
-    const adapter = getChannelAdapter(channel);
-    if (!adapter || !job.targetId) return false;
+  const channel = channelOfJob(job);
+  const adapter = channel === "web" ? undefined : getChannelAdapter(channel);
+  if (adapter && job.targetId) {
     const locale = job.locale === "en" ? "en" : "zh";
     for (let i = 0; i < bubbles.length; i++) {
       if (i > 0) {
@@ -295,6 +326,11 @@ async function deliverReply(
       }
     }
     return true;
+  }
+  if (channel !== "web" && !job.targetId) {
+    console.warn(
+      `[ReplyJobs] A ${channel} job has no target; the reply goes to the web conversation instead.`,
+    );
   }
   try {
     await pushToUser(job.userId, {
@@ -318,7 +354,7 @@ async function failDelivery(job: ReplyJob): Promise<void> {
     content: copy(locale, "channels.messageFailed", {
       reason: copy(locale, "channels.deliveryFailed"),
     }),
-    channel: job.channel === "wechat" || job.channel === "feishu" ? job.channel : "web",
+    channel: channelOfJob(job),
     origin: "system-notice",
   });
   await db.finishReplyJob(job.id, job.userId, "failed");
@@ -474,7 +510,7 @@ async function runFollowUpJob(job: ReplyJob, userId: number): Promise<boolean> {
     role: "assistant",
     content: text,
     emotionalState: persona.emotionalState,
-    channel: job.channel === "wechat" || job.channel === "feishu" ? job.channel : "web",
+    channel: channelOfJob(job),
     origin: "followup",
   });
   /**
@@ -504,7 +540,7 @@ async function failWithNotice(job: ReplyJob): Promise<void> {
     userId: job.userId,
     role: "assistant",
     content: copy(locale, "chat.replyFailedNotice"),
-    channel: job.channel === "wechat" || job.channel === "feishu" ? job.channel : "web",
+    channel: channelOfJob(job),
     origin: "system-notice",
   });
   await db.finishReplyJob(job.id, job.userId, "failed");
@@ -564,7 +600,7 @@ export async function runReplyJob(jobId: number, userId: number): Promise<boolea
       mode: "once",
       now: new Date(),
       locale: job.locale === "en" ? "en" : "zh",
-      channel: job.channel === "wechat" || job.channel === "feishu" ? job.channel : "web",
+      channel: channelOfJob(job),
       periodId: job.periodId,
       conversationKey: job.targetId ?? undefined,
       signal: controller.signal,
