@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import {
   countRecords,
+  countFidelityPairs,
   createCollectedMessages,
+  createFidelityPair,
+  listFidelityPairs,
   createLetter,
   createPersona,
   createUser,
@@ -30,6 +33,36 @@ const DATABASE_URL = process.env.DATABASE_URL;
 function hashKey(key: string): string {
   return createHash("md5").update(key).digest("hex");
 }
+
+describe.skipIf(!DATABASE_URL)("the chosen/rejected pairs (B8.8)", () => {
+  it("stores a pair with its features and keeps it to its owner and persona", async () => {
+    // The progress row used to rest on a mock: nothing inserted a row
+    // into `fidelity_pairs` against a real database, so a column that
+    // did not exist would not have failed.
+    const userId = 9_909_000 + Math.floor(Math.random() * 10_000);
+    const personaId = await createPersona({ userId, name: "pairs" });
+    try {
+      const pair = await createFidelityPair({
+        userId,
+        personaId,
+        messageId: 41,
+        chosenText: "我还是想听听你的声音",
+        rejectedText: "随便吧",
+        features: { overlap: 0.4, style: 0.2 },
+      });
+      expect(pair?.id).toBeGreaterThan(0);
+      expect(pair?.features).toEqual({ overlap: 0.4, style: 0.2 });
+
+      expect(await countFidelityPairs(personaId, userId)).toBe(1);
+      expect(await listFidelityPairs(personaId, userId)).toHaveLength(1);
+      // Another account does not see it.
+      expect(await listFidelityPairs(personaId, userId + 1)).toHaveLength(0);
+      expect(await countFidelityPairs(personaId, userId + 1)).toBe(0);
+    } finally {
+      await purgePersona(personaId, userId);
+    }
+  });
+});
 
 describe.skipIf(!DATABASE_URL)("the record table", () => {
   it("pages the Xiaoman fixture in time order, and counts the same number", async () => {
