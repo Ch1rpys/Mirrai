@@ -1228,6 +1228,14 @@ corepack pnpm eval -- --persona <id> --user <id> --audition
 
 **第三批状态**：C10.1 改回 ✅；B6.3、B6.6、B7.3、B7.14、B8.2、B8.4、B8.5、C3.2 改回 🟡（效果未量，未验证清单各有对应行）；B4.2、B5.2、B5.8、B6.5、C4.3、C4.6、C7.1、C9.5、C8.10、B9.3、C2.1、C2.8、C2.9、B1.8 补修了报告里的中级/低级问题（状态维持）。计数 ✅ 85→86、🟡 79→87、⬜ 9→0。**此前所有 ⬜ 已清空。** 闸门（不带 `--fast`、不带 `DATABASE_URL`）：`corepack pnpm gate` 退出码 0、`all seven steps passed`；`732` 个文件（`707 passed | 25 skipped`）、`6201` 个用例（`6073 passed | 128 skipped`）。
 
+**最终验证（修复会话收尾；到本进度文件更新前 `60ffcdf..HEAD` 共 25 个提交、154 个文件）**
+
+- **闸门**：`corepack pnpm gate`（不带 `--fast`、不带 `DATABASE_URL`）退出码 0、`all seven steps passed`；`732` 个文件（`707 passed | 25 skipped`）、`6201` 个用例（`6073 passed | 128 skipped`）。跳过数相对验收基线 122 增加 6，全部是本次新增的**数据库用例**（在已登记的 DB 测试文件里追加：`db-search` 2、`db-sharing` 1、`db-soft-delete` 1、`db-groups` 1、`db-timeline` 1、`material` 1，合计 6，且不在无库时跑）；没有被新加 skip 的既有测试；`git diff --name-status main..HEAD -- '*.test.ts' '*.test.tsx' | grep '^D'` = 0（没有删测试）。黄金快照仍只有 `e506484` 一个提交、之后未改。
+- **带库测试**：临时库 `mirrai_v6_verify_final`（`drizzle-kit push --force` 后），`server/skip-audit.test.ts` 登记的 29 个 DB 测试文件用 `--no-file-parallelism` 顺序跑：`29 passed (29)`、`140 passed (140)`、**0 skipped**；库已 `dropdb`。
+- **迁移四步 + 整段回滚/装回**：临时库 `mirrai_v6_verify_mig`（`push` → `migrate` 84 条 → `--replay` 84 条 → `--rollback 1` 退 0086 → `migrate` 回来）；再 43 次 `--rollback 1` 退到 0043：表 62→34、索引 171→72、journal 84→41、`file_type` 7 值→5 值；再 43 次 `migrate` 全部装回（表 62 / 索引 171 / journal 84 / 列 651、`file_type` 回 7 值）。另建只 `push` 的库 `mirrai_v6_verify_mig3` 与 push+migrate 库 `mirrai_v6_verify_mig2` 做 information_schema catalog diff（表名/列名/类型/可空）：**0 行差异**。三个临时库都已 `dropdb`；`mirrai_live` 未连接、未写。
+- **静态**：分支 `exec/v6`；`git status --porcelain` 空；`main..HEAD` 无 merge 提交、`Co-Authored-By` 0 条（`core.hooksPath` = `.githooks` 已确认）；`package.json` version 仍 1.3.0；未 push、未合并、未切分支、未改写历史；`main` 仍 `f71e77b`。
+- **仍没修/没量的**：真实模型/真实记录/真实设备才能量的效果类条目按 🟡 留在未验证清单（各自有可执行命令）；本机无法执行的验收项没有硬填数字。低严重度里未逐条处理的有：163 条历史问题行没有提交号（历史记录，不改变行为）、C10.2「引号里任何短语都被当地点」的抽取精度、C10.7 burst 只有最后一条立刻带 provenance、C8.11 30 天真实等待/浏览器整链路、C7.4 真实模型抽取等——都记在未验证清单或问题清单里。
+
 ### 独立验收 · 2026-11-27 · WP0–WP18 三遍全程复核
 
 不带实施上下文的独立验收会话。分支 `exec/v6`，开工 HEAD `f55a94b`、`git status --porcelain` 空、`git stash list` 空；未 push、未合并、未切分支、未改写历史、未改 `docs/exec-v6.md`；只改本进度文件。验证用一个临时库 `mirrai_v6_verify`（迁移专项，用完已 `dropdb`）与若干 `mirrai_v6_verify_*` 临时库（逐条测试，用完已 drop），**未写 `mirrai_live`**（`mirrai_live` 只在 P18.2 的既有记录里被读连接过一次，见下）。
