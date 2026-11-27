@@ -787,6 +787,13 @@ export const zh = {
       extraBodySaved: "额外请求参数已保存",
       saveRoles: "保存分工",
       saveExtraBody: "保存额外参数",
+      structuredOutputTitle: "请求格式约束",
+      structuredOutputNote: "两个只对部分模型服务有效的请求字段。默认值跟着地址走：OpenAI 官方地址会禁用 TA 从不用的词；其他地址默认关。打开一个服务不认识的字段，请求会失败。",
+      structuredOutputLogitBias: "禁用 TA 从不用的词（logit_bias）",
+      structuredOutputLogitBiasNote: "只在模型服务认识 OpenAI 的词表时才有意义。OpenAI 官方地址默认开启；兼容网关可能需要打开。",
+      structuredOutputGrammar: "限制回复的行数和列表格式（grammar）",
+      structuredOutputGrammarNote: "给 llama.cpp 的服务端用。它按行数和列表符号约束回复的形状；其他服务不认识这个字段。",
+      structuredOutputSaved: "请求格式约束已保存",
     },
     wechat: {
       title: "微信连接",

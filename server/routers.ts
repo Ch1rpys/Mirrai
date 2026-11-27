@@ -271,6 +271,7 @@ import {
   clampMaxTokens,
   sanitizeExtraConfig,
 } from "./chat/service";
+import { effectiveStructuredOutputSupport } from "./llm/logit-bias";
 import { writeFarewellLetterWithStatus } from "./chat/farewell";
 import { writeLetter } from "./chat/letters";
 import { encryptSecret } from "./_core/crypto";
@@ -5389,6 +5390,19 @@ export const appRouter = router({
     getDefault: protectedProcedure.query(async ({ ctx }) => {
       const config = await getDefaultLlmConfig(ctx.user.id);
       if (!config) return null;
+      const extraConfig = sanitizeExtraConfig(config.extraConfig);
+      /**
+       * The two request fields the settings page switches (B9.3).
+       *
+       * The interface needs the *effective* value: `logit_bias` is on for
+       * the official OpenAI address even when the user never set a flag,
+       * and the checkbox must not show it as off.
+       */
+      const structuredOutput = effectiveStructuredOutputSupport({
+        providerName: config.providerName,
+        baseUrl: config.baseUrl,
+        extraConfig,
+      });
       return {
         id: config.id,
         providerName: config.providerName,
@@ -5396,7 +5410,9 @@ export const appRouter = router({
         baseUrl: config.baseUrl,
         model: config.model,
         // Checked on the way out — see `llmConfig.list`.
-        extraConfig: sanitizeExtraConfig(config.extraConfig),
+        extraConfig,
+        supportsLogitBias: structuredOutput.logitBias,
+        supportsGrammar: structuredOutput.grammar,
         hasKey: !!config.apiKey,
         apiKeyHint: config.apiKeyHint ?? null,
       };

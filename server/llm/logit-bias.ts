@@ -161,3 +161,19 @@ export function providerSupportsGrammar(
 ): boolean {
   return declaredFlag(provider.extraConfig, "supportsGrammar") === true;
 }
+
+/**
+ * What the settings page shows as the current state.
+ *
+ * The checkbox has to show the *effective* answer, not just the stored
+ * flag: the official OpenAI address supports `logit_bias` without the
+ * user having set anything.
+ */
+export function effectiveStructuredOutputSupport(
+  provider: ProviderDescriptor & { extraConfig?: unknown },
+): { logitBias: boolean; grammar: boolean } {
+  return {
+    logitBias: providerSupportsLogitBias(provider),
+    grammar: providerSupportsGrammar(provider),
+  };
+}

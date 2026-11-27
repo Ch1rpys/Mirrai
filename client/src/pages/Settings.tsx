@@ -42,6 +42,7 @@ import EncryptionSettings from "@/components/v6/EncryptionSettings";
 import EmailDelivery from "@/components/v6/EmailDelivery";
 import EmbedStatus from "@/components/v6/EmbedStatus";
 import ExtraBodyEditor from "@/components/v6/ExtraBodyEditor";
+import StructuredOutputSettings from "@/components/v6/StructuredOutputSettings";
 import LlmRoles from "@/components/v6/LlmRoles";
 import UsagePanel from "@/components/v6/UsagePanel";
 import ApiKeys from "@/components/v6/ApiKeys";
@@ -894,6 +895,7 @@ function AISettingsTab() {
 
       <LlmRoles />
       <ExtraBodyEditor />
+      <StructuredOutputSettings />
       <EmbedStatus />
       <UsagePanel />
       <ApiKeys />

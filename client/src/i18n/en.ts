@@ -786,6 +786,13 @@ export const en = {
       extraBodySaved: "The extra fields were saved",
       saveRoles: "Save the split",
       saveExtraBody: "Save the extra fields",
+      structuredOutputTitle: "Request shape",
+      structuredOutputNote: "Two request fields that only some model services understand. The default follows the address: the official OpenAI address bans the words this person never uses; other addresses leave both off. Turning on a field a service does not know makes the request fail.",
+      structuredOutputLogitBias: "Ban the words they never use (logit_bias)",
+      structuredOutputLogitBiasNote: "Only meaningful where the service uses OpenAI's token ids. On by default for the official OpenAI address; a compatible gateway may need it turned on.",
+      structuredOutputGrammar: "Limit the lines and list shape of a reply (grammar)",
+      structuredOutputGrammarNote: "For a llama.cpp server. It constrains the shape of the reply — how many lines, and no list markers; other services do not understand the field.",
+      structuredOutputSaved: "The request shape was saved",
     },
     wechat: {
       title: "WeChat connection",

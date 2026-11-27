@@ -2976,3 +2976,110 @@ describe("the token bias layer", () => {
     expect(replyOptions().extraBody).toBeUndefined();
   });
 });
+
+/**
+ * The shape constraint (B9.3).
+ *
+ * GBNF is llama.cpp's format and nothing else here speaks it, so the field
+ * only travels when the user said their endpoint understands it. The
+ * planner is never constrained: its answer is JSON.
+ */
+describe("the shape grammar layer", () => {
+  function personaWithShape() {
+    const next = persona();
+    next.styleProfile = {
+      version: 1,
+      measuredAt: NOW.toISOString(),
+      recordsVersion: "80:80",
+      fingerprint: { samples: 80, turnChars: { median: 10, p95: 24 } },
+    };
+    next.behaviorProfile = {
+      samples: 40,
+      replyGapMedianSec: 40,
+      replyGapLogSigma: 0.8,
+      burstSizes: [1, 2],
+      proactiveRate: 0,
+      newlineRate: 0,
+      activeHours: [12],
+    };
+    return next;
+  }
+
+  function inputFor(extra: Record<string, unknown> = {}) {
+    return {
+      persona: personaWithShape(),
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "grammar:test",
+      exclude: { texts: [HELD_OUT] },
+      ...extra,
+    };
+  }
+
+  function replyOptions(callIndex = 0): Record<string, unknown> {
+    return (invokeWithProvider.mock.calls[callIndex][1] as {
+      options: Record<string, unknown>;
+    }).options;
+  }
+
+  it("adds the measured shape to the reply's private fields", async () => {
+    const input = inputFor({ extraConfig: { supportsGrammar: true } });
+    const plan = await planTurn(input);
+    expect(plan.layersUsed).toContain("logitBias");
+    invokeWithProvider.mockResolvedValueOnce("在吃");
+    await runExecute(plan, input);
+    const extraBody = replyOptions().extraBody as Record<string, unknown>;
+    expect(typeof extraBody.grammar).toBe("string");
+    // The largest measured burst is two lines.
+    expect(String(extraBody.grammar)).toContain("(nl line){0,1}");
+  });
+
+  it("sends nothing when the endpoint has not said it takes a grammar", async () => {
+    const input = inputFor();
+    const plan = await planTurn(input);
+    invokeWithProvider.mockResolvedValueOnce("在吃");
+    await runExecute(plan, input);
+    expect(replyOptions().extraBody).toBeUndefined();
+  });
+
+  it("does not constrain the two-stage planner", async () => {
+    const next = twoStagePersonaWithCap();
+    const input = {
+      persona: next,
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "grammar:planner",
+      exclude: { texts: [HELD_OUT] },
+      extraConfig: { supportsGrammar: true },
+    };
+    const plan = await planTurn(input);
+    expect(plan.layersUsed).toContain("twoStage");
+    invokeWithProvider
+      .mockResolvedValueOnce(JSON.stringify({ gist: "在吃饭" }))
+      .mockResolvedValueOnce("在吃");
+    await runExecute(plan, input);
+    expect(invokeWithProvider).toHaveBeenCalledTimes(2);
+    const plannerBody = replyOptions(0).extraBody as Record<string, unknown> | undefined;
+    expect(plannerBody?.grammar).toBeUndefined();
+    const replierBody = replyOptions(1).extraBody as Record<string, unknown>;
+    expect(typeof replierBody.grammar).toBe("string");
+  });
+
+  it("can be turned off with the layer", async () => {
+    const input = inputFor({
+      extraConfig: { supportsGrammar: true },
+      layerOverrides: layerOverridesForEval({ without: ["logitBias"] }),
+    });
+    const plan = await planTurn(input);
+    expect(plan.layersUsed).not.toContain("logitBias");
+    invokeWithProvider.mockResolvedValueOnce("在吃");
+    await runExecute(plan, input);
+    expect(replyOptions().extraBody).toBeUndefined();
+  });
+});

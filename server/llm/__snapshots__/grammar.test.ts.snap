@@ -1,0 +1,12 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`shapeGrammar > returns the same grammar text every time 1`] = `
+"# at most 3 lines, none starting like a list item
+root ::= line (nl line){0,2} nl?
+nl ::= "\\n"
+line ::= plain rest | digit | digit safe rest
+plain ::= [^*#0-9\\n\\-]
+rest ::= [^\\n]*
+digit ::= [0-9]
+safe ::= [^\\n.、)）]"
+`;

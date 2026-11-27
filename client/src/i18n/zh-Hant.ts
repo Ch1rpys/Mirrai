@@ -900,7 +900,14 @@ export const zhHant = {
       "extraBodyTooLarge": "超過了 2 KB。",
       "extraBodySaved": "額外請求參數已保存",
       "saveRoles": "保存分工",
-      "saveExtraBody": "保存額外參數"
+      "saveExtraBody": "保存額外參數",
+      "structuredOutputTitle": "請求格式約束",
+      "structuredOutputNote": "兩個只對部分模型服務有效的請求字段。默認值跟著地址走：OpenAI 官方地址會禁用 TA 從不用的詞；其他地址默認關。打開一個服務不認識的字段，請求會失敗。",
+      "structuredOutputLogitBias": "禁用 TA 從不用的詞（logit_bias）",
+      "structuredOutputLogitBiasNote": "只在模型服務認識 OpenAI 的詞表時才有意義。OpenAI 官方地址默認開啟；兼容網關可能需要打開。",
+      "structuredOutputGrammar": "限制回覆的行數和列表格式（grammar）",
+      "structuredOutputGrammarNote": "給 llama.cpp 的服務端用。它按行數和列表符號約束回覆的形狀；其他服務不認識這個字段。",
+      "structuredOutputSaved": "請求格式約束已保存"
     },
     "wechat": {
       "title": "微信連接",

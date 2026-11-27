@@ -16,8 +16,10 @@ import { invokeWithTools } from "../llm/tools";
 import {
   bannedWordsForPersona,
   buildLogitBias,
+  providerSupportsGrammar,
   providerSupportsLogitBias,
 } from "../llm/logit-bias";
+import { GRAMMAR_MAX_LINES, shapeGrammar } from "../llm/grammar";
 import { buildPersonaTools, type ToolPhoto } from "./persona-tools";
 import { copy } from "@shared/copy";
 import { dayPartFromHour, normalizeActProfile, sampleAct, type ActDayPart, type ActVia } from "@shared/act-profile";
@@ -850,33 +852,43 @@ function withLogitBiasLayer(layers: LayerId[], on: boolean): LayerId[] {
 }
 
 /**
- * The bias this turn may send (B9.3), or undefined.
+ * The sampler fields this turn may send (B9.3), or nothing.
  *
  * `plan.layersUsed` says the layer ran for this turn; the endpoint has the
- * last word on whether the field can travel at all. The token ids are
- * built from the model name the provider reports — an unknown tokenizer
- * produces no bias rather than a wrong one.
+ * last word on whether a field can travel at all. The token ids are built
+ * from the model name the provider reports — an unknown tokenizer
+ * produces no bias rather than a wrong one. The shape comes from the
+ * measured burst: how many lines they write in one go.
  */
-function logitBiasForTurn(
+function structuredOutputForTurn(
   input: TurnInput,
   plan: TurnPlan,
   provider: LLMProvider,
-): Record<string, number> | undefined {
-  if (!plan.layersUsed.includes("logitBias")) return undefined;
-  if (
-    !providerSupportsLogitBias({
-      providerName: provider.name,
-      baseUrl: provider.baseUrl,
-      extraConfig: input.extraConfig,
-    })
-  ) {
-    return undefined;
+): { logitBias?: Record<string, number>; grammar?: string } {
+  if (!plan.layersUsed.includes("logitBias")) return {};
+  const descriptor = {
+    providerName: provider.name,
+    baseUrl: provider.baseUrl,
+    extraConfig: input.extraConfig,
+  };
+  const out: { logitBias?: Record<string, number>; grammar?: string } = {};
+  if (providerSupportsLogitBias(descriptor)) {
+    const bias = buildLogitBias({
+      model: provider.modelName,
+      banned: bannedWordsForPersona(input.persona),
+    });
+    if (Object.keys(bias).length > 0) out.logitBias = bias;
   }
-  const bias = buildLogitBias({
-    model: provider.modelName,
-    banned: bannedWordsForPersona(input.persona),
-  });
-  return Object.keys(bias).length > 0 ? bias : undefined;
+  if (providerSupportsGrammar(descriptor)) {
+    const behavior = loadBehaviorProfile(input.persona);
+    const burstMax = behavior ? Math.max(1, ...behavior.burstSizes) : 0;
+    if (burstMax > 0) {
+      out.grammar = shapeGrammar({
+        maxLines: Math.min(burstMax, GRAMMAR_MAX_LINES),
+      });
+    }
+  }
+  return out;
 }
 
 async function plannerMessagesForTurn(
@@ -1406,7 +1418,19 @@ export async function* executePlan(
    * does not — its answer is JSON, and the bias is for the reply.
    */
   const replyProvider = io.voiceProvider ?? io.provider;
-  const logitBias = logitBiasForTurn(input, plan, replyProvider);
+  const sampler = structuredOutputForTurn(input, plan, replyProvider);
+  const logitBias = sampler.logitBias;
+  /**
+   * The grammar travels through the private request fields (B2.8).
+   *
+   * No adapter has a typed field for it: llama.cpp's server accepts
+   * `grammar` next to the OpenAI fields, and a provider without a grammar
+   * implementation ignores the extra body. That is why it is only built
+   * when the user has said their endpoint understands it.
+   */
+  const replyExtraBody = sampler.grammar
+    ? { ...(io.options.extraBody ?? {}), grammar: sampler.grammar }
+    : io.options.extraBody;
 
   /**
    * The tools turn (C9.4).
@@ -1468,7 +1492,7 @@ export async function* executePlan(
     topP: io.options.topP,
     presencePenalty: io.options.presencePenalty,
     frequencyPenalty: io.options.frequencyPenalty,
-    extraBody: io.options.extraBody,
+    extraBody: replyExtraBody,
     ...(logitBias ? { logitBias } : {}),
     stop: plan.stop,
     signal: io.signal,
