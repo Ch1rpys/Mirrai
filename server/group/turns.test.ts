@@ -49,6 +49,16 @@ describe("being called", () => {
     expect(decideGroupTurns({ members, userText: "@满满 在吗", seed: "x" })).toHaveLength(1);
   });
 
+  it("does not care about the case of a Latin name", () => {
+    expect(mentionsPersona("@xiaoman 在吗", { personaId: 1, name: "Xiaoman" })).toBe(true);
+    expect(mentionsPersona("@XIAOMAN 在吗", { personaId: 1, name: "Xiaoman" })).toBe(true);
+    expect(mentionsPersona("@a-kai 在吗", { personaId: 1, name: "Akai", aliases: ["A-Kai"] })).toBe(true);
+    expect(mentionsPersona("在吗", { personaId: 1, name: "Xiaoman" })).toBe(false);
+    // An unmeasured persona called by a lower-case handle still answers.
+    const members: GroupMember[] = [{ personaId: 1, name: "Xiaoman", group: null }];
+    expect(decideGroupTurns({ members, userText: "@xiaoman 来", seed: "case" })).toHaveLength(1);
+  });
+
   it("never speaks unmeasured, unless called", () => {
     const members: GroupMember[] = [
       { personaId: 1, name: "小满", group: null },

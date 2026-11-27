@@ -821,7 +821,7 @@ export const zhHant = {
       "experimentalTitle": "實驗功能",
       "experimentalNote": "還在試的功能。打開之後會多出對應的入口。",
       "groupChatSwitch": "群聊（實驗）",
-      "groupChatNote": "把幾個分身拉進一個群。它們只在你說話之後接話，不會自己聊起來。每說一句話最多會調用模型兩次。",
+      "groupChatNote": "把幾個分身拉進一個群。它們只在你說話之後接話，不會自己聊起來。每說一句話最多會調用模型四次。",
       "groupChatSaved": "群聊設置已保存。",
       "groupChatFailed": "群聊設置沒有保存。",
       "edit": "編輯資料",

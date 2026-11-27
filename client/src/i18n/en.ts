@@ -706,7 +706,7 @@ export const en = {
       experimentalTitle: "Experimental features",
       experimentalNote: "Things still being tried. Turning one on adds its entry to the app.",
       groupChatSwitch: "Group chat (experimental)",
-      groupChatNote: "Put several personas in one group. They only speak after you do, and never start talking to each other. One message calls the model at most twice.",
+      groupChatNote: "Put several personas in one group. They only speak after you do, and never start talking to each other. One message calls the model at most four times.",
       groupChatSaved: "The group-chat setting was saved.",
       groupChatFailed: "The group-chat setting was not saved.",
       edit: "Edit profile",

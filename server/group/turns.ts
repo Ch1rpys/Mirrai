@@ -112,7 +112,13 @@ export function mentionsPersona(text: string, member: GroupMember): boolean {
   const names = [member.name, ...(member.aliases ?? [])]
     .map((name) => (typeof name === "string" ? name.trim() : ""))
     .filter((name) => name.length > 0);
-  return names.some((name) => text.includes(name));
+  /**
+   * Latin names are written with whatever case the person uses: a room
+   * member called "Xiaoman" is called by `@xiaoman` too. Chinese has no
+   * case, so this only affects the Latin names.
+   */
+  const haystack = text.toLocaleLowerCase();
+  return names.some((name) => haystack.includes(name.toLocaleLowerCase()));
 }
 
 function clampRate(value: number): number {

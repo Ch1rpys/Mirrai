@@ -134,7 +134,7 @@ vi.mock("../_core/emotion", () => ({
 import { copy } from "@shared/copy";
 import { measureFingerprint } from "@shared/style-fingerprint";
 import { runConversation } from "./service";
-import { executePlan, planTurn } from "./generate";
+import { executePlan, fingerprintCoreForTurn, planTurn } from "./generate";
 import { layerOverridesForEval, runEval } from "../eval/run";
 import type { LLMProvider } from "../llm/types";
 
@@ -353,6 +353,70 @@ describe("the shared generation path", () => {
     expect(JSON.stringify(chatMessages)).toContain(HELD_OUT);
     expect(JSON.stringify(evalMessages)).not.toContain(HELD_OUT);
     expect(withoutHeldOutExemplar(chatMessages)).toEqual(evalMessages);
+  });
+
+  it("puts the group instruction and the named room lines into the model messages (C9.8)", async () => {
+    const groupOverlay = [
+      "这是一个群。群里有：小满、阿凯。",
+      "阿树 是真人；其他成员和你一样，是按记录重建的分身，他们说的话不代表真人。只替你自己说话。",
+    ].join("");
+    const plan = await planTurn({
+      persona: persona(),
+      userId: 1,
+      userMessage: "今天好累",
+      history: [
+        { role: "user", content: "阿树：在吗" },
+        { role: "assistant", content: "在的呀" },
+        { role: "user", content: "阿凯：我也在" },
+        { role: "user", content: "阿树：今天好累" },
+      ],
+      providedHistoryOnly: true,
+      groupOverlay,
+      now: NOW,
+      locale: "zh",
+      seed: "group:1:1",
+    } as never);
+    const system = String(plan.messages.find((message) => message.role === "system")?.content ?? "");
+    // The instruction is in the system prompt, before any fenced material.
+    expect(system).toContain(groupOverlay);
+    expect(system.indexOf(groupOverlay)).toBeLessThan(system.indexOf("<persona_data>"));
+    const userLines = plan.messages
+      .filter((message) => message.role === "user")
+      .map((message) => String(message.content))
+      .join("\n");
+    expect(userLines).toContain("阿树：在吗");
+    expect(userLines).toContain("阿凯：我也在");
+    // Its own line is still the assistant side.
+    expect(plan.messages.some(
+      (message) => message.role === "assistant" && String(message.content) === "在的呀",
+    )).toBe(true);
+  });
+
+  it("projects from the group's public fingerprint when measured, the stored one otherwise (C9.8)", () => {
+    const stored = { samples: 30, endings: { period: 0.1 } } as never;
+    const publicFp = { samples: 20, endings: { period: 0.2 } } as never;
+    const withProfile = persona();
+    withProfile.styleProfile = {
+      version: 1,
+      measuredAt: "2026-01-01T00:00:00.000Z",
+      recordsVersion: "10:10",
+      fingerprint: stored,
+    };
+    // No group surface: the pair's own fingerprint stands.
+    expect(fingerprintCoreForTurn({ persona: withProfile } as never)).toEqual(stored);
+    // In a room with a measured public surface, that surface wins.
+    expect(fingerprintCoreForTurn({
+      persona: withProfile,
+      groupStyle: { fingerprint: publicFp },
+    } as never)).toEqual(publicFp);
+    // Nothing measured at all: no projection rather than an invented one.
+    expect(fingerprintCoreForTurn({ persona: persona() } as never)).toBeNull();
+    // A present-but-broken public fingerprint projects nothing rather
+    // than silently using the one-to-one surface in a room.
+    expect(fingerprintCoreForTurn({
+      persona: withProfile,
+      groupStyle: { fingerprint: { samples: 0 } as never },
+    } as never)).toBeNull();
   });
 
   it("turns action sampling off with --without act", async () => {

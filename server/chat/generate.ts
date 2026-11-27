@@ -1144,7 +1144,7 @@ function actClusterLinesForTurn(
   return pickActClusterLines(clusters, rng);
 }
 
-function fingerprintCoreForTurn(input: TurnInput): StyleFingerprintCore | null {
+export function fingerprintCoreForTurn(input: TurnInput): StyleFingerprintCore | null {
   /**
    * A group turn projects from the public surface when there is one
    * (C9.8): how the person writes in a room is not how they write to one

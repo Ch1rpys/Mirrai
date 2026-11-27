@@ -707,7 +707,7 @@ export const zh = {
       experimentalTitle: "实验功能",
       experimentalNote: "还在试的功能。打开之后会多出对应的入口。",
       groupChatSwitch: "群聊（实验）",
-      groupChatNote: "把几个分身拉进一个群。它们只在你说话之后接话，不会自己聊起来。每说一句话最多会调用模型两次。",
+      groupChatNote: "把几个分身拉进一个群。它们只在你说话之后接话，不会自己聊起来。每说一句话最多会调用模型四次。",
       groupChatSaved: "群聊设置已保存。",
       groupChatFailed: "群聊设置没有保存。",
       edit: "编辑资料",

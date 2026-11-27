@@ -189,7 +189,7 @@ describe("composeGroupReply", () => {
     expect(io.rerank).toBe(false);
   });
 
-  it("falls back to the stored fingerprint when there is no public one", async () => {
+  it("passes no group fingerprint when there is no public one, so the executor falls back", async () => {
     const bare = persona({ styleProfile: { version: 1, measuredAt: "x", recordsVersion: "1:1", fingerprint: publicFingerprint } } as unknown as Partial<Persona>);
     await composeGroupReply(params({ persona: bare }));
     const input = planTurn.mock.calls[0]![0] as Record<string, any>;

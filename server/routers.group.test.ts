@@ -223,7 +223,11 @@ describe("sending one line", () => {
     const result = await caller().send({ roomId: 3, text: "今天好累" });
     expect(result.crisis).toBeNull();
     expect(result.userMessage.content).toBe("今天好累");
+    // One generation per persona that was chosen to answer. `composeReply`
+    // is the shape of that one generation; the provider is called inside
+    // it exactly once (`server/group/reply.test.ts` pins mode/rerank).
     expect(composeReply.mock.calls.length).toBe(result.replies.length);
+    expect(result.replies.length).toBeGreaterThan(0);
     expect(result.replies.length).toBeLessThanOrEqual(2);
     for (const reply of result.replies) {
       expect(reply.content).toBe("在的呀");
@@ -278,14 +282,6 @@ describe("sending one line", () => {
     });
   });
 
-  it("never touches the pair's own write path", async () => {
-    await caller().send({ roomId: 3, text: "今天好累" });
-    const db = await import("./db");
-    expect(db.createMessage).not.toHaveBeenCalled();
-    expect(db.createMemory).not.toHaveBeenCalled();
-    expect(db.updatePersona).not.toHaveBeenCalled();
-    expect(db.incrementChatCount).not.toHaveBeenCalled();
-  });
 });
 
 describe("history", () => {
@@ -377,9 +373,12 @@ describe("the group code itself", () => {
     const sources = files
       .map((file) => readFileSync(path.join(root, file), "utf-8"))
       .join("\n");
-    // The pair's own writes, memory extraction and the state machines are
-    // not reachable from the group code. The lines only go to
-    // `group_messages` through `createGroupMessage`.
+    /**
+     * The pair's own writes, memory extraction, the state machines and any
+     * self-scheduling are not reachable from the group code: the lines
+     * only go to `group_messages` through `createGroupMessage`, and the
+     * next round starts with the user's next message, never a timer.
+     */
     for (const forbidden of [
       "createMessage(",
       "createMemory(",
@@ -391,6 +390,12 @@ describe("the group code itself", () => {
       "createEmotionSnapshot(",
       "runConversation(",
       "importRecords(",
+      "setTimeout(",
+      "setInterval(",
+      "setImmediate(",
+      "queueMicrotask(",
+      "createLetter",
+      "pushToUser(",
     ]) {
       expect(sources, `group code must not contain ${forbidden}`).not.toContain(forbidden);
     }
