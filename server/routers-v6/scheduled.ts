@@ -165,7 +165,9 @@ export const scheduledRouter = router({
     .mutation(async ({ ctx, input }) => {
       const item = await getScheduledItem(input.id, ctx.user.id);
       if (!item) throw new TRPCError({ code: "NOT_FOUND" });
-      const cancelled = await cancelScheduledItem(input.id, ctx.user.id);
+      // The user called it off themselves (C5.3): the mailbox must not
+      // say the persona could not talk that day.
+      const cancelled = await cancelScheduledItem(input.id, ctx.user.id, "user");
       if (!cancelled) {
         throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "scheduled.alreadyDone") });
       }

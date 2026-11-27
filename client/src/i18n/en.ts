@@ -2436,6 +2436,7 @@ export const en = {
     openCapsule: "Open",
     capsuleFrom: "Left for you by {{name}} on {{date}}",
     upcomingLine: "{{name}} · {{date}}",
+    cancelUpcoming: "Cancel",
     personaLine: "{{name}} replied",
   },
   prosody: {
@@ -3404,6 +3405,7 @@ export const en = {
     reasonAsleep: "{{name}} was asleep by then",
     reasonSealed: "{{name}} was sealed by then",
     reasonClosed: "chat was closed that day",
+    reasonUser: "you called it off",
     reasonDeleted: "{{name}} was gone by then",
     open: "Open",
     close: "Put it away",

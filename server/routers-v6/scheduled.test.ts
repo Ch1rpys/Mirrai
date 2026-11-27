@@ -173,6 +173,9 @@ describe("scheduled items (C5.3)", () => {
     await expect(
       appRouter.createCaller(ctxFor(1)).scheduled.cancel({ id: 7 }),
     ).resolves.toEqual({ success: true });
+    // The user called it off themselves; the mailbox must not say the
+    // persona could not talk that day (C5.3).
+    expect(cancelScheduledItem).toHaveBeenCalledWith(7, 1, "user");
     cancelScheduledItem.mockResolvedValue(false);
     await expect(
       appRouter.createCaller(ctxFor(1)).scheduled.cancel({ id: 7 }),

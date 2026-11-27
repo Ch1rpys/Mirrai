@@ -2453,6 +2453,7 @@ export const zh = {
     openCapsule: "打开",
     capsuleFrom: "{{name}} 在 {{date}} 留给你的",
     upcomingLine: "{{name}} 会在 {{date}} 开口",
+    cancelUpcoming: "取消",
     personaLine: "{{name}} 回了",
   },
   prosody: {
@@ -3420,6 +3421,7 @@ export const zh = {
     reasonAsleep: "{{name}} 那时已经休眠了",
     reasonSealed: "{{name}} 那时是封存状态",
     reasonClosed: "那天不能聊",
+    reasonUser: "你自己取消了",
     reasonDeleted: "{{name}} 那时已经不在了",
     open: "打开",
     close: "收起来",

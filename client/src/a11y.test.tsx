@@ -602,6 +602,7 @@ vi.mock("@/lib/trpc", () => ({
       list: { useQuery: () => ({ data: { items: [] }, isError: false }) },
       create: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       markOpened: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      cancel: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
     },
     mark: {
       list: { useQuery: () => ({ data: { marks: [], maxPins: 3 } }) },

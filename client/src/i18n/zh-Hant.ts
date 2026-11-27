@@ -2425,6 +2425,7 @@ export const zhHant = {
     "openCapsule": "打開",
     "capsuleFrom": "{{name}} 在 {{date}} 留給你的",
     "upcomingLine": "{{name}} 會在 {{date}} 開口",
+    "cancelUpcoming": "取消",
     "personaLine": "{{name}} 回了"
   },
   "prosody": {
@@ -3354,6 +3355,7 @@ export const zhHant = {
     "reasonAsleep": "{{name}} 那時已經休眠了",
     "reasonSealed": "{{name}} 那時是封存狀態",
     "reasonClosed": "那天不能聊",
+    "reasonUser": "你自己取消了",
     "reasonDeleted": "{{name}} 那時已經不在了",
     "open": "打開",
     "close": "收起來",

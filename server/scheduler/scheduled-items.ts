@@ -27,6 +27,29 @@ export interface ScheduledSweepResult {
 }
 
 /**
+ * Records that a due item's words are a crisis line (C5.3).
+ *
+ * The check is asked at creation and again at delivery — the words are
+ * the user's own, and the manual asks both. Only the "message" branch
+ * had it: a capsule or a letter written around the same time went
+ * through without the event that the rest of the app reads.
+ */
+async function recordDeliveryCrisis(item: {
+  userId: number;
+  body: string;
+}, personaId: number): Promise<boolean> {
+  if (!detectCrisis(item.body).crisis) return false;
+  await db.createSafetyEvent({
+    userId: item.userId,
+    personaId,
+    type: "crisis",
+    severity: "critical",
+  }).catch((error: unknown) =>
+    console.warn("[Safety] Failed to record the crisis event:", error));
+  return true;
+}
+
+/**
  * Delivers every item whose day has come.
  *
  * `now` is a parameter so the tests can move the clock; the scheduler
@@ -178,6 +201,7 @@ export async function sweepScheduledItems(
     if (item.kind === "capsule") {
       // Nothing leaves the app: the body becomes readable in the letter
       // box, and only from the day onwards.
+      await recordDeliveryCrisis(item, persona.id);
       await db.finishScheduledItem(item.id, item.userId, "delivered", { at: now });
       delivered += 1;
       continue;
@@ -186,6 +210,7 @@ export async function sweepScheduledItems(
     const locale = user?.locale === "en" ? "en" : "zh";
 
     if (item.kind === "letter") {
+      await recordDeliveryCrisis(item, persona.id);
       try {
         const replyAt = resolveReplyAt({ now });
         await db.createLetterWithMessage(
@@ -225,16 +250,7 @@ export async function sweepScheduledItems(
 
     // The line was written earlier; the app reads it once more before it
     // goes in, the same way it reads a letter at the moment of writing.
-    const crisis = detectCrisis(item.body);
-    if (crisis.crisis) {
-      await db.createSafetyEvent({
-        userId: item.userId,
-        personaId: persona.id,
-        type: "crisis",
-        severity: "critical",
-      }).catch((error: unknown) =>
-        console.warn("[Safety] Failed to record the crisis event:", error));
-    }
+    await recordDeliveryCrisis(item, persona.id);
 
     let text = "";
     let failed = false;

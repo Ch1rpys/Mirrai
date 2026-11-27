@@ -72,6 +72,12 @@ export default function Letters() {
       utils.letter.unreadCount.invalidate();
     },
   });
+  const cancelUpcoming = trpc.scheduled.cancel.useMutation({
+    onSuccess: () => {
+      utils.letter.inbox.invalidate();
+      utils.letter.unreadCount.invalidate();
+    },
+  });
   /** Which letter is open on the page, and which capsule. */
   const [openLetter, setOpenLetter] = useState<number | null>(null);
   const [openCapsule, setOpenCapsule] = useState<number | null>(null);
@@ -310,6 +316,16 @@ export default function Letters() {
                   {preview(row.body, 140)}
                 </p>
               )}
+              {/* The mailbox lists what has not happened yet; this is
+                  where the user calls it off (C5.3). */}
+              <button
+                type="button"
+                className="text-xs text-muted-foreground underline"
+                onClick={() => cancelUpcoming.mutate({ id: row.id })}
+                disabled={cancelUpcoming.isPending}
+              >
+                {t("mailbox.cancelUpcoming")}
+              </button>
             </li>
           ))}
         </ul>

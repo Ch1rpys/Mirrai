@@ -194,6 +194,34 @@ describe("delivering what was scheduled (C5.3)", () => {
     expect(runConversation).toHaveBeenCalledTimes(1);
   });
 
+  it("reads a scheduled capsule for crisis language at delivery too (C5.3)", async () => {
+    // The delivery sweep used to check only the "message" branch. The
+    // three kinds are all the user's own words, and the manual asks for
+    // the check at creation *and* at delivery.
+    listDueScheduledItems.mockResolvedValue([item({ kind: "capsule", body: "我不想活了" })]);
+    await sweepScheduledItems(NOW);
+    expect(createSafetyEvent).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 1,
+      personaId: 1,
+      type: "crisis",
+    }));
+    // A capsule has nobody to hurt: it is still delivered to its day.
+    expect(finishScheduledItem).toHaveBeenCalledWith(7, 1, "delivered", { at: NOW });
+  });
+
+  it("reads a scheduled letter for crisis language at delivery too (C5.3)", async () => {
+    listDueScheduledItems.mockResolvedValue([item({ kind: "letter", body: "我不想活了" })]);
+    await sweepScheduledItems(NOW);
+    expect(createSafetyEvent).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 1,
+      personaId: 1,
+      type: "crisis",
+    }));
+    // The letter still enters the flow: its reply path answers crisis
+    // letters with the support response, not an in-character answer.
+    expect(createLetterWithMessage).toHaveBeenCalled();
+  });
+
   it("releases the claim when the turn fails, so a later sweep retries", async () => {
     runConversation.mockImplementation(async function* () {
       throw new Error("the provider is down");

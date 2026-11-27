@@ -78,6 +78,7 @@ export default function ScheduledList({
       asleep: "scheduled.reasonAsleep",
       sealed: "scheduled.reasonSealed",
       closed: "scheduled.reasonClosed",
+      user: "scheduled.reasonUser",
       deleted: "scheduled.reasonDeleted",
     };
     return t((map[reason ?? ""] ?? "scheduled.reasonClosed") as never, {

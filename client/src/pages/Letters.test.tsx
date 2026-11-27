@@ -8,6 +8,8 @@ const inboxState: { value: any } = { value: undefined };
 const refetch = vi.fn();
 const markRead = vi.fn();
 const markOpened = vi.fn();
+const cancelScheduled = vi.fn();
+const invalidateInbox = vi.fn();
 
 vi.mock("wouter", () => ({
   useLocation: () => ["/letters", vi.fn()],
@@ -30,7 +32,7 @@ vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({
       letter: {
-        inbox: { invalidate: vi.fn() },
+        inbox: { invalidate: invalidateInbox },
         unreadCount: { invalidate: vi.fn() },
       },
     }),
@@ -40,6 +42,13 @@ vi.mock("@/lib/trpc", () => ({
     },
     scheduled: {
       markOpened: { useMutation: () => ({ mutate: markOpened }) },
+      cancel: { useMutation: (options?: { onSuccess?: () => void }) => ({
+        mutate: (input: { id: number }) => {
+          cancelScheduled(input);
+          options?.onSuccess?.();
+        },
+        isPending: false,
+      }) },
     },
   },
 }));
@@ -62,6 +71,35 @@ const letter = (overrides: Record<string, unknown>) => ({
 });
 
 describe("the mailbox page", () => {
+  it("can cancel something that has not happened yet (C5.3)", async () => {
+    inboxState.value = {
+      data: {
+        received: [],
+        waiting: [],
+        kept: [],
+        capsules: [],
+        upcoming: [{
+          id: 7,
+          personaId: 5,
+          kind: "message",
+          body: "到那天再说",
+          dueAt: "2026-04-01T10:00:00.000Z",
+          status: "scheduled",
+          personaName: "小满",
+        }],
+      },
+      isLoading: false,
+      isError: false,
+    };
+    render(<Letters />);
+    expect(screen.getByText(/到那天再说/)).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: translate("zh", "mailbox.cancelUpcoming") }),
+    );
+    expect(cancelScheduled).toHaveBeenCalledWith({ id: 7 });
+    expect(invalidateInbox).toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     inboxState.value = {
