@@ -272,6 +272,36 @@ export function filterHarm<T extends { content?: string | null; role?: string }>
   });
 }
 
+/**
+ * The harm report without its evidence lines (C10.1).
+ *
+ * The snippets are the hurtful sentences themselves, kept so the notice
+ * can show the user what the app found. They are never part of an export:
+ * an exported file can be sent anywhere, while the notice is on this
+ * screen. The decision and the counts stay — they are what the next
+ * distillation reads.
+ */
+export function harmReportForExport(value: unknown): HarmReport | null {
+  const report = normalizeHarmReport(value);
+  if (!report) return null;
+  return {
+    ...report,
+    categories: report.categories.map(({ snippets: _snippets, ...row }) => row),
+  };
+}
+
+/** Persona data with the harm report's snippets removed, for an export. */
+export function personaDataForExport(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const data = { ...(value as Record<string, unknown>) };
+  if ("harmReport" in data) {
+    const report = harmReportForExport(data.harmReport);
+    if (report) data.harmReport = report;
+    else delete data.harmReport;
+  }
+  return data;
+}
+
 export function harmCount(report: HarmReport | null | undefined): number {
   if (!report) return 0;
   return report.categories.reduce((sum, row) => sum + row.count, 0);

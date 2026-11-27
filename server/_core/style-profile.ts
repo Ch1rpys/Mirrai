@@ -71,6 +71,15 @@ export async function measureStyleProfile(params: {
    * Distillation passes true after it has labelled.
    */
   force?: boolean;
+  /**
+   * Persona data to read instead of the row's own (C10.1).
+   *
+   * The first distillation runs before its own harm decision is stored,
+   * so the measurement would read an empty report and learn the voice
+   * from the lines the notice is asking about. The pipeline hands the
+   * decision in instead.
+   */
+  personaDataOverride?: Record<string, unknown>;
 }): Promise<StyleProfile> {
   const { personaId, userId, now = new Date(), force = false } = params;
   const recordsVersion = await getRecordsVersion(personaId, userId);
@@ -159,10 +168,12 @@ export async function measureStyleProfile(params: {
   const group = measureGroup(groupRows);
   const persona = await getPersonaById(personaId, userId);
   const user = await getUserById(userId);
-  const rawData =
-    persona?.personaData && typeof persona.personaData === "object" && !Array.isArray(persona.personaData)
+  const rawData = {
+    ...(persona?.personaData && typeof persona.personaData === "object" && !Array.isArray(persona.personaData)
       ? (persona.personaData as Record<string, unknown>)
-      : {};
+      : {}),
+    ...(params.personaDataOverride ?? {}),
+  };
   const nickname = typeof rawData.nickname === "string" ? rawData.nickname.trim() : "";
   const userName = typeof user?.name === "string" ? user.name.trim() : "";
   const personaName = typeof persona?.name === "string" ? persona.name.trim() : "";
@@ -200,8 +211,18 @@ export async function measureStyleProfile(params: {
     if (userFingerprint) userSide.fingerprint = userFingerprint;
   }
   const locale = user?.locale === "en" ? "en" : "zh";
+  /**
+   * The freshly measured stickers and delay, before the draft rules (B3.6).
+   *
+   * The draft compares one state with the others, so it has to read this
+   * run's numbers. It read the last stored profile instead: on a first
+   * run there was nothing, and on a re-run the drafts described the
+   * previous measurement.
+   */
+  const replyDelay = measureReplyDelay(rows, sessionZone ?? "UTC") ?? undefined;
+  const stickers = measureStickers(rows) ?? undefined;
   const drafts = draftImperfection(
-    { fingerprint, stickers: current?.stickers, replyDelay: current?.replyDelay },
+    { fingerprint, stickers, replyDelay },
     { locale, rows },
   );
   const minedRituals = mineRituals(turnsFromRecords(rows));
@@ -224,12 +245,10 @@ export async function measureStyleProfile(params: {
   const conflict = summarizeConflicts(conflictEpisodes, rawData);
   const triggers = groupConflictTriggers(conflictEpisodes);
   const sessions = measureSessions(labelledScenes, sessionZone);
-  const replyDelay = measureReplyDelay(rows, sessionZone ?? "UTC") ?? undefined;
   const routine = measureRoutine(rows, sessionZone ?? "UTC") ?? undefined;
   const typing = measureTyping(rows, replyDelay) ?? undefined;
   const quirks = measureQuirks(rows);
   const doubleText = measureDoubleText(rows, rawData) ?? undefined;
-  const stickers = measureStickers(rows) ?? undefined;
   const voice = measureVoice(rows) ?? undefined;
   const calls = measureCalls(rows, sessionZone) ?? undefined;
   const photos = measurePhotos(rows) ?? undefined;

@@ -247,6 +247,44 @@ describe("the v5 seam on a named transcript", () => {
     expect(requests).not.toContain("暂无聊天记录");
   }, 60_000);
 
+  it("filters the first distillation's harmful lines out of the measured style (C10.1)", async () => {
+    // On the first run the persona data has no harm decision yet, and the
+    // measurement read that stored data — so the sample pool, the act
+    // clusters and the conflict lines were measured from the very lines
+    // the notice asks the user about. The decision from this run has to
+    // reach the measurement.
+    const harmful = buildXiaomanRecords({ withHarm: true }).map((row) => ({
+      id: row.id,
+      role: row.role,
+      content: row.content,
+      timestamp: row.timestamp,
+      kind: row.kind,
+    }));
+    // The harm stage asks the model to confirm each candidate; the
+    // default stub answers every prompt with the persona JSON, which is
+    // not a confirmation. Answer this one as the model really would.
+    const defaultInvoke = invoke.getMockImplementation();
+    invoke.mockImplementation(async (request: unknown) => {
+      const blob = JSON.stringify(request);
+      if (blob.includes("只看这一句本身")) {
+        return JSON.stringify([0, 1, 2, 3, 4].map((i) => ({ i, harm: true })));
+      }
+      return defaultInvoke ? defaultInvoke(request) : PERSONA_JSON;
+    });
+    await runSkillPipeline({
+      ...baseInput,
+      chatContent: "",
+      records: harmful,
+    });
+    expect(measureStyleProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        personaDataOverride: expect.objectContaining({
+          harmReport: expect.objectContaining({ decision: expect.any(String) }),
+        }),
+      }),
+    );
+  }, 60_000);
+
   it("mines the same layers from structured records, with the fixture's own times", async () => {
     await runSkillPipeline({
       ...baseInput,

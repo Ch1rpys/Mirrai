@@ -45,6 +45,7 @@ import {
 } from "../_core/bundle";
 import { schedulePersonaEmbeddings } from "../chat/embeddings";
 import { measureStyleProfile } from "../_core/style-profile";
+import { personaDataForExport } from "@shared/harm";
 
 export interface BundleInclude {
   memories: boolean;
@@ -381,7 +382,8 @@ export async function exportPersonaBundle(
     togetherTo: (persona as { togetherTo?: string | null }).togetherTo ?? null,
     timezone: (persona as { timezone?: string | null }).timezone ?? null,
     characterFamily: (persona as { characterFamily?: string | null }).characterFamily ?? null,
-    personaData: persona.personaData ?? {},
+    // The harm notice's evidence lines are not part of an export (C10.1).
+    personaData: personaDataForExport(persona.personaData),
     settings: sanitizedSettings((persona as { settings?: unknown }).settings),
   };
 

@@ -80,6 +80,17 @@ describe("persona.decideHarm", () => {
     expect(patch?.personaData?.harmReport?.decision).toBe("keep");
   });
 
+  it("records the soften choice too (C10.1)", async () => {
+    await appRouter.createCaller(ctxFor(1)).persona.decideHarm({
+      id: 5,
+      decision: "soften",
+    });
+    const patch = updatePersona.mock.calls[0]?.[2] as {
+      personaData?: { harmReport?: { decision: string } };
+    };
+    expect(patch?.personaData?.harmReport?.decision).toBe("soften");
+  });
+
   it("writes under the persona's lock", () => {
     const at = SOURCE.indexOf("decideHarm: protectedProcedure");
     const lockAt = SOURCE.indexOf("withPersonaDataLock(input.id, async () => {", at);

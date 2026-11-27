@@ -6,6 +6,9 @@ import {
   filterHarm,
   findHarmCandidates,
   isHarmfulLine,
+  personaDataForExport,
+  shouldFilterHarm,
+  shouldInstructHarm,
 } from "./harm";
 import { buildXiaomanRecords } from "../server/test-fixtures/xiaoman";
 
@@ -71,5 +74,59 @@ describe("filterHarm", () => {
     for (const id of five) {
       expect(kept).toContain(id);
     }
+  });
+});
+
+describe("the soften decision (C10.1)", () => {
+  const lines = buildXiaomanRecords({ withHarm: true })
+    .filter((row) => row.role === "assistant" && row.kind === "text")
+    .map((row) => ({ id: row.id, content: row.content }));
+  const five = findHarmCandidates(buildXiaomanRecords({ withHarm: true })).map((row) => row.recordId);
+  const report = {
+    categories: [{ kind: "belittle" as const, count: 5, examples: five.slice(0, 3) }],
+    decision: "soften" as const,
+  };
+
+  it("keeps the voice but drops the hurtful lines", () => {
+    // 「学语气，不学这些话」: the measurement still learns how the
+    // person talks, but the lines that hurt are not part of the voice
+    // it learns. That is the middle choice between keep and remove.
+    expect(shouldFilterHarm(report)).toBe(true);
+    const kept = filterHarm(lines, { harmReport: report }).map((row) => row.id);
+    for (const id of five) expect(kept).not.toContain(id);
+    expect(kept.length).toBeGreaterThan(0);
+    // Softening does not add a second instruction on top of the prompt.
+    expect(shouldInstructHarm(report)).toBe(false);
+  });
+});
+
+describe("persona data on its way out (C10.1)", () => {
+  const harmReport = {
+    categories: [{
+      kind: "belittle" as const,
+      count: 5,
+      examples: [1, 2, 3],
+      snippets: ["你就是个废物", "真没用"],
+    }],
+    decision: "remove" as const,
+  };
+
+  it("strips the evidence snippets but keeps the decision", () => {
+    const exported = personaDataForExport({ personality: "温柔", harmReport });
+    const report = exported.harmReport as { decision: string; categories: Array<{ count: number; examples: number[]; snippets?: string[] }> };
+    expect(report.decision).toBe("remove");
+    expect(report.categories[0]?.count).toBe(5);
+    expect(report.categories[0]?.examples).toEqual([1, 2, 3]);
+    // The quotes themselves are only ever shown in the card.
+    expect(JSON.stringify(exported)).not.toContain("你就是个废物");
+    expect(report.categories[0]?.snippets).toBeUndefined();
+  });
+
+  it("leaves the rest of the persona alone", () => {
+    expect(personaDataForExport({ personality: "温柔", nickname: "满满" })).toEqual({
+      personality: "温柔",
+      nickname: "满满",
+    });
+    expect(personaDataForExport(null)).toEqual({});
   });
 });

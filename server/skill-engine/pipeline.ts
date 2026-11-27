@@ -1949,7 +1949,20 @@ async function runSkillPipelineOnce(
      * change the records-version string, so a profile measured at
      * import would otherwise keep only `any`.
      */
-    await measureStyleProfile({ personaId, userId, force: true }).catch((e) =>
+    await measureStyleProfile({
+      personaId,
+      userId,
+      force: true,
+      /**
+       * The harm decision from this run, before it is stored (C10.1).
+       *
+       * Without it the first distillation measured the sample pool, the
+       * act clusters and the conflict lines from the same hurtful
+       * sentences the notice is asking the user about — the report exists
+       * only in this run's memory until the persona is written below.
+       */
+      ...(harmReport ? { personaDataOverride: { harmReport } } : {}),
+    }).catch((e) =>
       console.warn("[SkillEngine] The style profile could not be remade after labelling:", e.message),
     );
     if (input.mineRules !== false) {

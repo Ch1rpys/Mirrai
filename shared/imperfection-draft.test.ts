@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { buildXiaomanRecords } from "../server/test-fixtures/xiaoman";
 import { measureFingerprint, type FingerprintRow, type StyleFingerprint } from "./style-fingerprint";
 import { draftImperfection } from "./imperfection-draft";
+import { measureStickers } from "./sticker-stats";
+import { copy } from "./copy";
 
 function fixtureRows(): FingerprintRow[] {
   return buildXiaomanRecords().map((row, index) => ({
@@ -88,5 +90,24 @@ describe("draftImperfection", () => {
     );
     const distant = (drafts.distant ?? []).map((row) => row.text);
     expect(distant).toContain("回得慢，常常隔 10 分钟");
+  });
+});
+
+describe("the sticker draft (B3.6)", () => {
+  it("reads the measured sticker stats, so a state with no stickers gets a draft", () => {
+    // The measurement stores sticker rates as `stickers.byState[state].rate`;
+    // the draft read `stickers[state]` / `stickers.perState[state]`, which
+    // never exist — so 「{{name}} 不发表情包」 was never drafted, even for a
+    // state where they really never sent one.
+    const rows = fixtureRows();
+    const fingerprint = fixtureFingerprint();
+    const stickers = measureStickers(rows);
+    expect(stickers).not.toBeNull();
+    const drafts = draftImperfection(
+      { fingerprint, stickers },
+      { locale: "zh", rows },
+    );
+    const texts = Object.values(drafts).flat().map((draft) => draft.text);
+    expect(texts).toContain(copy("zh", "v6.imperfection.noSticker"));
   });
 });

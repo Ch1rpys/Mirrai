@@ -19,6 +19,7 @@ import {
   type UserMood,
   type RelationshipEventKind,
 } from "@shared/user-side";
+import { personaDataForExport } from "@shared/harm";
 
 /**
  * How many messages one persona's export carries.
@@ -220,7 +221,8 @@ export async function buildExportBundle(userId: number): Promise<ExportBundle | 
       togetherFrom: persona.togetherFrom,
       togetherTo: persona.togetherTo,
       emotionalState: persona.emotionalState,
-      personaData: persona.personaData,
+      // The harm notice's evidence lines stay on the notice (C10.1).
+      personaData: personaDataForExport(persona.personaData),
       graduationStatus: persona.graduationStatus,
       graduatedAt: persona.graduatedAt,
       farewellLetter: persona.farewellLetter,

@@ -1,4 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+
+const updateRecordLabels = vi.fn();
+vi.mock("../db", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  updateRecordLabels: (...args: unknown[]) => updateRecordLabels(...args),
+}));
+
 import { labelActsForRecords } from "./label-acts";
 
 function rounds(count: number, start = Date.parse("2023-03-01T12:00:00.000Z")) {
@@ -74,6 +81,40 @@ describe("labelling acts on a record", () => {
     });
     expect(second.calls).toBe(0);
     expect(invoke.mock.calls.length).toBe(before);
+  });
+
+  it("writes every label back to the record row (B1.4)", async () => {
+    // The write path had no test at all: every direct test ran with
+    // `write: false`, so "the label is on the row" was only ever shown
+    // for an in-memory array. The distillation calls this with
+    // `write: true`, and that is the path the per-state pools and the
+    // act profile read afterwards.
+    updateRecordLabels.mockReset();
+    updateRecordLabels.mockResolvedValue(true);
+    const records = rounds(2);
+    await labelActsForRecords({
+      personaId: 1,
+      userId: 1,
+      mode: "standard",
+      records,
+      write: true,
+      invoke: vi.fn(async (messages: unknown) => labelsFrom(messages)),
+    });
+    const assistantIds = records.filter((row) => row.role === "assistant").map((row) => row.id);
+    const userIds = new Set(records.filter((row) => row.role === "user").map((row) => row.id));
+    const writtenIds = updateRecordLabels.mock.calls.map((call) => call[0] as number);
+    const allIds = new Set(records.map((row) => row.id));
+    for (const id of assistantIds) expect(writtenIds).toContain(id);
+    // Both sides can carry an act label (the user's actions are read by
+    // B4.1), but nothing outside the record batch is written.
+    for (const id of writtenIds) expect(allIds.has(id)).toBe(true);
+    for (const call of updateRecordLabels.mock.calls) {
+      expect(call[1]).toBe(1);
+      expect(call[2]).toMatchObject({ act: expect.any(String) });
+    }
+    expect(updateRecordLabels.mock.calls.some(
+      (call) => (call[2] as { actSource?: string }).actSource === "model",
+    )).toBe(true);
   });
 
   it("fences the pair payload", async () => {

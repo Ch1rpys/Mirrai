@@ -340,7 +340,15 @@ function numericByState(
 ): number | null {
   const source = asRecord(value);
   if (!source) return null;
-  const byState = asRecord(source[state]) ?? asRecord(asRecord(source.perState)?.[state]);
+  /**
+   * The measured shape is `byState` (B7.1): `{ byState: { warm: {rate} } }`.
+   * The older `state` / `perState` lookups never matched a real
+   * measurement, so the sticker rules could not fire at all.
+   */
+  const byState =
+    asRecord(asRecord(source.byState)?.[state])
+    ?? asRecord(source[state])
+    ?? asRecord(asRecord(source.perState)?.[state]);
   if (!byState) return null;
   for (const key of keys) {
     const n = byState[key];
