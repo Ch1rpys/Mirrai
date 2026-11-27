@@ -356,6 +356,38 @@ describe("the shared generation path", () => {
     expect(withoutHeldOutExemplar(chatMessages)).toEqual(evalMessages);
   });
 
+  it("puts the rehearsal's retry instruction in the prompt only on the retry (C3.2)", async () => {
+    /**
+     * The room asks for a second line when the first one promised
+     * something. The instruction used to ride on `TurnInput.sceneOverlay`
+     * and stop there: the ordinary model branch never read it, so both
+     * generations were the same prompt and the "retry" was a re-roll of
+     * the same sentence.
+     */
+    const instruction = copy("zh", "rehearsal.regenerateInstruction");
+    const base = {
+      persona: persona(),
+      userId: 1,
+      userMessage: "对不起",
+      history: [{ role: "user" as const, content: "对不起" }],
+      now: NOW,
+      locale: "zh" as const,
+      seed: "rehearsal:1:5:acknowledge",
+      forcedAct: "acknowledge" as const,
+    };
+    const first = await planTurn(base);
+    const firstPrompt = String(first.messages[0]?.content ?? "");
+    expect(firstPrompt).not.toContain(instruction);
+
+    const retry = await planTurn({ ...base, sceneOverlay: instruction });
+    const retryPrompt = String(retry.messages[0]?.content ?? "");
+    expect(retryPrompt).toContain(instruction);
+    // An instruction, not material: it must sit outside the fence.
+    const unfenced = retryPrompt.replace(/<persona_data>[\s\S]*?<\/persona_data>/g, "");
+    expect(unfenced).toContain(instruction);
+    expect(retry.sampledAct).toBe("acknowledge");
+  });
+
   it("puts the group instruction and the named room lines into the model messages (C9.8)", async () => {
     const groupOverlay = [
       "这是一个群。群里有：小满、阿凯。",
@@ -515,6 +547,56 @@ describe("the shared generation path", () => {
     const headingAt = prompt.indexOf(heading);
     expect(actAt).toBeGreaterThanOrEqual(0);
     expect(headingAt).toBeGreaterThan(actAt);
+  });
+
+  it("narrows a normal chat turn's exemplars to the sampled act when the act clusters exist (B4.2)", async () => {
+    /**
+     * The manual's third step: when at least two of the candidates that
+     * pass the first threshold carry the sampled act, only those are
+     * used. The evaluation path had the flag; the conversation path
+     * retrieved its exemplars before the clusters were computed, so the
+     * flag never reached the retrieval and the narrowing was dead code
+     * on the path the user actually talks on.
+     */
+    getCollectedMessagesForPersona.mockResolvedValue([
+      { id: 201, role: "user", content: "你今天怎么样呀", timestamp: NOW },
+      { id: 202, role: "assistant", content: "还行吧", act: "acknowledge", timestamp: NOW },
+      { id: 203, role: "user", content: "你今天怎么样啦", timestamp: NOW },
+      { id: 204, role: "assistant", content: "你又来", act: "tease", timestamp: NOW },
+      { id: 205, role: "user", content: "你今天怎么啦", timestamp: NOW },
+      { id: 206, role: "assistant", content: "就嗯？", act: "tease", timestamp: NOW },
+    ]);
+    const common = {
+      userId: 1,
+      userMessage: "你今天怎么样呀",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+    };
+
+    const narrowed = await planTurn({
+      ...common,
+      persona: personaWithTeaseClusters(),
+      seed: "narrow:on",
+    });
+    const narrowedSent = JSON.stringify(narrowed.messages);
+    expect(narrowed.sampledAct).toBe("tease");
+    expect(narrowed.layersUsed).toContain("actClusters");
+    // The acknowledge turn wins the literal first term; only the
+    // narrowing keeps it out of what the model is sent.
+    expect(narrowedSent).not.toContain("还行吧");
+    expect(narrowedSent).toContain("就嗯？");
+
+    const plain = persona();
+    plain.personaData = {
+      personality: "温柔",
+      actProfile: { samples: 80, unconditional: { tease: 80 }, buckets: [] },
+    };
+    const unnarrowed = await planTurn({ ...common, persona: plain, seed: "narrow:on" });
+    const unnarrowedSent = JSON.stringify(unnarrowed.messages);
+    expect(unnarrowed.sampledAct).toBe("tease");
+    expect(unnarrowed.layersUsed).not.toContain("actClusters");
+    expect(unnarrowedSent).toContain("还行吧");
   });
 
   it("omits the cluster block with --without actClusters", async () => {
@@ -2274,6 +2356,37 @@ describe("persona sampling on the reply", () => {
     expect(plan.sampledAct).not.toBe("repair");
     const prompt = String(plan.messages[0]?.content ?? "");
     expect(prompt).not.toContain(copy("zh", "prompt.repairLinesHeading"));
+  });
+
+  it("lets a caller-forced act win over the conflict repair (C3.2)", async () => {
+    /**
+     * The manual's acceptance: every model call's plan has
+     * `sampledAct === forcedAct` when the caller forced it. The record's
+     * long-freeze repair overwrote the forced act in the very next line,
+     * so the rehearsal card named one act and the model played another.
+     */
+    const frozen = personaWithConflict("distant", 9 * 60);
+    const base = {
+      persona: frozen,
+      userId: 1,
+      userMessage: "吃饭了吗",
+      history: CONTEXT,
+      now: NOW,
+      locale: "zh" as const,
+      seed: "conflict:forced",
+    };
+    // The same turn without a forced act is still the repair — the
+    // conflict material really is live, so the forced run is the only
+    // difference between the two.
+    const repaired = await planTurn(base);
+    expect(repaired.sampledAct).toBe("repair");
+
+    const forced = await planTurn({ ...base, forcedAct: "tease" });
+    expect(forced.sampledAct).toBe("tease");
+    expect(forced.kind).toBe("model");
+    expect(String(forced.messages[0]?.content ?? "")).not.toContain(
+      copy("zh", "prompt.repairLinesHeading"),
+    );
   });
 
   it("picks the same freeze length twice for the same emotionalStateSince", async () => {

@@ -116,6 +116,15 @@ export interface TurnInput {
   locale: Locale;
   periodId?: string | null;
   quotedSection?: string;
+  /**
+   * An appended instruction from the app for this one generation (C3.2).
+   *
+   * The rehearsal room asks again with a firm line when the first try
+   * promised something on the real person's behalf. It is application
+   * copy — not the record and not the active scene's wording — so it
+   * goes into the system prompt as an instruction, outside every fence.
+   * The manual calls the generation it triggers "带一句追加的指令重生成".
+   */
   sceneOverlay?: string | null;
   /**
    * The group-chat instruction (C9.8).
@@ -280,6 +289,7 @@ async function clockZoneFor(input: TurnInput): Promise<string | null> {
 async function exemplarsForTurn(
   input: TurnInput,
   sampledAct: SpeechAct | null,
+  restrictToSampledAct = false,
 ): Promise<Exemplar[]> {
   const period = periodForTurn(input.persona, input.periodId ?? null);
   const scope = resolveRecordScope(input.persona);
@@ -291,6 +301,14 @@ async function exemplarsForTurn(
     excludeTexts: input.exclude?.texts,
     personaData: input.persona.personaData as { harmReport?: never } | null,
     sampledAct,
+    /**
+     * The act-cluster layer narrows the retrieval (B4.2 做法 3).
+     *
+     * It is computed by the caller, before this read: whether there is
+     * a cluster block for the sampled act decides whether the exemplars
+     * are restricted to turns carrying that act.
+     */
+    restrictToSampledAct,
     emotion: input.actCondition?.emotion ?? input.persona.emotionalState ?? null,
     now: input.now,
     timeZone: (input.persona as { timezone?: string | null }).timezone ?? null,
@@ -365,7 +383,21 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     : null;
   let sampledAct = input.forcedAct
     ?? (sampled?.act === "silence" ? null : sampled?.act ?? null);
-  const conflictTurn = conflictMaterialForTurn(input, layers.emotionInertia);
+  /**
+   * A caller-forced act is the final decision (C3.2).
+   *
+   * The rehearsal room picks the act itself — one of the record's own
+   * acts — and the acceptance is that every model call's plan carries
+   * `sampledAct === forcedAct`. The record's long-freeze repair used to
+   * overwrite it one line later: the card said "tease" and the model
+   * played "repair". A forced act also means the turn is a model turn
+   * for that act, so the repair material from a choice this caller did
+   * not make is dropped as well.
+   */
+  const detectedConflictTurn = conflictMaterialForTurn(input, layers.emotionInertia);
+  const conflictTurn = input.forcedAct && detectedConflictTurn.forceRepair
+    ? { ...detectedConflictTurn, forceRepair: false, repairLines: [] }
+    : detectedConflictTurn;
   if (conflictTurn.forceRepair) sampledAct = "repair";
   const closingTurn = await closingForTurn(input, layers.closing);
   const inSessionShare = inSessionShareForTurn(input, layers.act, clockZone);
@@ -409,7 +441,12 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     };
   }
 
-  const ritual = conflictTurn.forceRepair
+  /**
+   * The table's ritual reply is a fixed line for a situation, not a
+   * reply in the forced act. A caller that chose the act needs the
+   * model to play that act, so the table is skipped (C3.2).
+   */
+  const ritual = conflictTurn.forceRepair || input.forcedAct
     ? null
     : await ritualPlanForTurn(input, layers.ritual, rng);
   if (ritual) {
@@ -441,8 +478,23 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     };
   }
 
+  /**
+   * The act clusters are worked out before the exemplars now (B4.2).
+   *
+   * Whether this turn has a cluster block decides its exemplar
+   * retrieval: when at least two candidates carry the sampled act, only
+   * those are used. The clusters used to be computed after the
+   * exemplars were fetched, and the conversation path's retrieval never
+   * received the restriction at all — the narrowing the manual asks for
+   * was dead code on the path the user actually talks on.
+   *
+   * The random draws are unchanged: nothing between here and the old
+   * position consumed the turn's `rng`.
+   */
+  const clusterLines = actClusterLinesForTurn(layers.actClusters, sampledAct, input, rng);
+  const clustersOn = clusterLines.length > 0;
   const turnExemplars = layers.exemplars || layers.seededTurns
-    ? await exemplarsForTurn(input, sampledAct)
+    ? await exemplarsForTurn(input, sampledAct, clustersOn)
     : [];
   const seeds = await seedPlanForTurn(
     input,
@@ -483,8 +535,6 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
   const reminderOn = reminder.lines.length > 0 || reminder.issues.length > 0;
   const twoStageOn = Boolean(layers.twoStage);
   const factRewriteOn = Boolean(layers.factRewrite);
-  const clusterLines = actClusterLinesForTurn(layers.actClusters, sampledAct, input, rng);
-  const clustersOn = clusterLines.length > 0;
   const emotionInertiaOn = Boolean(
     layers.emotionInertia &&
       (normalizeEmotionDynamics(effectiveStyleProfile(input.persona).emotionDynamics) ||
@@ -503,7 +553,11 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
       sampledAct,
       periodId: input.periodId ?? null,
       quotedSection: input.quotedSection,
-      sceneOverlay: input.sceneOverlay ?? null,
+      /**
+       * The rehearsal's appended instruction (C3.2) is application copy
+       * and goes in as an instruction, not as scene material.
+       */
+      guardInstruction: input.sceneOverlay ?? null,
       groupOverlay: input.groupOverlay ?? null,
       summarySection: input.summarySection,
       memories: input.memories as never,
@@ -607,6 +661,14 @@ export async function planTurn(input: TurnInput): Promise<TurnPlan> {
     extraConfig: input.extraConfig,
     replyToId: input.replyToId,
     quotedRecordIds: input.quotedRecordIds,
+    /**
+     * The rehearsal's appended instruction (C3.2).
+     *
+     * Without this the "retry" generated the very same prompt again —
+     * same materials, same angle — so it could not obey an instruction
+     * it never saw.
+     */
+    sceneOverlay: input.sceneOverlay ?? null,
     sampledAct,
     periodId: input.periodId ?? null,
     excludeExemplarIds: seeds.excludeIds,
@@ -927,7 +989,12 @@ async function plannerMessagesForTurn(
     sampledAct,
     periodId: input.periodId ?? null,
     quotedSection: undefined,
-    sceneOverlay: null,
+    /**
+     * The same appended instruction the reply carries (C3.2): the
+     * planner decides the gist, and a gist that promises on the
+     * person's behalf is the failure the instruction exists to prevent.
+     */
+    guardInstruction: input.sceneOverlay ?? null,
     summarySection: "",
     memories: input.memories as never,
     promptMode: "planner",

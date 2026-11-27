@@ -141,11 +141,24 @@ describe("rehearsal.run", () => {
     expect(planTurn).toHaveBeenCalledTimes(2);
     expect(planTurn.mock.calls[0][0].forcedAct).toBe("acknowledge");
     expect(planTurn.mock.calls[1][0].forcedAct).toBe("comfort");
+    // An ordinary line is shown as generated: the promise guard must not
+    // refuse every reply.
+    expect(variants.find((entry: any) => entry.act === "acknowledge")?.text).toBe("我会有点意外。");
     expect(createRehearsal).toHaveBeenCalledWith(expect.objectContaining({
       userId: 1,
       personaId: 5,
       line: "那天我不该那样说",
     }));
+  });
+
+  it("still rehearses an ordinary question (C3.2)", async () => {
+    // The widened question guard is for verdicts, not for every
+    // question: "你今天忙吗" is practice, not a promise.
+    for (const line of ["你今天忙吗", "how was your day"]) {
+      const result = await appRouter.createCaller(ctxFor(1)).rehearsal.run({ personaId: 5, line });
+      expect(result.mode).toBe("variants");
+    }
+    expect(planTurn).toHaveBeenCalled();
   });
 
   it("does not generate the silent one", async () => {
@@ -172,6 +185,24 @@ describe("rehearsal.run", () => {
     const result = await appRouter
       .createCaller(ctxFor(1))
       .rehearsal.run({ personaId: 5, line: "你还爱我吗" });
+    expect(result.mode).toBe("my_side_only");
+    expect(planTurn).not.toHaveBeenCalled();
+    expect(retrieveMemories).not.toHaveBeenCalled();
+  });
+
+  it("refuses the same question asked another way, in Chinese (C3.2)", async () => {
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .rehearsal.run({ personaId: 5, line: "你会答应我吗" });
+    expect(result.mode).toBe("my_side_only");
+    expect(planTurn).not.toHaveBeenCalled();
+    expect(retrieveMemories).not.toHaveBeenCalled();
+  });
+
+  it("refuses the same question asked another way, in English (C3.2)", async () => {
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .rehearsal.run({ personaId: 5, line: "would you give me another chance" });
     expect(result.mode).toBe("my_side_only");
     expect(planTurn).not.toHaveBeenCalled();
     expect(retrieveMemories).not.toHaveBeenCalled();
@@ -259,6 +290,27 @@ describe("rehearsal.run", () => {
     const retryInputs = planTurn.mock.calls.filter((call) => call[0].sceneOverlay);
     expect(retryInputs.length).toBe(2);
     expect(retryInputs[0][0].sceneOverlay).toMatch(/不要替对方/);
+  });
+
+  it("drops a retry that makes the promise in other words (C3.2)", async () => {
+    // The first line is caught by the table; the retry comes back with
+    // the same promise in a phrasing the old table missed. It must be
+    // dropped, not shown.
+    finalPlan(["我原谅你", "我会原谅你"]);
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .rehearsal.run({ personaId: 5, line: "对不起" });
+    const variants = (result as any).variants;
+    expect(variants.every((entry: any) => entry.text === null)).toBe(true);
+  });
+
+  it("drops an English retry that makes the promise in other words (C3.2)", async () => {
+    finalPlan(["i forgive you", "I'll give you another chance"]);
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .rehearsal.run({ personaId: 5, line: "对不起" });
+    const variants = (result as any).variants;
+    expect(variants.every((entry: any) => entry.text === null)).toBe(true);
   });
 
   it("refuses the twenty-first rehearsal of the day", async () => {

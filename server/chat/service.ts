@@ -698,6 +698,15 @@ export async function composeMessages(params: {
   replyToId?: number | null;
   /** A stretch of the record the user brought into this turn (C8.10). */
   quotedRecordIds?: number[];
+  /**
+   * An appended instruction for this one generation (C3.2).
+   *
+   * The rehearsal room retries with a firm line when the first try
+   * promised something on the real person's behalf. It is application
+   * copy, not material, so it goes into the system prompt as an
+   * instruction, outside the fences.
+   */
+  sceneOverlay?: string | null;
   sampledAct?: import("@shared/speech-acts").SpeechAct | null;
   actClusterLines?: string[] | null;
   coldLines?: string[] | null;
@@ -833,6 +842,14 @@ export async function composeMessages(params: {
     sceneOverlay: scene
       ? (localizeScene(scene as any, params.locale ?? "zh") as any).systemPromptOverlay ?? null
       : null,
+    /**
+     * The caller's appended instruction (C3.2).
+     *
+     * It is not a scene: nothing here comes from the record. It says
+     * what this one generation must not do, so the prompt puts it with
+     * the instructions and outside the fences.
+     */
+    guardInstruction: params.sceneOverlay ?? null,
     // The lines of the stretch the scene was drawn from, and the days
     // it covers. Material is fenced; the boundary is an instruction.
     sceneRangeSection: sceneRange?.section ?? null,

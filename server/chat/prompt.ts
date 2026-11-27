@@ -108,6 +108,14 @@ export interface PromptContext {
   now?: Date;
   /** The scene overlay, when a scene is active. */
   sceneOverlay?: string | null;
+  /**
+   * One call's own appended instruction, outside every fence (C3.2).
+   *
+   * The rehearsal room's retry says, in the app's own words, not to
+   * promise anything on the real person's behalf. It is application
+   * copy, not record material, so it belongs with the hard rules.
+   */
+  guardInstruction?: string | null;
   /** The group-chat instruction, when this turn is inside a group (C9.8). */
   groupOverlay?: string | null;
   /**
@@ -344,6 +352,7 @@ export async function buildPromptBundleForPersona(
 
   const parts = buildSystemPromptParts(persona, {
     sceneOverlay: context.sceneOverlay ?? null,
+    guardInstruction: context.guardInstruction ?? null,
     groupOverlay: context.groupOverlay ?? null,
     emotionalDesc: context.emotionalDesc,
     emotionalState: context.emotionalState ?? null,

@@ -144,12 +144,12 @@ export default function Rehearsal() {
                   {result.variants.map((variant) => (
                     <div key={variant.act} className="surface p-3 space-y-2">
                       <p className="text-[11px] text-muted-subtle">
-                        {variant.silent
-                          ? t("rehearsal.silent", { name })
-                          : t("rehearsal.card", {
-                              n: Math.round(variant.share * 10),
-                              act: t(`rehearsal.acts.${variant.act}` as never),
-                            })}
+                        {t("rehearsal.card", {
+                          n: Math.round(variant.share * 10),
+                          act: variant.silent
+                            ? t("rehearsal.acts.silence")
+                            : t(`rehearsal.acts.${variant.act}` as never),
+                        })}
                       </p>
                       <p className="text-sm leading-relaxed text-foreground/90">
                         {variant.silent

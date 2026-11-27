@@ -104,7 +104,9 @@ describe("the rehearsal room", () => {
     }));
     expect(screen.getByText("大约十次里有 5 次 · 应一声")).toBeInTheDocument();
     expect(screen.getByText("嗯，我在听。")).toBeInTheDocument();
-    expect(screen.getAllByText("小满 可能不回")).toHaveLength(2);
+    // The silent card carries its proportion too, and says it once.
+    expect(screen.getByText("大约十次里有 2 次 · 不回")).toBeInTheDocument();
+    expect(screen.getAllByText("小满 可能不回")).toHaveLength(1);
     expect(screen.getByText(translate("zh", "rehearsal.notGenerated"))).toBeInTheDocument();
   });
 
