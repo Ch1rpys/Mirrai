@@ -16,11 +16,16 @@ const update = vi.fn();
 const remove = vi.fn();
 const invalidate = vi.fn();
 const fetchOlder = vi.fn();
+let createResult: any = {};
+let updateResult: any = {};
 let entries: any[] = [];
 let next: number | null = null;
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    safety: {
+      resources: { useQuery: () => ({ data: { resources: [] }, isError: false, isLoading: false }) },
+    },
     useUtils: () => ({ journal: { list: { invalidate, fetch: fetchOlder } } }),
     journal: {
       list: { useQuery: () => ({ data: { entries, next }, isLoading: false, isError: false, refetch: vi.fn() }) },
@@ -28,7 +33,7 @@ vi.mock("@/lib/trpc", () => ({
         useMutation: (options: any) => ({
           mutate: (input: any) => {
             create(input);
-            options?.onSuccess?.();
+            options?.onSuccess?.(createResult);
           },
           isPending: false,
         }),
@@ -37,7 +42,7 @@ vi.mock("@/lib/trpc", () => ({
         useMutation: (options: any) => ({
           mutate: (input: any) => {
             update(input);
-            options?.onSuccess?.();
+            options?.onSuccess?.(updateResult);
           },
           isPending: false,
         }),
@@ -66,6 +71,30 @@ describe("my own diary", () => {
     vi.clearAllMocks();
     entries = [];
     next = null;
+    createResult = {};
+    updateResult = {};
+  });
+
+  it("shows the crisis card instead of saving a crisis entry (C4.5)", async () => {
+    const user = userEvent.setup();
+    createResult = { crisis: true };
+    render(<ConfirmProvider><MyJournal /></ConfirmProvider>);
+    await user.type(screen.getByLabelText(translate("zh", "myJournal.placeholder")), "我不想活了");
+    await user.click(screen.getByRole("button", { name: translate("zh", "myJournal.save") }));
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  it("shows the crisis card instead of saving a crisis edit (C4.5)", async () => {
+    const user = userEvent.setup();
+    entries = [{ id: 7, body: "今天", entryDate: "2026-03-01", createdAt: new Date().toISOString() }];
+    updateResult = { success: true, crisis: true };
+    render(<ConfirmProvider><MyJournal /></ConfirmProvider>);
+    await user.click(screen.getByRole("button", { name: translate("zh", "myJournal.edit") }));
+    const box = screen.getByDisplayValue("今天");
+    await user.clear(box);
+    await user.type(box, "我不想活了");
+    await user.click(screen.getByRole("button", { name: translate("zh", "microRules.save") }));
+    expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 
   it("says where the words stay", () => {

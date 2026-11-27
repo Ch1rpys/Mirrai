@@ -478,7 +478,7 @@ export default function Graduation() {
           initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}
           className="surface p-6 sm:p-8"
         >
-          <OutboundLetters personaId={personaId} />
+          <OutboundLetters personaId={personaId} name={persona.name} />
         </motion.section>
 
         <motion.section

@@ -19,6 +19,7 @@ const updateRoleplaySession = vi.fn();
 const getPersonaStyleProfile = vi.fn();
 const candidateRecordsByOverlap = vi.fn();
 const createJournalEntry = vi.fn();
+const createSafetyEvent = vi.fn();
 const invokeWithProvider = vi.fn();
 
 vi.mock("./db", async (importOriginal) => ({
@@ -32,6 +33,7 @@ vi.mock("./db", async (importOriginal) => ({
   getPersonaStyleProfile: (...a: unknown[]) => getPersonaStyleProfile(...a),
   candidateRecordsByOverlap: (...a: unknown[]) => candidateRecordsByOverlap(...a),
   createJournalEntry: (...a: unknown[]) => createJournalEntry(...a),
+  createSafetyEvent: (...a: unknown[]) => createSafetyEvent(...a),
 }));
 
 vi.mock("./llm", async (importOriginal) => {
@@ -100,6 +102,7 @@ describe("roleplay routes", () => {
     countRoleplaySessionsSince.mockResolvedValue(0);
     createRoleplaySession.mockResolvedValue(11);
     getRoleplaySession.mockResolvedValue(session);
+    createSafetyEvent.mockResolvedValue(1);
     updateRoleplaySession.mockResolvedValue(true);
     getPersonaStyleProfile.mockResolvedValue({
       userSide: { samples: 300, sampleLines: ["我到家了"], fingerprint: null },
@@ -198,6 +201,20 @@ describe("roleplay routes", () => {
       expect.objectContaining({ userId: 1, personaId: 5, body: note }),
     );
     expect(result).toEqual({ success: true, journalId: 21 });
+  });
+
+  it("stops the closing note and shows the crisis card when the note is a crisis (C4.4)", async () => {
+    // The closing note is free writing, so WP12's rule applies to it as
+    // well: a hit is shown as the crisis card, and the note is not
+    // written into the diary.
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .roleplay.end({ sessionId: 11, note: "我不想活了" });
+    expect(result).toMatchObject({ crisis: true });
+    expect(createJournalEntry).not.toHaveBeenCalled();
+    expect(createSafetyEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 1, personaId: 5, type: "crisis" }),
+    );
   });
 
   it("leaves the conversation alone", () => {

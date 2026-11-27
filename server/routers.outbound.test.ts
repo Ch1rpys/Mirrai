@@ -20,6 +20,7 @@ const updateOutboundLetterText = vi.fn();
 const createRelationshipEvent = vi.fn();
 const getPersonaSettings = vi.fn();
 const setPersonaSettings = vi.fn();
+const createSafetyEvent = vi.fn();
 const invoke = vi.fn();
 
 vi.mock("./llm", async (importOriginal) => {
@@ -57,6 +58,7 @@ vi.mock("./db", async (importOriginal) => ({
   createRelationshipEvent: (...a: unknown[]) => createRelationshipEvent(...a),
   getPersonaSettings: (...a: unknown[]) => getPersonaSettings(...a),
   setPersonaSettings: (...a: unknown[]) => setPersonaSettings(...a),
+  createSafetyEvent: (...a: unknown[]) => createSafetyEvent(...a),
 }));
 
 import { appRouter } from "./routers";
@@ -155,6 +157,7 @@ describe("outbound.addOwn", () => {
     vi.clearAllMocks();
     getPersonaById.mockResolvedValue(persona);
     createOutboundLetter.mockResolvedValue(12);
+    createSafetyEvent.mockResolvedValue(1);
   });
 
   it("writes a sentence with no message behind it", async () => {
@@ -172,6 +175,20 @@ describe("outbound.addOwn", () => {
       appRouter.createCaller(ctxFor(1)).outbound.addOwn({ personaId: 5, text: "   " }),
     ).rejects.toThrow();
     expect(createOutboundLetter).not.toHaveBeenCalled();
+  });
+
+  it("stops and shows the crisis card when the sentence is a crisis (C3.3)", async () => {
+    // The exit list is a place the user writes freely, so WP12's rule
+    // applies: the words are read by the crisis detector before they are
+    // kept, and a hit shows the card instead of doing the rest.
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .outbound.addOwn({ personaId: 5, text: "我不想活了" });
+    expect(result).toMatchObject({ crisis: true });
+    expect(createOutboundLetter).not.toHaveBeenCalled();
+    expect(createSafetyEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 1, personaId: 5, type: "crisis" }),
+    );
   });
 });
 
@@ -231,6 +248,7 @@ describe("outbound.saveOutcome", () => {
     getOutboundLetterById.mockResolvedValue(sent);
     setOutboundLetterOutcome.mockResolvedValue(true);
     createRelationshipEvent.mockResolvedValue({ id: 3 });
+    createSafetyEvent.mockResolvedValue(1);
   });
 
   it("keeps the user's words exactly and records one relationship event", async () => {
@@ -243,6 +261,18 @@ describe("outbound.saveOutcome", () => {
       expect.objectContaining({ personaId: 5, kind: "said_it", detail: note }),
     );
     expect(result).toEqual({ saved: true, event: { id: 3 } });
+  });
+
+  it("stops and shows the crisis card when the note is a crisis (C3.5)", async () => {
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .outbound.saveOutcome({ id: 7, note: "我不想活了" });
+    expect(result).toMatchObject({ crisis: true });
+    expect(setOutboundLetterOutcome).not.toHaveBeenCalled();
+    expect(createRelationshipEvent).not.toHaveBeenCalled();
+    expect(createSafetyEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 1, personaId: 5, type: "crisis" }),
+    );
   });
 
   it("writes nothing when the user leaves it blank", async () => {

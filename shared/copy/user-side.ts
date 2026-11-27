@@ -61,6 +61,13 @@ export const USER_SIDE = {
   "userSide.phase.news": { zh: "你们之间有新的消息", en: "there is news between you" },
   "userSide.phase.meetup": { zh: "你们最近见过面", en: "you met up recently" },
   "userSide.phase.triggered": { zh: "有些事还没有过去", en: "some things have not been settled" },
+  /**
+   * "I said it to them" is a phase too (C3.5).
+   *
+   * The event is written by the exit list, and the phase card in the
+   * prompt has to have a sentence for it like every other event kind.
+   */
+  "userSide.phase.said_it": { zh: "你把那句话对 TA 说出口了", en: "you said it to them" },
 
   // ── What has been happening ──────────────────────────────────────────────
   "userSide.eventsTitle": {

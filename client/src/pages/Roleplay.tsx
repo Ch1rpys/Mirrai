@@ -63,8 +63,16 @@ export default function Roleplay() {
     onError: (error: any) => toast.error(error.message),
   });
   const end = trpc.roleplay.end.useMutation({
-    onSuccess: () => {
+    onSuccess: (data: { crisis?: boolean }) => {
       setEnded(true);
+      /**
+       * The closing note is read for crisis language before it is saved
+       * (WP12's rule, C4.4). A hit shows the card instead of "saved".
+       */
+      if (data?.crisis) {
+        setCrisis(true);
+        return;
+      }
       toast.success(t("roleplay.saved"));
     },
     onError: (error: any) => toast.error(error.message),

@@ -73,6 +73,15 @@ export const RELATIONSHIP_EVENT_KINDS = [
   "news",
   "meetup",
   "triggered",
+  /**
+   * "I said it to them" (C3.5).
+   *
+   * The exit list writes this event when the user records how it went.
+   * It was in the database and on the add-event enum but not in this
+   * list, so the timeline showed the raw key and the prompt lost the
+   * sentence that says what kind of thing happened.
+   */
+  "said_it",
 ] as const;
 
 export type RelationshipEventKind = (typeof RELATIONSHIP_EVENT_KINDS)[number];
@@ -196,6 +205,7 @@ export const EVENT_LABELS: Record<RelationshipEventKind, { zh: string; en: strin
   news: { zh: "有件事想告诉你", en: "there is something to tell you" },
   meetup: { zh: "我们见面了", en: "we met up" },
   triggered: { zh: "我今天想起了一些难受的事", en: "something painful came up today" },
+  said_it: { zh: "我把那句话对 TA 说出口了", en: "I said it to them" },
 };
 
 /**

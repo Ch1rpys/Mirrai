@@ -2715,6 +2715,7 @@ export const zh = {
       news: "有消息",
       meetup: "见面",
       triggered: "触动了什么",
+      said_it: "我把话说出口了",
     },
   },
   userProfile: {

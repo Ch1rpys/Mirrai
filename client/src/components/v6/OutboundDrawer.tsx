@@ -50,7 +50,7 @@ export default function OutboundDrawer({
           </button>
         </div>
         <div className="overflow-y-auto px-4 py-4">
-          <OutboundLetters personaId={personaId} />
+          <OutboundLetters personaId={personaId} name={name} />
         </div>
       </aside>
     </div>

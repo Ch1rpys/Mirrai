@@ -15,6 +15,7 @@ const say = vi.fn();
 const end = vi.fn();
 let startOptions: any = null;
 let sayOptions: any = null;
+let endOptions: any = null;
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -34,7 +35,12 @@ vi.mock("@/lib/trpc", () => ({
           return { mutate: say, isPending: false };
         },
       },
-      end: { useMutation: () => ({ mutate: end, isPending: false }) },
+      end: {
+        useMutation: (options: any) => {
+          endOptions = options;
+          return { mutate: end, isPending: false };
+        },
+      },
     },
     safety: {
       resources: { useQuery: () => ({ data: { resources: [] }, isError: false, isLoading: false }) },
@@ -97,6 +103,22 @@ describe("the role swap", () => {
     expect(container.querySelectorAll("[data-roleplay-avatar]")).toHaveLength(2);
     expect(container.querySelector('[data-roleplay-avatar="user"]')).not.toBeNull();
     expect(container.querySelector('[data-roleplay-avatar="assistant"]')).not.toBeNull();
+  });
+
+  it("shows the crisis card when the closing note is a crisis (C4.4)", async () => {
+    const user = userEvent.setup();
+    render(<Roleplay />);
+    await user.click(screen.getByRole("button", { name: translate("zh", "roleplay.start") }));
+    act(() => startOptions.onSuccess({ sessionId: 11, remainingSeconds: 900, remainingTurns: 30 }));
+    act(() => sayOptions.onSuccess({ ended: true, crisis: false }, { text: "在吗" }));
+    await user.type(
+      screen.getByLabelText(translate("zh", "roleplay.notePlaceholder")),
+      "我不想活了",
+    );
+    await user.click(screen.getByRole("button", { name: translate("zh", "roleplay.saveNote") }));
+    expect(end).toHaveBeenCalledWith({ sessionId: 11, note: "我不想活了" });
+    act(() => endOptions.onSuccess({ success: true, crisis: true }));
+    expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 
   it("offers the note only after the practice ends", () => {

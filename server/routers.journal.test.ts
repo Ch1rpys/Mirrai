@@ -14,6 +14,7 @@ const listJournalEntries = vi.fn();
 const getJournalEntryById = vi.fn();
 const updateJournalEntry = vi.fn();
 const deleteJournalEntry = vi.fn();
+const createSafetyEvent = vi.fn();
 
 vi.mock("./db", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -23,6 +24,7 @@ vi.mock("./db", async (importOriginal) => ({
   getJournalEntryById: (...a: unknown[]) => getJournalEntryById(...a),
   updateJournalEntry: (...a: unknown[]) => updateJournalEntry(...a),
   deleteJournalEntry: (...a: unknown[]) => deleteJournalEntry(...a),
+  createSafetyEvent: (...a: unknown[]) => createSafetyEvent(...a),
 }));
 
 import { appRouter } from "./routers";
@@ -59,6 +61,7 @@ describe("journal routes", () => {
     listJournalEntries.mockResolvedValue([{ id: 7, body: "今天" }]);
     getJournalEntryById.mockResolvedValue({ id: 7, userId: 1, body: "今天" });
     updateJournalEntry.mockResolvedValue(true);
+    createSafetyEvent.mockResolvedValue(1);
     deleteJournalEntry.mockResolvedValue(true);
   });
 
@@ -87,6 +90,31 @@ describe("journal routes", () => {
       expect.objectContaining({ userId: 1, personaId: null }),
     );
     expect(result.entries).toHaveLength(1);
+  });
+
+  it("stops and shows the crisis card when the entry is a crisis (C4.5)", async () => {
+    // The diary is the most private free writing in the app; the words
+    // are read by the crisis detector and a hit shows the card instead
+    // of saving.
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .journal.create({ body: "我不想活了" });
+    expect(result).toMatchObject({ crisis: true });
+    expect(createJournalEntry).not.toHaveBeenCalled();
+    expect(createSafetyEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 1, type: "crisis" }),
+    );
+  });
+
+  it("stops and shows the crisis card when the edit is a crisis (C4.5)", async () => {
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .journal.update({ id: 7, body: "我不想活了" });
+    expect(result).toMatchObject({ crisis: true });
+    expect(updateJournalEntry).not.toHaveBeenCalled();
+    expect(createSafetyEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 1, type: "crisis" }),
+    );
   });
 
   it("does not edit or delete somebody else's entry", async () => {

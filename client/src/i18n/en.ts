@@ -2698,6 +2698,7 @@ export const en = {
       news: "Some news",
       meetup: "Met up",
       triggered: "Something painful",
+      said_it: "I said it to them",
     },
   },
   userProfile: {

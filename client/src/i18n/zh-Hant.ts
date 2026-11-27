@@ -2678,7 +2678,8 @@ export const zhHant = {
       "reconciliation": "和好",
       "news": "有消息",
       "meetup": "見面",
-      "triggered": "觸動了什麼"
+      "triggered": "觸動了什麼",
+      "said_it": "我把話說出口了"
     }
   },
   "userProfile": {

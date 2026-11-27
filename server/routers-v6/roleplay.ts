@@ -17,6 +17,7 @@ import {
   countRecords,
   countRoleplaySessionsSince,
   createJournalEntry,
+  createSafetyEvent,
   createRoleplaySession,
   getPersonaById,
   getPersonaStyleProfile,
@@ -185,6 +186,20 @@ export const roleplayRouter = router({
       });
       let journalId: number | undefined;
       const note = input.note?.trim();
+      /**
+       * The closing note is free writing, so it is read for crisis
+       * language before it is saved (WP12's rule). A hit shows the card
+       * and the note is left out of the diary.
+       */
+      if (note && detectCrisis(note).crisis) {
+        await createSafetyEvent({
+          userId: ctx.user.id,
+          personaId: session.personaId,
+          type: "crisis",
+          severity: "critical",
+        }).catch((e: unknown) => console.warn("[Safety] Failed to record the crisis event:", e));
+        return { success: true, crisis: true };
+      }
       if (note) {
         journalId = await createJournalEntry({
           userId: ctx.user.id,

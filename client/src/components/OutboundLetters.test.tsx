@@ -27,6 +27,8 @@ const dismissSaidItHint = vi.fn();
 const navigate = vi.fn();
 const suggestWording = vi.fn();
 let suggestResult: any = { suggestions: [], crisis: false, text: "" };
+let addOwnResult: any = { success: true };
+let outcomeResult: any = { saved: true };
 
 let letters: any[] = [];
 let saidItHint = false;
@@ -67,7 +69,7 @@ vi.mock("@/lib/trpc", () => ({
         useMutation: (options?: any) => ({
           mutate: (input: any) => {
             addOwn(input);
-            options?.onSuccess?.();
+            options?.onSuccess?.(addOwnResult);
           },
           isPending: false,
         }),
@@ -76,7 +78,7 @@ vi.mock("@/lib/trpc", () => ({
         useMutation: (options?: any) => ({
           mutate: (input: any) => {
             saveOutcome(input);
-            options?.onSuccess?.({ saved: true });
+            options?.onSuccess?.(outcomeResult);
           },
           isPending: false,
         }),
@@ -347,6 +349,18 @@ describe("the way out", () => {
     // The box is empty again, so the next sentence starts clean.
     await waitFor(() => expect(box).toHaveValue(""));
   });
+
+  it("shows the crisis card instead of keeping a crisis sentence (C3.3)", async () => {
+    const user = userEvent.setup();
+    addOwnResult = { success: true, crisis: true };
+    render(<ConfirmProvider><OutboundLetters personaId={5} name="小满" /></ConfirmProvider>);
+    await user.type(
+      screen.getByLabelText(translate("zh", "outbound.writeOwn")),
+      "我不想活了",
+    );
+    await user.click(screen.getByRole("button", { name: translate("zh", "outbound.addOwn") }));
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
 });
 
 describe("after the words have been said (C3.5)", () => {
@@ -382,6 +396,19 @@ describe("after the words have been said (C3.5)", () => {
     // no badge, no notification.
     expect(toast.success).not.toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("shows the crisis card instead of saving a crisis note (C3.5)", async () => {
+    const user = userEvent.setup();
+    outcomeResult = { saved: false, crisis: true };
+    letters = [{ id: 7, status: "sent", text: "我说了", createdAt: new Date().toISOString() }];
+    render(<ConfirmProvider><OutboundLetters personaId={5} name="小满" /></ConfirmProvider>);
+    await user.type(
+      screen.getByLabelText(translate("zh", "outbound.outcomePlaceholder")),
+      "我不想活了",
+    );
+    await user.click(screen.getByRole("button", { name: translate("zh", "outbound.saveOutcome") }));
+    expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 
   it("offers the last page only while the hint has not been made", () => {
@@ -434,6 +461,8 @@ describe("the wording assistant (C3.6)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     suggestResult = { suggestions: [], crisis: false, text: "" };
+    addOwnResult = { success: true };
+    outcomeResult = { saved: true };
   });
 
   it("shows the suggestions under the original without changing it", async () => {

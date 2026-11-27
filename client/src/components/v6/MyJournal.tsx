@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { formatDayKey } from "@/lib/dates";
+import CrisisCard from "@/components/CrisisCard";
 import { toast } from "sonner";
 
 /**
@@ -24,8 +25,18 @@ export default function MyJournal({ personaId }: { personaId?: number }) {
   const { data, isLoading, isError, refetch } = trpc.journal.list.useQuery(
     personaId ? { personaId } : {},
   );
+  const [crisisOpen, setCrisisOpen] = useState(false);
   const create = trpc.journal.create.useMutation({
-    onSuccess: () => {
+    onSuccess: (result: { crisis?: boolean }) => {
+      /**
+       * The words are read before they are kept (WP12's rule, C4.5). A
+       * hit shows the card and the entry is not written; the draft is
+       * left where it is, so nothing the person wrote disappears.
+       */
+      if (result?.crisis) {
+        setCrisisOpen(true);
+        return;
+      }
       setDraft("");
       utils.journal.list.invalidate();
       toast.success(t("myJournal.saved"));
@@ -33,7 +44,11 @@ export default function MyJournal({ personaId }: { personaId?: number }) {
     onError: (e) => toast.error(e.message),
   });
   const update = trpc.journal.update.useMutation({
-    onSuccess: () => {
+    onSuccess: (result: { crisis?: boolean }) => {
+      if (result?.crisis) {
+        setCrisisOpen(true);
+        return;
+      }
       setEditing(null);
       utils.journal.list.invalidate();
     },
@@ -73,6 +88,7 @@ export default function MyJournal({ personaId }: { personaId?: number }) {
 
   return (
     <section className="space-y-4">
+      {crisisOpen ? <CrisisCard onClose={() => setCrisisOpen(false)} /> : null}
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="section-title">{t("myJournal.title")}</h2>
       </div>

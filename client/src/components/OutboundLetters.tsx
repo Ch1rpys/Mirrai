@@ -99,8 +99,17 @@ export default function OutboundLetters({ personaId, name }: { personaId: number
    * the sentence was never typed anywhere, and the drawer is where a
    * person is reminded of the one they have been carrying around.
    */
+  const [crisisOpen, setCrisisOpen] = useState(false);
   const addOwnMutation = trpc.outbound.addOwn.useMutation({
-    onSuccess: () => {
+    onSuccess: (result: { crisis?: boolean }) => {
+      /**
+       * A crisis sentence is not kept: the server stops before the write
+       * and says so, and the card is the whole answer (C3.3).
+       */
+      if (result?.crisis) {
+        setCrisisOpen(true);
+        return;
+      }
       setOwn("");
       toast.success(t("outbound.keep"));
       refetch();
@@ -116,7 +125,15 @@ export default function OutboundLetters({ personaId, name }: { personaId: number
    * card simply keeps the sentence.
    */
   const saveOutcome = trpc.outbound.saveOutcome.useMutation({
-    onSuccess: () => refetch(),
+    onSuccess: (result: { crisis?: boolean }) => {
+      // Same rule as the words themselves (C3.5): a crisis note is
+      // answered with the card, not stored.
+      if (result?.crisis) {
+        setCrisisOpen(true);
+        return;
+      }
+      refetch();
+    },
     onError: (e: any) => toast.error(e.message),
   });
   const dismissSaidItHint = trpc.outbound.dismissSaidItHint.useMutation({
@@ -250,6 +267,7 @@ export default function OutboundLetters({ personaId, name }: { personaId: number
 
   return (
     <section className="space-y-4">
+      {crisisOpen ? <CrisisCard onClose={() => setCrisisOpen(false)} /> : null}
       <header className="space-y-1">
         <div className="flex items-center justify-between gap-3">
           <h2 className="section-title">{t("outbound.title")}</h2>

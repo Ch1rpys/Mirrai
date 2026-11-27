@@ -7973,6 +7973,23 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const persona = await getPersonaById(input.personaId, ctx.user.id);
         if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+        /**
+         * The words are read before they are kept (WP12's rule).
+         *
+         * The drawer is the user talking about the thing they wish they
+         * had said — exactly the kind of writing the crisis detector is
+         * for. A hit shows the card and stops; nothing is collected from
+         * it.
+         */
+        if (detectCrisis(input.text).crisis) {
+          await createSafetyEvent({
+            userId: ctx.user.id,
+            personaId: input.personaId,
+            type: "crisis",
+            severity: "critical",
+          }).catch((e: unknown) => console.warn("[Safety] Failed to record the crisis event:", e));
+          return { success: true, crisis: true };
+        }
         await createOutboundLetter({
           userId: ctx.user.id,
           personaId: input.personaId,
@@ -8098,6 +8115,20 @@ export const appRouter = router({
         // An empty note is a complete answer: nothing is written, and no
         // relationship event is created.
         if (!input.note.trim()) return { saved: false };
+        /**
+         * "How it went" is where a person writes the worst of it (WP12's
+         * rule). A hit shows the card and stops; the note is not stored
+         * and no relationship event is created from it.
+         */
+        if (detectCrisis(input.note).crisis) {
+          await createSafetyEvent({
+            userId: ctx.user.id,
+            personaId: letter.personaId,
+            type: "crisis",
+            severity: "critical",
+          }).catch((e: unknown) => console.warn("[Safety] Failed to record the crisis event:", e));
+          return { saved: false, crisis: true };
+        }
         const now = new Date();
         const saved = await setOutboundLetterOutcome(input.id, ctx.user.id, input.note, now);
         if (!saved) throw new TRPCError({ code: "NOT_FOUND" });
