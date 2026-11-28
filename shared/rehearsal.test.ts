@@ -147,6 +147,47 @@ describe("isCommitmentQuestion", () => {
     }
   });
 
+  it("keeps the English daily questions apart from the relationship ones (C3.2 round 5)", () => {
+    // The English half of the ending/reply tables was widened in round
+    // five; without an object bound it caught "end this meeting",
+    // "break up the team" and "we are done with the report".
+    for (const line of [
+      "should we end this call?",
+      "should we end this meeting early?",
+      "can we end this quickly?",
+      "do we end this chapter here?",
+      "should we break up the team into groups?",
+      "should we break up the work into two parts?",
+      "should we split up the bill?",
+      "will we end this semester early?",
+    ]) {
+      expect(isCommitmentQuestion(line), line).toBe(false);
+    }
+    for (const line of ["should we break up?", "should we split up?"]) {
+      expect(isCommitmentQuestion(line), line).toBe(true);
+    }
+    // A plain modal is a statement; the question form needs a particle,
+    // and the particle forms of 陪我到老 include 对吧/是吧.
+    for (const line of ["你会一直陪着我", "你会永远陪着我", "你会陪我到老"]) {
+      expect(isCommitmentQuestion(line), line).toBe(false);
+    }
+    for (const line of ["你会一直陪着我吗", "你会陪我到老吗", "你陪我到老，对吧", "你陪我到老是吧"]) {
+      expect(isCommitmentQuestion(line), line).toBe(true);
+    }
+    for (const reply of [
+      "we are done with the report",
+      "we are done for today",
+      "we are done for now",
+      "We should end this meeting before six.",
+      "We should break up the task into steps.",
+    ]) {
+      expect(containsCommitment(reply), reply).toBe(false);
+    }
+    for (const reply of ["we are done.", "we are over", "we should break up.", "we should end this.", "我们到此结束吧"]) {
+      expect(containsCommitment(reply), reply).toBe(true);
+    }
+  });
+
   it("does not treat an ordinary question as a verdict", () => {
     for (const line of [
       "我今天很想你",

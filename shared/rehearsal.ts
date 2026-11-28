@@ -78,13 +78,15 @@ const COMMITMENT_QUESTION_PATTERNS: RegExp[] = [
   // 你会不会陪我到老 / 你能不能陪我到老 / 你愿不愿意留下来陪我
   // (a promise about the future; the subject must be 你/您 and a question
   // word must be there — "他陪我到老" and "谢谢你来陪我" are statements)
-  /(?:^|[，。！？!?\s])(?:请问|那|所以|嗯)?\s*(?:你|您)(?:会不会|能不能|愿不愿意|肯不肯|可不可以|会|愿意|肯|能|可以)(?:不会|不愿意|不肯)?(?:一直|永远)?[^。！？!?\n]{0,6}(?:陪我到老|陪着我|留下来陪我|留在我身边|陪我走下去)/,
+  /(?:^|[，。！？!?\s])(?:请问|那|所以|嗯)?\s*(?:你|您)(?:会不会|能不能|愿不愿意|肯不肯|可不可以)(?:不会|不愿意|不肯)?(?:一直|永远)?[^。！？!?\n]{0,6}(?:陪我到老|陪着我|留下来陪我|留在我身边|陪我走下去)/,
+  /** 你会陪我到老吗 — a plain modal only counts as a question with a particle. */
+  /(?:^|[，。！？!?\s])(?:请问|那|所以|嗯)?\s*(?:你|您)(?:会|愿意|肯|能|可以)(?:一直|永远)?[^。！？!?\n]{0,6}(?:陪我到老|陪着我|留下来陪我|留在我身边|陪我走下去)(?=[\s,，]*[吗么呢？?])/,
   // 你回来陪我吗 / 你回来陪我吧 / 你什么时候回来陪我 (陪我 only as a
   // verdict when it ends the sentence or is followed by a particle;
   // "回来陪我吃饭" is a daily request)
   /(?:^|[，。！？!?\s])(?:请问|那|所以|嗯)?\s*(?:你|您)(?:什么时候|几点|哪天)?[^。！？!?\n]{0,6}(?:回来|回到我身边|回来找我)(?:陪我|陪着我)(?=[吗么呢吧。！？!?\s]|$)/,
   /** 你陪我到老好不好 / 行吗 / 可以吗 / 好吗 — the particle forms of the same promise. */
-  /(?:^|[，。！？!?\s])(?:请问|那|所以|嗯)?\s*(?:你|您)[^。！？!?\n]{0,4}陪我到老(?=[\s,，]*(?:好不好|好吗|好么|好不|行吗|行不行|可以吗|可以么|成吗|成不成)|[吗么呢？?])/,
+  /(?:^|[，。！？!?\s])(?:请问|那|所以|嗯)?\s*(?:你|您)[^。！？!?\n]{0,4}陪我到老(?=[\s,，]*(?:好不好|好吗|好么|好不|行吗|行不行|可以吗|可以么|成吗|成不成|对吧|是吧|是么)|[吗么呢？?])/,
   // 你决定原谅我了吗 / 你打算重新开始吗
   /(你|您)(决定|打算|准备)(原谅|回来|复合|和好|重新开始)/,
   // 你愿意再试一次吗
@@ -108,7 +110,7 @@ const COMMITMENT_QUESTION_PATTERNS: RegExp[] = [
   // is it over / are we over / is this the end
   /is (it|this|everything) over/i,
   /are we (over|done|through)/i,
-  /(should|do|will|would|can|could) we (break up|split up|end (this|it))/i,
+  /(should|do|will|would|can|could) we (break up|split up)(?=\s*[?.!]|$)/i,
   /is this the end/i,
   // do we still have a chance
   /do we (still )?have (a|another) (chance|future)/i,
@@ -214,8 +216,9 @@ const COMMITMENT_REPLY_PATTERNS: RegExp[] = [
   /(我们|咱们)分手(?!了吗|吗|么|呢|[?？])/,
   // 我们结束了 / 我们结束吧 / 我们该结束了 / 我们离婚吧
   /(我们|咱们)(?:还是|就|已经|该|是)?(?:结束|分开|离婚)(?:了|啦|吧|好了)(?=[。！？!?，,\s]|$)/,
-  // 我们结束这段关系吧 / 我们结束这段感情
+  // 我们结束这段关系吧 / 我们结束这段感情 / 我们到此结束吧
   /(我们|咱们)(?:还是|就|已经|该|是)?(?:结束|分开|离婚)(?:掉)?(?:这段|我们的)(?:关系|感情)(?:吧|了|啦)?/,
+  /(我们|咱们)(?:到此|就)(?:结束|分开)(?:吧|了)/,
   // ---- the same decisions in other words ----
   // 我会原谅你 / 我决定原谅你 / 我愿意再试一次
   /(我|我们)(会|决定|打算|愿意|可以|能|选择)(原谅|答应|同意|接受|回来|复合|和好|再试|重新开始)/,
@@ -266,9 +269,10 @@ const COMMITMENT_REPLY_PATTERNS: RegExp[] = [
   /i don'?t love you/i,
   /let'?s get back together/i,
   /we are back together/i,
-  /we('re| are) (over|done|through)/i,
+  /we('re| are) (over|done|through)(?=\s*(?:[.!?]|$|with us|between us|for good))/i,
   /it'?s over between us/i,
-  /we should (break up|split up|end (this|it))/i,
+  /we should (break up|split up)(?=\s*[?.!]|$)/i,
+  /we should end (this|it)(?=\s*[.!?]|$)/i,
   /(we (can|will|should) |let'?s )(start over|try again|be together|get back together|be friends)/i,
   /i promise/i,
   /i swear/i,
