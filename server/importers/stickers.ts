@@ -6,6 +6,7 @@ import { ENV } from "../_core/env";
 import { fileExtension, resolveUploadPath } from "../_core/filename";
 import { storagePut } from "../storage";
 import { importUnpackRelKey } from "./archive";
+import { pathCandidatesFor, type RedactedMediaPathCandidates } from "./media";
 
 /**
  * The stickers the record says they used.
@@ -35,6 +36,7 @@ export interface StickerRowLike {
   content?: string | null;
   timestamp?: Date | string | null;
   fileId?: number | null;
+  lineNo?: number | null;
   meta?: Record<string, unknown> | null;
 }
 
@@ -46,7 +48,7 @@ export interface StickerGroup {
   firstUsedAt: Date | null;
   lastUsedAt: Date | null;
   /** The first row whose `meta.path` points at something on disk. */
-  image: { fileId: number | null; relativePath: string } | null;
+  image: { fileId: number | null; relativePath: string; lineNo: number | null } | null;
 }
 
 function at(value: Date | string | null | undefined): Date | null {
@@ -101,7 +103,11 @@ export function groupStickerRows(rows: StickerRowLike[]): StickerGroup[] {
     }
     const relativePath = typeof row.meta?.path === "string" ? row.meta.path : "";
     if (!group.image && relativePath) {
-      group.image = { fileId: row.fileId ?? null, relativePath };
+      group.image = {
+        fileId: row.fileId ?? null,
+        relativePath,
+        lineNo: typeof row.lineNo === "number" ? row.lineNo : null,
+      };
     }
     groups.set(label, group);
   }
@@ -112,7 +118,7 @@ async function absoluteMediaPath(
   userId: number,
   personaId: number,
   group: StickerGroup,
-  pathCandidates?: Map<string, string[]>,
+  pathCandidates?: RedactedMediaPathCandidates,
 ): Promise<string | null> {
   if (!group.image) return null;
   const base = group.image.fileId != null
@@ -120,9 +126,15 @@ async function absoluteMediaPath(
     : "";
   /**
    * The stored path may be the redacted one (C1.7): the picture on disk
-   * still has the name the export gave it. Try each original name.
+   * still has the name the export gave it. The row's own line picks its
+   * original out of the list, so two names that redacted to one token
+   * are not confused for each other.
    */
-  for (const relativePath of pathCandidates?.get(group.image.relativePath) ?? [group.image.relativePath]) {
+  for (const relativePath of pathCandidatesFor(
+    pathCandidates,
+    group.image.relativePath,
+    group.image.lineNo,
+  )) {
     try {
       const abs = resolveUploadPath(ENV.uploadDir, `${base}${relativePath}`);
       const info = await stat(abs);
@@ -154,9 +166,9 @@ export async function registerStickers(params: {
   /**
    * The original names of sticker files whose stored path redaction
    * replaced (C1.7). Keys are the redacted relative path; values are
-   * the paths it replaced.
+   * the original names, tagged with the line that wrote them.
    */
-  pathCandidates?: Map<string, string[]>;
+  pathCandidates?: RedactedMediaPathCandidates;
 }): Promise<RegisterStickersResult> {
   const rows: StickerRowLike[] = [];
   for await (const row of iterateRecords(params.personaId, params.userId, {
@@ -171,6 +183,20 @@ export async function registerStickers(params: {
   const groups = groupStickerRows(rows);
   const existing = await listStickers(params.personaId, params.userId);
   const existingKeys = new Set(existing.map((row) => row.key));
+  /**
+   * The already-registered sticker for each name (C1.7).
+   *
+   * This scan covers the whole persona, so it re-reads rows an earlier
+   * redacted import wrote. Those rows name a file inside an import
+   * directory that is now gone; the picture itself was copied out under
+   * a hash when it was registered. Reusing that row keeps one sticker
+   * per name instead of adding an image-less `label:` duplicate of it
+   * on every later import.
+   */
+  const existingByLabel = new Map<string, (typeof existing)[number]>();
+  for (const row of existing) {
+    if (!existingByLabel.has(row.label)) existingByLabel.set(row.label, row);
+  }
   let registered = 0;
   let copied = 0;
   let skipped = 0;
@@ -209,14 +235,11 @@ export async function registerStickers(params: {
       }
     }
 
-    if (!existingKeys.has(key)) {
-      if (existingKeys.size >= STICKER_LIBRARY_MAX) {
+    if (imageBytes && fileKey && mime) {
+      if (!existingKeys.has(key) && existingKeys.size >= STICKER_LIBRARY_MAX) {
         skipped += 1;
         continue;
       }
-    }
-
-    if (imageBytes && fileKey && mime) {
       try {
         await storagePut(fileKey, imageBytes, mime);
         copied += 1;
@@ -225,6 +248,30 @@ export async function registerStickers(params: {
         mime = null;
         key = `label:${group.label}`;
       }
+    }
+
+    /**
+     * No picture this time: keep the row that already has one (C1.7).
+     *
+     * Either the source is gone with its import directory or its bytes
+     * were unusable. The name is the identity of a sticker here, and the
+     * library already has a row under that name — the one the earlier
+     * import registered with its copied picture. Writing a `label:` key
+     * now would add a second, image-less sticker with the same name; the
+     * uses and timestamps belong on the existing row instead.
+     */
+    if (key === `label:${group.label}`) {
+      const sameLabel = existingByLabel.get(group.label);
+      if (sameLabel) {
+        key = sameLabel.key;
+        fileKey = sameLabel.fileKey ?? null;
+        mime = sameLabel.mime ?? null;
+      }
+    }
+
+    if (!existingKeys.has(key) && existingKeys.size >= STICKER_LIBRARY_MAX) {
+      skipped += 1;
+      continue;
     }
 
     await upsertSticker({

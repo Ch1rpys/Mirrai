@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
+import { copyFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { iterateRecords, upsertMedia } from "../db";
 import type { Media } from "../../drizzle/schema";
@@ -15,7 +15,10 @@ import { importUnpackRelKey } from "./archive";
  * The file is not copied: a voice note and a video can be large, and
  * the import directory already holds them. The row points at the
  * file with the same key the uploader reads, so the owner-only upload
- * guard covers the audio without another rule.
+ * guard covers the audio without another rule. The exception is a
+ * redacted import: the stored name is not the export's name, and the
+ * key is served back as a URL, so those bytes are copied to a
+ * content-addressed name in the same directory (C1.7).
  *
  * The identity of a row is the content hash. Importing the same export
  * twice registers the same recording once — and a re-import can bring
@@ -123,6 +126,58 @@ export interface RegisterMediaResult {
   total: number;
 }
 
+/**
+ * One original file name redaction replaced, and the source line of the
+ * record that carried it (C1.7).
+ *
+ * Two names can redact to the same token — `IMG_13800138000.jpg` and
+ * `IMG_13900139000.jpg` both become `IMG_[phone].jpg` — so the map holds
+ * a list per token. The line number is what gives each row back its own
+ * original: the registrar re-reads stored rows that only know the
+ * redacted token, and two rows that share a token were written from two
+ * different source lines.
+ */
+export interface RedactedMediaPathOriginal {
+  original: string;
+  lineNo: number | null;
+}
+
+/** Redacted relative path → the original names it replaced, in record order. */
+export type RedactedMediaPathCandidates = Map<string, RedactedMediaPathOriginal[]>;
+
+/**
+ * The original names to try for a stored path, the row's own line first.
+ *
+ * The stored row no longer names its file. Without the line the registrar
+ * would try the candidate list from the head for every row, so two rows
+ * that redacted to the same token would both find the first file on disk
+ * and the second file would never be registered.
+ */
+export function pathCandidatesFor(
+  pathCandidates: RedactedMediaPathCandidates | undefined,
+  storedPath: string,
+  lineNo: number | null | undefined,
+): string[] {
+  const list = pathCandidates?.get(storedPath);
+  if (!list || list.length === 0) return [storedPath];
+  const line = typeof lineNo === "number" ? lineNo : null;
+  const ordered = line == null
+    ? [...list]
+    : [
+        ...list.filter((entry) => entry.lineNo === line),
+        ...list.filter((entry) => entry.lineNo !== line),
+      ];
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const entry of ordered) {
+    const name = entry.original.replace(/^\/+/, "");
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  return names.length > 0 ? names : [storedPath];
+}
+
 export async function registerMedia(params: {
   personaId: number;
   userId: number;
@@ -134,11 +189,11 @@ export async function registerMedia(params: {
    * The original names of media files whose stored path redaction
    * replaced (C1.7). The unpacked file keeps its own name for the
    * import; the record only stores the redacted one, so the registrar
-   * has to map back to find the bytes. Keys are the redacted relative
-   * path, values every original path it replaced — more than one when
-   * two names redacted to the same token.
+   * has to map back to find the bytes. The row's own source line picks
+   * its original out of the list — more than one name can redact to the
+   * same token.
    */
-  pathCandidates?: Map<string, string[]>;
+  pathCandidates?: RedactedMediaPathCandidates;
 }): Promise<RegisterMediaResult> {
   let registered = 0;
   let skipped = 0;
@@ -168,30 +223,64 @@ export async function registerMedia(params: {
      *
      * Usually the stored path is the file's path. After a redacted
      * import the stored path may be `IMG_[phone].jpg` while the file is
-     * still `IMG_13800138000.jpg`, so every original candidate is tried
-     * in turn; the first one that exists is the file.
+     * still `IMG_13800138000.jpg`, so the original names are tried in
+     * turn; the row's own line is tried first, so two rows that redacted
+     * to the same token each find their own file. The first candidate
+     * that exists is the file.
      */
+    const unpackBase = importUnpackRelKey(params.userId, params.personaId, row.fileId);
+    const storedName = relative.replace(/^\/+/, "");
+    const candidates = pathCandidatesFor(params.pathCandidates, relative, row.lineNo);
     let fileKey: string | null = null;
+    let sourceAbs: string | null = null;
+    let sourceName: string | null = null;
     let bytes = 0;
     let hash = "";
-    for (const candidate of params.pathCandidates?.get(relative) ?? [relative]) {
-      const key = `${importUnpackRelKey(params.userId, params.personaId, row.fileId)}/${candidate.replace(/^\/+/, "")}`;
+    for (const candidate of candidates) {
+      const name = candidate.replace(/^\/+/, "");
+      const key = `${unpackBase}/${name}`;
       try {
         const abs = resolveUploadPath(ENV.uploadDir, key);
         const info = await stat(abs);
         if (!info.isFile()) continue;
         bytes = info.size;
         hash = await hashFile(abs);
+        sourceAbs = abs;
+        sourceName = name;
         fileKey = key;
         break;
       } catch {
         // This candidate is not on disk; try the next original name.
       }
     }
-    if (!fileKey) {
+    if (!fileKey || !sourceAbs) {
       // The export did not carry the file; the text of the row stays.
       skipped += 1;
       continue;
+    }
+    /**
+     * A redacted stored path does not name the file, and `fileKey` is
+     * served back to the browser as `/uploads/<fileKey>` (C1.7). Keeping
+     * the export's name there would hand back the phone number the
+     * record path had already replaced, so the bytes are copied to a
+     * content-addressed name in the same import directory. The export's
+     * own file stays for the sticker registrar, and the directory is
+     * deleted as a unit.
+     */
+    if (sourceName !== storedName) {
+      const hashedKey = `${unpackBase}/${hash}${fileExtension(storedName)}`;
+      try {
+        await copyFile(sourceAbs, resolveUploadPath(ENV.uploadDir, hashedKey));
+        fileKey = hashedKey;
+      } catch (error) {
+        // Registering the original name would put the number in the URL.
+        console.warn(
+          "[Import] The media file could not be copied under a redacted name:",
+          (error as Error).message,
+        );
+        skipped += 1;
+        continue;
+      }
     }
 
     const duration = Number(meta.durationSec);

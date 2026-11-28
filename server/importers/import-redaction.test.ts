@@ -1,4 +1,5 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { strToU8, zipSync } from "fflate";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -66,6 +67,7 @@ vi.mock("../_core/style-profile", () => ({ afterRecordsChanged }));
 
 import { registerMedia } from "./media";
 import { startImport } from "./index";
+import { registerStickers } from "./stickers";
 
 const FILE_ID = 11;
 const PERSONA_ID = 5;
@@ -105,6 +107,10 @@ function zipOf(files: Record<string, string>): Uint8Array {
   return zipSync(data);
 }
 
+function sha256(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
 /** The CSV shape WeChatMsg/PyWxDump writes, with the voice transcript column. */
 const WECHAT_CSV = [
   "IsSender,StrContent,StrTime,Type,SubType,NickName,Transcript",
@@ -114,6 +120,43 @@ const WECHAT_CSV = [
 
 /** A WhatsApp line whose attachment name carries a phone number. */
 const WHATSAPP_TEXT = "[3/1/22, 20:00:00] 小满: <attached: IMG_13800138000.jpg>";
+
+/**
+ * Two attachments whose file names differ only by the phone number in
+ * them, so redaction turns both stored paths into `IMG_[phone].jpg`.
+ */
+const WHATSAPP_TWO_ATTACHMENTS = [
+  "[3/1/22, 20:00:00] 小满: <attached: IMG_13800138000.jpg>",
+  "[3/1/22, 20:00:05] 小满: <attached: IMG_13900139000.jpg>",
+].join("\n");
+
+/**
+ * A Telegram export whose sticker carries both a label and a file path.
+ *
+ * Instagram/Messenger sticker metadata has a path but no label, and a
+ * WhatsApp attachment has a path but the token `[sticker]`, so neither
+ * can name the sticker. Telegram records the emoji and the file name
+ * together, which is the shape the sticker library groups by.
+ */
+const TELEGRAM_STICKER_JSON = JSON.stringify({
+  name: "和她的聊天",
+  type: "private_chat",
+  id: 12345,
+  messages: [
+    {
+      id: 1,
+      type: "message",
+      date: "2022-03-01T20:00:00",
+      date_unixtime: "1646136000",
+      from: "小满",
+      from_id: "user1",
+      media_type: "sticker",
+      sticker_emoji: "🐶",
+      file: "stickers/sticker_13800138000.webp",
+      text: "",
+    },
+  ],
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -181,8 +224,10 @@ describe("a redacted import keeps the original out of every column (C1.7)", () =
     expect(done.redaction.replaced.phones).toBe(2);
     expect(JSON.stringify(reports())).not.toContain("13800138000");
     expect(JSON.stringify(rows)).not.toContain("13800138000");
-    // The transcript was not copied into the media row as the original.
-    expect(upsertMedia).not.toHaveBeenCalled();
+    // No assertion here on `upsertMedia`: a WeChat CSV export has no media
+    // file list (`wechat-csv` never sets `meta.path`), so this fixture
+    // cannot reach the registrar and `not.toHaveBeenCalled()` was always
+    // true. The next test feeds a media path through the real registrar.
   });
 
   it("puts the redacted transcript into media.transcript, not the original", async () => {
@@ -226,7 +271,8 @@ describe("a redacted import keeps the original out of every column (C1.7)", () =
   });
 
   it("redacts a media path and still registers the file it names (C1.7)", async () => {
-    const unpackDir = path.join(ENV.uploadDir, importUnpackRelKey(USER_ID, PERSONA_ID, FILE_ID));
+    const unpackRel = importUnpackRelKey(USER_ID, PERSONA_ID, FILE_ID);
+    const unpackDir = path.join(ENV.uploadDir, unpackRel);
     getPersonaFileById.mockResolvedValue(file("archive", "chats.zip"));
     try {
       const result = await startImport({
@@ -249,18 +295,132 @@ describe("a redacted import keeps the original out of every column (C1.7)", () =
       // The stored name is the redacted one...
       expect(image.meta.path).toBe("IMG_[phone].jpg");
       expect(JSON.stringify(rows)).not.toContain("13800138000");
-      // ...but the row still found the file, which kept its own name on
-      // disk for this import, and the media row points at the bytes.
+      // ...and the media row still found the bytes, but it points at a
+      // content-addressed copy: the browser gets `/uploads/<fileKey>`, so
+      // a key that kept the phone number would give the number back.
       const media = upsertMedia.mock.calls.at(-1)![0] as Record<string, any>;
       expect(media.kind).toBe("photo");
-      expect(media.fileKey).toBe(
-        `${importUnpackRelKey(USER_ID, PERSONA_ID, FILE_ID)}/IMG_13800138000.jpg`,
-      );
+      expect(media.fileKey).toBe(`${unpackRel}/${sha256("jpeg-bytes")}.jpg`);
+      expect(media.fileKey).not.toContain("13800138000");
+      // The record router serves the media row as this URL (record.ts), so
+      // the URL cannot carry the name either.
+      expect(`/uploads/${media.fileKey}`).not.toContain("13800138000");
+      expect(media.hash).toBe(sha256("jpeg-bytes"));
+      await expect(readFile(path.join(ENV.uploadDir, media.fileKey), "utf8"))
+        .resolves.toBe("jpeg-bytes");
+      // The export's own file stays on disk for the sticker registrar; the
+      // import directory is deleted as a unit.
+      await expect(readFile(path.join(unpackDir, "IMG_13800138000.jpg"), "utf8"))
+        .resolves.toBe("jpeg-bytes");
       // The report's media file list is redacted too.
       const done = reports().find((report) => report.progress === 100)!;
       expect((done.mediaFiles as string[]).join(" ")).toContain("[phone]");
       expect(JSON.stringify(reports())).not.toContain("13800138000");
     } finally {
+      await rm(unpackDir, { recursive: true, force: true });
+    }
+  });
+
+  it("registers both files when two original names redact to one token (C1.7)", async () => {
+    const unpackRel = importUnpackRelKey(USER_ID, PERSONA_ID, FILE_ID);
+    const unpackDir = path.join(ENV.uploadDir, unpackRel);
+    getPersonaFileById.mockResolvedValue(file("archive", "chats.zip"));
+    try {
+      const result = await startImport({
+        fileId: FILE_ID,
+        userId: USER_ID,
+        locale: "zh",
+        bytes: zipOf({
+          "chat.txt": WHATSAPP_TWO_ATTACHMENTS,
+          "IMG_13800138000.jpg": "jpeg-one",
+          "IMG_13900139000.jpg": "jpeg-two",
+        }),
+        format: "whatsapp-txt",
+        me: ["阿树"],
+        them: ["小满"],
+        redaction: { phones: true },
+      });
+
+      expect(result).toMatchObject({ status: "done", written: 2 });
+      const rows = writtenRows();
+      // Both stored paths are the same token now, so the registrar cannot
+      // tell the two files apart by the stored name alone.
+      expect(rows.map((row) => row.meta.path)).toEqual(["IMG_[phone].jpg", "IMG_[phone].jpg"]);
+      expect(JSON.stringify(rows)).not.toContain("13800138000");
+
+      const calls = upsertMedia.mock.calls.map((call) => call[0] as Record<string, any>);
+      expect(calls).toHaveLength(2);
+      const keys = calls.map((call) => String(call.fileKey));
+      // Each record resolves its own original file, so both files are
+      // registered — the second one used to be dropped on the floor.
+      expect(new Set(keys).size).toBe(2);
+      for (const key of keys) {
+        expect(key).not.toContain("13800138000");
+        expect(key).not.toContain("13900139000");
+      }
+      const contents = await Promise.all(
+        keys.map((key) => readFile(path.join(ENV.uploadDir, key), "utf8")),
+      );
+      // The rows are read back in write order, so the first record must
+      // have found the first file — not both rows hitting the same one.
+      expect(contents).toEqual(["jpeg-one", "jpeg-two"]);
+      expect(new Set(calls.map((call) => String(call.hash))).size).toBe(2);
+    } finally {
+      await rm(unpackDir, { recursive: true, force: true });
+    }
+  });
+
+  it("reuses the registered sticker when a later scan cannot find the source (C1.7)", async () => {
+    const unpackRel = importUnpackRelKey(USER_ID, PERSONA_ID, FILE_ID);
+    const unpackDir = path.join(ENV.uploadDir, unpackRel);
+    const stickerSource = path.join(unpackDir, "stickers", "sticker_13800138000.webp");
+    getPersonaFileById.mockResolvedValue(file("archive", "chats.zip"));
+    let storedCopy: string | null = null;
+    try {
+      const first = await startImport({
+        fileId: FILE_ID,
+        userId: USER_ID,
+        locale: "zh",
+        bytes: zipOf({
+          "result.json": TELEGRAM_STICKER_JSON,
+          "stickers/sticker_13800138000.webp": "sticker-bytes",
+        }),
+        format: "telegram-json",
+        me: ["阿树"],
+        them: ["小满"],
+        redaction: { phones: true },
+      });
+
+      expect(first).toMatchObject({ status: "done", written: 1 });
+      // The first import found the file and copied it out under its hash,
+      // so the sticker row does not depend on the import directory.
+      expect(upsertSticker).toHaveBeenCalledTimes(1);
+      const registered = upsertSticker.mock.calls[0]![0] as Record<string, any>;
+      expect(String(registered.key)).toMatch(/^[0-9a-f]{32}$/);
+      expect(registered.label).toBe("🐶");
+      expect(String(registered.fileKey)).toContain("/stickers/");
+      storedCopy = path.join(ENV.uploadDir, String(registered.fileKey));
+      await expect(stat(storedCopy)).resolves.toBeTruthy();
+
+      // The import directory goes away with the import; a later scan sees
+      // the redacted row but not the file it names. It must not add an
+      // image-less `label:` duplicate of the sticker it already has.
+      await rm(stickerSource, { force: true });
+      listStickers.mockResolvedValue([{ id: 1, ...registered }]);
+      upsertSticker.mockClear();
+
+      const again = await registerStickers({ personaId: PERSONA_ID, userId: USER_ID });
+
+      expect(again.registered).toBe(1);
+      // Nothing was copied again: the bytes are already in the library.
+      expect(again.copied).toBe(0);
+      const calls = upsertSticker.mock.calls.map((call) => call[0] as Record<string, any>);
+      expect(calls).toHaveLength(1);
+      expect(calls.some((call) => String(call.key).startsWith("label:"))).toBe(false);
+      expect(calls[0]!.key).toBe(registered.key);
+      expect(calls[0]!.fileKey).toBe(registered.fileKey);
+    } finally {
+      if (storedCopy) await rm(storedCopy, { force: true });
       await rm(unpackDir, { recursive: true, force: true });
     }
   });

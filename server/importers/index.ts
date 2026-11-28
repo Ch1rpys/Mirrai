@@ -29,7 +29,7 @@ import {
 import { importRecords, RecordLimitError } from "../collectors/db-store";
 import { afterRecordsChanged } from "../_core/style-profile";
 import { registerStickers } from "./stickers";
-import { registerMedia } from "./media";
+import { registerMedia, type RedactedMediaPathCandidates } from "./media";
 import { resolveStoredPath } from "../storage";
 import {
   importUnpackRelKey,
@@ -123,28 +123,32 @@ function reportOf(partial: ParseReport): ParseReport {
  * A record's `meta.path` is the file's name inside the import directory,
  * and it is text the person's own phone wrote: `IMG_13800138000.jpg`.
  * The stored record is redacted, but the file on disk keeps its name for
- * the import — copying or renaming it would break the upload keys the
- * media row needs. So the two registrars, which run after the rows are
+ * the import, so the two registrars, which run after the rows are
  * written, are handed the original names for the redacted ones they
- * read back. Two names can redact to one token ("13800138000.jpg" and
- * "13900139000.jpg"); both stay in the list and the registrar uses the
- * one that exists on disk.
+ * read back. Two names can redact to one token ("IMG_13800138000.jpg"
+ * and "IMG_13900139000.jpg"); both stay in the list, each tagged with
+ * the source line that wrote it, so a registrar can give every row back
+ * its own file instead of both rows hitting the first one on disk.
  */
 function redactedMediaPaths(
-  before: Array<{ meta?: Record<string, unknown> | null }>,
-  after: Array<{ meta?: Record<string, unknown> | null }>,
-): Map<string, string[]> {
-  const candidates = new Map<string, string[]>();
+  before: Array<{ meta?: Record<string, unknown> | null; lineNo?: number | null }>,
+  after: Array<{ meta?: Record<string, unknown> | null; lineNo?: number | null }>,
+): RedactedMediaPathCandidates {
+  const candidates: RedactedMediaPathCandidates = new Map();
   const keys = ["path", "relativePath"];
   for (let index = 0; index < after.length; index += 1) {
     const oldMeta = before[index]?.meta ?? {};
     const newMeta = after[index]?.meta ?? {};
+    const lineNoRaw = before[index]?.lineNo;
+    const lineNo = typeof lineNoRaw === "number" ? lineNoRaw : null;
     for (const key of keys) {
       const original = typeof oldMeta[key] === "string" ? oldMeta[key].trim() : "";
       const redacted = typeof newMeta[key] === "string" ? newMeta[key].trim() : "";
       if (!original || !redacted || original === redacted) continue;
       const list = candidates.get(redacted) ?? [];
-      if (!list.includes(original)) list.push(original);
+      if (!list.some((entry) => entry.original === original && entry.lineNo === lineNo)) {
+        list.push({ original, lineNo });
+      }
       candidates.set(redacted, list);
     }
   }
@@ -597,9 +601,9 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
       }))
     : redacted.records;
   /** The file names redaction replaced, for the media/sticker registrars (C1.7). */
-  const pathCandidates = redacted.counts
+  const pathCandidates: RedactedMediaPathCandidates = redacted.counts
     ? redactedMediaPaths(assigned, redacted.records)
-    : new Map<string, string[]>();
+    : new Map();
   const redactionReport = redacted.counts
     ? redactionReportOf(redactionOptions, redacted.counts)
     : undefined;
@@ -666,7 +670,8 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
         personaId: file.personaId,
         userId: input.userId,
         timeZone: user?.timezone ?? persona?.timezone ?? null,
-        // The stored path is redacted; the file keeps its name on disk (C1.7).
+        // The stored path is redacted; the registrar maps back to the file's
+        // own name and stores a content-addressed key instead (C1.7).
         ...(pathCandidates.size > 0 ? { pathCandidates } : {}),
       });
     } catch (error) {
