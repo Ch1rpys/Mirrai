@@ -29,7 +29,7 @@ import { normalizePeriods } from "../shared/periods";
 import { dayPartFromHour } from "../shared/act-profile";
 import { zoneForRecords, zonedHour } from "../shared/timezone";
 import { labelEvalCases } from "../server/eval/act-labels";
-import { heavyModeLabelsNow } from "../server/eval/heavy-mode";
+import { labelEvalCasesForRun } from "../server/eval/heavy-mode";
 import { previewLayersUsed, runEval } from "../server/eval/run";
 import {
   compareMetricCI,
@@ -305,10 +305,14 @@ const cut = stored.length
  * speech act of every line that has none, and "show me the cost" was
  * paying for one request before it printed the cost.
  */
-const labelsNow = heavyModeLabelsNow({ ablate, tune, yes });
-const cases: EvalCaseData[] = labelsNow
-  ? (await labelEvalCases(cut, { userId, locale })).map(withDayPart)
-  : [];
+const { labelsNow, cases } = await labelEvalCasesForRun<EvalCaseData>({
+  ablate,
+  tune,
+  yes,
+  cases: cut,
+  label: async (items) =>
+    (await labelEvalCases(items, { userId, locale })).map(withDayPart),
+});
 if (labelsNow && (!stored.length || cut.some((item) => !item.expectedAct))) {
   await db.saveEvalCases(
     personaId,

@@ -69,6 +69,7 @@ vi.mock("../_core/style-profile", () => ({
 }));
 
 import { runSkillPipeline } from "./pipeline";
+import { copy } from "@shared/copy";
 import { renderFixture } from "../test-fixtures/render";
 import {
   buildXiaomanRecords,
@@ -285,9 +286,73 @@ describe("the v5 seam on a named transcript", () => {
     );
   }, 60_000);
 
-  it("mines the same layers from structured records, with the fixture's own times", async () => {
+  it("measures a re-run with the keep decision the user already made (C10.1)", async () => {
+    // The user kept the hurtful lines last time. This run confirms the
+    // same lines again and its report is "pending" until the user
+    // decides — but the manual's rule is that a stored keep filters
+    // nothing, so the measurement must not be handed the pending report.
+    // The persona write below already merges the stored decision; it is
+    // the measurement that used to disagree with it.
+    const harmful = buildXiaomanRecords({ withHarm: true }).map((row) => ({
+      id: row.id,
+      role: row.role,
+      content: row.content,
+      timestamp: row.timestamp,
+      kind: row.kind,
+    }));
+    const storedHarm = {
+      categories: [{ kind: "belittle", count: 5, examples: [2, 4, 6] }],
+      decision: "keep",
+      decidedAt: "2026-01-01T00:00:00.000Z",
+    };
+    getPersonaById.mockResolvedValue({
+      id: 1,
+      userId: 1,
+      name: XIAOMAN_NAME,
+      personaData: { harmReport: storedHarm },
+    });
+    const defaultInvoke = invoke.getMockImplementation();
+    invoke.mockImplementation(async (request: unknown) => {
+      const blob = JSON.stringify(request);
+      if (blob.includes("只看这一句本身")) {
+        return JSON.stringify([0, 1, 2, 3, 4].map((i) => ({ i, harm: true })));
+      }
+      return defaultInvoke ? defaultInvoke(request) : PERSONA_JSON;
+    });
     await runSkillPipeline({
       ...baseInput,
+      chatContent: "",
+      records: harmful,
+    });
+    const measured = measureStyleProfile.mock.calls.at(-1)?.[0] as
+      | { personaDataOverride?: { harmReport?: { decision?: string; categories?: unknown[] } } }
+      | undefined;
+    expect(measured?.personaDataOverride?.harmReport?.decision).toBe("keep");
+    // This run's newly confirmed categories still reach the measurement.
+    expect(measured?.personaDataOverride?.harmReport?.categories).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "belittle", count: 5 })]),
+    );
+    // And the write keeps the decision the user made.
+    expect(writtenPersona().harmReport?.decision).toBe("keep");
+    expect(writtenPersona().harmReport?.decidedAt).toBe("2026-01-01T00:00:00.000Z");
+    expect(writtenPersona().harmReport?.categories?.[0]?.count).toBe(5);
+  }, 60_000);
+
+  it("mines the same layers from structured records, with the fixture's own times", async () => {
+    /**
+     * The structured records are the only material (A4/A2).
+     *
+     * The upload entry point no longer puts the record table into
+     * `chatContent`; a persona imported through the wizard or the CLI
+     * arrives as `records`. This case used to pass `chatContent` too, so
+     * it stayed green even when the records path was disconnected — the
+     * legacy transcript supplied every line the analysis read. Setting
+     * it to the empty string here means a broken records path has no
+     * fallback to hide behind.
+     */
+    await runSkillPipeline({
+      ...baseInput,
+      chatContent: "",
       records: fixture.map((row) => ({
         id: row.id,
         role: row.role,
@@ -297,5 +362,38 @@ describe("the v5 seam on a named transcript", () => {
       })),
     });
     expectMinedV5(writtenPersona(), firstAfterSilenceIso());
+
+    /**
+     * The analysis path actually read the records.
+     *
+     * Above two hundred rows the analysis is the chunked map stage, and
+     * its prompts are the ones with the observation-card instruction.
+     * Reading only those (not every model call in the run) is what makes
+     * this an assertion about the analysis path: the intake, harm and
+     * builder prompts also carry fragments of the material.
+     */
+    const observationCard = copy("zh", "prompts.distill.observationCard", {
+      name: XIAOMAN_NAME,
+    });
+    const mapMaterials: string[] = [];
+    for (const [request] of invoke.mock.calls) {
+      // `invokeForUserWithReason` takes one object with `messages` in it.
+      const messages = Array.isArray(request)
+        ? request
+        : (request as { messages?: unknown } | undefined)?.messages;
+      if (!Array.isArray(messages)) continue;
+      const [system, user] = messages as Array<{ role?: string; content?: string }>;
+      if (system?.role !== "system") continue;
+      if (!String(system.content ?? "").includes(observationCard)) continue;
+      mapMaterials.push(String(user?.content ?? ""));
+    }
+    const analysisMaterial = mapMaterials.join("\n");
+    expect(mapMaterials.length).toBeGreaterThan(0);
+    expect(analysisMaterial).not.toContain("暂无聊天记录");
+    const sample = fixture.find(
+      (row) => row.role === "assistant" && row.content.trim().length >= 4,
+    );
+    expect(sample).toBeTruthy();
+    expect(analysisMaterial).toContain(sample!.content.trim());
   }, 60_000);
 });

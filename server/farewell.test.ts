@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 const getMemoriesByPersonaId = vi.fn();
 const getLatestChatSummary = vi.fn();
@@ -54,6 +54,28 @@ vi.mock("./llm", () => ({
 
 import { buildFarewellPrompt, fallbackFarewellLetter, writeFarewellLetter } from "./chat/farewell";
 import { copy } from "@shared/copy";
+
+/**
+ * The layout these snapshots were written for.
+ *
+ * `buildFarewellPrompt` assembles its system prompt with
+ * `buildSystemPrompt`, which falls back to `process.env.PROMPT_LAYOUT`.
+ * With `PROMPT_LAYOUT=cache` exported the paragraphs were reordered and
+ * the snapshot below failed — the file was only green on a machine that
+ * happened not to set the variable. `buildFarewellPrompt` takes no
+ * layout option, so the environment is the only seam; pin it here and
+ * put it back afterwards (B2.9 test isolation).
+ */
+const previousPromptLayout = process.env.PROMPT_LAYOUT;
+
+beforeEach(() => {
+  process.env.PROMPT_LAYOUT = "classic";
+});
+
+afterEach(() => {
+  if (previousPromptLayout === undefined) delete process.env.PROMPT_LAYOUT;
+  else process.env.PROMPT_LAYOUT = previousPromptLayout;
+});
 
 /**
  * The farewell letter.

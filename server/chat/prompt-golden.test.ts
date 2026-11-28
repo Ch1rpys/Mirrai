@@ -140,7 +140,31 @@ import { buildSystemPrompt } from "../_core/persona-utils";
 import { runConversation } from "./service";
 
 const NOW = new Date("2026-01-15T12:00:00Z");
-const OPTIONS = { now: NOW, locale: "zh" as const, timeZone: "Asia/Shanghai" };
+/** Everything except the layout, for the paths that read `PROMPT_LAYOUT`. */
+const ENV_OPTIONS = { now: NOW, locale: "zh" as const, timeZone: "Asia/Shanghai" };
+
+/**
+ * The layout this file's snapshots were written for.
+ *
+ * `buildSystemPrompt` falls back to `process.env.PROMPT_LAYOUT`, and so
+ * does the turn assembly (`runConversation`). A `PROMPT_LAYOUT=cache` in
+ * the environment reordered every block and failed ten snapshots — the
+ * goldens were only green because the environment happened not to have
+ * the variable. The option pins the direct calls; the hooks below pin
+ * the paths that only read the environment (B2.9 test isolation).
+ */
+const OPTIONS = { ...ENV_OPTIONS, layout: "classic" as const };
+
+const previousPromptLayout = process.env.PROMPT_LAYOUT;
+
+beforeEach(() => {
+  process.env.PROMPT_LAYOUT = "classic";
+});
+
+afterEach(() => {
+  if (previousPromptLayout === undefined) delete process.env.PROMPT_LAYOUT;
+  else process.env.PROMPT_LAYOUT = previousPromptLayout;
+});
 
 /**
  * i18n:allow-identifier — these are the persona's own words, not
@@ -317,6 +341,33 @@ describe("the prompt of a persona with no sixth-stage data", () => {
     expect(
       buildSystemPrompt(sevenLayerPersona(), { ...OPTIONS, locale: "en" }),
     ).toMatchSnapshot();
+  });
+
+  /**
+   * The pin has to win over the environment (B2.9 test isolation).
+   *
+   * The suite used to depend on the machine: with `PROMPT_LAYOUT=cache`
+   * exported, `buildSystemPrompt` reordered the blocks and every golden
+   * here failed. The explicit layout option is the pin — but a pin that
+   * is never shown to beat the environment can be deleted and every
+   * snapshot would stay green, because CI usually runs without the
+   * variable. So this test sets the variable itself, proves the variable
+   * still changes the unpinned prompt, and then asserts the golden
+   * prompt is unchanged.
+   */
+  it("keeps the classic layout when the environment asks for cache", () => {
+    const golden = buildSystemPrompt(v5Persona(), OPTIONS);
+    const previous = process.env.PROMPT_LAYOUT;
+    process.env.PROMPT_LAYOUT = "cache";
+    try {
+      // The switch is live: without the pin, the environment reorders it.
+      expect(buildSystemPrompt(v5Persona(), ENV_OPTIONS)).not.toBe(golden);
+      // The pin wins: the prompt the snapshots pin is still produced.
+      expect(buildSystemPrompt(v5Persona(), OPTIONS)).toBe(golden);
+    } finally {
+      if (previous === undefined) delete process.env.PROMPT_LAYOUT;
+      else process.env.PROMPT_LAYOUT = previous;
+    }
   });
 });
 

@@ -4,10 +4,12 @@ import { GRAMMAR_DEFAULT_LINES, GRAMMAR_MAX_LINES, shapeGrammar } from "./gramma
 /**
  * The shape checker written a second way.
  *
- * The grammar is a constraint for llama.cpp; there is no GBNF parser in
- * this repository to run a sample through. This function is the same shape
- * expressed directly, so the test can say which strings the grammar is
- * meant to accept and which it is meant to refuse.
+ * This is the *intent* — which strings the grammar is meant to accept and
+ * which it is meant to refuse. It is not coupled to the implementation:
+ * the old, too-narrow grammar satisfied it too, because it was a second
+ * hand-written checker rather than a reading of the produced GBNF. The
+ * assertions in "the grammar the decoder receives" below read the actual
+ * `shapeGrammar` output and are what pin the implementation (B9.3).
  */
 function fitsShape(text: string, maxLines: number): boolean {
   if (text === "") return false;
@@ -47,6 +49,66 @@ describe("shapeGrammar", () => {
     expect(shapeGrammar({ maxLines: Number.NaN })).toContain(
       `(nl line){0,${GRAMMAR_DEFAULT_LINES - 1}}`,
     );
+  });
+});
+
+describe("the grammar the decoder receives (B9.3)", () => {
+  /**
+   * GBNF as it is produced: one rule per line, `name ::= body`.
+   *
+   * The old test only exercised `fitsShape`, a second hand-written
+   * checker — the old grammar (`digit ::= [0-9]` and a `safe` rule that
+   * looked at the character after the first digit) satisfied it, so the
+   * only thing pinning the fix was the snapshot. These assertions read
+   * the text llama.cpp would actually receive.
+   */
+  function rulesOf(text: string): Map<string, string> {
+    const rules = new Map<string, string>();
+    for (const line of text.split("\n")) {
+      const match = /^([a-z_]+)\s*::=\s*(.+)$/.exec(line);
+      if (match) rules.set(match[1]!, match[2]!);
+    }
+    return rules;
+  }
+
+  const grammar = shapeGrammar({ maxLines: 3 });
+  const rules = rulesOf(grammar);
+
+  it("lets a number be any run of digits, not one character", () => {
+    const digits = rules.get("digits") ?? "";
+    expect(digits).toBeTruthy();
+    // `[0-9]+`: a run, not the old single-character `[0-9]`.
+    expect(digits).toMatch(/^\[0-9\]\+$/);
+    expect(rules.has("digit")).toBe(false);
+    expect(grammar).not.toContain("digit ::= [0-9]");
+  });
+
+  it("rejects a bullet mark after the digits, including 、 ) ）", () => {
+    const spacer = rules.get("spacer") ?? "";
+    expect(spacer).toBeTruthy();
+    // A negated character class, so the *second* character after the
+    // digits cannot be `、`, `)` or `）` — nor `.` (the list marker).
+    expect(spacer).toMatch(/^\[\^/);
+    for (const mark of [".", "、", ")", "）"]) {
+      expect(spacer).toContain(mark);
+    }
+    const line = rules.get("line") ?? "";
+    // Digits are only accepted as a line through `digits spacer rest`,
+    // so "12. " cannot be read as digits + rest.
+    expect(line).toContain("digits spacer rest");
+    expect(line.split("|").map((part) => part.trim())).toEqual([
+      "plain rest",
+      "digits",
+      "digits spacer rest",
+    ]);
+    expect(rules.has("safe")).toBe(false);
+    expect(grammar).not.toContain("safe ::=");
+  });
+
+  it("does not contain the old too-narrow line rule", () => {
+    expect(grammar).not.toContain("line ::= plain rest | digit | digit safe rest");
+    expect(rules.get("line")).not.toContain("digit safe rest");
+    expect(rules.get("line")).not.toMatch(/\bdigit\b/);
   });
 });
 

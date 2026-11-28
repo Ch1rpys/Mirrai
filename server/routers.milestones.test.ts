@@ -8,6 +8,13 @@ import type { TrpcContext } from "./_core/context";
  *
  * Each caller only sees their own first letter, first sentence taken
  * back, and first goodbye. Somebody else's dates are not mixed in.
+ *
+ * Wiring only: `getUserMilestones` is mocked in this file, so it cannot
+ * prove the query filters by user — a mock filter is whatever the mock
+ * says. The behavior ("counts only the current user") is pinned against
+ * a real database with two users in `server/db-records.test.ts`, under
+ * "the user's own first dates". What is tested here is that the router
+ * hands the caller's id to the helper and returns what it returns.
  */
 
 const store: Record<number, {

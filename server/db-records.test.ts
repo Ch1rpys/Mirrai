@@ -5,6 +5,7 @@ import {
   countFidelityPairs,
   createCollectedMessages,
   createFidelityPair,
+  createOutboundLetter,
   listFidelityPairs,
   createLetter,
   createPersona,
@@ -15,12 +16,17 @@ import {
   deletePersonaFile,
   deleteRecordsByFile,
   getCollectedMessagesForPersona,
+  getOutboundLetters,
+  getPersonaById,
   getPersonaStyleProfile,
   getRecordsAround,
   getRecordSourceSummary,
+  getUserMilestones,
   getWaitingNotes,
   iterateRecords,
+  setGraduationStatus,
   setLetterDone,
+  setOutboundLetterStatus,
 } from "./db";
 import { importRecords } from "./collectors/db-store";
 import { measureStyleProfile } from "./_core/style-profile";
@@ -542,6 +548,93 @@ describe.skipIf(!DATABASE_URL)("the record table", () => {
       expect(rows[0].id).toBe(open!.id);
     } finally {
       await deleteUserAccount(userId);
+    }
+  });
+});
+
+/**
+ * The user's first letter, first sent letter and first goodbye (A4/A2).
+ *
+ * The router test mocked `getUserMilestones` whole, so "counts only the
+ * current user" was defined by the mock: breaking the query (counting
+ * another user's rows, or all letters instead of only letters) left it
+ * green. This pins the real query against a real database with two
+ * users whose firsts live in different tables.
+ */
+describe.skipIf(!DATABASE_URL)("the user's own first dates", () => {
+  it("returns each account's own firsts and nothing from the other account", async () => {
+    const suffix = `${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+    const userA = await createUser({
+      username: `milestones-a-${suffix}`,
+      passwordHash: "x",
+      name: "A",
+    });
+    const userB = await createUser({
+      username: `milestones-b-${suffix}`,
+      passwordHash: "x",
+      name: "B",
+    });
+    const personaA = await createPersona({ userId: userA, name: "a-head" });
+    const personaB = await createPersona({ userId: userB, name: "b-head" });
+    try {
+      /**
+       * A wrote one letter. B is the cross-check account: a note for
+       * later (which must not count as a letter), a real letter written
+       * after a pause (so a query that forgot to filter by user would
+       * report A's earlier letter as B's first), an outbound letter that
+       * was sent, and a persona that graduated. None of B's rows may
+       * reach A's result, and B must not see A's letter.
+       */
+      const letterA = await createLetter({
+        userId: userA,
+        personaId: personaA,
+        body: "第一封信",
+        status: "private",
+      });
+      // The earliest row in `letters` for B: a query that forgot
+      // `kind = "letter"` would report this note as B's first letter.
+      await createLetter({
+        userId: userB,
+        personaId: personaB,
+        body: "以后再说",
+        status: "private",
+        kind: "todo",
+      });
+      // Timers never fire early, so B's letter is strictly later than
+      // A's — that gap is what makes a missing `userId` filter visible.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const letterB = await createLetter({
+        userId: userB,
+        personaId: personaB,
+        body: "第二封信",
+        status: "private",
+      });
+      const outboundId = await createOutboundLetter({
+        userId: userB,
+        personaId: personaB,
+        text: "说出口的话",
+      });
+      expect(outboundId).toBeTruthy();
+      expect(await setOutboundLetterStatus(outboundId!, userB, "sent")).toBe(true);
+      await setGraduationStatus(personaB, userB, "graduated", "再见");
+
+      const a = await getUserMilestones(userA);
+      expect(a.firstLetterAt).toEqual(letterA!.createdAt);
+      expect(a.firstLetterAt).not.toEqual(letterB!.createdAt);
+      expect(a.firstOutboundSentAt).toBeNull();
+      expect(a.firstFarewellAt).toBeNull();
+
+      const b = await getUserMilestones(userB);
+      // B's own letter, not A's earlier one and not B's note.
+      expect(b.firstLetterAt).toEqual(letterB!.createdAt);
+      const [sent] = await getOutboundLetters(personaB, userB);
+      expect(b.firstOutboundSentAt).toEqual(sent!.sentAt);
+      const personaRow = await getPersonaById(personaB, userB);
+      expect(personaRow?.graduatedAt).toBeTruthy();
+      expect(b.firstFarewellAt).toEqual(personaRow!.graduatedAt);
+    } finally {
+      await deleteUserAccount(userA);
+      await deleteUserAccount(userB);
     }
   });
 });

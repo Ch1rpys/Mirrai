@@ -45,16 +45,54 @@ describe("PROMPT_LAYOUT", () => {
     expect(cache.prompt.indexOf(cache.volatile)).toBeGreaterThanOrEqual(cache.stable.length);
   });
 
-  it("keeps the relative order inside each group the same as classic", () => {
-    const classic = buildSystemPromptParts(persona, { ...options, layout: "classic" });
-    const cache = buildSystemPromptParts(persona, { ...options, layout: "cache" });
+  it("keeps each group's internal order, except the act moved to the front", () => {
+    /**
+     * Production passes the seed-turn note.
+     *
+     * `generate.ts` sets `seedTurnsNote: seeds.note` whenever it splices
+     * recorded exchanges into the message list, and that paragraph is
+     * the first volatile block in the classic layout. The old test did
+     * not pass it, so the volatile group it compared never contained
+     * that block — and the claim it was named after ("the relative
+     * order inside each group is the same as classic") was never
+     * exercised. A probe with the production shape shows the cache
+     * layout really does reorder the volatile group (B2.9).
+     */
+    const seedTurnsNote = copy("zh", "prompt.seedTurnsNote");
+    const production = { ...options, seedTurnsNote };
+    const classic = buildSystemPromptParts(persona, { ...production, layout: "classic" });
+    const cache = buildSystemPromptParts(persona, { ...production, layout: "cache" });
+
+    // The stable group keeps classic's paragraphs, in classic's order.
     expect(paragraphs(cache.stable)).toEqual(paragraphs(classic.stable));
+
+    const act = copy("zh", "prompt.actHeading");
     const classicVolatile = paragraphs(classic.volatile);
     const cacheVolatile = paragraphs(cache.volatile);
-    const act = copy("zh", "prompt.actHeading");
-    expect(cacheVolatile[0]).toContain(act);
-    expect(classicVolatile.filter((block) => block.includes(act))).toHaveLength(1);
     expect([...cacheVolatile].sort()).toEqual([...classicVolatile].sort());
+
+    /**
+     * Deviation from the acceptance sentence "两类内部的相对顺序与
+     * classic 相同" (the relative order inside both groups is the same
+     * as classic).
+     *
+     * It is not literally true for the volatile group, and the manual's
+     * own 做法 3 says why: the act instruction must be the first
+     * volatile block, so the cache layout moves it there. The probe
+     * (passing the seed note, as production does) shows the difference:
+     * classic starts the volatile group with the seed-turn note and has
+     * the act instruction later; cache starts with the act instruction
+     * and the seed note is second. What the layout really guarantees —
+     * asserted below — is: the same set of paragraphs; the act first;
+     * every *other* volatile paragraph in classic's relative order. The
+     * acceptance wording is recorded here rather than asserted.
+     */
+    expect(cacheVolatile[0]).toContain(act);
+    expect(classicVolatile[0]).toBe(seedTurnsNote);
+    expect(cacheVolatile[1]).toBe(seedTurnsNote);
+    expect(classicVolatile.filter((block) => block.includes(act))).toHaveLength(1);
+    const withoutAct = (blocks: string[]) => blocks.filter((block) => !block.includes(act));
+    expect(withoutAct(cacheVolatile)).toEqual(withoutAct(classicVolatile));
   });
 
   it("contains the same paragraphs in both layouts", () => {
