@@ -492,17 +492,34 @@ function remapRecordIds(value: unknown, map: Map<number, number>): unknown {
  * the rows are inserted, and every stored reference is rewritten through
  * them. A failure removes the persona and the files.
  */
-/** Removes now-empty directories up to the uploads root, and no further. */
-async function removeEmptyParents(filePath: string): Promise<void> {
-  const root = path.resolve(ENV.uploadDir);
+/**
+ * Removes now-empty directories up to the uploads root, and no further.
+ *
+ * `rmdir` is allowed to fail and the walk keeps going (C9.5). It used to
+ * `return` on the first failure, so one directory that was already gone
+ * — two files in different subfolders are cleaned in either order — left
+ * the empty `personas/<user>/<persona>/` chain behind. A level that is
+ * merely non-empty costs one failed call and then the parent fails too;
+ * that is harmless, and it is what lets a later file's cleanup finish the
+ * chain. The root itself is never removed: a failed import leaves no
+ * persona folders, but it does not remove the uploads directory.
+ */
+export async function removeEmptyParents(
+  filePath: string,
+  rootPath: string = ENV.uploadDir,
+): Promise<void> {
+  const root = path.resolve(rootPath);
   let dir = path.dirname(path.resolve(filePath));
   while (dir.startsWith(`${root}${path.sep}`)) {
     try {
       await fs.rmdir(dir);
     } catch {
-      return;
+      // ENOENT: somebody else already removed it — keep walking up.
+      // ENOTEMPTY: this level stays, and its ancestors are non-empty too.
     }
-    dir = path.dirname(dir);
+    const parent = path.dirname(dir);
+    if (parent === dir) return;
+    dir = parent;
   }
 }
 

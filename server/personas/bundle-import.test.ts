@@ -9,7 +9,7 @@ import {
   PERSONA_BUNDLE_PARTS,
   writePersonaBundle,
 } from "../_core/bundle";
-import { bundleFileAllowed, importPersonaBundle } from "./bundle";
+import { bundleFileAllowed, importPersonaBundle, removeEmptyParents } from "./bundle";
 
 /**
  * What file entries a persona bundle may carry (C9.5, C9.4 of the manual's
@@ -176,5 +176,46 @@ describe("bundle file entries", () => {
     await expect(importPersonaBundle({ userId: 13, filePath: bundlePath })).rejects.toBeInstanceOf(
       BackupFormatError,
     );
+  });
+});
+
+describe("removeEmptyParents", () => {
+  it("keeps walking after a directory that is already gone", async () => {
+    /**
+     * C9.5: two files in different subfolders are cleaned in either
+     * order, so the second call often finds its leaf already gone. The
+     * walk used to stop on that first `rmdir` failure and skip the empty
+     * `personas/<user>/<persona>/` chain above it.
+     */
+    const root = tempRoot();
+    const personaDir = path.join(root, "personas", "1", "5");
+    await fs.mkdir(personaDir, { recursive: true });
+    await removeEmptyParents(path.join(personaDir, "missing", "file.jpg"), root);
+    await expect(fs.stat(personaDir)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.stat(path.join(root, "personas"))).rejects.toMatchObject({ code: "ENOENT" });
+    // The uploads root itself always stays.
+    await expect(fs.stat(root)).resolves.toBeTruthy();
+  });
+
+  it("removes an ordinary empty chain but never the uploads root", async () => {
+    const root = tempRoot();
+    const personaDir = path.join(root, "personas", "2", "7");
+    await fs.mkdir(personaDir, { recursive: true });
+    const file = path.join(personaDir, "note.jpg");
+    await fs.writeFile(file, "x");
+    await fs.rm(file);
+    await removeEmptyParents(file, root);
+    await expect(fs.stat(path.join(root, "personas"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.stat(root)).resolves.toBeTruthy();
+  });
+
+  it("keeps a directory that still holds something", async () => {
+    const root = tempRoot();
+    const personaDir = path.join(root, "personas", "3", "9");
+    await fs.mkdir(personaDir, { recursive: true });
+    await fs.writeFile(path.join(personaDir, "keep.txt"), "keep");
+    await removeEmptyParents(path.join(personaDir, "other", "file.jpg"), root);
+    await expect(fs.readFile(path.join(personaDir, "keep.txt"), "utf-8")).resolves.toBe("keep");
+    await expect(fs.stat(personaDir)).resolves.toBeTruthy();
   });
 });
