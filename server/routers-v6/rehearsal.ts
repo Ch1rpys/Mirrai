@@ -44,112 +44,6 @@ import type { Locale } from "@shared/copy";
 /** The daily cap, in the user's own calendar. */
 export const REHEARSAL_DAILY_LIMIT = 20;
 
-/**
- * The same two guards in the phrasings the shared table does not list.
- *
- * `shared/rehearsal.ts` is the canonical table, built from the manual's
- * own examples. The acceptance review found that questions asking the
- * same thing in other words still went to "three possibilities" — the
- * room then put a whole model back-and-forth in front of the user for a
- * question it must refuse without calling a model at all. The retry
- * guard had the same gap: a second line that made the promise in other
- * words got through.
- *
- * Both lists are deliberately conservative: every pattern asks what the
- * *other person* would promise, decide, agree to, or commit to, which is
- * the answer the replica cannot give. Ordinary questions ("你今天忙吗")
- * are not caught.
- */
-// i18n:allow-input — matched against what the user typed
-const THEIR_ANSWER_QUESTION_PATTERNS: RegExp[] = [
-  // 你会答应我吗 / 你愿意答应下来吗、同意和好吗
-  /你(会|愿意|肯)(不会|不愿意|不肯)?(答应我|答应(下来)?|同意(和好|复合|再试|原谅|重新开始)|同意我)/,
-  // 你会原谅我吗 / 你愿意回来吗 / 你决定原谅我了吗
-  /你(会|愿意|打算|决定|能|可以)(不会|不愿意|不打算)?(原谅我|回来|复合|和好|再试|重新开始)/,
-  // 会不会 / 愿不愿意 / 能不能 … （A-not-A 问句）
-  /你(会不会|愿不愿意|肯不肯|能不能|可不可以|打不打算)(原谅|答应|同意|接受|回来|复合|和好|再试|重新开始|给我们|给我)/,
-  // 我们还能重新开始吗 / 咱们会不会在一起
-  /(我们|咱们)(还能|能不能|会不会|可不可以|可以|要不要)(重新开始|重新在一起|和好|复合|在一起)/,
-  // 我们会和好吗 / 能重新开始吗
-  /(和好|复合|重新开始|重新在一起)(吗|么|呢|？|\?)/,
-  // 你会给我一次机会吗 / 能不能再给我一次机会
-  /(会|能|可以|愿意|肯)(再)?给(我|我们)(一|另)?次机会/,
-  // 你依然爱我吗 / 你还喜欢我吗（共享词表只覆盖「还爱…吗」这一种）
-  /(你|你依然|你仍然|你一直)(还|依然|仍然|一直)?(爱|喜欢|在乎)(着)?我(吗|么|呢|？|\?)/,
-  // 要不要和好 / 我们要不要重新开始
-  /要不要(和好|复合|重新开始|再试一次|重新在一起)/,
-  // 原谅我吗
-  /原谅我(吗|么|呢|？|\?)/,
-  // will/would you …; would you give me another chance
-  /(will|would|can|could|do) you (still )?(forgive|agree|promise|stay|come back|take me back|try again|give me)/i,
-  // can we start over / will we get back together
-  /(will|would|can|could|should) we (start over|try again|get back together|be together)/i,
-  // are you going to forgive me; do you want to get back together
-  /(are you (going to|gonna)|do you (want|plan|intend) to) (forgive|come back|stay|try|agree|promise|get back together|start over)/i,
-  // will you stay / wait for me / say yes
-  /will you (stay|wait for me|say yes)/i,
-  // do you still care about me
-  /do you (still )?care about me/i,
-  // would you give me another chance (and the like)
-  /(would|will) you give (me|us) (another |a second |one more )?chance/i,
-];
-
-// i18n:allow-input — matched against what the model wrote
-const ANSWERS_FOR_THEM_PATTERNS: RegExp[] = [
-  // 我会原谅你 / 我决定原谅你 / 我愿意再试一次
-  /(我|我们)(会|决定|打算|愿意|可以|能)(原谅|答应|同意|接受|回来|复合|和好|再试|重新开始)/,
-  // 我们重新开始吧 / 咱们再在一起吧
-  /(我们|咱们)(重新|再)(开始|在一起|试试|来过)/,
-  // 我会等你 / 我会一直陪着你
-  /(我|我们)(会|愿意)(一直)?(等你|陪着你|陪在你身边|一直在)/,
-  // 我不恨你了
-  /我(已经)?不恨你/,
-  // 我给你一次机会 / 再给你一次机会
-  /(再)?给你(一|另)?次机会/,
-  // 我同意和好 / 我决定分手
-  /我(决定|同意)(和好|复合|分开|分手|做朋友|当朋友)/,
-  // 我们分开吧 / 我们还是做朋友吧
-  /(我们|咱们)(还是)?(分开|分手|做朋友|当朋友)(吧)?/,
-  // 我依然爱你 / 我还是爱你
-  /我(依然|仍然|一直|还是)爱你/,
-  // 我们在一起吧
-  /我们(重新|还是)?在一起吧/,
-  // I'll forgive you / I've decided to forgive you
-  /i('ll| will| have decided to|'ve decided to| decided to|'m going to| am going to) (forgive|come back|stay|try again|give you|agree|accept)/i,
-  // I'm willing to try again
-  /i('m| am) willing to (forgive|try|come back)/i,
-  // I'll give you another chance
-  /i('ll| will) give you (another |a second |one more )?chance/i,
-  // we can start over / let's try again
-  /(we (can|will|should) |let'?s )(start over|try again|be together|get back together|be friends)/i,
-  // I'll wait for you
-  /i('ll| will) wait for you/i,
-  // I still have feelings for you
-  /i still (have feelings for you|care about you)/i,
-  // I'm not angry anymore
-  /i('m| am) not (angry|mad|upset) anymore/i,
-];
-
-/** The shared question table plus the phrasings it does not list. */
-export function asksForTheirAnswer(line: string): boolean {
-  const value = String(line ?? "").trim();
-  if (!value) return false;
-  return (
-    isCommitmentQuestion(value) ||
-    THEIR_ANSWER_QUESTION_PATTERNS.some((pattern) => pattern.test(value))
-  );
-}
-
-/** The shared reply table plus the phrasings it does not list. */
-export function answersForThem(reply: string): boolean {
-  const value = String(reply ?? "").trim();
-  if (!value) return false;
-  return (
-    containsCommitment(value) ||
-    ANSWERS_FOR_THEM_PATTERNS.some((pattern) => pattern.test(value))
-  );
-}
-
 export interface RehearsalVariant {
   act: string;
   share: number;
@@ -229,7 +123,7 @@ export const rehearsalRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: copy(ctx.locale, "errors.budgetOver") });
       }
 
-      if (asksForTheirAnswer(input.line)) {
+      if (isCommitmentQuestion(input.line)) {
         const id = await createRehearsal({
           userId: ctx.user.id,
           personaId: input.personaId,
@@ -401,9 +295,9 @@ async function generateVariant(params: {
    * retry could pass it again — the user saw the replica decide for the
    * real person.
    */
-  if (!answersForThem(first)) return first || null;
+  if (!containsCommitment(first)) return first || null;
   const second = await generate(params.regenerateInstruction);
-  if (!second || answersForThem(second)) return null;
+  if (!second || containsCommitment(second)) return null;
   return second;
 }
 

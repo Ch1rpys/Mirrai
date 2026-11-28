@@ -208,6 +208,44 @@ describe("rehearsal.run", () => {
     expect(retrieveMemories).not.toHaveBeenCalled();
   });
 
+  it("refuses the proposal phrasings that used to reach the model (C3.2)", async () => {
+    // The acceptance found these returning three generated possibilities:
+    // a question whose answer belongs to the other person must be refused
+    // before any model call. Before the fix this test failed on the first
+    // line — `variants` came back and `planTurn` had been called.
+    for (const line of [
+      "你会不会娶我",
+      "我们结婚吧",
+      "你愿意嫁给我吗",
+      "能不能给我一次机会",
+      "is it over",
+      "give me another chance",
+    ]) {
+      const result = await appRouter
+        .createCaller(ctxFor(1))
+        .rehearsal.run({ personaId: 5, line });
+      expect(result.mode, line).toBe("my_side_only");
+    }
+    expect(planTurn).not.toHaveBeenCalled();
+    expect(retrieveMemories).not.toHaveBeenCalled();
+  });
+
+  it("still rehearses an ordinary line that only mentions a wedding or a song (C3.2)", async () => {
+    // The broadened table must not refuse the everyday words it borrows
+    // from: a wedding is something one attends, and "love" takes an
+    // object. The last two are the phrasings the old, wider table
+    // misjudged: "回来" followed by another verb is a schedule question,
+    // and "give me the salt" is not a request for another chance. These
+    // must still generate.
+    for (const line of ["今天去参加朋友的婚礼", "I love this song", "你会回来吃饭吗", "can you give me the salt"]) {
+      const result = await appRouter
+        .createCaller(ctxFor(1))
+        .rehearsal.run({ personaId: 5, line });
+      expect(result.mode, line).toBe("variants");
+    }
+    expect(planTurn).toHaveBeenCalled();
+  });
+
   it("refuses a persona the user stepped down to letters (C6.1)", async () => {
     getPersonaById.mockResolvedValue({
       ...persona,
@@ -306,6 +344,18 @@ describe("rehearsal.run", () => {
 
   it("drops an English retry that makes the promise in other words (C3.2)", async () => {
     finalPlan(["i forgive you", "I'll give you another chance"]);
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .rehearsal.run({ personaId: 5, line: "对不起" });
+    const variants = (result as any).variants;
+    expect(variants.every((entry: any) => entry.text === null)).toBe(true);
+  });
+
+  it("drops a retry that promises to stay, in words the old second gate missed (C3.2)", async () => {
+    // "I'll never leave you" is the same promise as "I forgive you".
+    // The second gate used to know only the manual's examples, so this
+    // retry was shown; the extended shared table has to drop it.
+    finalPlan(["我会原谅你", "我不会离开你"]);
     const result = await appRouter
       .createCaller(ctxFor(1))
       .rehearsal.run({ personaId: 5, line: "对不起" });
