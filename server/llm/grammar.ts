@@ -14,7 +14,8 @@
  * Two details of the format matter here:
  *
  * - There is no lookahead, so "a digit that is not a list number" is written
- *   as "a digit followed by a character that is not a bullet mark".
+ *   as "a run of digits followed by a character that is neither a bullet
+ *   mark nor another digit".
  * - `\-` is the escape for a literal hyphen inside a character class; the
  *   parser supports it (`parse_char` in `llama-grammar.cpp`).
  *
@@ -52,14 +53,16 @@ export function shapeGrammar(input: ShapeGrammarInput = {}): string {
     /**
      * A line may start with a number only when it is not a list marker.
      *
-     * `digit` used to be a single character and `safe` refused the
-     * punctuation right after it, so "12. " got through: the second
-     * character was "2", not "." (B9.3).
+     * `spacer` excludes digits as well as the bullet marks, so the whole
+     * run of digits has to end before a character that is neither a
+     * bullet nor a digit. Without the digits in `spacer`, "12. 第一点"
+     * is read as digits "1" + spacer "2" + rest ". 第一点", and every
+     * multi-digit list marker gets through (B9.3).
      */
     "line ::= plain rest | digits | digits spacer rest",
     "plain ::= [^*#0-9\\n\\-]",
     "rest ::= [^\\n]*",
     "digits ::= [0-9]+",
-    "spacer ::= [^.、)）\\n]",
+    "spacer ::= [^.、)）0-9\\n]",
   ].join("\n");
 }

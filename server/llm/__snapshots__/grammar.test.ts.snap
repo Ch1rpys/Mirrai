@@ -8,5 +8,5 @@ line ::= plain rest | digits | digits spacer rest
 plain ::= [^*#0-9\\n\\-]
 rest ::= [^\\n]*
 digits ::= [0-9]+
-spacer ::= [^.、)）\\n]"
+spacer ::= [^.、)）0-9\\n]"
 `;
