@@ -108,6 +108,18 @@ export function redactionReportOf(
  */
 /** The house/lane/unit number an address needs to count. */
 const ADDRESS_UNIT = /\d+\s*(?:号|弄|栋|幢|单元|室|楼)/u.source;
+/**
+ * What may follow the first number and still be the same address.
+ *
+ * A house number is not the whole address: "淮海中路1234号501室" keeps
+ * the room, "淮海中路1234弄5号" keeps the second number, and
+ * "建国路88号SOHO现代城" keeps the building's name. The share copy used
+ * to replace only up to the first number and print the rest (C6.3). A
+ * floor/room number may have spaces around it ("100 号 501 室"); a named
+ * building has to be written against the number, so an ordinary phrase
+ * after an address ("1234号楼下等我") is not swallowed.
+ */
+const ADDRESS_TAIL = /(?:\s*\d+\s*(?:号|弄|栋|幢|单元|室|楼|层)|[A-Za-z][A-Za-z0-9]*[\u4e00-\u9fa5]{0,8}?(?:城|大厦|广场|花园|公寓|苑|中心|府)|[\u4e00-\u9fa5]{2,10}?(?:城|大厦|广场|花园|公寓|苑|中心|府))*/u.source;
 const ADDRESS_PROVINCE = /[\u4e00-\u9fa5]{2,10}?(?:省|自治区)/u.source;
 const ADDRESS_CITY = /[\u4e00-\u9fa5]{2,10}?市/u.source;
 const ADDRESS_DISTRICT = /[\u4e00-\u9fa5]{2,10}?(?:区|县)/u.source;
@@ -117,12 +129,12 @@ const ADDRESS_STREET = /[\u4e00-\u9fa5A-Za-z0-9]{2,20}?(?:路|街|巷|大道|弄
 const ADDRESS_PLACE = /[\u4e00-\u9fa5A-Za-z0-9]{2,20}?(?:小区|花园|公寓|大厦|广场|家园|苑)/u.source;
 
 const CITY_ADDRESS_RE = new RegExp(
-  `(?:${ADDRESS_PROVINCE}\\s*)?${ADDRESS_CITY}\\s*(?:${ADDRESS_DISTRICT}\\s*)?(?:${ADDRESS_STREET}|${ADDRESS_PLACE})\\s*${ADDRESS_UNIT}`,
+  `(?:${ADDRESS_PROVINCE}\\s*)?${ADDRESS_CITY}\\s*(?:${ADDRESS_DISTRICT}\\s*)?(?:${ADDRESS_STREET}|${ADDRESS_PLACE})\\s*${ADDRESS_UNIT}${ADDRESS_TAIL}`,
   "gu",
 );
 /** An address without the city: a street (or compound) and a number. */
 const STREET_ADDRESS_RE = new RegExp(
-  `(?:${ADDRESS_DISTRICT}\\s*)?(?:${ADDRESS_STREET}|${ADDRESS_PLACE})\\s*${ADDRESS_UNIT}`,
+  `(?:${ADDRESS_DISTRICT}\\s*)?(?:${ADDRESS_STREET}|${ADDRESS_PLACE})\\s*${ADDRESS_UNIT}${ADDRESS_TAIL}`,
   "gu",
 );
 /**

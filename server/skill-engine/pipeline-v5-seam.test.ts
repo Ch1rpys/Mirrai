@@ -389,7 +389,10 @@ describe("the v5 seam on a named transcript", () => {
     }
     const analysisMaterial = mapMaterials.join("\n");
     expect(mapMaterials.length).toBeGreaterThan(0);
-    expect(analysisMaterial).not.toContain("暂无聊天记录");
+    // "暂无聊天记录" was asserted here too, but a map-stage material can
+    // never contain it (the phrase comes from another prompt and this
+    // run passes `chatContent: ""`), so the line could not fail. The
+    // assertions around it are what prove the records were read.
     const sample = fixture.find(
       (row) => row.role === "assistant" && row.content.trim().length >= 4,
     );

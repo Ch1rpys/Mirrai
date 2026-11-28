@@ -45,9 +45,25 @@ export default function Decode() {
   const [crisisDismissed, setCrisisDismissed] = useState(false);
 
   const persona = trpc.persona.get.useQuery({ id: personaId }, { enabled: personaId > 0 });
+  /**
+   * The search is a query that writes one thing: when the pasted line is
+   * a crisis, the server records a safety event before it answers
+   * (C3.4). A query that writes is the wrong shape, so nothing may run
+   * it again on its own: no refetch on focus/reconnect, no retry, and a
+   * cache that never goes stale while the page is open. A new line has a
+   * new query key, so submitting still asks once. Deviation 641 records
+   * why this is not a mutation yet.
+   */
   const decoded = trpc.record.decode.useQuery(
     { personaId, text: asked },
-    { enabled: personaId > 0 && asked.length > 0 },
+    {
+      enabled: personaId > 0 && asked.length > 0,
+      staleTime: Infinity,
+      gcTime: Infinity,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      retry: false,
+    },
   );
 
   if (!Number.isFinite(personaId) || personaId <= 0) return <NotFound />;

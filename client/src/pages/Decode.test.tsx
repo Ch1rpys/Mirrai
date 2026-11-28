@@ -108,6 +108,33 @@ describe("read this line", () => {
     expect(screen.getByText(/被标成了「疏离」/)).toBeInTheDocument();
   });
 
+  it("asks once per line and never re-runs the query by itself (C3.4 write safety)", async () => {
+    /**
+     * `record.decode` records a crisis safety event on the server before
+     * it answers (WP12's rule), so the page must not let React Query run
+     * the query again on its own: focus/reconnect refetches are off, the
+     * result never goes stale while the page is open, and a failed call
+     * is not retried. A new line has a new query key, so submitting still
+     * asks exactly once. Deviation 640 records why the write is still in
+     * a query instead of a mutation.
+     */
+    const user = userEvent.setup();
+    decodedState = { data: result, isFetching: false, isError: false, refetch: vi.fn() };
+    render(<Decode />);
+    await user.type(screen.getByLabelText(translate("zh", "decode.placeholder", { name: "小满" })), "就嗯？");
+    await user.click(screen.getByRole("button", { name: translate("zh", "decode.submit") }));
+    expect(decode).toHaveBeenLastCalledWith(
+      { personaId: 5, text: "就嗯？" },
+      expect.objectContaining({
+        enabled: true,
+        staleTime: Infinity,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+        retry: false,
+      }),
+    );
+  });
+
   it("keeps the fixed note on the page", () => {
     decodedState = { data: result, isFetching: false, isError: false, refetch: vi.fn() };
     render(<Decode />);

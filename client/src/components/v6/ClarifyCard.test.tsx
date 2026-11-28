@@ -17,6 +17,9 @@ let questions: Array<{
   choices?: Array<{ value: string; label: string }>;
 }> = [];
 
+/** Simulates a failed answer write: mutate runs but onSuccess never fires. */
+let writeFails = false;
+
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     persona: {
@@ -24,7 +27,15 @@ vi.mock("@/lib/trpc", () => ({
         useQuery: () => ({ data: { questions }, isLoading: false, isError: false, refetch }),
       },
       answerClarification: {
-        useMutation: () => ({ mutate: answer, isPending: false }),
+        // The mutation's onSuccess is how the component learns the answer
+        // was stored; a failed write never calls it.
+        useMutation: (options?: { onSuccess?: () => void }) => ({
+          mutate: (...args: unknown[]) => {
+            answer(...args);
+            if (!writeFails) options?.onSuccess?.();
+          },
+          isPending: false,
+        }),
       },
     },
   },
@@ -44,6 +55,7 @@ import ClarifyCard from "./ClarifyCard";
 describe("the post-distill questions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    writeFails = false;
     questions = [
       { id: "never_says", kind: "never_says", prompt: "有没有哪句话是 小满 绝对不会说的？", input: "skipable-text" },
       { id: "avoid_topic", kind: "avoid_topic", prompt: "有没有 小满 不愿意聊的话题？", input: "skipable-text" },
@@ -87,6 +99,26 @@ describe("the post-distill questions", () => {
     expect(
       screen.getByText(translate("zh", "clarify.done", { name: "小满" })),
     ).toBeInTheDocument();
+  });
+
+  it("does not claim the rules were updated when the answer write failed (B1.6)", async () => {
+    /**
+     * The card says the questions were recorded. A failed write is not a
+     * recorded answer, so skipping the remaining questions after it must
+     * leave the page quiet — the same rule as skipping everything.
+     */
+    const user = userEvent.setup();
+    writeFails = true;
+    const { rerender } = render(<ClarifyCard personaId={5} name="小满" />);
+    await user.type(screen.getByRole("textbox"), "加油");
+    await user.click(screen.getByRole("button", { name: "记下" }));
+    expect(answer).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "跳过" }));
+    questions = [];
+    rerender(<ClarifyCard personaId={5} name="小满" />);
+    expect(
+      screen.queryByText(translate("zh", "clarify.done", { name: "小满" })),
+    ).toBeNull();
   });
 
   it("does not claim the rules were updated when everything was skipped (B1.6)", async () => {

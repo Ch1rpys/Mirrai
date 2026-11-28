@@ -28,6 +28,15 @@ export default function ClarifyCard(props: { personaId: number; name: string }) 
   );
   const answer = trpc.persona.answerClarification.useMutation({
     onSuccess: () => {
+      /**
+       * The count is the answer that was *written* (B1.6).
+       *
+       * It used to go up on the click, so a failed write followed by
+       * skipping the rest still showed the finished card — the same
+       * false "already in the rules" the card exists to avoid. The
+       * server's success is the only evidence the answer was recorded.
+       */
+      setAnswered((count) => count + 1);
       setText("");
       void query.refetch();
     },
@@ -51,7 +60,6 @@ export default function ClarifyCard(props: { personaId: number; name: string }) 
 
   const current = questions[0]!;
   const submit = (value: string) => {
-    setAnswered((count) => count + 1);
     answer.mutate({
       id: props.personaId,
       questionId: current.id,

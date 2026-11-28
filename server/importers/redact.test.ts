@@ -108,6 +108,33 @@ describe("redactRecords", () => {
       .toBe("有 100 个人来了");
   });
 
+  it("replaces the room and building name that follow the house number (C6.3)", () => {
+    // Replacing up to the first house number left the rest of the address
+    // in the share copy: "淮海中路1234号501室" came out as
+    // "[address]501室" and "建国路88号SOHO现代城" kept the building.
+    expect(contentOf("上海市徐汇区淮海中路1234号501室", { addresses: true }))
+      .toBe("[address]");
+    expect(contentOf("我家在 世纪大道 100 号 501 室", { addresses: true }))
+      .toBe("我家在 [address]");
+    expect(contentOf("北京市朝阳区建国路88号SOHO现代城", { addresses: true }))
+      .toBe("[address]");
+    expect(contentOf("上海市徐汇区淮海中路1234弄5号", { addresses: true }))
+      .toBe("[address]");
+    // A sentence after the address is not part of it.
+    expect(contentOf("淮海中路1234号楼下等我", { addresses: true }))
+      .toBe("[address]楼下等我");
+  });
+
+  it("leaves a compound without a house number alone (deviation 641)", () => {
+    // The old rule treated "市…小区/花园/大厦" as an address on its own,
+    // which also replaced "我们去市中心广场吧". The tightened rule needs a
+    // house number, so a compound named without one is no longer
+    // replaced; the trade-off is recorded as deviation 641 instead of
+    // printing part of an address.
+    expect(contentOf("上海市徐汇区阳光花园", { addresses: true }))
+      .toBe("上海市徐汇区阳光花园");
+  });
+
   it("replaces a Luhn-valid card and leaves a long number that fails Luhn", () => {
     expect(contentOf("卡 4111111111111111", { cards: true })).toBe("卡 [card]");
     expect(contentOf("卡 1234567890123", { cards: true })).toBe("卡 1234567890123");
