@@ -73,6 +73,29 @@ describe("isCommitmentQuestion", () => {
     }
   });
 
+  it("recognises a proposal or an ending question with the subject dropped (C3.2)", () => {
+    // The first table needed a 你/您 before 嫁 and a question marker
+    // directly after 结婚, so the same questions typed the way people
+    // actually say them came back as no question at all; the Chinese
+    // ending family had no pattern whatsoever.
+    for (const line of [
+      "嫁给我好吗",
+      "嫁给我吧",
+      "愿意嫁给我吗",
+      "我们结婚好吗",
+      "我们结婚好不好",
+      "我们领证好吗",
+      "我们办婚礼好吗",
+      "是不是结束了",
+      "我们是不是结束了",
+      "我们结束了吗",
+      "我们是不是要分手",
+      "marry me",
+    ]) {
+      expect(isCommitmentQuestion(line), line).toBe(true);
+    }
+  });
+
   it("does not treat an ordinary question as a verdict", () => {
     for (const line of [
       "我今天很想你",
@@ -92,6 +115,29 @@ describe("isCommitmentQuestion", () => {
       "你愿意给我带杯咖啡吗",
       "我好喜欢这首歌",
     ]) {
+      expect(isCommitmentQuestion(line), line).toBe(false);
+    }
+  });
+
+  it("does not mistake a daily request for a question about the relationship (C3.2)", () => {
+    // The widened table used to catch these: "陪我" and "留下" are only a
+    // verdict when nothing follows them, and "回来陪我吃饭" is a
+    // schedule, not "come back to me". A rehearsal of them must still
+    // generate.
+    for (const line of [
+      "你能不能陪我逛街",
+      "你会不会陪我逛街",
+      "你能不能留下来吃饭",
+      "你回来陪我吃饭吗",
+    ]) {
+      expect(isCommitmentQuestion(line), line).toBe(false);
+    }
+  });
+
+  it("does not treat a statement about the relationship as a question (C3.2)", () => {
+    // "我们结束了" is the user saying it, not asking it, and
+    // "我们结婚好几年了" only borrows the marriage word.
+    for (const line of ["我们结束了", "我们结婚好几年了"]) {
       expect(isCommitmentQuestion(line), line).toBe(false);
     }
   });
@@ -149,6 +195,27 @@ describe("containsCommitment", () => {
       "I'll marry you",
       "let's get married",
       "I promise",
+    ]) {
+      expect(containsCommitment(reply), reply).toBe(true);
+    }
+  });
+
+  it("catches the marriage promises the acceptance found passing the second gate (C3.2)", () => {
+    /**
+     * The retry could still answer for the person when the promise was a
+     * marriage rather than one of the manual's examples: the old table
+     * wanted `我娶你`/`我嫁给你` or `我们结婚` followed by a particle. A
+     * reply that decides the marriage for them must be dropped.
+     */
+    for (const reply of [
+      "我会和你结婚",
+      "我决定和你结婚",
+      "我会跟你结婚",
+      "我们领证吧",
+      "我们办婚礼吧",
+      "我们会结婚的",
+      "我接受你的求婚",
+      "我答应嫁给你",
     ]) {
       expect(containsCommitment(reply), reply).toBe(true);
     }

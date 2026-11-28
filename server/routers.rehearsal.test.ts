@@ -246,6 +246,38 @@ describe("rehearsal.run", () => {
     expect(planTurn).toHaveBeenCalled();
   });
 
+  it("refuses a proposal or an ending question typed without a subject (C3.2)", async () => {
+    // The same questions in the words people type: the subject of 嫁 is
+    // dropped and 结婚 is followed by 好吗 / 好不好, and the Chinese
+    // ending family had no pattern at all. The room used to generate
+    // three possibilities for these instead of refusing before a model
+    // call.
+    for (const line of ["嫁给我好吗", "我们结婚好吗", "我们是不是结束了"]) {
+      const result = await appRouter
+        .createCaller(ctxFor(1))
+        .rehearsal.run({ personaId: 5, line });
+      expect(result.mode, line).toBe("my_side_only");
+    }
+    expect(planTurn).not.toHaveBeenCalled();
+    expect(executePlan).not.toHaveBeenCalled();
+    expect(retrieveMemories).not.toHaveBeenCalled();
+  });
+
+  it("still rehearses a daily request that only sounds like a commitment (C3.2)", async () => {
+    // "陪我" and "留下来" are only a verdict when nothing follows them,
+    // and "回来陪我吃饭" is a schedule, not "come back to me". The
+    // widened table used to refuse these before any model call.
+    for (const line of ["你能不能陪我逛街", "你回来陪我吃饭吗"]) {
+      const result = await appRouter
+        .createCaller(ctxFor(1))
+        .rehearsal.run({ personaId: 5, line });
+      expect(result.mode, line).toBe("variants");
+      expect((result as any).variants.some((entry: any) => entry.text)).toBe(true);
+    }
+    expect(planTurn).toHaveBeenCalled();
+    expect(executePlan).toHaveBeenCalled();
+  });
+
   it("refuses a persona the user stepped down to letters (C6.1)", async () => {
     getPersonaById.mockResolvedValue({
       ...persona,
