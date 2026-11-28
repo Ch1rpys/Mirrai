@@ -48,7 +48,7 @@ Mirrai is an open-source, self-hosted AI companion that rebuilds a person's digi
 
 ## What stage six added
 
-Stage six had two goals: **sound more like them**, and **be useful enough to keep using**. Of the 164 proposals, 80 are implemented and tested, 81 pass every machine check but their effect still needs real records to measure, one was decided against (voice cloning), and two had their preconditions unmet — the local adapter and shallow fusion only got a read-only unlock-check command. The feature list below covers only those first two states; the last two lines say what was not built. A 🟡 line means **effect not yet measured on real records**.
+Stage six had two goals: **sound more like them**, and **be useful enough to keep using**. Of the 164 proposals, 74 are implemented and tested, 87 pass every machine check but their effect still needs real records to measure, one was decided against (voice cloning), and two had their preconditions unmet — the local adapter and shallow fusion only got a read-only unlock-check command. The feature list below covers only those first two states; the last two lines say what was not built. A 🟡 line means **effect not yet measured on real records**.
 
 Per-item evidence lives in [`docs/exec-v6-progress.md`](docs/exec-v6-progress.md); the per-work-package status table is [`docs/roadmap-v6.md`](docs/roadmap-v6.md).
 
@@ -61,7 +61,8 @@ Per-item evidence lives in [`docs/exec-v6-progress.md`](docs/exec-v6-progress.md
 **Reading and measuring**
 
 - ✅ Chunked distillation: records are split into chunks, only new chunks are re-run, every conclusion carries the line it came from, and each rebuild keeps a version you can look at and restore (B1.1, B1.3, B1.7–B1.9).
-- ✅ One clarifying question at a time when the records are not enough; a tone fingerprint (endings, particles, laughter, length, emoji, words they never use), fingerprint distance, micro-rules and per-mood imperfection drafts; memories carry entities and an old, barely-mentioned memory is marked "you don't remember it clearly" in the prompt (B1.6, B3.1, B3.2, B3.5, B3.6, B6.7, B6.8).
+- ✅ One clarifying question at a time when the records are not enough; a tone fingerprint (endings, particles, laughter, length, emoji, words they never use), fingerprint distance and micro-rules; memories carry entities and an old, barely-mentioned memory is marked "you don't remember it clearly" in the prompt (B1.6, B3.1, B3.2, B6.7, B6.8).
+- 🟡 The quality of the mined candidate rules (B3.5) and of the per-mood imperfection drafts (B3.6): the machine checks pass, but "does this sound like them" needs real records (see the unverified list).
 - 🟡 Measurements taken from the records: acts conditioned on what you did, act clusters, emotional inertia, conflict scripts, triggers, closings, multi-point messages, in-session openers, reply-delay buckets, sleep window, typing rhythm, quirks, double texts, address history, private words, embedding-based exemplar retrieval, people, likes and dislikes, routine and life events, knowledge boundaries, fact checking, and the ledger of things they said (B2.3, B3.3, B3.4, B3.7, B3.8, B4.1–B4.8, B5.3–B5.7, B6.1–B6.6, B6.9; effect not yet measured on real records).
 - 🟡 New ways to measure "does it still sound like them": discriminator AUC, in-app blind sessions, layer-by-layer ablation, drift detection, multi-model auditions, and A/B-chosen rerank weights (B8.1–B8.5, B8.8; effect not yet measured on real records).
 
@@ -101,7 +102,8 @@ Per-item evidence lives in [`docs/exec-v6-progress.md`](docs/exec-v6-progress.md
 - ✅ Reunion countdown, their local weather and sunrise/sunset (the city name is sent once, then only coarse coordinates), letter replies by email, a reunion summary, a four-step taper and sealing a persona (name and dates only until the day) (C5.1, C5.2, C5.4–C5.5, C6.1, C6.2).
 - ✅ Three kept quotes and a printable memory book with automatic redaction in the shared version (C6.3, C6.4).
 - 🟡 Finishing an unfinished sentence for you, reading letters side by side, a post-graduation check-in, and four different endings each with its own letter (C6.5, C6.6; effect not yet measured on real records).
-- ✅ Memorial mode (no talk of "now", says it is a reconstruction when asked), family sharing (each member keeps their own side), oral accounts (C7.1–C7.4).
+- ✅ Family sharing (each member keeps their own side, C7.2); the machine-checked half of Voices (listen, download, favourite, C7.3).
+- 🟡 The model-level effect of the memorial rule (C7.1: no talk of "now", says it is a reconstruction when asked), and real-model extraction from oral accounts, real-recording transcription and the two-account browser path (C7.4) — not yet measured.
 
 **Daily use and safety**
 

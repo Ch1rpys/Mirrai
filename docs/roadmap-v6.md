@@ -15,28 +15,28 @@
 > - 逐条的提交号、验收证据、偏差表、未验证清单、待用户决定在 [`exec-v6-progress.md`](exec-v6-progress.md)。本文件只做摘要，状态与数字冲突时以进度表为准。
 > - v5 及更早的路线图（[`roadmap-v5.md`](roadmap-v5.md)）不重做；它们记录的是当时的状态，不回填。
 >
-> 合计 **176 行**：P0.1–P0.7（7 条）、164 条建议（A1–A9、B1.1–B9.3、C1.1–C10.7）、P18.1–P18.5（5 条）。状态合计 **✅ 92 · 🟡 81 · ⛔ 1 · 🔒 2 · ⬜ 0**；P18.4 独立抽查已完成，176 行全部收口。
+> 合计 **176 行**：P0.1–P0.7（7 条）、164 条建议（A1–A9、B1.1–B9.3、C1.1–C10.7）、P18.1–P18.5（5 条）。状态合计 **✅ 86 · 🟡 87 · ⛔ 1 · 🔒 2 · ⬜ 0**；P18.4 独立抽查已完成，176 行全部收口（2026-11-28 按「修复后独立验收」再修后的收尾值；建议数 164 条里 **74 ✅ / 87 🟡 / 1 ⛔ / 2 🔒**）。
 
 ## 哪些只到 🟡、为什么
 
 **🟡 = 机器验收全过，但「更像 TA」这类效果还没在真实数据上量过。** 量它需要三样本机没有的东西：真实聊天记录、真实模型（本机没有配任何 LLM provider，测试里的 provider 全是桩），以及真人盲测、真机或真实外部账号。缺一样，这一层就只能证明「开关接对了、围栏没破、测试绿」，不能证明「加了它之后更像 TA」，所以最高只能标 🟡。逐条缺什么、该跑的命令、谁来跑，都在 [`exec-v6-progress.md`](exec-v6-progress.md) 的「未验证清单」。
 
-81 条 🟡 按工作包分布：
+87 条 🟡 按工作包分布：
 
 | 工作包 | 🟡 | 工作包 | 🟡 |
 |---|---|---|---|
 | WP0 准备 | 0 | WP10 文字之外 | 14 |
 | WP1 地基 | 0 | WP11 回看真实记录 | 6 |
 | WP2 修补 | 0 | WP12 把话带回真人 | 8 |
-| WP3 读完全部记录 | 0 | WP13 异地、告别、悼念 | 2 |
+| WP3 读完全部记录 | 2 | WP13 异地、告别、悼念 | 4 |
 | WP4 尺子 | 6 | WP14 日常可用 | 4 |
-| WP5 语气指纹与硬约束 | 5 | WP15 通道与生态 | 3 |
+| WP5 语气指纹与硬约束 | 7 | WP15 通道与生态 | 3 |
 | WP6 生成方式 | 8 | WP16 安全与伦理 | 1 |
 | WP7 动作与情绪 | 8 | WP17 模型层 | 1 |
 | WP8 TA 的世界 | 7 | | |
 | WP9 时间与节奏 | 8 | | |
 
-WP0–WP3 全部 ✅，没有 🟡。按「缺什么」粗分（未验证清单共 117 行，有几行合并写相邻条目）：
+WP0–WP2 全部 ✅；WP3 只剩 B1.4/B1.5 两条 🟡（动作/情绪标注的准确率要真实模型才能量）。按「缺什么」粗分（未验证清单共 125 行，有几行合并写相邻条目；下面的粗分是 117 行时的旧口径，新增的 8 行没有重分摊，具体以未验证清单为准）：
 
 - **真实模型下的生成效果**（45 行）：WP5–WP8 的大部分层（B2.x、B3.x、B4.x、B6.x）和 B9.3 的 `logit_bias`/`grammar`。单测证明层按测量值发出、开关与围栏正确，但「加了这一层是否更像 TA、是否少编往事」只能跑 `pnpm eval --compare` / `--ablate` 才量得出来。
 - **真实浏览器与真机观感**（27 行）：WP10 的语音、表情、照片、视频、通话和界面版式，WP11 的地图与打印，WP13 的纪念册打印，WP14 的可访问性、繁体、备份还原、应用锁，WP16 的深夜保护与解释页。jsdom 只证明组件接线与属性。
@@ -95,15 +95,15 @@ WP0–WP3 全部 ✅，没有 🟡。按「缺什么」粗分（未验证清单�
 
 ## WP3 读完全部记录
 
-（共 11 条：✅ 11）
+（共 11 条：✅ 9 · 🟡 2）
 
 | 编号 | 一句话 | 状态 | 落点 | 验收依据 |
 |---|---|---|---|---|
 | B1.1 | 分层蒸馏 | ✅ | `server/skill-engine/chunks.ts`、`server/skill-engine/pipeline.ts`、`client/src/pages/Upload.tsx` | 提交 93aa60d、1fd5c18、14faa43；`chunks.test.ts` 6 通过、`pipeline-chunked.test.ts` 7 通过；迁移 `0046_distillation_tables` 四步与升级路径通过 |
 | B1.2 | 抽样分层 | ✅ | `server/skill-engine/chunks.ts` | 提交 dbd08ca、99e8b2f；`chunks.test.ts` 3 通过 |
 | B1.3 | 全量事实抽取 | ✅ | `shared/memory-date.ts`、`shared/fact-cues.ts`、`server/skill-engine/facts.ts` | 提交 c1e9484、ce3c3d9、ad296b3；`memory-date.test.ts` 3 通过、`fact-cues.test.ts` 3 通过 |
-| B1.4 | 全量动作标注 | ✅ | `shared/speech-acts.ts`、`server/skill-engine/label-acts.ts`、`shared/act-profile.ts` | 提交 89d0048、ade38b6；`acts-coverage.test.ts` 2 通过、`speech-acts.test.ts` 通过 |
-| B1.5 | 历史情绪回标 | ✅ | `server/skill-engine/label-emotions.ts` | 提交 db75f76；`act-buckets-emotion.test.ts` 3 通过 |
+| B1.4 | 全量动作标注 | 🟡 | `shared/speech-acts.ts`、`server/skill-engine/label-acts.ts`、`shared/act-profile.ts` | 提交 89d0048、ade38b6；`acts-coverage.test.ts` 2 通过、`speech-acts.test.ts` 通过 |
+| B1.5 | 历史情绪回标 | 🟡 | `server/skill-engine/label-emotions.ts` | 提交 db75f76；`act-buckets-emotion.test.ts` 3 通过 |
 | B1.6 | 蒸馏完向用户追问 | ✅ | `shared/clarify.ts`、`client/src/components/v6/ClarifyCard.tsx` | 提交 4709167、ada73e8、41fe204；`shared/clarify.test.ts` 22 通过、`routers.clarify.test.ts` 3 通过 |
 | B1.7 | 增量蒸馏 | ✅ | `server/skill-engine/observations.ts` | 提交 8499939、ad296b3；`pipeline-chunked.test.ts` 通过、`observations.test.ts` 通过；闸门 333 passed |
 | B1.8 | 每句结论能点回原话 | ✅ | `shared/evidence-map.ts`、`client/src/components/v6/EvidenceList.tsx`、`client/src/pages/PersonaProfile.tsx` | 提交 420ef23、76a2694；`shared/evidence-map.test.ts` 4 通过、`routers.evidence.test.ts` 2 通过 |
@@ -132,15 +132,15 @@ WP0–WP3 全部 ✅，没有 🟡。按「缺什么」粗分（未验证清单�
 
 ## WP5 语气指纹与硬约束
 
-（共 7 条：✅ 2 · 🟡 5）
+（共 7 条：🟡 7）
 
 | 编号 | 一句话 | 状态 | 落点 | 验收依据 |
 |---|---|---|---|---|
 | B2.7 | 长度硬上限 | 🟡 | `shared/length-cap.ts`、`server/chat/generate.ts`、`server/llm/types.ts` | 提交 9147cf4、89f29db；`shared/length-cap.test.ts` 7 通过、`server/llm/providers/stop.test.ts` 4 通过 |
 | B3.3 | 指纹进重排 | 🟡 | `server/chat/rerank.ts`、`server/chat/rerank-model.ts`、`server/chat/generate.ts` | 提交 020c183、78f2500；`rerank-empty-corpus.test.ts` 通过、`rerank.test.ts` 6 通过 |
 | B3.4 | 确定性投影 | 🟡 | `shared/style-projection.ts`、`server/chat/generate.ts`、`client/src/components/v6/PersonaSwitches.tsx` | 提交 16c888f、498033c；`shared/style-projection.test.ts` 27 通过、`generate.test.ts` 通过 |
-| B3.5 | 分态指纹 → 判别规则候选 | ✅ | `server/skill-engine/state-rules.ts`、`client/src/components/MicroRulesEditor.tsx` | 提交 6dbb539；`state-rules.test.ts` 3 通过、`fidelity-prompt.test.ts` 通过 |
-| B3.6 | 分态不完美自动起草 | ✅ | `shared/imperfection-draft.ts`、`client/src/components/ImperfectionEditor.tsx`、`shared/copy/v6.ts` | 提交 b15124e；`shared/imperfection-draft.test.ts` 通过、`ImperfectionEditor.test.tsx` 通过；闸门 363 passed |
+| B3.5 | 分态指纹 → 判别规则候选 | 🟡 | `server/skill-engine/state-rules.ts`、`client/src/components/MicroRulesEditor.tsx` | 提交 6dbb539；`state-rules.test.ts` 3 通过、`fidelity-prompt.test.ts` 通过 |
+| B3.6 | 分态不完美自动起草 | 🟡 | `shared/imperfection-draft.ts`、`client/src/components/ImperfectionEditor.tsx`、`shared/copy/v6.ts` | 提交 b15124e；`shared/imperfection-draft.test.ts` 通过、`ImperfectionEditor.test.tsx` 通过；闸门 363 passed |
 | B3.7 | TA 的词 | 🟡 | `server/chat/generate.ts`、`client/src/components/v6/LexiconEditor.tsx`、`server/skill-engine/lexicon.ts` | 提交 d2397b8、7e4a4ff；`lexicon.test.ts` 5 通过、`fidelity-prompt.test.ts` 通过 |
 | B3.8 | 称呼史 | 🟡 | `shared/address-history.ts`、`client/src/components/v6/AddressHistoryView.tsx`、`client/src/pages/PersonaProfile.tsx` | 提交 03c7200；`address-history.test.ts` 通过、`prompt-fences.test.ts` 通过；闸门 365 passed |
 
@@ -270,7 +270,7 @@ WP0–WP3 全部 ✅，没有 🟡。按「缺什么」粗分（未验证清单�
 
 ## WP13 异地、告别、悼念
 
-（共 15 条：✅ 13 · 🟡 2）
+（共 15 条：✅ 11 · 🟡 4）
 
 | 编号 | 一句话 | 状态 | 落点 | 验收依据 |
 |---|---|---|---|---|
@@ -285,10 +285,10 @@ WP0–WP3 全部 ✅，没有 🟡。按「缺什么」粗分（未验证清单�
 | C6.4 | 留下三句话 | ✅ | `client/src/components/v6/KeepThree.tsx`、`client/src/pages/Graduation.tsx`、`client/src/pages/Lobby.tsx` | 提交 26e7798；`server/routers.kept-quotes.test.ts` 4 通过、`KeepThree.test.tsx` 2 通过 |
 | C6.5 | 没说完的话、互相读信、毕业后回访 | 🟡 | `server/records/unsaid.ts`、`server/chat/unsaid.ts`、`server/routers-v6/unsaid.ts` | 提交 01c1994、31be290、b718e0c；`server/records/unsaid.test.ts` 4 通过、`server/chat/unsaid.test.ts` 3 通过 |
 | C6.6 | 多种结局 | 🟡 | `server/chat/farewell.ts`、`client/src/components/v6/GraduationKindPicker.tsx`、`client/src/pages/Graduation.tsx` | 提交 974fd44；`server/farewell.test.ts` 12 通过、`GraduationKindPicker.test.tsx` 1 通过 |
-| C7.1 | 悼念模式 | ✅ | `shared/graduation-mode.ts`、`shared/proactive-decision.ts`、`server/chat/proactive-sweep.ts` | 提交 c7a9a4f、478aa2e；`server/graduation-mode.test.ts` 8 通过、`shared/proactive-decision.test.ts` 通过 |
+| C7.1 | 悼念模式 | 🟡 | `shared/graduation-mode.ts`、`shared/proactive-decision.ts`、`server/chat/proactive-sweep.ts` | 提交 c7a9a4f、478aa2e；`server/graduation-mode.test.ts` 8 通过、`shared/proactive-decision.test.ts` 通过 |
 | C7.2 | 家人共用一个分身 | ✅ | `server/routers-v6/share.ts`、`shared/persona-sharing.ts`、`server/chat/service.ts` | 提交 219e8af、6116eaa、b46a562；`server/db-sharing.test.ts` 1 通过、`server/routers-v6/share.test.ts` 6 通过 |
 | C7.3 | 留声 | ✅ | `client/src/pages/Voices.tsx`、`client/src/components/v6/VoicesEntry.tsx`、`client/src/pages/PersonaProfile.tsx` | 提交 f6afa64；`client/src/pages/Voices.test.tsx` 11 通过、`client/src/components/v6/VoicesEntry.test.tsx` 2 通过 |
-| C7.4 | 口述补全 | ✅ | `shared/oral.ts`、`server/oral/extract.ts`、`server/routers-v6/oral.ts` | 提交 aa512b4、36e75bb、4fdc42e；`shared/oral.test.ts` 10 通过、`server/oral/extract.test.ts` 9 通过；迁移 `0073_oral_accounts` 四步与升级路径通过 |
+| C7.4 | 口述补全 | 🟡 | `shared/oral.ts`、`server/oral/extract.ts`、`server/routers-v6/oral.ts` | 提交 aa512b4、36e75bb、4fdc42e；`shared/oral.test.ts` 10 通过、`server/oral/extract.test.ts` 9 通过；迁移 `0073_oral_accounts` 四步与升级路径通过 |
 
 ## WP14 日常可用
 

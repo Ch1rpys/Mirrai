@@ -83,8 +83,8 @@ nohup $NODE dist/index.js > /tmp/mirrai_server.log 2>&1 &
 
 ## 四、当前进度
 
-- 仓库累计 **1674 个提交**（`exec/v6`，2026-11-27；`main` 仍是 `f71e77b`，本分支未合并），工作区**干净**。
-- 测试：**728 个文件 / 6148 个用例**（不带数据库时 `703 passed | 25 skipped` 文件、`6022 passed | 126 skipped` 用例）；`tsc --noEmit` 干净；客户端构建通过。
+- 仓库累计 **1748 个提交**（`exec/v6`，2026-11-28 收尾；`main` 仍是 `f71e77b`，本分支未合并），工作区**干净**。
+- 测试（收尾实测，`corepack pnpm gate` 不带 `--fast`、不带 `DATABASE_URL`）：**737 个文件 / 6356 个用例**（`712 passed | 25 skipped` 文件、`6219 passed | 137 skipped` 用例）；137 个跳过用例全部是已登记数据库测试的 `skipIf(!DATABASE_URL)`。带 `DATABASE_URL` 顺序跑 29 个 DB 文件：`29 passed (29)` / `149 passed (149)` / **0 skipped**。最近一次修复轮 2026-11-28 的 15 个代码提交见 `docs/exec-v6-progress.md` 批次日志「修复会话 · 2026-11-28」。`tsc --noEmit` 干净；客户端构建通过。
 - `docs/AGENT-MISSION.md` 记到**第十五批**（写完之后**补第十六批**）。
 
 ### 这一轮刚修完的（都有提交、有测试）
