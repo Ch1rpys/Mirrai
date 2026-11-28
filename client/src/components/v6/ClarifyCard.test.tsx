@@ -74,4 +74,40 @@ describe("the post-distill questions", () => {
     expect(answer).not.toHaveBeenCalled();
     expect(screen.getByText(questions[1]!.prompt)).toBeInTheDocument();
   });
+
+  it("claims the rules were updated after an answer (B1.6)", async () => {
+    // 验收 4: answering writes; the finished card may say so.
+    const user = userEvent.setup();
+    const { rerender } = render(<ClarifyCard personaId={5} name="小满" />);
+    await user.type(screen.getByRole("textbox"), "加油");
+    await user.click(screen.getByRole("button", { name: "记下" }));
+    expect(answer).toHaveBeenCalledTimes(1);
+    questions = [];
+    rerender(<ClarifyCard personaId={5} name="小满" />);
+    expect(
+      screen.getByText(translate("zh", "clarify.done", { name: "小满" })),
+    ).toBeInTheDocument();
+  });
+
+  it("does not claim the rules were updated when everything was skipped (B1.6)", async () => {
+    /**
+     * The manual contradicts itself here: 做法 2 says a skipped question
+     * is recorded in `personaData.clarified`, 验收 4 says skipping writes
+     * nothing. We keep 验收 4 — so nothing was written, and the card must
+     * not say "这些已经记进规则里". Before the fix the done card appeared
+     * here; the question is asked again next visit.
+     */
+    const user = userEvent.setup();
+    const { rerender } = render(<ClarifyCard personaId={5} name="小满" />);
+    await user.click(screen.getByRole("button", { name: "跳过" }));
+    expect(answer).not.toHaveBeenCalled();
+    expect(screen.getByText(questions[1]!.prompt)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "跳过" }));
+    expect(answer).not.toHaveBeenCalled();
+    questions = [];
+    rerender(<ClarifyCard personaId={5} name="小满" />);
+    expect(
+      screen.queryByText(translate("zh", "clarify.done", { name: "小满" })),
+    ).toBeNull();
+  });
 });

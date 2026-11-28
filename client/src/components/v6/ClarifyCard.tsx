@@ -11,7 +11,16 @@ export default function ClarifyCard(props: { personaId: number; name: string }) 
   const { t } = useLocale();
   const [later, setLater] = useState(false);
   const [text, setText] = useState("");
-  const [done, setDone] = useState(false);
+  /**
+   * How many answers were actually submitted in this visit (B1.6).
+   *
+   * 验收 4 says a skipped question is not written. So when everything
+   * was skipped nothing was recorded, and the finished card — "这些已经
+   * 记进 {{name}} 的规则里" — would be false. It is shown only after at
+   * least one answer. (The manual's 做法 2 says skips are recorded too;
+   * the two contradict each other — see the deviation in the report.)
+   */
+  const [answered, setAnswered] = useState(0);
   const [skipped, setSkipped] = useState<string[]>([]);
   const query = trpc.persona.clarifications.useQuery(
     { id: props.personaId },
@@ -30,7 +39,7 @@ export default function ClarifyCard(props: { personaId: number; name: string }) 
   const questions = (query.data?.questions ?? []).filter((row) => !skipped.includes(row.id));
   if (query.isLoading) return null;
   if (questions.length === 0) {
-    if (!done) return null;
+    if (answered === 0) return null;
     return (
       <div className="mb-6 rounded-md border border-border bg-muted/30 p-4 sm:p-5">
         <p className="text-sm text-foreground/85 leading-relaxed">
@@ -41,13 +50,13 @@ export default function ClarifyCard(props: { personaId: number; name: string }) 
   }
 
   const current = questions[0]!;
-  const submit = (value: string, skip = false) => {
-    setDone(true);
+  const submit = (value: string) => {
+    setAnswered((count) => count + 1);
     answer.mutate({
       id: props.personaId,
       questionId: current.id,
       answer: value,
-      skip,
+      skip: false,
     });
   };
 
@@ -111,7 +120,8 @@ export default function ClarifyCard(props: { personaId: number; name: string }) 
           className="text-xs underline underline-offset-2 text-muted-foreground"
           disabled={answer.isPending}
           onClick={() => {
-            setDone(true);
+            // 验收 4: a skip writes nothing, so it does not count as an
+            // answer and must not produce the "记进规则" claim.
             setText("");
             setSkipped((ids) => [...ids, current.id]);
           }}

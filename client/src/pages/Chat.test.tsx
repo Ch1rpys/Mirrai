@@ -39,6 +39,8 @@ const streamChat = vi.fn();
  */
 const clientMutation = vi.fn();
 const streamingUnsupported = vi.hoisted(() => ({ value: false }));
+/** The props the page hands the waiting gauge (C3.1). */
+const waitGaugeProps = vi.hoisted(() => ({ value: null as Record<string, unknown> | null }));
 
 vi.mock("@/lib/chat-stream", () => ({
   streamChat: (...a: unknown[]) => streamChat(...a),
@@ -191,6 +193,13 @@ vi.mock("@/components/ConfirmDialog", () => ({
   useConfirm: () => async () => true,
 }));
 
+vi.mock("@/components/v6/WaitGauge", () => ({
+  default: (props: Record<string, unknown>) => {
+    waitGaugeProps.value = props;
+    return <div data-testid="wait-gauge" />;
+  },
+}));
+
 vi.mock("streamdown", () => ({
   Streamdown: ({ children }: { children?: unknown }) => <div>{children as any}</div>,
   defaultRehypePlugins: { harden: {}, raw: {}, katex: {} },
@@ -212,6 +221,7 @@ describe("Chat", () => {
     localStorage.clear();
     markAdd.mockReset();
     markRemove.mockReset();
+    waitGaugeProps.value = null;
   });
 
   it("wears the skin and the note the user chose, and keeps the badge", () => {
@@ -254,6 +264,35 @@ describe("Chat", () => {
     expect(
       screen.getByText("今天见面。有 1 件「等 小A 回来再说」的事 →"),
     ).toBeInTheDocument();
+  });
+
+  it("gives the wait gauge the user's zone when the persona has none (C3.1)", async () => {
+    /**
+     * The page used to pass only `persona.timezone`. A persona imported
+     * without a zone got no prop at all, so the gauge fell back to the old
+     * hard-coded Shanghai (or, after that fix, to the browser) while the
+     * user's own zone — the one the records are read in — was right there.
+     * The persona's zone still wins when it has one.
+     */
+    authUser.timezone = "America/New_York";
+    const user = userEvent.setup();
+    const first = render(<Chat />);
+    await user.click(screen.getByRole("button", { name: "更多操作" }));
+    await user.click(screen.getByRole("button", { name: "小A 一般多久回" }));
+    expect(waitGaugeProps.value).toMatchObject({
+      personaId: 1,
+      timezone: "America/New_York",
+    });
+    first.unmount();
+
+    // And the order of the two zones: the persona's own measurement is
+    // read in their clock, so it comes first.
+    waitGaugeProps.value = null;
+    chatPersona.value.timezone = "Europe/Berlin";
+    render(<Chat />);
+    await user.click(screen.getByRole("button", { name: "更多操作" }));
+    await user.click(screen.getByRole("button", { name: "小A 一般多久回" }));
+    expect(waitGaugeProps.value).toMatchObject({ timezone: "Europe/Berlin" });
   });
 
   it("underlines every bubble of a burst, not only the last (C10.7)", async () => {

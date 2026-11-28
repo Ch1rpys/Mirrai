@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { readFileSync } from "fs";
 import path from "path";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { translate } from "@/i18n";
 import { measureReplyDelay } from "@shared/reply-delay";
@@ -61,14 +61,66 @@ const profile = {
 /** 21:00 in Shanghai. */
 const atNine = new Date("2026-01-15T13:00:00Z");
 
+/**
+ * Two bands with different numbers, so a rendered sentence names the band
+ * that was used: 13:00Z is 21:00 in Shanghai (evening) but 08:00 in New
+ * York (morning).
+ */
+const twoBands = {
+  replyDelay: {
+    samples: 80,
+    resolution: "second",
+    buckets: {
+      evening: { n: 40, mu: Math.log(40), sigma: 0.8 },
+      morning: { n: 40, mu: Math.log(120), sigma: 0.2 },
+    },
+  },
+};
+
+/** Say the browser is in this zone, whatever the test machine is set to. */
+function browserZone(timeZone: string) {
+  return vi
+    .spyOn(Intl.DateTimeFormat.prototype, "resolvedOptions")
+    .mockReturnValue({ timeZone } as Intl.ResolvedDateTimeFormatOptions);
+}
+
 describe("the waiting gauge", () => {
   beforeEach(() => {
     styleState = { data: { profile }, isLoading: false, isError: false };
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("states the median and the ninetieth percentile for this hour", () => {
     render(<WaitGauge personaId={5} name="小满" timezone="Asia/Shanghai" now={atNine} />);
     expect(screen.getByText(/一半在 40 秒 之内，九成在 2 分钟 之内/)).toBeInTheDocument();
+  });
+
+  it("falls back to the browser's zone when the persona has none (C3.1)", () => {
+    /**
+     * The fallback used to be hard-coded to Asia/Shanghai. A user outside
+     * Shanghai whose persona has no measured zone saw the Shanghai band:
+     * at 13:00Z the old code said 21:00 (evening, "40 秒"), while the
+     * browser's zone is 08:00 in New York (morning). This test fails on
+     * `timezone || "Asia/Shanghai"` and passes on the Intl fallback.
+     */
+    styleState = { data: { profile: twoBands }, isLoading: false, isError: false };
+    browserZone("America/New_York");
+    render(<WaitGauge personaId={5} name="小满" timezone={null} now={atNine} />);
+    expect(screen.getByText(/一半在 2 分钟 之内/)).toBeInTheDocument();
+    expect(screen.queryByText(/一半在 40 秒 之内/)).toBeNull();
+  });
+
+  it("uses the persona's own zone ahead of the browser's (C3.1)", () => {
+    // The other half of the priority: when the persona does have a zone it
+    // is the record's zone, and the browser does not override it.
+    styleState = { data: { profile: twoBands }, isLoading: false, isError: false };
+    browserZone("America/New_York");
+    render(<WaitGauge personaId={5} name="小满" timezone="Asia/Shanghai" now={atNine} />);
+    expect(screen.getByText(/一半在 40 秒 之内/)).toBeInTheDocument();
+    expect(screen.queryByText(/一半在 2 分钟 之内/)).toBeNull();
   });
 
   it("shows a row per part of the day, and says when a row is too thin", () => {
