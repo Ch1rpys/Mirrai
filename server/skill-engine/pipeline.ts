@@ -95,7 +95,7 @@ import {
 } from "./chunks";
 import { DistillationMapFailed, mapObservationCards } from "./observations";
 import { confirmHarmFromRecords } from "./harm";
-import { mergeHarmDecision } from "@shared/harm";
+import { mergeHarmDecision, normalizeHarmReport } from "@shared/harm";
 import { extractFactsFromRecords } from "./facts";
 import { commitDistilledPersona } from "./commit-distillation";
 import { labelActsForRecords } from "./label-acts";
@@ -1956,6 +1956,30 @@ async function runSkillPipelineOnce(
       );
     }
     /**
+     * The user's decision survives a re-run, so the measurement has to
+     * read it too (C10.1).
+     *
+     * `confirmHarmFromRecords` always answers with `pending`: on a re-run
+     * the user may long since have chosen keep, and the manual's rule is
+     * that keep filters nothing. Measuring with this run's pending report
+     * alone would filter the very lines the user asked to keep. The merge
+     * below is the same one the persona write does before it saves, so
+     * what this run measures and what the persona holds agree.
+     */
+    const storedHarmReport = await (async () => {
+      try {
+        const persona = await db.getPersonaById(personaId, userId);
+        return normalizeHarmReport(
+          (persona?.personaData as Partial<PersonaData> | null | undefined)?.harmReport,
+        );
+      } catch {
+        // A persona that cannot be read is a persona whose decision is
+        // unknown. The run still measures; this run's report stands.
+        return null;
+      }
+    })();
+    const measuredHarmReport = mergeHarmDecision(harmReport, storedHarmReport);
+    /**
      * Per-state pools read the emotion column. Labelling does not
      * change the records-version string, so a profile measured at
      * import would otherwise keep only `any`.
@@ -1971,8 +1995,12 @@ async function runSkillPipelineOnce(
        * act clusters and the conflict lines from the same hurtful
        * sentences the notice is asking the user about — the report exists
        * only in this run's memory until the persona is written below.
+       *
+       * A stored `keep` / `soften` / `remove` wins over this run's
+       * `pending` decision (merged above): the categories are this run's,
+       * the decision is the user's.
        */
-      ...(harmReport ? { personaDataOverride: { harmReport } } : {}),
+      ...(measuredHarmReport ? { personaDataOverride: { harmReport: measuredHarmReport } } : {}),
     }).catch((e) =>
       console.warn("[SkillEngine] The style profile could not be remade after labelling:", e.message),
     );

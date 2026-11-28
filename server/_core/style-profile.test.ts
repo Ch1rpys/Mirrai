@@ -688,6 +688,107 @@ describe("measureStyleProfile", () => {
     expect(written).toBeDefined();
     expect(written).not.toHaveProperty("group");
   });
+
+  it("keeps the lines the user already chose to keep when a re-run measures with a pending report (C10.1)", async () => {
+    // The user chose "keep": the manual's rule is that nothing is
+    // filtered. A re-run then confirms the same hurtful lines again —
+    // a fresh report is always "pending" until the user decides — and
+    // hands that report to the measurement. The stored decision is the
+    // user's and it wins: the kept lines must stay in the sample pool,
+    // the act clusters and the conflict repair lines.
+    // i18n:allow-input — hurtful lines from the fixture, matched not shown.
+    const keptLines = ["你真没用呀啊啊", "你怎么这么差呀"];
+    const storedCategories = [{ kind: "belittle", count: 12, examples: [1, 2, 3] }];
+    getRecordsVersion.mockResolvedValue("40:40");
+    getPersonaStyleProfile.mockResolvedValue(null);
+    getPersonaById.mockResolvedValue({
+      id: 5,
+      userId: 1,
+      name: "小满",
+      personaData: {
+        nickname: "树树",
+        harmReport: {
+          categories: storedCategories,
+          decision: "keep",
+          decidedAt: "2026-01-01T00:00:00.000Z",
+        },
+      },
+    });
+    getUserById.mockResolvedValue({ id: 1, name: "阿树" });
+
+    const at = (minute: number) =>
+      new Date(Date.parse("2023-01-01T12:00:00.000Z") + minute * 60_000);
+    const rows: Array<Record<string, unknown>> = [];
+    let id = 0;
+    const add = (row: Record<string, unknown>) => {
+      id += 1;
+      rows.push({
+        id,
+        role: "assistant",
+        kind: "text",
+        speaker: "小满",
+        emotion: "warm",
+        ...row,
+      });
+    };
+    // Three fights; each one ends with a hurtful line the user kept.
+    for (let episode = 0; episode < 3; episode++) {
+      const start = episode * 180;
+      add({ role: "user", content: "嗯", emotion: "neutral", timestamp: at(start) });
+      add({ content: "哦。", emotion: "distant", timestamp: at(start + 1) });
+      add({ content: keptLines[episode % 2]!, act: "tease", timestamp: at(start + 30) });
+    }
+    // Twelve teasing lines, enough for the act clusters to form.
+    for (let i = 0; i < 9; i++) {
+      add({ content: keptLines[i % 2]!, act: "tease", timestamp: at(600 + i) });
+    }
+    // Their ordinary lines, so a pool has something to sample.
+    for (let i = 0; i < 25; i++) {
+      add({ content: "今天在的呀啊啊", act: "answer", timestamp: at(700 + i) });
+    }
+    iterateRecords.mockImplementation(async function* (
+      _personaId: number,
+      _userId: number,
+      options?: { register?: string },
+    ) {
+      const source = options?.register ? [] : rows;
+      for (const row of source) yield row;
+    });
+
+    const measured = await measureStyleProfile({
+      personaId: 5,
+      userId: 1,
+      force: true,
+      now: new Date("2026-02-01T00:00:00.000Z"),
+      personaDataOverride: {
+        harmReport: {
+          categories: [{ kind: "belittle", count: 12, examples: [1, 2, 3] }],
+          decision: "pending",
+        },
+      },
+    });
+
+    const pool = measured.samplePool?.any ?? [];
+    for (const line of keptLines) expect(pool).toContain(line);
+    const teaseLines = (measured.actClusters?.tease ?? []).flatMap(
+      (cluster) => cluster.lines,
+    );
+    for (const line of keptLines) expect(teaseLines).toContain(line);
+    const repairLines = measured.conflict?.repairLines ?? [];
+    for (const line of keptLines) expect(repairLines).toContain(line);
+    expect(measured.conflict?.episodes).toBe(3);
+
+    // What is written is the same unfiltered measurement.
+    const written = setPersonaStyleProfile.mock.calls.at(-1)?.[2] as
+      | {
+          samplePool?: { any?: string[] };
+          actClusters?: Record<string, Array<{ lines: string[] }>>;
+          conflict?: { repairLines?: string[] };
+        }
+      | undefined;
+    expect(written?.samplePool?.any).toEqual(expect.arrayContaining(keptLines));
+    expect(written?.conflict?.repairLines).toEqual(expect.arrayContaining(keptLines));
+  });
 });
 
 describe("afterRecordsChanged", () => {

@@ -18,6 +18,7 @@ import {
 import { mergePersonaSettings } from "@shared/persona-settings";
 import { normalizePeriods } from "@shared/periods";
 import { mineAddressForms } from "@shared/address-history";
+import { mergeHarmDecision, normalizeHarmReport } from "@shared/harm";
 import { normalizePeople } from "@shared/people";
 import { preferredClockZone } from "@shared/timezone";
 import { draftImperfection } from "@shared/imperfection-draft";
@@ -169,12 +170,31 @@ export async function measureStyleProfile(params: {
   const group = measureGroup(groupRows);
   const persona = await getPersonaById(personaId, userId);
   const user = await getUserById(userId);
-  const rawData = {
-    ...(persona?.personaData && typeof persona.personaData === "object" && !Array.isArray(persona.personaData)
+  const storedPersonaData =
+    persona?.personaData && typeof persona.personaData === "object" && !Array.isArray(persona.personaData)
       ? (persona.personaData as Record<string, unknown>)
-      : {}),
-    ...(params.personaDataOverride ?? {}),
-  };
+      : {};
+  const overrideData = params.personaDataOverride ?? {};
+  const rawData = { ...storedPersonaData, ...overrideData };
+  /**
+   * A report from this run does not overrule the decision the user
+   * already made (C10.1).
+   *
+   * A re-run measures before its own report is stored, and a fresh
+   * report is always `pending` until the user decides. Spreading it over
+   * the row's own report turns a stored `keep` back into `pending`, and
+   * the rule for `keep` is that nothing is filtered. The pipeline merges
+   * the stored decision in before it measures; this second merge means a
+   * caller that forgets cannot take the user's choice away either.
+   */
+  if (overrideData.harmReport !== undefined) {
+    const mergedHarm = mergeHarmDecision(
+      normalizeHarmReport(overrideData.harmReport),
+      normalizeHarmReport(storedPersonaData.harmReport),
+    );
+    if (mergedHarm) rawData.harmReport = mergedHarm;
+    else delete rawData.harmReport;
+  }
   const nickname = typeof rawData.nickname === "string" ? rawData.nickname.trim() : "";
   const userName = typeof user?.name === "string" ? user.name.trim() : "";
   const personaName = typeof persona?.name === "string" ? persona.name.trim() : "";
