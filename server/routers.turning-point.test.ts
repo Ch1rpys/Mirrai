@@ -88,6 +88,57 @@ describe("record.timeline and the turning-point decisions", () => {
     });
   });
 
+  it("carries the changes of the point the user confirmed into the stored decision (C2.5)", async () => {
+    // The page shows the user what moved before it asks them to keep the
+    // turn. Those changes have to be written with the decision: a later
+    // run that no longer measures the week must still be able to show
+    // the line and "what changed", not an empty list.
+    const changes = [
+      { series: "charsMedian", before: 10, after: 6 },
+      { series: "total", before: 32, after: 11 },
+    ] as const;
+    const caller = appRouter.createCaller(ctxFor(1));
+    await caller.turningPoint.confirm({ personaId: 5, id: "2023-W29", note: "换工作", changes: [...changes] });
+    expect(setTurningPointDecision).toHaveBeenLastCalledWith({
+      personaId: 5,
+      userId: 1,
+      id: "2023-W29",
+      status: "confirmed",
+      note: "换工作",
+      changes: [...changes],
+    });
+    await caller.turningPoint.annotate({ personaId: 5, id: "2023-W33", note: "那周搬家", changes: [...changes] });
+    expect(setTurningPointDecision).toHaveBeenLastCalledWith({
+      personaId: 5,
+      userId: 1,
+      id: "2023-W33",
+      status: "confirmed",
+      note: "那周搬家",
+      changes: [...changes],
+    });
+  });
+
+  it("refuses malformed changes before writing anything (C2.5)", async () => {
+    const caller = appRouter.createCaller(ctxFor(1));
+    const badSeries = [{ series: "not-a-series", before: 1, after: 2 }] as never;
+    await expect(
+      caller.turningPoint.confirm({ personaId: 5, id: "2023-W29", changes: badSeries }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const badNumber = [{ series: "total", before: "nine", after: 2 }] as never;
+    await expect(
+      caller.turningPoint.confirm({ personaId: 5, id: "2023-W29", changes: badNumber }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const tooMany = Array.from({ length: 13 }, () => ({
+      series: "total" as const,
+      before: 10,
+      after: 6,
+    }));
+    await expect(
+      caller.turningPoint.confirm({ personaId: 5, id: "2023-W29", changes: tooMany }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(setTurningPointDecision).not.toHaveBeenCalled();
+  });
+
   it("does not decide on somebody else's persona", async () => {
     getPersonaById.mockResolvedValue(undefined);
     await expect(

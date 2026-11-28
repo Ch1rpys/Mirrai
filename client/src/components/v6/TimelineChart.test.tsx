@@ -144,11 +144,33 @@ describe("the timeline chart", () => {
       personaId: 5,
       id: "2023-W10",
       note: undefined,
+      /**
+       * The decision carries the changes the user is looking at. The
+       * next run may not measure them anymore, and the page has to keep
+       * showing what moved instead of an empty list (C2.5).
+       */
+      changes: [{ series: "charsMedian", before: 10, after: 6 }],
     });
 
     await userEvent.click(screen.getByText("2023-W14"));
     await userEvent.click(screen.getByRole("button", { name: translate("zh", "report.reject") }));
     expect(rejectMutation).toHaveBeenCalledWith({ personaId: 5, id: "2023-W14" });
+  });
+
+  it("sends the changes along with a note (C2.5)", async () => {
+    render(<TimelineChart personaId={5} />);
+    await userEvent.click(screen.getByText("2023-W14"));
+    await userEvent.type(
+      screen.getByRole("textbox", { name: translate("zh", "report.annotate") }),
+      "那周开始变少",
+    );
+    await userEvent.click(screen.getByRole("button", { name: translate("zh", "report.saveNote") }));
+    expect(annotateMutation).toHaveBeenCalledWith({
+      personaId: 5,
+      id: "2023-W14",
+      note: "那周开始变少",
+      changes: [{ series: "myShare", before: 0.5, after: 0.3 }],
+    });
   });
 
 });

@@ -144,6 +144,14 @@ describe("the user's decisions on the electrocardiogram (C2.5)", () => {
     const kept = merged.find((point) => point.id === "2023-W29");
     expect(kept).toMatchObject({ status: "confirmed", note: "那周以后话短了" });
     expect(kept?.weekStart).toBe(weekStartDate("2023-W29"));
+    /**
+     * The point survives so the user can still see it, and what moved
+     * has to survive with it: the store keeps the changes the user
+     * confirmed, because this run no longer measures them. An empty
+     * change list here is what used to drop the line and the sentence
+     * from the page.
+     */
+    expect(kept?.changes).toEqual([{ series: "charsMedian", before: 9, after: 5 }]);
     // And the detected ones are still there.
     expect(merged.map((point) => point.id)).toEqual(["2023-W27", "2023-W29", "2023-W33"]);
   });

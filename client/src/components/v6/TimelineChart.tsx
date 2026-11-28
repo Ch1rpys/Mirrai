@@ -187,7 +187,17 @@ export default function TimelineChart({ personaId }: { personaId: number }) {
           <div className="mt-2 flex flex-wrap gap-2">
             <Button
               size="sm"
-              onClick={() => decide.mutate({ personaId, id: selectedPoint.id, note: note.trim() || undefined })}
+              onClick={() => decide.mutate({
+                personaId,
+                id: selectedPoint.id,
+                note: note.trim() || undefined,
+                /**
+                 * Write down what the page is showing (C2.5). A later
+                 * run can stop detecting the turn; without these the
+                 * stored point would have no line and no sentence.
+                 */
+                changes: selectedPoint.changes,
+              })}
             >
               {t("report.confirm")}
             </Button>
@@ -195,8 +205,16 @@ export default function TimelineChart({ personaId }: { personaId: number }) {
               size="sm"
               variant="outline"
               onClick={() => {
-                if (note.trim()) annotate.mutate({ personaId, id: selectedPoint.id, note: note.trim() });
-                else reject.mutate({ personaId, id: selectedPoint.id });
+                if (note.trim()) {
+                  annotate.mutate({
+                    personaId,
+                    id: selectedPoint.id,
+                    note: note.trim(),
+                    changes: selectedPoint.changes,
+                  });
+                } else {
+                  reject.mutate({ personaId, id: selectedPoint.id });
+                }
               }}
             >
               {note.trim() ? t("report.saveNote") : t("report.reject")}

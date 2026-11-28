@@ -291,6 +291,28 @@ export interface StoredTurningPoint {
   note?: string;
 }
 
+/**
+ * Reads stored change rows, keeping only the fields the page knows.
+ *
+ * The store is `personaData`, which is user-controllable JSON: whatever
+ * is not a `{ series, before, after }` row is dropped rather than handed
+ * to the chart.
+ */
+function normalizeChanges(value: unknown): TurningChange[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((change) => {
+    if (!change || typeof change !== "object") return [];
+    const entry = change as Record<string, unknown>;
+    if (typeof entry.series !== "string") return [];
+    if (typeof entry.before !== "number" || typeof entry.after !== "number") return [];
+    return [{
+      series: entry.series as TimelineSeriesId,
+      before: entry.before,
+      after: entry.after,
+    }];
+  });
+}
+
 export function normalizeStoredTurningPoints(value: unknown): StoredTurningPoint[] {
   if (!Array.isArray(value)) return [];
   const out: StoredTurningPoint[] = [];
@@ -300,19 +322,7 @@ export function normalizeStoredTurningPoints(value: unknown): StoredTurningPoint
     if (typeof row.id !== "string" || !row.id.trim()) continue;
     const status = row.status;
     if (status !== "auto" && status !== "confirmed" && status !== "rejected") continue;
-    const changes: TurningChange[] = Array.isArray(row.changes)
-      ? row.changes.flatMap((change) => {
-          if (!change || typeof change !== "object") return [];
-          const entry = change as Record<string, unknown>;
-          if (typeof entry.series !== "string") return [];
-          if (typeof entry.before !== "number" || typeof entry.after !== "number") return [];
-          return [{
-            series: entry.series as TimelineSeriesId,
-            before: entry.before,
-            after: entry.after,
-          }];
-        })
-      : [];
+    const changes = normalizeChanges(row.changes);
     out.push({
       id: row.id.trim(),
       at: typeof row.at === "string" && row.at ? row.at : row.id,
@@ -421,13 +431,23 @@ export async function buildTimeline(params: {
   return { series, points, events };
 }
 
-/** Records one decision about a turning point. */
+/**
+ * Records one decision about a turning point.
+ *
+ * `changes` are the changes the user was looking at when they decided
+ * (C2.5). They are stored with the decision: when the records later
+ * change, a run can stop detecting the week, and the detector cannot
+ * re-measure what it no longer sees — without the stored changes the
+ * page would have the point but no vertical line and no "what changed".
+ * When they are not passed, the store keeps what it already had.
+ */
 export async function setTurningPointDecision(params: {
   personaId: number;
   userId: number;
   id: string;
   status: "confirmed" | "rejected";
   note?: string;
+  changes?: TurningChange[];
 }): Promise<StoredTurningPoint | null> {
   const persona = await db.getPersonaById(params.personaId, params.userId);
   if (!persona) return null;
@@ -436,10 +456,15 @@ export async function setTurningPointDecision(params: {
     : {};
   const list = normalizeStoredTurningPoints(data.turningPoints);
   const index = list.findIndex((point) => point.id === params.id);
+  const changes = params.changes !== undefined
+    ? normalizeChanges(params.changes)
+    : index >= 0
+      ? list[index].changes
+      : [];
   const next: StoredTurningPoint = {
     id: params.id,
     at: params.id,
-    changes: index >= 0 ? list[index].changes : [],
+    changes,
     status: params.status,
     ...(params.note ? { note: params.note } : {}),
   };
