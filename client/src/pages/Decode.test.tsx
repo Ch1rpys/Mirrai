@@ -34,6 +34,9 @@ vi.mock("@/lib/trpc", () => ({
         },
       },
     },
+    safety: {
+      resources: { useQuery: () => ({ data: { resources: [] }, isError: false, isLoading: false }) },
+    },
   },
 }));
 
@@ -135,5 +138,32 @@ describe("read this line", () => {
     await user.click(screen.getByRole("button", { name: translate("zh", "decode.showContext") }));
     expect(screen.getByText("哦。")).toBeInTheDocument();
     expect(screen.getByText("嗯")).toBeInTheDocument();
+  });
+
+  it("shows the crisis card instead of the three blocks when the line is a crisis (C3.4)", async () => {
+    const user = userEvent.setup();
+    // The server short-circuits the decoder and answers with the card
+    // flag only (WP12's rule: every piece of user input is read for
+    // crisis language first, and a hit does nothing else).
+    decodedState = { data: { crisis: true }, isFetching: false, isError: false, refetch: vi.fn() };
+    render(<Decode />);
+    await user.type(
+      screen.getByLabelText(translate("zh", "decode.placeholder", { name: "小满" })),
+      "我不想活了",
+    );
+    await user.click(screen.getByRole("button", { name: translate("zh", "decode.submit") }));
+    expect(decode).toHaveBeenLastCalledWith(
+      { personaId: 5, text: "我不想活了" },
+      expect.objectContaining({ enabled: true }),
+    );
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByText(translate("zh", "safety.crisisTitle"))).toBeInTheDocument();
+    // The three result blocks are not rendered: the crisis card is the
+    // whole answer.
+    expect(screen.queryByText(translate("zh", "decode.rulesTitle"))).toBeNull();
+    expect(
+      screen.queryByText(translate("zh", "decode.precedentsTitle", { name: "小满" })),
+    ).toBeNull();
+    expect(screen.queryByText(translate("zh", "decode.afterTitle"))).toBeNull();
   });
 });

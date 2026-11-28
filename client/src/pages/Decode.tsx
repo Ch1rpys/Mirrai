@@ -7,6 +7,7 @@ import { formatInstantInZone } from "@/lib/dates";
 import { renderRecordContent } from "@shared/records";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import CrisisCard from "@/components/CrisisCard";
 import PageLoader from "@/components/PageLoader";
 import NotFound from "@/pages/NotFound";
 
@@ -17,6 +18,10 @@ import NotFound from "@/pages/NotFound";
  * the rules the user confirmed that mention it, the times they really
  * said it, and what usually followed. It gives precedents, never a
  * verdict — there is no sentence anywhere here that says what they meant.
+ *
+ * The pasted line is user input (WP12's rule), so a crisis is answered
+ * with the crisis card instead of a reading. The server short-circuits
+ * the decoder; this page only draws the flag it sends back.
  */
 interface DecodeRowView {
   id: number;
@@ -37,6 +42,7 @@ export default function Decode() {
   const [draft, setDraft] = useState("");
   const [asked, setAsked] = useState("");
   const [open, setOpen] = useState<Set<number>>(new Set());
+  const [crisisDismissed, setCrisisDismissed] = useState(false);
 
   const persona = trpc.persona.get.useQuery({ id: personaId }, { enabled: personaId > 0 });
   const decoded = trpc.record.decode.useQuery(
@@ -109,6 +115,9 @@ export default function Decode() {
           event.preventDefault();
           const trimmed = draft.trim();
           if (!trimmed) return;
+          // A new line is a new answer; the card the last one opened is
+          // not this one's.
+          setCrisisDismissed(false);
           setAsked(trimmed);
         }}
       >
@@ -140,6 +149,13 @@ export default function Decode() {
             {t("common.retry")}
           </button>
         </div>
+      ) : result?.crisis ? (
+        /**
+         * A crisis is the whole answer: the card, and none of the three
+         * blocks. Putting it away leaves the page quiet until the user
+         * asks about another line.
+         */
+        crisisDismissed ? null : <CrisisCard onClose={() => setCrisisDismissed(true)} />
       ) : result ? (
         <div className="space-y-5">
           <section className="surface p-4 space-y-2">

@@ -10,6 +10,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import {
   countRecords,
   countRecordsByMonth,
+  createSafetyEvent,
   deleteRecordRow,
   deleteRecordsBySource,
   getFilesByPersonaId,
@@ -36,6 +37,7 @@ import { assertPersonaWritable } from "../_core/persona-access";
 import { findHarmKind, normalizeHarmReport } from "@shared/harm";
 import { findNearest } from "../records/nearest";
 import { decodeLine } from "../records/decode";
+import { detectCrisis } from "../safety/crisis";
 import { onThisDay } from "../records/on-this-day";
 import { buildReport } from "../records/report";
 import { buildTimeline } from "../records/timeline";
@@ -425,12 +427,28 @@ export const recordRouter = router({
     .query(async ({ ctx, input }) => {
       const persona = await getPersonaById(input.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
+      /**
+       * The pasted line is user input, so WP12's rule comes first
+       * (C3.4): it is read for crisis language before the decoder runs.
+       * A hit is the crisis card and the safety event, not a reading of
+       * the record — no rules, no precedents, no "what followed".
+       */
+      if (detectCrisis(input.text).crisis) {
+        await createSafetyEvent({
+          userId: ctx.user.id,
+          personaId: input.personaId,
+          type: "crisis",
+          severity: "critical",
+        }).catch((e: unknown) => console.warn("[Safety] Failed to record the crisis event:", e));
+        return { crisis: true as const };
+      }
       assertPersonaWritable(persona, ctx.locale);
-      return decodeLine({
+      const result = await decodeLine({
         personaId: input.personaId,
         userId: ctx.user.id,
         text: input.text,
       });
+      return { ...result, crisis: false as const };
     }),
 
   onThisDay: protectedProcedure
