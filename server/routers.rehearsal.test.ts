@@ -263,16 +263,82 @@ describe("rehearsal.run", () => {
     expect(retrieveMemories).not.toHaveBeenCalled();
   });
 
+  it("refuses the 陪我 promises and the same-family ending questions (C3.2)", async () => {
+    // The third fix dropped the 陪我/回来陪我 phrasings and only knew
+    // 是不是 directly before 结束/分手; all of these are questions whose
+    // answer belongs to the person, so no model may be called.
+    for (const line of [
+      "你会不会陪我到老",
+      "你能不能陪我到老",
+      "你愿不愿意留下来陪我",
+      "你会不会留下来陪我",
+      "你回来陪我吗",
+      "你回来陪我吧",
+      "你什么时候回来陪我",
+      "我们是不是该结束了",
+      "我们是不是该分手了",
+      "我们该不该结束了",
+      "我们是不是快要结束了",
+      "嫁给我行吗",
+      "嫁给我可以吗",
+      "嫁给我，好吗",
+      "嫁给我成吗",
+    ]) {
+      // The room's own rate limit (10 heavy calls a minute) is for
+      // production; this loop is one test, so start each attempt from a
+      // fresh bucket.
+      rateLimiter.reset?.();
+      const result = await appRouter
+        .createCaller(ctxFor(1))
+        .rehearsal.run({ personaId: 5, line });
+      expect(result.mode, line).toBe("my_side_only");
+    }
+    expect(planTurn).not.toHaveBeenCalled();
+    expect(executePlan).not.toHaveBeenCalled();
+    expect(retrieveMemories).not.toHaveBeenCalled();
+  });
+
   it("still rehearses a daily request that only sounds like a commitment (C3.2)", async () => {
     // "陪我" and "留下来" are only a verdict when nothing follows them,
     // and "回来陪我吃饭" is a schedule, not "come back to me". The
     // widened table used to refuse these before any model call.
-    for (const line of ["你能不能陪我逛街", "你回来陪我吃饭吗"]) {
+    for (const line of [
+      "你能不能陪我逛街",
+      "你回来陪我吃饭吗",
+      "你能陪我逛街吗",
+      "你陪我逛街吧",
+      "你回来陪我看电影",
+    ]) {
       const result = await appRouter
         .createCaller(ctxFor(1))
         .rehearsal.run({ personaId: 5, line });
       expect(result.mode, line).toBe("variants");
       expect((result as any).variants.some((entry: any) => entry.text)).toBe(true);
+    }
+    expect(planTurn).toHaveBeenCalled();
+    expect(executePlan).toHaveBeenCalled();
+  });
+
+  it("still rehearses a movie, an exam or someone else's break-up (C3.2)", async () => {
+    // 结束/分手 are also about things and other people; the ending
+    // question rule is anchored to the relationship, so these must go
+    // through the generation path instead of being refused.
+    for (const line of [
+      "电影是不是结束了",
+      "这部剧是不是结束了",
+      "考试是不是结束了",
+      "比赛结束了吗",
+      "他是不是分手了",
+      "我朋友是不是分手了",
+      "我们分手吧",
+      "我们结束吧",
+      "我们分开吧",
+    ]) {
+      rateLimiter.reset?.();
+      const result = await appRouter
+        .createCaller(ctxFor(1))
+        .rehearsal.run({ personaId: 5, line });
+      expect(result.mode, line).toBe("variants");
     }
     expect(planTurn).toHaveBeenCalled();
     expect(executePlan).toHaveBeenCalled();

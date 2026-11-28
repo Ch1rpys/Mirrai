@@ -96,6 +96,57 @@ describe("isCommitmentQuestion", () => {
     }
   });
 
+  it("keeps the 陪我 promises that were a verdict before the third fix (C3.2)", () => {
+    // The third fix narrowed 陪我 to the end of the sentence and dropped
+    // 陪 from the "回来找我" family, so these went back to the
+    // generation path. They are promises about the relationship, not a
+    // request for the day ("陪我逛街" / "回来陪我吃饭" stay out).
+    for (const line of [
+      "你会不会陪我到老",
+      "你能不能陪我到老",
+      "你愿不愿意留下来陪我",
+      "你会不会留下来陪我",
+      "你回来陪我吗",
+      "你回来陪我吧",
+      "你什么时候回来陪我",
+    ]) {
+      expect(isCommitmentQuestion(line), line).toBe(true);
+    }
+  });
+
+  it("recognises the same ending question with 该 / 快 and the proposal with 行 / 可以 (C3.2)", () => {
+    // The ending pattern only knew 是不是/是否 directly before the verb,
+    // and the proposal only knew a particle directly after 嫁给我.
+    for (const line of [
+      "我们是不是该结束了",
+      "我们是不是该分手了",
+      "我们该不该结束了",
+      "我们是不是快要结束了",
+      "嫁给我行吗",
+      "嫁给我可以吗",
+      "嫁给我，好吗",
+      "嫁给我成吗",
+    ]) {
+      expect(isCommitmentQuestion(line), line).toBe(true);
+    }
+  });
+
+  it("does not treat a movie, an exam, a match or someone else's break-up as a verdict (C3.2)", () => {
+    // The 结束/分手 family is also used for things and other people: a
+    // rehearsal of "电影是不是结束了" is a normal line, not a question
+    // whose answer belongs to the persona.
+    for (const line of [
+      "电影是不是结束了",
+      "这部剧是不是结束了",
+      "考试是不是结束了",
+      "比赛结束了吗",
+      "他是不是分手了",
+      "我朋友是不是分手了",
+    ]) {
+      expect(isCommitmentQuestion(line), line).toBe(false);
+    }
+  });
+
   it("does not treat an ordinary question as a verdict", () => {
     for (const line of [
       "我今天很想你",
@@ -129,6 +180,9 @@ describe("isCommitmentQuestion", () => {
       "你会不会陪我逛街",
       "你能不能留下来吃饭",
       "你回来陪我吃饭吗",
+      "你能陪我逛街吗",
+      "你陪我逛街吧",
+      "你回来陪我看电影",
     ]) {
       expect(isCommitmentQuestion(line), line).toBe(false);
     }
@@ -136,8 +190,16 @@ describe("isCommitmentQuestion", () => {
 
   it("does not treat a statement about the relationship as a question (C3.2)", () => {
     // "我们结束了" is the user saying it, not asking it, and
-    // "我们结婚好几年了" only borrows the marriage word.
-    for (const line of ["我们结束了", "我们结婚好几年了"]) {
+    // "我们结婚好几年了" only borrows the marriage word. "我们分手吧"
+    // is a proposal to rehearse — the reply gate (containsCommitment)
+    // covers what the model may answer, not this first gate.
+    for (const line of [
+      "我们结束了",
+      "我们结婚好几年了",
+      "我们分手吧",
+      "我们结束吧",
+      "我们分开吧",
+    ]) {
       expect(isCommitmentQuestion(line), line).toBe(false);
     }
   });

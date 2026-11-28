@@ -61,14 +61,11 @@ const COMMITMENT_QUESTION_PATTERNS: RegExp[] = [
   /(你|您)(会不会|愿不愿意|肯不肯|会|愿意|肯)(不会|不愿意|不肯)?(答应我|答应(下来)?|同意(和好|复合|再试|原谅|重新开始)|同意我)/,
   // 你会不会娶我 / 你愿意嫁给我吗
   /(你|您)(会不会|愿不愿意|肯不肯|想不想|要不要|会|愿意|肯|想)?(不会|不愿意|不肯)?(娶|嫁)(给我|我吧|我吗|给我吗|给我吧|我)/,
-  // 嫁给我好吗 / 嫁给我吧 / 愿意嫁给我吗 (the subject is dropped)
-  /嫁给我[好吗吧么呢]/,
+  // 嫁给我好吗 / 嫁给我吧 / 愿意嫁给我吗 / 嫁给我行吗 / 嫁给我，好吗
+  // (the subject is dropped; a statement like 我想嫁给我喜欢的人 is not)
+  /嫁给我(?=[\s,，、]*(?:好吗|好么|好吧|好不好|好不|行吗|行不行|可以吗|可以么|成吗|成不成|吧|吗|么|呢|嘛|$))/,
   // 我们结婚吧 / 我们结婚好吗 / 我们结婚好不好 / 我们要不要结婚
   /(我们|咱们)(要不要|该不该|是不是该)?(结婚|办婚礼|领证)(?=(?:好吗|好吧|好不好|好不|行吗|行不行|可以吗|可以么|成吗|吧|吗|么|呢|[。！？!?\s])|$)/,
-  // 是不是结束了 / 我们是不是要分手
-  /(是不是|是否)(要|已经|已经要|想|打算)?(结束|分手|分开)/,
-  // 我们结束了吗 / 我们分手了吗 (a bare "我们结束了" is a statement)
-  /(结束|分手|分开)(了|啦)?[吗么呢吧？?]/,
   // 我想和你结婚
   /我(想|要|愿意)(和|跟|与)你(结婚|领证)/,
   // 能不能给我一次机会 / 再给我一次机会好吗
@@ -76,6 +73,11 @@ const COMMITMENT_QUESTION_PATTERNS: RegExp[] = [
   /(再)?给(我|我们)(一|另)?次机会(?=[吗么呢吧好。！？!?\s]|$)/,
   // 你会不会接受我 / 你愿不愿意留下 / 你肯不肯陪我 ("陪我逛街" is a request)
   /(你|您)(会不会|愿不愿意|肯不肯|能不能|可不可以|打不打算)(接受我|留下|留下来|陪着我|陪我)(?=[吗么呢啊呀吧。！？!?\s]|$)/,
+  // 你会不会陪我到老 / 你能不能陪我到老 (a promise about the future)
+  /陪我到老/,
+  // 你回来陪我吗 / 你回来陪我吧 / 你什么时候回来陪我 (陪我 only as a
+  // verdict when nothing follows it; "回来陪我吃饭" is a daily request)
+  /陪我(?=[吗么呢啊呀吧。！？!?\s]|$)/,
   // 你决定原谅我了吗 / 你打算重新开始吗
   /(你|您)(决定|打算|准备)(原谅|回来|复合|和好|重新开始)/,
   // 你愿意再试一次吗
@@ -124,10 +126,49 @@ const COMMITMENT_QUESTION_PATTERNS: RegExp[] = [
   /(will|would|can|could|do) you (still )?(forgive|agree|promise|come back|take me back|try again)/i,
 ];
 
+/**
+ * Is this a question about the relationship ending?
+ *
+ * The 结束/分手/分开 family is not always about the two of them: a
+ * movie, an exam or a match also 结束 ("考试是不是结束了"), and someone
+ * else also 分手 ("他是不是分手了"). The same words without a question
+ * are a statement or a proposal ("我们结束了", "我们分手吧"), which is
+ * the user's own line to try, not a verdict to refuse — the reply gate
+ * (`containsCommitment`) is what covers the generated answer.
+ *
+ * So the verdict needs either a relationship subject (我们/咱们/我们俩/
+ * 我俩/这段感情/这段关系) and a question marker or 了吗, or — when the
+ * subject is dropped, as in "是不是结束了" — no other subject noun and a
+ * question marker. A bare 吧 never counts.
+ */
+const RELATIONSHIP_END_VERB = /(?:结束|分手|分开)/u;
+const RELATIONSHIP_ANCHOR = /(?:我们|咱们|我俩|我们俩|这段感情|这段关系)/u;
+/** Nouns that make the sentence about something or someone else. */
+const OTHER_END_SUBJECT = /(?:电影|电视剧|剧|考试|比赛|面试|课程|上课|课|会议|游戏|直播|演出|演唱会|节目|活动|项目|工作|学期|假期|他|她|它|朋友|同事|同学|室友|家人|我妈|我爸|老师)/u;
+const END_QUESTION_MARKER = /(?:是不是|是否|该不该|要不要|会不会|快不|快要)/u;
+const END_QUESTION_PARTICLE = /(?:结束|分手|分开)(?:了|啦)?\s*[吗么呢？?]/u;
+
+function isEndingCommitmentQuestion(value: string): boolean {
+  if (!RELATIONSHIP_END_VERB.test(value)) return false;
+  if (RELATIONSHIP_ANCHOR.test(value)) {
+    // "我们是不是该结束了" / "我们该不该结束了" / "我们是不是快要结束了"
+    if (END_QUESTION_MARKER.test(value)) return true;
+    // "我们结束了吗" — a question particle, never the bare 吧 of a proposal.
+    return END_QUESTION_PARTICLE.test(value);
+  }
+  // The subject was dropped: "是不是结束了" is a verdict only when no
+  // other subject noun is there to take it away from the relationship.
+  if (OTHER_END_SUBJECT.test(value)) return false;
+  return END_QUESTION_MARKER.test(value) || END_QUESTION_PARTICLE.test(value);
+}
+
 export function isCommitmentQuestion(text: string): boolean {
   const value = String(text ?? "").trim();
   if (!value) return false;
-  return COMMITMENT_QUESTION_PATTERNS.some((pattern) => pattern.test(value));
+  return (
+    COMMITMENT_QUESTION_PATTERNS.some((pattern) => pattern.test(value)) ||
+    isEndingCommitmentQuestion(value)
+  );
 }
 
 /**
