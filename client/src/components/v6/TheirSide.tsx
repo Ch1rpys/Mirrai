@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
 import { normalizePersonaSettings } from "@shared/persona-settings";
-import { zonedDateKey } from "@shared/timezone";
-import { sunTimes } from "@shared/sun";
+import { nextSunEvent } from "@shared/sun";
 import type { Locale } from "@shared/copy";
 
 /** The WMO weather-code groups the header can name. */
@@ -99,24 +98,20 @@ export default function TheirSide({
   const group = weatherGroup(data.weatherCode);
   const temp = Math.round(data.temperature);
 
-  const today = zonedDateKey(at, zone);
   let sunLabel = "";
   let sunTime = "";
-  let sun = sunTimes(today, city.lat, city.lng);
-  const candidates: Array<{ kind: "sunrise" | "sunset"; at: Date }> = [];
-  if (sun) {
-    if (sun.sunrise.getTime() > at.getTime()) candidates.push({ kind: "sunrise", at: sun.sunrise });
-    if (sun.sunset.getTime() > at.getTime()) candidates.push({ kind: "sunset", at: sun.sunset });
-  }
-  if (candidates.length === 0) {
-    // Both have passed: the next light is tomorrow's sunrise.
-    const tomorrow = zonedDateKey(new Date(at.getTime() + 24 * 60 * 60 * 1000), zone);
-    sun = sunTimes(tomorrow, city.lat, city.lng);
-    if (sun) candidates.push({ kind: "sunrise", at: sun.sunrise });
-  }
-  if (candidates.length > 0) {
-    candidates.sort((a, b) => a.at.getTime() - b.at.getTime());
-    const next = candidates[0];
+  /**
+   * The next light, on the city's own calendar (C5.2).
+   *
+   * The events were computed for the local day-key as if it were a UTC
+   * day, so near the date line both of "today's" events landed on the
+   * next local day — Apia at local noon showed tomorrow's sunrise
+   * instead of today's sunset. `nextSunEvent` assembles the candidates
+   * from the UTC days around the local day and keeps only the ones that
+   * really fall on it.
+   */
+  const next = nextSunEvent(at, city.lat, city.lng, zone);
+  if (next) {
     sunLabel = next.kind === "sunrise" ? t("theirWeather.sunrise") : t("theirWeather.sunset");
     sunTime = clockIn(zone, next.at, locale === "en" ? "en" : "zh");
   }

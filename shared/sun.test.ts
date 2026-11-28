@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { sunTimes } from "./sun";
+import { nextSunEvent, sunTimes } from "./sun";
+import { zonedDateKey } from "./timezone";
 
 /**
  * The reference times below are from sunrise-sunset.org, which uses the
@@ -135,5 +136,67 @@ describe("the sun over a place and a day (C5.2)", () => {
     expect(sunTimes("2024-06-21", 91, 0)).toBeNull();
     expect(sunTimes("2024-06-21", 0, 181)).toBeNull();
     expect(sunTimes("2024-06-21", Number.NaN, 0)).toBeNull();
+  });
+});
+
+describe("the next light on the city's own calendar (C5.2)", () => {
+  // Apia is UTC+13 at longitude 171.75 W; Kiritimati is UTC+14 at
+  // 157.4 W. Their local day is a day ahead of UTC, so events computed
+  // for the local day-key as a UTC day land on the following local day.
+  const APIA = { latitude: -13.8333, longitude: -171.75, zone: "Pacific/Apia" };
+  const KIRITIMATI = { latitude: 1.8721, longitude: -157.4278, zone: "Pacific/Kiritimati" };
+
+  it("shows today's sunset at local noon in Apia, not tomorrow's sunrise", () => {
+    // 2026-03-01 12:00 in Apia is 2026-02-28T23:00Z.
+    const at = new Date("2026-02-28T23:00:00Z");
+    const next = nextSunEvent(at, APIA.latitude, APIA.longitude, APIA.zone);
+    expect(next).not.toBeNull();
+    expect(next!.kind).toBe("sunset");
+    expect(zonedDateKey(next!.at, APIA.zone)).toBe("2026-03-01");
+    expect(next!.at.getTime()).toBeGreaterThan(at.getTime());
+    // Apia's sunset is around 18:30 in March.
+    const hour = Number(
+      new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hour12: false, timeZone: APIA.zone }).format(next!.at),
+    );
+    expect(hour).toBeGreaterThanOrEqual(16);
+    expect(hour).toBeLessThanOrEqual(20);
+  });
+
+  it("shows today's sunset at local noon in Kiritimati", () => {
+    // 2026-03-01 12:00 in Kiritimati is 2026-02-28T22:00Z.
+    const at = new Date("2026-02-28T22:00:00Z");
+    const next = nextSunEvent(at, KIRITIMATI.latitude, KIRITIMATI.longitude, KIRITIMATI.zone);
+    expect(next).not.toBeNull();
+    expect(next!.kind).toBe("sunset");
+    expect(zonedDateKey(next!.at, KIRITIMATI.zone)).toBe("2026-03-01");
+  });
+
+  it("keeps Shanghai and New York on the same answers as before", () => {
+    // Noon in Shanghai: today's sunset is the next light.
+    const shanghaiNoon = new Date("2026-03-01T04:00:00Z");
+    const shanghai = nextSunEvent(shanghaiNoon, 31.2304, 121.4737, "Asia/Shanghai");
+    expect(shanghai!.kind).toBe("sunset");
+    expect(zonedDateKey(shanghai!.at, "Asia/Shanghai")).toBe("2026-03-01");
+    expect(shanghai!.at.toISOString()).toBe(
+      sunTimes("2026-03-01", 31.2304, 121.4737)!.sunset.toISOString(),
+    );
+
+    // 20:00 in New York: both of today's events are past, so tomorrow's
+    // sunrise is the next light.
+    const nyEvening = new Date("2026-03-02T01:00:00Z");
+    const ny = nextSunEvent(nyEvening, 40.7128, -74.006, "America/New_York");
+    expect(ny!.kind).toBe("sunrise");
+    expect(zonedDateKey(ny!.at, "America/New_York")).toBe("2026-03-02");
+
+    // Early morning: today's sunrise, not tomorrow's.
+    const nyMorning = new Date("2026-03-01T10:00:00Z");
+    const morning = nextSunEvent(nyMorning, 40.7128, -74.006, "America/New_York");
+    expect(morning!.kind).toBe("sunrise");
+    expect(zonedDateKey(morning!.at, "America/New_York")).toBe("2026-03-01");
+  });
+
+  it("has no next light during the polar night", () => {
+    const at = new Date("2024-12-21T12:00:00Z");
+    expect(nextSunEvent(at, 69.6492, 18.9553, "Europe/Oslo")).toBeNull();
   });
 });

@@ -20,6 +20,8 @@
  * 20th because the server is on another clock.
  */
 
+import { zonedDateKey } from "./timezone";
+
 export interface SunTimes {
   sunrise: Date;
   sunset: Date;
@@ -111,4 +113,65 @@ export function sunTimes(
     sunrise: new Date(midnight + sunriseMinutes * 60_000),
     sunset: new Date(midnight + sunsetMinutes * 60_000),
   };
+}
+
+/** The local calendar day key `deltaDays` away from `dayKey`. */
+function shiftDayKey(dayKey: string, deltaDays: number): string {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + deltaDays);
+  return date.toISOString().slice(0, 10);
+}
+
+/** The next sunrise or sunset, and which one it is. */
+export interface SunEvent {
+  kind: "sunrise" | "sunset";
+  at: Date;
+}
+
+/**
+ * The next sunrise or sunset at a place, on the place's own calendar (C5.2).
+ *
+ * `sunTimes` computes the events of one UTC calendar day, but the day a
+ * city lives in is its local one. Near the date line the two disagree:
+ * Apia (UTC+13) at local noon is still on the previous UTC day, so the
+ * events computed for the local day-key land on the *next* local day —
+ * the header showed tomorrow's sunrise instead of today's sunset.
+ *
+ * So the candidates are assembled from the UTC days on either side of
+ * the local target day, each event is kept only when its local calendar
+ * date is the target, and the earliest event still ahead is the answer.
+ * A local day is at most one UTC day away from its own date, and the
+ * extra day handles the "everything today has passed" case.
+ */
+export function nextSunEvent(
+  at: Date,
+  latitude: number,
+  longitude: number,
+  timeZone: string | null | undefined,
+): SunEvent | null {
+  if (!Number.isFinite(at.getTime())) return null;
+  const zone = timeZone || "UTC";
+  const today = zonedDateKey(at, zone);
+  for (const target of [today, shiftDayKey(today, 1)]) {
+    const candidates: SunEvent[] = [];
+    for (const delta of [-1, 0, 1]) {
+      const sun = sunTimes(shiftDayKey(target, delta), latitude, longitude);
+      if (!sun) continue;
+      const events: Array<[SunEvent["kind"], Date]> = [
+        ["sunrise", sun.sunrise],
+        ["sunset", sun.sunset],
+      ];
+      for (const [kind, when] of events) {
+        if (zonedDateKey(when, zone) !== target) continue;
+        if (when.getTime() <= at.getTime()) continue;
+        candidates.push({ kind, at: when });
+      }
+    }
+    if (candidates.length > 0) {
+      candidates.sort((a, b) => a.at.getTime() - b.at.getTime());
+      return candidates[0];
+    }
+  }
+  return null;
 }
