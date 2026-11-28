@@ -125,6 +125,43 @@ describe("redactRecords", () => {
       .toBe("[address]楼下等我");
   });
 
+  it("replaces the lettered building and 号楼 tail after the house number (C6.3)", () => {
+    // The tail only knew numbered rooms and a few named buildings, so a
+    // lettered building or a 号楼 form went out with the share copy:
+    // "…号SOHO现代城A座" printed "[address]A座", "…号B栋" printed
+    // "[address]B栋", and "…号5号楼" printed "[address]楼" (it kept the
+    // room/floor character of the unit). The segments may follow each
+    // other, and the spaces people paste between them are part of it.
+    expect(contentOf("上海市徐汇区淮海中路1234号SOHO现代城A座", { addresses: true }))
+      .toBe("[address]");
+    expect(contentOf("北京市朝阳区建国路88号B栋", { addresses: true }))
+      .toBe("[address]");
+    expect(contentOf("北京市朝阳区建国路88号5号楼", { addresses: true }))
+      .toBe("[address]");
+    expect(contentOf("北京市朝阳区建国路88号SOHO现代城A座501室", { addresses: true }))
+      .toBe("[address]");
+    expect(contentOf("上海市徐汇区淮海中路1234号2单元3层", { addresses: true }))
+      .toBe("[address]");
+    expect(contentOf("上海市徐汇区淮海中路 1234 号 B 栋 501 室", { addresses: true }))
+      .toBe("[address]");
+  });
+
+  it("keeps an ordinary sentence after an address (C6.3)", () => {
+    // "楼" is also a unit character, so an over-eager tail would eat the
+    // start of the next sentence: "1234号楼下等我" must keep "楼下等我".
+    // The separating space and comma stay outside the replacement.
+    expect(contentOf("淮海中路1234号楼下等我", { addresses: true }))
+      .toBe("[address]楼下等我");
+    expect(contentOf("淮海中路1234号 楼下等我", { addresses: true }))
+      .toBe("[address] 楼下等我");
+    expect(contentOf("淮海中路1234号，楼下等我", { addresses: true }))
+      .toBe("[address]，楼下等我");
+    expect(contentOf("淮海中路1234号B栋楼下等我", { addresses: true }))
+      .toBe("[address]楼下等我");
+    expect(contentOf("淮海中路1234号SOHO现代城A座，我到了", { addresses: true }))
+      .toBe("[address]，我到了");
+  });
+
   it("leaves a compound without a house number alone (deviation 641)", () => {
     // The old rule treated "市…小区/花园/大厦" as an address on its own,
     // which also replaced "我们去市中心广场吧". The tightened rule needs a
@@ -133,6 +170,26 @@ describe("redactRecords", () => {
     // printing part of an address.
     expect(contentOf("上海市徐汇区阳光花园", { addresses: true }))
       .toBe("上海市徐汇区阳光花园");
+  });
+
+  it("records the named-compound over-consumption as deviation 642", () => {
+    // Known limitation, recorded as deviation 642 instead of silencing
+    // it: the named-building tail cannot tell a building name from an
+    // ordinary clause that happens to end in 城/大厦/广场/花园/中心/府,
+    // so the clause after the house number goes with the address. The
+    // third re-acceptance called this out as "still swallowing the
+    // sentence after the address"; tightening it would drop real named
+    // buildings (万达广场, SOHO现代城) or require punctuation that people
+    // do not type. The ordinary sentence cases that can be separated
+    // are pinned above (楼下等我 in three forms), so this test documents
+    // the residue rather than claiming it was fixed.
+    expect(contentOf("淮海中路1234号附近有个广场", { addresses: true }))
+      .toBe("[address]");
+    expect(contentOf("淮海中路1234号市中心广场见", { addresses: true }))
+      .toBe("[address]见");
+    // A sentence whose end is not a building word is kept.
+    expect(contentOf("淮海中路1234号我到了", { addresses: true }))
+      .toBe("[address]我到了");
   });
 
   it("replaces a Luhn-valid card and leaves a long number that fails Luhn", () => {
