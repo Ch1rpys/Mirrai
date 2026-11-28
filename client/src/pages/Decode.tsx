@@ -51,7 +51,7 @@ export default function Decode() {
    * (C3.4). A query that writes is the wrong shape, so nothing may run
    * it again on its own: no refetch on focus/reconnect, no retry, and a
    * cache that never goes stale while the page is open. A new line has a
-   * new query key, so submitting still asks once. Deviation 641 records
+   * new query key, so submitting still asks once. Deviation 640 records
    * why this is not a mutation yet.
    */
   const decoded = trpc.record.decode.useQuery(
