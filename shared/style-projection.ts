@@ -16,14 +16,28 @@ export type ProjectionRule =
   | "strip_emoji"
   | "punct_width";
 
+/**
+ * `strip_emoji` runs first: every other rule works on the characters it
+ * leaves behind. It used to run last, so removing an emoji could expose a
+ * trailing tilde or period, join two `哈` into one run, or reveal a comma
+ * now sitting between two Han characters — after the rule that would have
+ * acted on them had already run. One pass was not a fixed point (B3.4).
+ *
+ * The rest keep this order because no later rule creates input for an
+ * earlier one: `laugh_runs` keeps a run a run and runs after the only rule
+ * that can split one, `ellipsis_form` only emits tokens `strip_period`
+ * protects, `exclaim_runs` caps a length `punct_width` does not change,
+ * and `comma_to_space` already reads both comma widths before
+ * `punct_width` rewrites them.
+ */
 export const PROJECTION_RULES: ProjectionRule[] = [
+  "strip_emoji",
   "strip_period",
   "strip_tilde",
   "laugh_runs",
   "ellipsis_form",
   "exclaim_runs",
   "comma_to_space",
-  "strip_emoji",
   "punct_width",
 ];
 
@@ -95,26 +109,57 @@ const COMMON_ABBREVIATIONS = new Set([
   "sun",
 ]);
 
+/**
+ * How many times the ordered pipeline may run before the text counts as
+ * settled.
+ *
+ * `strip_period` and `strip_tilde` can expose each other: `好~。` ends on a
+ * period, stripping it leaves `~` at the end, and `好。~` is the same pair
+ * the other way round. Neither order is a fixed point for both sentences,
+ * so the ordered pipeline is iterated instead of trusting one pass; the
+ * other pairs settle in the first pass. Each pass removes at most one
+ * trailing mark per bubble, so the cap is set above any plausible chain
+ * of them; the loop is cheap and stops as soon as a pass changes
+ * nothing, so ordinary text takes one or two passes.
+ */
+const MAX_PROJECTION_PASSES = 16;
+
 export function projectStyle(
   text: string,
   fp: StyleFingerprintCore,
   rng: () => number,
 ): ProjectionResult {
   const applied: ProjectionRule[] = [];
-  const bubbles = text.split("\n");
-  const out = bubbles.map((bubble) => {
-    let next = bubble;
-    for (const rule of PROJECTION_RULES) {
-      if (!ruleApplies(rule, fp)) continue;
-      const projected = applyRule(rule, next, fp, rng);
-      if (projected !== next) {
-        if (!applied.includes(rule)) applied.push(rule);
-        next = projected;
+  let current = text;
+  for (let pass = 0; pass < MAX_PROJECTION_PASSES; pass++) {
+    let changed = false;
+    const bubbles = current.split("\n");
+    const out = bubbles.map((bubble) => {
+      let next = bubble;
+      for (const rule of PROJECTION_RULES) {
+        /**
+         * `laugh_runs` runs on the first pass only. It draws from `rng`; a
+         * second draw in the same call would advance the sequence and
+         * re-sample runs it has already sampled, so the call would stop
+         * being deterministic and the next call would not land on the same
+         * fixed point. No later rule creates a `哈` run, so once is enough
+         * once emoji are gone.
+         */
+        if (pass > 0 && rule === "laugh_runs") continue;
+        if (!ruleApplies(rule, fp)) continue;
+        const projected = applyRule(rule, next, fp, rng);
+        if (projected !== next) {
+          changed = true;
+          if (!applied.includes(rule)) applied.push(rule);
+          next = projected;
+        }
       }
-    }
-    return next;
-  });
-  return { text: out.join("\n"), applied };
+      return next;
+    });
+    current = out.join("\n");
+    if (!changed) break;
+  }
+  return { text: current, applied };
 }
 
 function ruleApplies(rule: ProjectionRule, fp: StyleFingerprintCore): boolean {

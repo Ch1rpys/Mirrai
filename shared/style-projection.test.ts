@@ -332,6 +332,78 @@ describe("the fixture fingerprint", () => {
     expect(result.applied).not.toContain("strip_period");
   });
 
+  /**
+   * B3.4: `strip_emoji` used to run last, so every rule before it worked on
+   * text that still carried the emoji. Removing the emoji afterwards
+   * exposed a trailing tilde, a trailing period, a joined `哈` run, or a
+   * comma now sitting between two Han characters — after the rule that
+   * would have acted on them had already run. The first pass then stopped
+   * at a different text than the second pass, so the projection was not
+   * idempotent. These are the acceptance report's reproductions against
+   * the fixture's happy-state fingerprint.
+   */
+  it("reaches one fixed point when an emoji hid a trailing tilde", () => {
+    const { happy } = fixtureCore();
+    const once = apply("好的~😊", happy, "b34-emoji-tilde");
+    expect(once.text).toBe("好的");
+    expect(once.applied).toContain("strip_emoji");
+    expect(once.applied).toContain("strip_tilde");
+    const twice = apply(once.text, happy, "b34-emoji-tilde");
+    expect(twice.text).toBe(once.text);
+    expect(twice.applied).toEqual([]);
+  });
+
+  it("reaches one fixed point when an emoji hid a trailing period", () => {
+    const { happy } = fixtureCore();
+    const once = apply("好的。😊", happy, "b34-emoji-period");
+    expect(once.text).toBe("好的");
+    expect(once.applied).toContain("strip_emoji");
+    expect(once.applied).toContain("strip_period");
+    const twice = apply(once.text, happy, "b34-emoji-period");
+    expect(twice.text).toBe(once.text);
+    expect(twice.applied).toEqual([]);
+  });
+
+  it("reaches one fixed point when an emoji split a laugh run", () => {
+    const { happy } = fixtureCore();
+    // The happy state's only non-zero `haRuns` bucket is length four, so a
+    // run sampled from it is four 哈: the first pass has one expected
+    // answer. The second pass must use the same seed and draw four again.
+    const once = apply("哈😊哈", happy, "b34-emoji-laugh");
+    expect(once.text).toBe("哈哈哈哈");
+    expect(once.applied).toContain("strip_emoji");
+    expect(once.applied).toContain("laugh_runs");
+    const twice = apply(once.text, happy, "b34-emoji-laugh");
+    expect(twice.text).toBe(once.text);
+    expect(twice.applied).toEqual([]);
+  });
+
+  it("reaches one fixed point when an emoji separated a comma from Han", () => {
+    const { happy } = fixtureCore();
+    const once = apply("好的,😊知道了", happy, "b34-emoji-comma");
+    expect(once.text).toBe("好的 知道了");
+    expect(once.applied).toContain("strip_emoji");
+    expect(once.applied).toContain("comma_to_space");
+    const twice = apply(once.text, happy, "b34-emoji-comma");
+    expect(twice.text).toBe(once.text);
+    expect(twice.applied).toEqual([]);
+  });
+
+  it("settles a period and a tilde that expose each other", () => {
+    // `strip_period` removes a period the happy state never writes, which
+    // can leave a `~` at the end; `strip_tilde` removes the tilde, which can
+    // leave a `。` at the end. Neither order alone reaches a fixed point for
+    // both sentences, so the pipeline settles them before returning.
+    const { happy } = fixtureCore();
+    for (const line of ["好的。~", "好的~。"]) {
+      const once = apply(line, happy);
+      expect(once.text, line).toBe("好的");
+      const twice = apply(once.text, happy);
+      expect(twice.text, line).toBe(once.text);
+      expect(twice.applied, line).toEqual([]);
+    }
+  });
+
   it("is idempotent across the reachable punctuation-width and comma combinations", () => {
     // A persona who writes "好的 知道了" (spaces where commas would go) and
     // almost never uses half-width marks is a reachable fingerprint. With
@@ -375,22 +447,50 @@ describe("the fixture fingerprint", () => {
     }
   });
 
-  it("is idempotent on fifty fixture lines with the same seed", () => {
-    const { overall } = fixtureCore();
+  it("settles a long chain of trailing marks in one call", () => {
+    // Each pass strips at most one trailing mark per bubble, so a chain
+    // that alternates the two strip rules needs several passes. The
+    // manual promises the projection is a fixed point; the cap must be
+    // above a pathological chain, not just above ordinary punctuation.
+    const { happy } = fixtureCore();
+    const chain = `好的${"。~".repeat(8)}`;
+    const once = apply(chain, happy, "xiaoman-happy");
+    const twice = apply(once.text, happy, "xiaoman-happy");
+    expect(once.text).toBe("好的");
+    expect(twice.text).toBe(once.text);
+    expect(twice.applied).toEqual([]);
+  });
+
+  it("is idempotent on fifty fixture lines, some of which the rules change", () => {
+    const { happy } = fixtureCore();
     const lines = buildXiaomanRecords()
       .filter((row) => row.role === "assistant" && row.kind === "text")
       .map((row) => row.content);
+    // A seeded Fisher–Yates shuffle, so the fifty lines are a random sample
+    // of the whole fixture rather than "the first fifty that pass a gate".
+    // The overall fingerprint changes none of these lines (every habit it
+    // measured is already what the rules would write), so the sample uses
+    // the happy core — the fingerprint the acceptance report reproduced
+    // against — which is what makes the run exercise a rule at all.
     const rng = seededRandom("pick-50");
-    const picked: string[] = [];
-    for (const line of lines) {
-      if (picked.length >= 50) break;
-      if (rng() < 0.04) picked.push(line);
+    const order = lines.map((_, index) => index);
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [order[i], order[j]] = [order[j]!, order[i]!];
     }
+    const picked = order.slice(0, 50).map((index) => lines[index]!);
     expect(picked.length).toBe(50);
+    let changed = 0;
     for (const line of picked) {
-      const once = projectStyle(line, overall, seededRandom(line));
-      const twice = projectStyle(once.text, overall, seededRandom(line));
-      expect(twice.text).toBe(once.text);
+      const once = projectStyle(line, happy, seededRandom(line));
+      const twice = projectStyle(once.text, happy, seededRandom(line));
+      if (once.text !== line) changed += 1;
+      expect(twice.text, line).toBe(once.text);
+      expect(twice.applied, line).toEqual([]);
     }
+    // Zero would mean "idempotent" was a statement about the identity
+    // function: at this fixture/fingerprint five of the fifty end on a
+    // period the happy state never writes, and `strip_period` changes them.
+    expect(changed).toBeGreaterThan(0);
   });
 });
