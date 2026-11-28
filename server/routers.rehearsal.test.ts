@@ -283,6 +283,10 @@ describe("rehearsal.run", () => {
       "嫁给我可以吗",
       "嫁给我，好吗",
       "嫁给我成吗",
+      "你陪我到老好不好",
+      "你陪我到老行吗",
+      "你陪我到老可以吗",
+      "你陪我到老，好吗",
     ]) {
       // The room's own rate limit (10 heavy calls a minute) is for
       // production; this loop is one test, so start each attempt from a
@@ -351,6 +355,13 @@ describe("rehearsal.run", () => {
       "展会结束了吗",
       "我们公司是不是结束了",
       "饭局结束了吗",
+      "我们能不能结束这个话题",
+      "能不能结束这个话题",
+      "我们可不可以结束这场讨论",
+      "我们能不能早点结束",
+      "你会和我结婚的",
+      "你会和我结婚以后住哪里",
+      "你愿意和我结婚",
     ]) {
       rateLimiter.reset?.();
       const result = await appRouter

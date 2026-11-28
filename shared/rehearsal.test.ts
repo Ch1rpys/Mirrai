@@ -212,6 +212,23 @@ describe("isCommitmentQuestion", () => {
       "展会结束了吗",
       "我们公司是不是结束了",
       "饭局结束了吗",
+      // The same class in the other direction: a request to end the
+      // topic/trip/call is about the thing, not the relationship, and a
+      // marriage statement is not a question.
+      "我们能不能结束这个话题",
+      "能不能结束这个话题",
+      "我们可不可以结束这场讨论",
+      "我们能不能结束这次争吵",
+      "我们能不能早点结束",
+      "你会和我结婚的",
+      "你会和我结婚以后住哪里",
+      "你愿意和我结婚",
+      "谢谢你陪我",
+      "谢谢你一直陪我",
+      "他会陪我到老",
+      "他说他会陪我到老",
+      "我希望你陪我到老",
+      "他每天都陪我",
     ]) {
       expect(isCommitmentQuestion(line), line).toBe(false);
     }
@@ -222,6 +239,10 @@ describe("isCommitmentQuestion", () => {
       "你会回来陪我吗",
       "你会和我结婚吗",
       "你会一直陪着我吗",
+      "你陪我到老好不好",
+      "你陪我到老行吗",
+      "你陪我到老可以吗",
+      "你陪我到老，好吗",
       "should we break up",
     ]) {
       expect(isCommitmentQuestion(line), line).toBe(true);
@@ -335,6 +356,8 @@ describe("containsCommitment", () => {
       "我们该结束了",
       "我们分开吧",
       "我们离婚吧",
+      "我们结束这段关系吧",
+      "我们结束这段感情吧",
       "we are over",
       "we should break up",
     ]) {

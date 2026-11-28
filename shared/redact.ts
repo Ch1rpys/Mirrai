@@ -107,7 +107,7 @@ export function redactionReportOf(
  * untranslated interface copy.
  */
 /** The house/lane/unit number an address needs to count. */
-const ADDRESS_UNIT = /\d+\s*(?:号楼(?![下上里外前后边])|号|弄|栋|幢|座|单元|室|楼|层)/u.source;
+const ADDRESS_UNIT = /\d+[ \t]*(?:号楼(?![下上里外前后边])|号|弄|栋|幢|单元|室|楼)/u.source;
 /**
  * What may follow the first number and still be the same address.
  *
@@ -126,17 +126,26 @@ const ADDRESS_UNIT = /\d+\s*(?:号楼(?![下上里外前后边])|号|弄|栋|幢
  *
  * A unit character only counts with a number or a letter in front of
  * it, so an ordinary phrase after a numeric unit is not swallowed:
- * "1234号楼下等我" keeps "楼下等我". The named-building branch can still
- * swallow a clause that happens to end in 城/大厦/广场/花园/中心/府; that
- * over-consumption is recorded as deviation 642, not claimed as fixed.
+ * "1234号楼下等我" keeps "楼下等我". A building name may follow a space
+ * only when it starts with Latin letters ("1234号 SOHO现代城"); a Han
+ * clause after a space ("1234号 附近有个广场") is kept. The
+ * named-building branch can still swallow a clause that happens to end
+ * in 城/大厦/广场/花园/中心/府 when it is written directly against the
+ * number; that over-consumption is recorded as deviation 642.
  */
 /** A numbered room/floor/building segment inside the tail. */
-const ADDRESS_TAIL_NUMBER = /\s*\d+\s*(?:号楼(?![下上里外前后边])|号|弄|栋|幢|座|单元|室|楼|层)/u.source;
+const ADDRESS_TAIL_NUMBER = /[ \t]*\d+[ \t]*(?:号楼(?![下上里外前后边])|号|弄|栋|幢|座|单元|室|楼|层)/u.source;
 /** A lettered building segment inside the tail ("A座", "B栋"). */
-const ADDRESS_TAIL_LETTER = /\s*[A-Za-z][A-Za-z0-9]{0,3}\s*(?:号楼|号|弄|栋|幢|座|单元|室|楼|层)/u.source;
+const ADDRESS_TAIL_LETTER = /[ \t]*[A-Za-z][A-Za-z0-9]{0,3}[ \t]*(?:号楼|号|弄|栋|幢|座|单元|室|楼|层)/u.source;
 /** A named building written against the number ("SOHO现代城"). */
-const ADDRESS_TAIL_BUILDING = /\s*(?:[A-Za-z][A-Za-z0-9]*[\u4e00-\u9fa5]{0,8}?|[\u4e00-\u9fa5]{2,10}?)(?:城|大厦|广场|花园|公寓|苑|中心|府)/u.source;
-const ADDRESS_TAIL = `(?:${ADDRESS_TAIL_NUMBER}|${ADDRESS_TAIL_LETTER}|${ADDRESS_TAIL_BUILDING})*`;
+const ADDRESS_TAIL_BUILDING = /(?:[A-Za-z][A-Za-z0-9]*[\u4e00-\u9fa5]{0,8}?|[\u4e00-\u9fa5]{2,10}?)(?:城|大厦|广场|花园|公寓|苑|中心|府)/u.source;
+/**
+ * A Latin-led building name after a space ("1234号 SOHO现代城").
+ * Only Latin-led names are allowed across the space: without this a
+ * clause like "1234号 附近有个广场" would be swallowed too.
+ */
+const ADDRESS_TAIL_BUILDING_SPACED = /[ \t]+[A-Za-z][A-Za-z0-9]*[\u4e00-\u9fa5]{0,8}?(?:城|大厦|广场|花园|公寓|苑|中心|府)/u.source;
+const ADDRESS_TAIL = `(?:${ADDRESS_TAIL_NUMBER}|${ADDRESS_TAIL_LETTER}|${ADDRESS_TAIL_BUILDING_SPACED}|${ADDRESS_TAIL_BUILDING})*`;
 const ADDRESS_PROVINCE = /[\u4e00-\u9fa5]{2,10}?(?:省|自治区)/u.source;
 const ADDRESS_CITY = /[\u4e00-\u9fa5]{2,10}?市/u.source;
 const ADDRESS_DISTRICT = /[\u4e00-\u9fa5]{2,10}?(?:区|县)/u.source;

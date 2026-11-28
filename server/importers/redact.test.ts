@@ -156,6 +156,14 @@ describe("redactRecords", () => {
       .toBe("[address]");
     expect(contentOf("淮海中路1234号 SOHO现代城A座", { addresses: true }))
       .toBe("[address]");
+    // A Han clause after a space is not a building name: only Latin-led
+    // names may cross the space.
+    expect(contentOf("淮海中路1234号 附近有个广场", { addresses: true }))
+      .toBe("[address] 附近有个广场");
+    // 座 / 层 were not units of the first number after all; they stay
+    // ordinary suffixes when no 号/弄/栋/楼/单元/室 is there.
+    expect(contentOf("建国路3座", { addresses: true })).toBe("建国路3座");
+    expect(contentOf("建国路3层", { addresses: true })).toBe("建国路3层");
   });
 
   it("keeps an ordinary sentence after an address (C6.3)", () => {
