@@ -385,3 +385,41 @@ describe("outbound.updateText and the assisted mark", () => {
     expect(updateOutboundLetterText).toHaveBeenCalledWith(7, 1, "建议的说法", true);
   });
 });
+
+describe("outbound.updateText and the crisis rule (C3.6)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getOutboundLetterById.mockResolvedValue({
+      id: 7,
+      personaId: 5,
+      status: "ready",
+      text: "旧的话",
+    });
+    updateOutboundLetterText.mockResolvedValue(true);
+    createSafetyEvent.mockResolvedValue(1);
+  });
+
+  it("stops and shows the crisis card when the sentence being saved is a crisis", async () => {
+    // Saving is the moment the edited text becomes the letter — and the
+    // letter is never answered by the persona, so nothing downstream
+    // would ever read it (WP12's rule). The crisis detector runs before
+    // the write; a hit shows the card instead of the rest.
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .outbound.updateText({ id: 7, text: "我不想活了" });
+    expect(result).toEqual({ success: true, crisis: true });
+    expect(updateOutboundLetterText).not.toHaveBeenCalled();
+    expect(createSafetyEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 1, personaId: 5, type: "crisis", severity: "critical" }),
+    );
+  });
+
+  it("still saves an ordinary sentence and answers without a crisis flag", async () => {
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .outbound.updateText({ id: 7, text: "那天我应该留下来的" });
+    expect(result).toEqual({ success: true });
+    expect(updateOutboundLetterText).toHaveBeenCalledWith(7, 1, "那天我应该留下来的");
+    expect(createSafetyEvent).not.toHaveBeenCalled();
+  });
+});

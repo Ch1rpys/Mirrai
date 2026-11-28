@@ -89,7 +89,12 @@ export default function OutboundLetters({ personaId, name }: { personaId: number
    */
   const staleMutation = trpc.outbound.markStaleNotified.useMutation();
   const updateMutation = trpc.outbound.updateText.useMutation({
-    onSuccess: () => refetch(),
+    /**
+     * Whether a save is done is decided by what the server answers, so
+     * the close and the refetch live in the call's own success handler
+     * below. A save that was stopped by the crisis detector is not a
+     * save: the editor stays open and the list is not re-read.
+     */
     onError: (e: any) => toast.error(e.message),
   });
   /**
@@ -249,7 +254,19 @@ export default function OutboundLetters({ personaId, name }: { personaId: number
     updateMutation.mutate(
       { id, text: trimmed, assisted: assistedId === id },
       {
-        onSuccess: () => {
+        onSuccess: (result: { crisis?: boolean }) => {
+          /**
+           * A crisis sentence is not saved (WP12's rule, C3.6).
+           *
+           * The server reads the text before it writes it; on a hit it
+           * stops and says so without storing anything. So the letter
+           * still holds the text it had, the editor stays open with the
+           * words the user typed, and the card is the whole answer.
+           */
+          if (result?.crisis) {
+            setCrisisOpen(true);
+            return;
+          }
           setAssistedId(null);
           /**
            * Only the editor that was saved is closed.
@@ -260,6 +277,7 @@ export default function OutboundLetters({ personaId, name }: { personaId: number
            * back, with no warning and no undo.
            */
           setEditing((current) => (current === id ? null : current));
+          refetch();
         },
       },
     );

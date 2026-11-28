@@ -26,9 +26,11 @@ const saveOutcome = vi.fn();
 const dismissSaidItHint = vi.fn();
 const navigate = vi.fn();
 const suggestWording = vi.fn();
+const refetch = vi.fn();
 let suggestResult: any = { suggestions: [], crisis: false, text: "" };
 let addOwnResult: any = { success: true };
 let outcomeResult: any = { saved: true };
+let updateResult: any = { success: true };
 
 let letters: any[] = [];
 let saidItHint = false;
@@ -43,7 +45,7 @@ vi.mock("@/lib/trpc", () => ({
       resources: { useQuery: () => ({ data: { resources: [] }, isError: false, isLoading: false }) },
     },
     outbound: {
-      list: { useQuery: () => ({ data: { letters, saidItHint }, refetch: vi.fn() }) },
+      list: { useQuery: () => ({ data: { letters, saidItHint }, refetch }) },
       collect: { useMutation: () => ({ mutate: collect, isPending: false }) },
       markSent: { useMutation: () => ({ mutate: markSent, isPending: false }) },
       drop: { useMutation: () => ({ mutate: drop, isPending: false }) },
@@ -528,5 +530,58 @@ describe("the wording assistant (C3.6)", () => {
     await user.click(screen.getByRole("button", { name: translate("zh", "outbound.suggest") }));
     expect(screen.queryByText(translate("zh", "outbound.suggestionsTitle"))).toBeNull();
     expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+});
+
+describe("saving an edited sentence (C3.6)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    updateResult = { success: true };
+  });
+
+  /** Opens the editor of the only letter, rewrites it, and presses save. */
+  async function editAndSave(original: string, edited: string) {
+    const user = userEvent.setup();
+    letters = [{ id: 7, status: "ready", text: original, createdAt: new Date().toISOString() }];
+    render(<ConfirmProvider><OutboundLetters personaId={5} name="小满" /></ConfirmProvider>);
+    await user.click(screen.getByLabelText(translate("zh", "outbound.edit")));
+    const editor = screen.getByLabelText(translate("zh", "outbound.editLabel"));
+    await user.clear(editor);
+    await user.type(editor, edited);
+    await user.click(screen.getByRole("button", { name: translate("zh", "microRules.save") }));
+  }
+
+  it("shows the crisis card instead of saving a crisis sentence, and keeps the editor open", async () => {
+    updateResult = { success: true, crisis: true };
+    await editAndSave("我想了很久。", "我不想活了");
+
+    expect(updateText).toHaveBeenCalledWith(
+      { id: 7, text: "我不想活了", assisted: false },
+      expect.anything(),
+    );
+
+    // The server has read the words and stopped before the write, so the
+    // card is the whole answer: the sentence is not treated as saved and
+    // is still in the editor where the user wrote it.
+    act(() => {
+      updateText.mock.calls[0][1].onSuccess(updateResult);
+    });
+
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    expect(screen.getByLabelText(translate("zh", "outbound.editLabel"))).toHaveValue("我不想活了");
+    // Nothing was re-read: the letter keeps the text it had.
+    expect(refetch).not.toHaveBeenCalled();
+  });
+
+  it("closes the editor when the server has taken an ordinary sentence", async () => {
+    await editAndSave("我想了很久。", "那天我应该留下来的");
+
+    act(() => {
+      updateText.mock.calls[0][1].onSuccess(updateResult);
+    });
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByLabelText(translate("zh", "outbound.editLabel"))).toBeNull();
+    expect(refetch).toHaveBeenCalled();
   });
 });

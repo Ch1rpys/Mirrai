@@ -8355,6 +8355,30 @@ export const appRouter = router({
         assisted: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        /**
+         * The words are read before they are written (WP12's rule).
+         *
+         * Saving is the moment the edited sentence becomes the letter —
+         * the text the exit list will hand back to the user. It can be
+         * "我不想活了" as easily as it can be an apology, and this door
+         * was the one way into the list the detector never read: a saved
+         * letter is never answered by the persona, so nothing downstream
+         * would ever look at it. A hit shows the card and stops; the
+         * letter keeps the text it had.
+         */
+        if (detectCrisis(input.text).crisis) {
+          // The letter is read only to give the event the persona it was
+          // written to. A letter that is not there does not change the
+          // answer: the user's words still need the card.
+          const letter = await getOutboundLetterById(input.id, ctx.user.id);
+          await createSafetyEvent({
+            userId: ctx.user.id,
+            personaId: letter?.personaId ?? null,
+            type: "crisis",
+            severity: "critical",
+          }).catch((e: unknown) => console.warn("[Safety] Failed to record the crisis event:", e));
+          return { success: true, crisis: true };
+        }
         const changed = input.assisted
           ? await updateOutboundLetterText(input.id, ctx.user.id, input.text, true)
           : await updateOutboundLetterText(input.id, ctx.user.id, input.text);
