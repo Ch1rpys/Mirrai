@@ -333,6 +333,24 @@ describe("rehearsal.run", () => {
       "我们分手吧",
       "我们结束吧",
       "我们分开吧",
+      // A statement or a thanks is not a verdict even when it borrows a
+      // commitment word (round 5).
+      "他一直陪我",
+      "妈妈每天陪我",
+      "谢谢你来陪我",
+      "谢谢你陪我到老",
+      "他陪我到老",
+      "你昨天陪我",
+      "你今晚陪我吗",
+      "你能陪我吗",
+      "我们快要结束了",
+      "我们快要分手了",
+      "我们考试结束了吗",
+      "我们比赛结束了吗",
+      "暑假结束了吗",
+      "展会结束了吗",
+      "我们公司是不是结束了",
+      "饭局结束了吗",
     ]) {
       rateLimiter.reset?.();
       const result = await appRouter
@@ -454,6 +472,18 @@ describe("rehearsal.run", () => {
     // The second gate used to know only the manual's examples, so this
     // retry was shown; the extended shared table has to drop it.
     finalPlan(["我会原谅你", "我不会离开你"]);
+    const result = await appRouter
+      .createCaller(ctxFor(1))
+      .rehearsal.run({ personaId: 5, line: "对不起" });
+    const variants = (result as any).variants;
+    expect(variants.every((entry: any) => entry.text === null)).toBe(true);
+  });
+
+  it("drops a generated reply that ends the relationship for the person (C3.2 round 5)", async () => {
+    // The first gate lets a statement or a proposal through so the user
+    // can rehearse saying it; the reply gate must stop the model from
+    // answering it with "we're over" — the same decision as "we break up".
+    finalPlan(["我们结束了", "我们结束吧", "我们该结束了"]);
     const result = await appRouter
       .createCaller(ctxFor(1))
       .rehearsal.run({ personaId: 5, line: "对不起" });

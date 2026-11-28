@@ -144,6 +144,18 @@ describe("redactRecords", () => {
       .toBe("[address]");
     expect(contentOf("上海市徐汇区淮海中路 1234 号 B 栋 501 室", { addresses: true }))
       .toBe("[address]");
+    // 号楼 is also a first unit, not only something after 号: the old unit
+    // pattern consumed 3号 and left the 楼 behind ("[address]楼").
+    expect(contentOf("北京市朝阳区建国路3号楼", { addresses: true }))
+      .toBe("[address]");
+    expect(contentOf("北京市朝阳区建国路88号楼", { addresses: true }))
+      .toBe("[address]");
+    // Space between the house number and a named building is common when
+    // people paste an address; it is part of the same address.
+    expect(contentOf("淮海中路1234号 SOHO现代城", { addresses: true }))
+      .toBe("[address]");
+    expect(contentOf("淮海中路1234号 SOHO现代城A座", { addresses: true }))
+      .toBe("[address]");
   });
 
   it("keeps an ordinary sentence after an address (C6.3)", () => {

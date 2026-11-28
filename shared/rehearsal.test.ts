@@ -188,6 +188,46 @@ describe("isCommitmentQuestion", () => {
     }
   });
 
+  it("does not treat a daily sentence that borrows 陪我 / 快要 as a question (C3.2 round 5)", () => {
+    // The fourth fix made any sentence ending in 陪我 a verdict and put
+    // 快要 into the ending question markers, so third-person statements,
+    // thanks, and "the summer is almost over" were refused before any
+    // model call. These are ordinary lines; the room must still generate.
+    for (const line of [
+      "他一直陪我",
+      "妈妈每天陪我",
+      "谢谢你来陪我",
+      "谢谢你陪我到老",
+      "他陪我到老",
+      "你昨天陪我",
+      "你今晚陪我吗",
+      "你能陪我吗",
+      "我们快要结束了",
+      "我们快要分手了",
+      "我们快要结束异地了",
+      "暑假快要结束了",
+      "我们考试结束了吗",
+      "我们比赛结束了吗",
+      "暑假结束了吗",
+      "展会结束了吗",
+      "我们公司是不是结束了",
+      "饭局结束了吗",
+    ]) {
+      expect(isCommitmentQuestion(line), line).toBe(false);
+    }
+  });
+
+  it("recognises the same-family questions still missed at round four (C3.2 round 5)", () => {
+    for (const line of [
+      "你会回来陪我吗",
+      "你会和我结婚吗",
+      "你会一直陪着我吗",
+      "should we break up",
+    ]) {
+      expect(isCommitmentQuestion(line), line).toBe(true);
+    }
+  });
+
   it("does not treat a statement about the relationship as a question (C3.2)", () => {
     // "我们结束了" is the user saying it, not asking it, and
     // "我们结婚好几年了" only borrows the marriage word. "我们分手吧"
@@ -199,6 +239,8 @@ describe("isCommitmentQuestion", () => {
       "我们分手吧",
       "我们结束吧",
       "我们分开吧",
+      "我们快要结束了",
+      "我们快要分手了",
     ]) {
       expect(isCommitmentQuestion(line), line).toBe(false);
     }
@@ -283,6 +325,23 @@ describe("containsCommitment", () => {
     }
   });
 
+  it("catches the ending promises the retry could still answer for the person (C3.2 round 5)", () => {
+    // The first gate now lets a statement/proposal through on purpose
+    // ("我们分手吧" is the user's line to rehearse); the second gate has
+    // to stop the model from answering it with a decision of its own.
+    for (const reply of [
+      "我们结束了",
+      "我们结束吧",
+      "我们该结束了",
+      "我们分开吧",
+      "我们离婚吧",
+      "we are over",
+      "we should break up",
+    ]) {
+      expect(containsCommitment(reply), reply).toBe(true);
+    }
+  });
+
   it("lets an ordinary reply through", () => {
     for (const reply of [
       "嗯",
@@ -294,6 +353,7 @@ describe("containsCommitment", () => {
       "今天去参加朋友的婚礼",
       "我最近在学做饭",
       "这首歌真好听",
+      "我们分手了吗",
     ]) {
       expect(containsCommitment(reply), reply).toBe(false);
     }
