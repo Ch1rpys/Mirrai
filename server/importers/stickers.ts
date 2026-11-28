@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { countStickers, iterateRecords, listStickers, upsertSticker } from "../db";
 import { ENV } from "../_core/env";
@@ -108,16 +108,30 @@ export function groupStickerRows(rows: StickerRowLike[]): StickerGroup[] {
   return [...groups.values()];
 }
 
-function absoluteMediaPath(userId: number, personaId: number, group: StickerGroup): string | null {
+async function absoluteMediaPath(
+  userId: number,
+  personaId: number,
+  group: StickerGroup,
+  pathCandidates?: Map<string, string[]>,
+): Promise<string | null> {
   if (!group.image) return null;
   const base = group.image.fileId != null
     ? `${importUnpackRelKey(userId, personaId, group.image.fileId)}/`
     : "";
-  try {
-    return resolveUploadPath(ENV.uploadDir, `${base}${group.image.relativePath}`);
-  } catch {
-    return null;
+  /**
+   * The stored path may be the redacted one (C1.7): the picture on disk
+   * still has the name the export gave it. Try each original name.
+   */
+  for (const relativePath of pathCandidates?.get(group.image.relativePath) ?? [group.image.relativePath]) {
+    try {
+      const abs = resolveUploadPath(ENV.uploadDir, `${base}${relativePath}`);
+      const info = await stat(abs);
+      if (info.isFile()) return abs;
+    } catch {
+      // Not this name; try the next original.
+    }
   }
+  return null;
 }
 
 export interface RegisterStickersResult {
@@ -137,6 +151,12 @@ export interface RegisterStickersResult {
 export async function registerStickers(params: {
   personaId: number;
   userId: number;
+  /**
+   * The original names of sticker files whose stored path redaction
+   * replaced (C1.7). Keys are the redacted relative path; values are
+   * the paths it replaced.
+   */
+  pathCandidates?: Map<string, string[]>;
 }): Promise<RegisterStickersResult> {
   const rows: StickerRowLike[] = [];
   for await (const row of iterateRecords(params.personaId, params.userId, {
@@ -161,7 +181,12 @@ export async function registerStickers(params: {
     let mime: string | null = null;
     let imageBytes: Buffer | null = null;
 
-    const sourcePath = absoluteMediaPath(params.userId, params.personaId, group);
+    const sourcePath = await absoluteMediaPath(
+      params.userId,
+      params.personaId,
+      group,
+      params.pathCandidates,
+    );
     if (sourcePath) {
       const extension = fileExtension(sourcePath);
       if ((STICKER_EXTENSIONS as readonly string[]).includes(extension)) {

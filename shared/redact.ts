@@ -249,15 +249,84 @@ export function redactTextWithOptions(text: string, options: RedactionOptions): 
 }
 
 /**
+ * The metadata a record may carry that is not an enum.
+ *
+ * `register`, `mode` and `direction` are small closed values the writer
+ * and the measurements read; every other string in `meta` is text that
+ * came out of the person's file. The importers keep some of the
+ * original text outside `content` — the transcript of a voice note
+ * (`meta.transcript`), the file name of unpacked media (`meta.path`),
+ * a sticker label, a location name — and a redacted import has to
+ * replace it too (C1.7): the promise is that the original cannot be
+ * found again, and `recordText`/the search tokens read `meta.transcript`
+ * as the row's text.
+ */
+const META_STRUCTURAL_KEYS = new Set(["register", "mode", "direction"]);
+
+function redactMetaValue(
+  value: unknown,
+  options: RedactionOptions,
+  counts: RedactionCounts,
+  people: Array<{ pattern: string; token: string }>,
+): unknown {
+  if (typeof value === "string") return redactText(value, options, counts, people);
+  if (Array.isArray(value)) {
+    return value.map((item) => redactMetaValue(item, options, counts, people));
+  }
+  if (value && typeof value === "object") {
+    const next: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      next[key] = redactMetaValue(item, options, counts, people);
+    }
+    return next;
+  }
+  return value;
+}
+
+/**
+ * Redacts the text fields of a record's `meta`, not only `content`.
+ *
+ * Returns the input object untouched when nothing changed, so callers
+ * can compare identities. `null` and non-object values are passed
+ * through.
+ */
+function redactMeta(
+  meta: Record<string, unknown> | null | undefined,
+  options: RedactionOptions,
+  counts: RedactionCounts,
+  people: Array<{ pattern: string; token: string }>,
+) {
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return meta;
+  let changed = false;
+  const next: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(meta)) {
+    if (META_STRUCTURAL_KEYS.has(key)) {
+      next[key] = value;
+      continue;
+    }
+    const replaced = redactMetaValue(value, options, counts, people);
+    if (replaced !== value) changed = true;
+    next[key] = replaced;
+  }
+  return changed ? next : meta;
+}
+
+/**
  * Returns a new list of records with the chosen patterns replaced.
  *
  * Does not mutate the input. `role: "other"` speakers that match a
  * hidden name are replaced with the same token used in the content.
+ * The text fields of `meta` are replaced with the same matcher, and the
+ * replacements count into the same report as the content (C1.7).
  */
-export function redactRecords<T extends { content: string; speaker: string; role?: string }>(
-  records: T[],
-  options: RedactionOptions,
-): { records: T[]; counts: RedactionCounts } {
+export function redactRecords<
+  T extends {
+    content: string;
+    speaker: string;
+    role?: string;
+    meta?: Record<string, unknown> | null;
+  },
+>(records: T[], options: RedactionOptions): { records: T[]; counts: RedactionCounts } {
   const counts = emptyRedactionCounts();
   const keepNames = options.keepNames ?? [];
   const people = personTokensOf(options.names ?? [], keepNames);
@@ -282,8 +351,9 @@ export function redactRecords<T extends { content: string; speaker: string; role
         counts.names += 1;
       }
     }
-    if (content === row.content && speaker === row.speaker) return row;
-    return { ...row, content, speaker };
+    const meta = redactMeta(row.meta, options, counts, people);
+    if (content === row.content && speaker === row.speaker && meta === row.meta) return row;
+    return { ...row, content, speaker, meta } as T;
   });
   return { records: next, counts };
 }

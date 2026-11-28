@@ -130,6 +130,15 @@ export async function registerMedia(params: {
   fileId?: number;
   /** The user's zone, for the wall clock a camera wrote into EXIF. */
   timeZone?: string | null;
+  /**
+   * The original names of media files whose stored path redaction
+   * replaced (C1.7). The unpacked file keeps its own name for the
+   * import; the record only stores the redacted one, so the registrar
+   * has to map back to find the bytes. Keys are the redacted relative
+   * path, values every original path it replaced — more than one when
+   * two names redacted to the same token.
+   */
+  pathCandidates?: Map<string, string[]>;
 }): Promise<RegisterMediaResult> {
   let registered = 0;
   let skipped = 0;
@@ -154,20 +163,32 @@ export async function registerMedia(params: {
       continue;
     }
 
-    let fileKey: string;
-    let bytes: number;
-    let hash: string;
-    try {
-      fileKey = `${importUnpackRelKey(params.userId, params.personaId, row.fileId)}/${relative.replace(/^\/+/, "")}`;
-      const abs = resolveUploadPath(ENV.uploadDir, fileKey);
-      const info = await stat(abs);
-      if (!info.isFile()) {
-        skipped += 1;
-        continue;
+    /**
+     * Find the file the export carried.
+     *
+     * Usually the stored path is the file's path. After a redacted
+     * import the stored path may be `IMG_[phone].jpg` while the file is
+     * still `IMG_13800138000.jpg`, so every original candidate is tried
+     * in turn; the first one that exists is the file.
+     */
+    let fileKey: string | null = null;
+    let bytes = 0;
+    let hash = "";
+    for (const candidate of params.pathCandidates?.get(relative) ?? [relative]) {
+      const key = `${importUnpackRelKey(params.userId, params.personaId, row.fileId)}/${candidate.replace(/^\/+/, "")}`;
+      try {
+        const abs = resolveUploadPath(ENV.uploadDir, key);
+        const info = await stat(abs);
+        if (!info.isFile()) continue;
+        bytes = info.size;
+        hash = await hashFile(abs);
+        fileKey = key;
+        break;
+      } catch {
+        // This candidate is not on disk; try the next original name.
       }
-      bytes = info.size;
-      hash = await hashFile(abs);
-    } catch {
+    }
+    if (!fileKey) {
       // The export did not carry the file; the text of the row stays.
       skipped += 1;
       continue;

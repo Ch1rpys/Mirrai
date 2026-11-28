@@ -118,6 +118,40 @@ function reportOf(partial: ParseReport): ParseReport {
 }
 
 /**
+ * The media file names redaction replaced, in the other direction (C1.7).
+ *
+ * A record's `meta.path` is the file's name inside the import directory,
+ * and it is text the person's own phone wrote: `IMG_13800138000.jpg`.
+ * The stored record is redacted, but the file on disk keeps its name for
+ * the import — copying or renaming it would break the upload keys the
+ * media row needs. So the two registrars, which run after the rows are
+ * written, are handed the original names for the redacted ones they
+ * read back. Two names can redact to one token ("13800138000.jpg" and
+ * "13900139000.jpg"); both stay in the list and the registrar uses the
+ * one that exists on disk.
+ */
+function redactedMediaPaths(
+  before: Array<{ meta?: Record<string, unknown> | null }>,
+  after: Array<{ meta?: Record<string, unknown> | null }>,
+): Map<string, string[]> {
+  const candidates = new Map<string, string[]>();
+  const keys = ["path", "relativePath"];
+  for (let index = 0; index < after.length; index += 1) {
+    const oldMeta = before[index]?.meta ?? {};
+    const newMeta = after[index]?.meta ?? {};
+    for (const key of keys) {
+      const original = typeof oldMeta[key] === "string" ? oldMeta[key].trim() : "";
+      const redacted = typeof newMeta[key] === "string" ? newMeta[key].trim() : "";
+      if (!original || !redacted || original === redacted) continue;
+      const list = candidates.get(redacted) ?? [];
+      if (!list.includes(original)) list.push(original);
+      candidates.set(redacted, list);
+    }
+  }
+  return candidates;
+}
+
+/**
  * The first eight data rows of a delimiter-separated file.
  *
  * The column-map wizard needs a table without parsing the rest of a
@@ -562,6 +596,10 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
         meta: { ...row.meta, register: "group" as const },
       }))
     : redacted.records;
+  /** The file names redaction replaced, for the media/sticker registrars (C1.7). */
+  const pathCandidates = redacted.counts
+    ? redactedMediaPaths(assigned, redacted.records)
+    : new Map<string, string[]>();
   const redactionReport = redacted.counts
     ? redactionReportOf(redactionOptions, redacted.counts)
     : undefined;
@@ -628,6 +666,8 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
         personaId: file.personaId,
         userId: input.userId,
         timeZone: user?.timezone ?? persona?.timezone ?? null,
+        // The stored path is redacted; the file keeps its name on disk (C1.7).
+        ...(pathCandidates.size > 0 ? { pathCandidates } : {}),
       });
     } catch (error) {
       console.warn("[Import] The media rows could not be stored:", error);
@@ -640,7 +680,11 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
        * out of the import directory so deleting the import does not
        * empty the library.
        */
-      await registerStickers({ personaId: file.personaId, userId: input.userId });
+      await registerStickers({
+        personaId: file.personaId,
+        userId: input.userId,
+        ...(pathCandidates.size > 0 ? { pathCandidates } : {}),
+      });
     } catch (error) {
       console.warn("[Import] The sticker library could not be updated:", error);
     }

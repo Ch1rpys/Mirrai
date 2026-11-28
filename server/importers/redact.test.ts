@@ -148,6 +148,77 @@ describe("redactRecords", () => {
     expect(records[0].speaker).toBe("阿树");
   });
 
+  it("redacts the text a record keeps in meta, not only content (C1.7)", () => {
+    // A voice note's transcript is the actual words, and a media file's
+    // name comes from the phone — both were stored verbatim while the
+    // content was replaced. `recordText` and the search tokens read
+    // `meta.transcript`, so the original survived the "cannot be found
+    // again" promise in another column.
+    const voice = {
+      speaker: "小满",
+      role: "assistant",
+      content: "[voice:3]",
+      meta: { durationSec: 3, transcript: "今天打 13800138000 聊了会儿" },
+    };
+    const image = {
+      speaker: "小满",
+      role: "assistant",
+      content: "[image]",
+      meta: {
+        path: "相册/琪琪_13800138000.jpg",
+        register: "public",
+        mode: "voice",
+        direction: "in",
+      },
+    };
+    const { records, counts } = redactRecords([voice, image], { phones: true, names: ["琪琪"] });
+    expect(records[0]!.meta).toEqual({
+      durationSec: 3,
+      transcript: "今天打 [phone] 聊了会儿",
+    });
+    // `register`/`mode`/`direction` are enums the writer reads, not text
+    // from the file; the path and the label are text and are replaced.
+    expect(records[1]!.meta).toEqual({
+      path: "相册/[person-1]_[phone].jpg",
+      register: "public",
+      mode: "voice",
+      direction: "in",
+    });
+    expect(counts.phones).toBe(2);
+    expect(counts.names).toBe(1);
+    expect(JSON.stringify(records)).not.toContain("13800138000");
+    expect(JSON.stringify(records)).not.toContain("琪琪");
+  });
+
+  it("keeps a meta-only row's identity when nothing in it is redactable", () => {
+    const untouched = {
+      speaker: "小满",
+      role: "assistant",
+      content: "[voice:12]",
+      meta: { path: "voice.ogg", durationSec: 12, transcript: "刚下课" },
+    };
+    const { records, counts } = redactRecords([untouched], { phones: true });
+    expect(records[0]).toBe(untouched);
+    expect(counts).toEqual({
+      phones: 0,
+      ids: 0,
+      emails: 0,
+      cards: 0,
+      names: 0,
+      addresses: 0,
+    });
+  });
+
+  it("counts a meta replacement in the same report as the content (C1.7)", () => {
+    const { counts } = redactRecords(
+      [{ speaker: "小满", content: "[voice:3]", meta: { transcript: "打 13800138000" } }],
+      { phones: true },
+    );
+    const report = redactionReportOf({ phones: true }, counts);
+    expect(report.replaced.phones).toBe(1);
+    expect(JSON.stringify(report)).not.toContain("13800138000");
+  });
+
   it("records which flags ran and the replacement counts, not the originals", () => {
     const { records, counts } = redactRecords(
       [row("13800138000 琪琪")],
