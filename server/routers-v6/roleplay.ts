@@ -10,7 +10,8 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { assertPersonaWritable } from "../_core/persona-access";
 import { copy } from "@shared/copy";
-import { normalizeStyleProfile } from "@shared/style-profile";
+import { normalizeAddressHistory } from "@shared/address-history";
+import { effectiveStyleProfile } from "@shared/style-profile";
 import { zonedDateKey, zonedDayStart } from "@shared/timezone";
 import {
   candidateRecordsByOverlap,
@@ -20,7 +21,6 @@ import {
   createSafetyEvent,
   createRoleplaySession,
   getPersonaById,
-  getPersonaStyleProfile,
   getRoleplaySession,
   updateRoleplaySession,
 } from "../db";
@@ -119,19 +119,51 @@ export const roleplayRouter = router({
       const persona = await getPersonaById(session.personaId, ctx.user.id);
       if (!persona) throw new TRPCError({ code: "NOT_FOUND" });
       assertPersonaWritable(persona, ctx.locale);
-      const stored = await getPersonaStyleProfile(session.personaId, ctx.user.id);
-      const profile = normalizeStyleProfile(stored);
+      /**
+       * The self is rebuilt from the effective profile (C10.6).
+       *
+       * This is the generation path, so it has to read the persona's
+       * profile through `effectiveStyleProfile`: the user can turn a
+       * measurement off with 「不用这一项」, and the switch lives in
+       * `persona.settings`. Reading the stored profile straight from the
+       * table — the old `getPersonaStyleProfile` call — could not see the
+       * switch, so a turned-off userSide kept shaping the role swap.
+       */
+      const profile = effectiveStyleProfile(persona);
       const candidates = await candidateRecordsByOverlap(session.personaId, ctx.user.id, {
         text: input.text,
         role: "user",
         limit: 60,
       });
-      const examples = candidates.slice(0, 6).map((row) => row.content);
+      /**
+       * The manual's material names the user's fingerprint *and* their
+       * address habit (C4.4): how I call them is part of how I sound.
+       * `addressHistory` is measured per direction; only "me_to_them" is
+       * mine to use, and the three strongest forms are the habit. It is
+       * read through the effective profile like everything else, so a
+       * measurement the user turned off is not put back in.
+       */
+      const addressForms = normalizeAddressHistory(profile.addressHistory)
+        .filter((entry) => entry.direction === "me_to_them")
+        .sort((a, b) => b.total - a.total || a.form.localeCompare(b.form))
+        .slice(0, 3)
+        .map((entry) => entry.form);
+      /**
+       * The examples are the user's own real lines. `candidateRecordsByOverlap`
+       * is asked for `role: "user"`, and the role is checked again here:
+       * a line from the other side shown as "how I say things" would put
+       * the persona's voice into the replica of the user.
+       */
+      const examples = candidates
+        .filter((row) => row.role === "user")
+        .slice(0, 6)
+        .map((row) => row.content);
       const transcript = turnsOf(session.transcript);
       const system = buildSelfPrompt({
         personaName: persona.name,
         locale: ctx.locale,
         userSide: profile.userSide ?? null,
+        addressForms,
         examples,
       });
 

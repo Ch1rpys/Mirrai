@@ -7,9 +7,10 @@
  * `roleplay_sessions`, and no message, memory, mood, intimacy or chat
  * count is written.
  *
- * The self is built from the measured user side (the fingerprint and the
- * representative lines) plus a few of the user's real lines near the one
- * being answered — all of it material, fenced.
+ * The self is built from the measured user side — the fingerprint, the
+ * way the user addresses the persona, and the representative lines —
+ * plus a few of the user's real lines near the one being answered. All
+ * of it is material, fenced.
  */
 import { copy } from "@shared/copy";
 import { asMaterial } from "@shared/material";
@@ -27,6 +28,11 @@ export interface SelfPromptInput {
   personaName: string;
   locale: Locale;
   userSide?: UserSideProfile | null;
+  /**
+   * How the user addresses the persona, the strongest forms first
+   * (C4.4, from `addressHistory` with direction "me_to_them").
+   */
+  addressForms?: string[];
   /** The user's own real lines, chosen near the line being answered. */
   examples: string[];
 }
@@ -45,7 +51,18 @@ export function buildSelfPrompt(input: SelfPromptInput): string {
     .join("\n");
   const samples = (input.userSide?.sampleLines ?? []).slice(0, 12).join("\n");
   const examples = input.examples.slice(0, 6).join("\n");
-  const block = [prose, samples, examples].filter(Boolean).join("\n\n");
+  const forms = (input.addressForms ?? [])
+    .map((form) => String(form ?? "").trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  const addressLine = forms.length > 0
+    ? copy(locale, "roleplay.addressHabit", {
+      name: personaName,
+      // The same separator the address history shows uses.
+      forms: forms.join(locale === "zh" ? "、" : ", "),
+    })
+    : "";
+  const block = [prose, addressLine, samples, examples].filter(Boolean).join("\n\n");
   const instruction = copy(locale, "roleplay.system", { name: personaName });
   if (!block.trim()) return instruction;
   return [

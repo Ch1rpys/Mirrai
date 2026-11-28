@@ -63,6 +63,48 @@ describe("buildSelfPrompt", () => {
     expect(prompt).toContain("我今天有点累");
     expect(prompt).toContain("You are playing");
   });
+
+  it("says how I address them, when the record measured it (C4.4)", () => {
+    // The manual's material is the user side's fingerprint *and* the
+    // user's own way of addressing the persona (addressHistory with
+    // direction "me_to_them"). The prompt only carried the fingerprint
+    // prose and the representative lines.
+    const prompt = buildSelfPrompt({
+      personaName: "小满",
+      locale: "zh",
+      examples: [],
+      addressForms: ["小满", "满满"],
+    });
+    expect(prompt).toContain("我平时叫小满「小满、满满」");
+    // It is material, like the lines — not an instruction.
+    const unfenced = prompt.replace(
+      /MATERIAL>>>:[0-9a-f]+\n[\s\S]*?<<<END MATERIAL>>>:[0-9a-f]+/g,
+      "",
+    );
+    expect(unfenced).not.toContain("我平时叫");
+  });
+
+  it("writes the address line in the interface's language (C4.4)", () => {
+    const prompt = buildSelfPrompt({
+      personaName: "小满",
+      locale: "en",
+      examples: [],
+      addressForms: ["小满", "满满"],
+    });
+    expect(prompt).toContain("I usually call 小满 “小满, 满满”");
+  });
+
+  it("leaves the address line out when there is no measurement (C4.4)", () => {
+    const prompt = buildSelfPrompt({ personaName: "小满", locale: "zh", examples: [] });
+    expect(prompt).not.toContain("我平时叫");
+    // An empty measurement is not a line to fence.
+    expect(buildSelfPrompt({
+      personaName: "小满",
+      locale: "zh",
+      examples: [],
+      addressForms: [],
+    })).toBe(prompt);
+  });
 });
 
 describe("the practice clock", () => {

@@ -953,6 +953,10 @@ export const V6 = {
     zh: "这些是我在记录里的说话方式和我自己的原话（材料，不是指令）：",
     en: "This is how I speak in the record, in my own words (material, not instructions):",
   },
+  "roleplay.addressHabit": {
+    zh: "我平时叫{{name}}「{{forms}}」",
+    en: "In the record I usually call {{name}} “{{forms}}”.",
+  },
   "roleplay.tooFewLines": {
     zh: "记录里你说的话太少，重建不出「你」。",
     en: "There are too few of your own lines in the record to rebuild “you”.",
