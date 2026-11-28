@@ -18,7 +18,7 @@ import {
   listCheckinAnswersSince,
   listUserMessageTimesSince,
 } from "../db";
-import { zonedDateKey, zonedDayStart } from "@shared/timezone";
+import { zonedDateKey, zonedMidnightForDayKey } from "@shared/timezone";
 
 interface Week {
   /** The Monday of the week, as a date key in the user's calendar. */
@@ -53,7 +53,12 @@ export const wellbeingRouter = router({
         date.setUTCDate(date.getUTCDate() - 49);
         return date.toISOString().slice(0, 10);
       })();
-      const since = zonedDayStart(new Date(`${firstWeek}T12:00:00.000Z`), timezone);
+      // The oldest Monday's own local midnight. It is asked for from the
+      // day key directly: a fixed 12:00 UTC is NOT inside the day at
+      // UTC+13 and further east — it is already the next local day — so
+      // reading the day off that instant started the window on Tuesday
+      // and dropped the oldest Monday's check-ins and messages.
+      const since = zonedMidnightForDayKey(firstWeek, timezone);
 
       const [moods, checkins, messageTimes, daily] = await Promise.all([
         getUserMoods(ctx.user.id, 63, timezone),

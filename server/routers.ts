@@ -1323,6 +1323,9 @@ export const appRouter = router({
             range: input.range,
             from: days === null ? null : since,
             to: now,
+            // The dates in the summary are the user's own calendar days
+            // (C4.6, C2.6), not the UTC slice of a stored instant.
+            timezone,
             moods: moods.map((mood) => ({ date: mood.date, mood: mood.mood })),
             weeks: Array.from(weeks.values())
               .sort((a, b) => a.start.localeCompare(b.start))

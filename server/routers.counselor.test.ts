@@ -42,7 +42,7 @@ vi.mock("./llm", async (importOriginal) => {
 
 import { appRouter } from "./routers";
 
-function ctxFor(userId: number): TrpcContext {
+function ctxFor(userId: number, timezone = "Asia/Shanghai"): TrpcContext {
   return {
     user: {
       id: userId,
@@ -57,7 +57,7 @@ function ctxFor(userId: number): TrpcContext {
       updatedAt: new Date(),
       lastSignedIn: new Date(),
       name: "阿树",
-      timezone: "Asia/Shanghai",
+      timezone,
       locale: "zh",
     },
     locale: "zh",
@@ -94,5 +94,23 @@ describe("user.exportCounselorSummary", () => {
       .createCaller(ctxFor(2))
       .user.exportCounselorSummary({ range: "90d", includeThemes: true, includeJournal: true });
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("prints relationship events on the user's own calendar (C4.6)", async () => {
+    // The route has to hand the caller's zone to the page: an event at
+    // 03:00 UTC on New Year's Day happened on New Year's Eve in New York.
+    getRelationshipEvents.mockResolvedValue([
+      { happenedAt: new Date("2026-01-01T03:00:00.000Z"), title: "跨年" },
+    ]);
+
+    const shanghai = await appRouter
+      .createCaller(ctxFor(2))
+      .user.exportCounselorSummary({ range: "all", includeThemes: false, includeJournal: false });
+    expect(shanghai.html).toContain("2026-01-01 · 跨年");
+
+    const newYork = await appRouter
+      .createCaller(ctxFor(2, "America/New_York"))
+      .user.exportCounselorSummary({ range: "all", includeThemes: false, includeJournal: false });
+    expect(newYork.html).toContain("2025-12-31 · 跨年");
   });
 });

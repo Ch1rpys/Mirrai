@@ -337,6 +337,7 @@ describe("the counsellor summary (C4.6)", () => {
     includeThemes: false,
     includeJournal: false,
     journal: [{ entryDate: "2026-02-11", body: "日记里的哨兵串" }],
+    timezone: "Asia/Shanghai",
   };
 
   it("never carries the conversation, the persona's reply, or the diary by default", () => {
@@ -370,6 +371,25 @@ describe("the counsellor summary (C4.6)", () => {
     );
     expect(html).toContain("日记里的哨兵串");
     expect(html).not.toContain("分身回复的哨兵串");
+  });
+
+  it("prints an event on the user's own calendar (C4.6, C2.6)", () => {
+    // 03:00 UTC on New Year's Day is still New Year's Eve in New York.
+    const event = { happenedAt: new Date("2026-01-01T03:00:00.000Z"), title: "跨年" };
+    const newYork = generateCounselorSummaryHTML(
+      { ...input, timezone: "America/New_York", events: [event] },
+      "zh",
+    );
+    expect(newYork).toContain("2025-12-31 · 跨年");
+    expect(newYork).not.toContain("2026-01-01 · 跨年");
+
+    // And it is New Year's Day in Shanghai: the day is the user's, not
+    // the UTC slice of the instant.
+    const shanghai = generateCounselorSummaryHTML(
+      { ...input, timezone: "Asia/Shanghai", events: [event] },
+      "zh",
+    );
+    expect(shanghai).toContain("2026-01-01 · 跨年");
   });
 
   it("has no external resource and escapes what it does print", () => {

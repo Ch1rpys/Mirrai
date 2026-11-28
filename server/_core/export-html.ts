@@ -1,4 +1,5 @@
 import { intimacyLevelLabel } from "@shared/intimacy";
+import { zonedDateKey } from "@shared/timezone";
 import { normalizePersonaData } from "./persona-schema";
 import { describeFingerprint } from "@shared/fingerprint-prose";
 import { normalizeMicroRules } from "@shared/micro-rules";
@@ -744,6 +745,14 @@ export interface CounselorSummaryInput {
   range: "30d" | "90d" | "all";
   from: Date | null;
   to: Date;
+  /**
+   * The zone whose calendar the summary's dates are printed on.
+   *
+   * The stored instants are UTC, but the person reading the page lives
+   * in their own day: a relationship event at 03:00 UTC on New Year's
+   * Day happened on New Year's Eve in New York.
+   */
+  timezone: string | null;
   moods: Array<{ date: string; mood: string }>;
   weeks: CounselorWeek[];
   checkins: Array<{ answer: string }>;
@@ -802,7 +811,10 @@ export function generateCounselorSummaryHTML(
     )}</li>`,
   );
   const eventRows = input.events.map((event) =>
-    `<li>${escapeHtml(event.happenedAt.toISOString().slice(0, 10))} · ${escapeHtml(event.title)}</li>`,
+    // The day the event happened is the day it was where the user lives
+    // (C2.6): the stored instant is UTC, and the UTC slice of it showed
+    // an event from New Year's Eve in New York under New Year's Day.
+    `<li>${escapeHtml(zonedDateKey(event.happenedAt, input.timezone))} · ${escapeHtml(event.title)}</li>`,
   );
   const safetyRows = Object.entries(input.safetyCounts)
     .filter(([, n]) => n > 0)
