@@ -2145,6 +2145,7 @@ export const zh = {
       colMs: "平均耗时",
       useThis: "给这个分身用它",
       failed: "这个模型没有答出来",
+      failedCasesNote: "{{failed}}/{{attempted}} 道题没有答出来：{{reason}}",
       none: "还没有配置过模型。",
     },
     historyEmpty: "还没有跑过评测。",

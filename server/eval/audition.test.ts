@@ -196,4 +196,83 @@ describe("runAudition", () => {
     expect(failed?.composite).toBeUndefined();
     expect(report.results[0]!.id).toBe("steady");
   });
+
+  it("keeps a partially failed candidate's score and carries why the calls failed", async () => {
+    const taLine = fixtureTaLine();
+    // Two failures out of ten is under the max rate, so the candidate
+    // is ranked — and the row has to say which calls did not answer.
+    // The UI used to hide the composite and replace it with a fixed
+    // sentence for exactly these rows.
+    const tenCases = Array.from({ length: 10 }, () => cases()[0]!);
+    let flakyCalls = 0;
+    const report = await runAudition({
+      persona: persona(),
+      userId: 1,
+      cases: tenCases,
+      trainingTexts: [taLine],
+      providers: [
+        {
+          id: "steady",
+          providerName: "steady",
+          model: "voice",
+          provider: stubProvider("steady", async () => taLine),
+        },
+        {
+          id: "flaky",
+          providerName: "flaky",
+          model: "voice",
+          provider: stubProvider("flaky", async () => {
+            flakyCalls += 1;
+            if (flakyCalls <= 2) throw new Error(`connect ECONNREFUSED call ${flakyCalls}`);
+            return taLine;
+          }),
+        },
+      ],
+    });
+
+    const flaky = report.results.find((row) => row.id === "flaky");
+    expect(flaky?.failedCases).toBe(2);
+    expect(flaky?.attemptedCases).toBe(10);
+    // Still ranked: the score is there and the row is not an error row.
+    expect(flaky?.composite).toBeTypeOf("number");
+    expect(flaky?.error).toBeUndefined();
+    // The provider's own words, which the row now carries.
+    expect(flaky?.failureReasons).toEqual([
+      "connect ECONNREFUSED call 1",
+      "connect ECONNREFUSED call 2",
+    ]);
+    // A candidate that answered every case carries none.
+    expect(report.results.find((row) => row.id === "steady")?.failureReasons).toBeUndefined();
+  });
+
+  it("keeps at most two failure reasons on a ranked candidate", async () => {
+    const taLine = fixtureTaLine();
+    const tenCases = Array.from({ length: 10 }, () => cases()[0]!);
+    let calls = 0;
+    const report = await runAudition({
+      persona: persona(),
+      userId: 1,
+      cases: tenCases,
+      trainingTexts: [taLine],
+      providers: [
+        {
+          id: "flaky",
+          providerName: "flaky",
+          model: "voice",
+          provider: stubProvider("flaky", async () => {
+            calls += 1;
+            if (calls <= 4) throw new Error(`refused call ${calls}`);
+            return taLine;
+          }),
+        },
+      ],
+    });
+
+    const flaky = report.results.find((row) => row.id === "flaky");
+    // Four of ten is still under the max rate: ranked, not an error row.
+    expect(flaky?.composite).toBeTypeOf("number");
+    expect(flaky?.failedCases).toBe(4);
+    expect(flaky?.failureReasons).toHaveLength(2);
+    expect(flaky?.failureReasons?.[0]).toContain("refused call 1");
+  });
 });

@@ -2134,6 +2134,7 @@ export const zhHant = {
       "colMs": "平均耗時",
       "useThis": "給這個分身用它",
       "failed": "這個模型沒有答出來",
+      "failedCasesNote": "{{failed}}/{{attempted}} 道題沒有答出來：{{reason}}",
       "none": "還沒有配置過模型。"
     },
     "historyEmpty": "還沒有跑過評測。",

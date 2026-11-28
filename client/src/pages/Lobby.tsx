@@ -1635,7 +1635,11 @@ function CreatePersonaDialog({ open, onOpenChange, onCreated }: {
               placeholder={t("lobby.createDialog.relationshipPlaceholder")} className="h-10 bg-muted/50 border-border rounded-xl" />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="create-persona-together" className="text-sm text-foreground/70">{t("lobby.createDialog.togetherSince")}</Label>
+            <Label htmlFor="create-persona-together" className="text-sm text-foreground/70">
+              {/* A memorial persona's dates are when they met and when they left (C7.1),
+                  the same wording the edit page uses. */}
+              {t(memorial ? "personaEdit.togetherFromLabelMemorial" : "lobby.createDialog.togetherSince")}
+            </Label>
             <Input id="create-persona-together" type="date" value={togetherSince} onChange={e => setTogetherSince(e.target.value)}
               className="h-10 bg-muted/50 border-border rounded-xl" />
           </div>
@@ -1657,7 +1661,9 @@ function CreatePersonaDialog({ open, onOpenChange, onCreated }: {
             </label>
             {showEndDate && (
               <>
-                <Label htmlFor="create-persona-end-date" className="text-sm text-foreground/70">{t("lobby.createDialog.separatedOn")}</Label>
+                <Label htmlFor="create-persona-end-date" className="text-sm text-foreground/70">
+                  {t(memorial ? "personaEdit.togetherToLabelMemorial" : "lobby.createDialog.separatedOn")}
+                </Label>
                 <Input id="create-persona-end-date" type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
                   className="h-10 bg-muted/50 border-border rounded-xl mt-1.5" />
               </>

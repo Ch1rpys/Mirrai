@@ -13,6 +13,10 @@
  * cases that came back are the easier half, and a score of those does
  * not say how it would sound on the half it could not answer. Its row
  * keeps the provider's own reason.
+ *
+ * A candidate that fails a few cases is still ranked; its row keeps the
+ * score and up to two of the provider's reasons, so the table can say
+ * "2 of 10 did not answer" without hiding what was measured.
  */
 import type { Persona } from "../../drizzle/schema";
 import type { LLMProvider } from "../llm/types";
@@ -63,6 +67,16 @@ export interface AuditionResult {
    */
   failedCases?: number;
   attemptedCases?: number;
+  /**
+   * The provider's own words for a *ranked* candidate's failed calls.
+   *
+   * Only partially failed ranked rows carry this: they keep their
+   * composite (the run is still comparable), and the table shows the
+   * score plus a note saying how many cases did not answer and why.
+   * Unranked rows use `error` instead. At most two, so a row stays a
+   * row.
+   */
+  failureReasons?: string[];
   error?: string;
 }
 
@@ -217,6 +231,21 @@ function failureMessage(metrics: EvalRunResult, locale: Locale): string {
 }
 
 /**
+ * Up to two of the provider's own reasons for a ranked candidate's
+ * failed calls (B8.4).
+ *
+ * The unranked row puts its reason in `error`; a ranked row keeps its
+ * composite, so the list of reasons is carried separately and the table
+ * shows "2 of 10 did not answer: …" under the score.
+ */
+function partialFailureReasons(metrics: EvalRunResult): string[] {
+  return metrics.failureReasons
+    .map((text) => text.trim())
+    .filter((text) => text.length > 0)
+    .slice(0, 2);
+}
+
+/**
  * Runs the same cases against each candidate.
  */
 export async function runAudition(options: AuditionOptions): Promise<AuditionReport> {
@@ -259,10 +288,12 @@ export async function runAudition(options: AuditionOptions): Promise<AuditionRep
         });
         continue;
       }
+      const reasons = partialFailureReasons(metrics);
       results.push({
         ...base,
         failedCases,
         attemptedCases,
+        ...(reasons.length > 0 ? { failureReasons: reasons } : {}),
         overlap: metrics.overlap,
         likelihoodGap: metrics.likelihoodGap,
         lengthDistance: metrics.lengthDistance,

@@ -4,7 +4,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { translate } from "@/i18n";
 
-const state: { value: any } = { value: undefined };
+const state: { value: any; input?: { personaId: number } } = { value: undefined };
 
 vi.mock("@/contexts/LocaleContext", () => ({
   useLocale: () => ({
@@ -17,7 +17,14 @@ vi.mock("@/contexts/LocaleContext", () => ({
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    record: { onThisDay: { useQuery: () => state.value } },
+    record: {
+      onThisDay: {
+        useQuery: (input: { personaId: number }) => {
+          state.input = input;
+          return state.value;
+        },
+      },
+    },
   },
 }));
 
@@ -45,6 +52,7 @@ const featured = {
 describe("on this day in the hall", () => {
   beforeEach(() => {
     state.value = { data: years };
+    state.input = undefined;
   });
 
   it("shows the year and the real line for a persona the hall may feature", () => {
@@ -75,5 +83,29 @@ describe("on this day in the hall", () => {
       <OnThisDay personas={[{ ...featured, settings: { onThisDay: false } }]} />,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("never falls back to a locked persona (C8.4)", () => {
+    /**
+     * A locked persona is a card with no name; it is not a candidate
+     * for "on this day" either. The fallback used to be `personas[0]`,
+     * so an account whose personas were all locked still read records
+     * for the hidden one — and the read is refused with `LOCKED`, which
+     * opens the app lock screen from the hall.
+     */
+    const locked = {
+      ...featured,
+      settings: { locked: true, onThisDay: true },
+      locked: true,
+    };
+    const first = render(<OnThisDay personas={[locked]} />);
+    expect(first.container).toBeEmptyDOMElement();
+    expect(state.input?.personaId ?? 0).toBe(0);
+    first.unmount();
+
+    // With somebody else in the list, the other persona is looked at.
+    const paused = { ...featured, id: 6, name: "暂停的", presence: "quiet" };
+    render(<OnThisDay personas={[locked, paused]} />);
+    expect(state.input?.personaId).toBe(6);
   });
 });

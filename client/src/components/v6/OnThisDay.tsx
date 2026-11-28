@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocale } from "@/contexts/LocaleContext";
-import { mayFeature, type LobbyPersona } from "@/lib/lobby-eligibility";
+import { isLockedPersona, mayFeature, type LobbyPersona } from "@/lib/lobby-eligibility";
 
 /**
  * "On this day" in the hall (C2.1)
@@ -17,9 +17,20 @@ export interface OnThisDayPersona extends LobbyPersona {
 
 export default function OnThisDay({ personas }: { personas: OnThisDayPersona[] }) {
   const { t } = useLocale();
-  const persona = personas.find((item) => mayFeature(item)) ?? personas[0];
+  /**
+   * The first persona the hall may feature, else the first one that is
+   * at least not locked.
+   *
+   * The fallback used to be `personas[0]`. A locked persona would then
+   * be read here — the records read is refused with `LOCKED`, and the
+   * client turns that into the app lock screen, so opening the hall
+   * with only a locked persona could pop a lock screen (C8.4). A
+   * locked card has nothing to show here.
+   */
+  const persona = personas.find((item) => mayFeature(item))
+    ?? personas.find((item) => !isLockedPersona(item));
   const [opened, setOpened] = useState(false);
-  const enabled = Boolean(persona) && persona.settings?.onThisDay !== false;
+  const enabled = persona ? persona.settings?.onThisDay !== false : false;
   const query = trpc.record.onThisDay.useQuery(
     { personaId: persona?.id ?? 0 },
     { enabled },

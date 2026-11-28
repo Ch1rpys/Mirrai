@@ -95,10 +95,43 @@ export function redactionReportOf(
  * mentions a city is not. The keepsake book's share version promises to
  * take the addresses out (C6.3), and a rule that replaced every sentence
  * containing a city name would take out ordinary conversation too.
+ *
+ * So a place name only counts with a house/lane/unit number next to it
+ * (`号`, `弄`, `栋`, `幢`, `单元`, `室`, `楼`), and the parts may be
+ * separated by spaces — people paste "上海市 浦东新区 世纪大道 100 号".
+ * A bare `道` is not accepted as a street marker: "我知道3号楼" is a
+ * sentence, not an address.
+ *
+ * The pieces are regex literals rather than strings so the language
+ * guard (`server/i18n.test.ts`) sees patterns to match user text, not
+ * untranslated interface copy.
  */
-const CITY_ADDRESS_RE = /(?:[\u4e00-\u9fa5]{2,10}(?:省|自治区))?[\u4e00-\u9fa5]{2,10}市[\u4e00-\u9fa5A-Za-z0-9]{0,40}?(?:\d+\s*(?:号|弄|栋|幢|单元|室|楼)|\d+\s*[路街巷]|小区|花园|公寓|大厦|广场)/gu;
-/** An address without the city: a street and a number. */
-const STREET_ADDRESS_RE = /[\u4e00-\u9fa5]{2,10}(?:路|街|巷|大道|道)\d+\s*号/gu;
+/** The house/lane/unit number an address needs to count. */
+const ADDRESS_UNIT = /\d+\s*(?:号|弄|栋|幢|单元|室|楼)/u.source;
+const ADDRESS_PROVINCE = /[\u4e00-\u9fa5]{2,10}?(?:省|自治区)/u.source;
+const ADDRESS_CITY = /[\u4e00-\u9fa5]{2,10}?市/u.source;
+const ADDRESS_DISTRICT = /[\u4e00-\u9fa5]{2,10}?(?:区|县)/u.source;
+/** A street: 路, 街, 巷, 大道, 弄, 胡同 or 大街. */
+const ADDRESS_STREET = /[\u4e00-\u9fa5A-Za-z0-9]{2,20}?(?:路|街|巷|大道|弄|胡同|大街)/u.source;
+/** A named compound: the address is the compound plus a building number. */
+const ADDRESS_PLACE = /[\u4e00-\u9fa5A-Za-z0-9]{2,20}?(?:小区|花园|公寓|大厦|广场|家园|苑)/u.source;
+
+const CITY_ADDRESS_RE = new RegExp(
+  `(?:${ADDRESS_PROVINCE}\\s*)?${ADDRESS_CITY}\\s*(?:${ADDRESS_DISTRICT}\\s*)?(?:${ADDRESS_STREET}|${ADDRESS_PLACE})\\s*${ADDRESS_UNIT}`,
+  "gu",
+);
+/** An address without the city: a street (or compound) and a number. */
+const STREET_ADDRESS_RE = new RegExp(
+  `(?:${ADDRESS_DISTRICT}\\s*)?(?:${ADDRESS_STREET}|${ADDRESS_PLACE})\\s*${ADDRESS_UNIT}`,
+  "gu",
+);
+/**
+ * An English address: a house number, at least one capitalised street
+ * word, and a street suffix. An optional apartment/unit suffix goes
+ * with it. The capitalised word requirement is what keeps "Room 123 is
+ * ready", "the 2024 season" and "2 Way Tickets" out.
+ */
+const ENGLISH_ADDRESS_RE = /\b\d{1,6}[A-Za-z]{0,2}\s+(?:[A-Z][A-Za-z.'-]*\s+){1,4}(?:Street|St\.?|Road|Rd\.?|Avenue|Ave\.?|Lane|Ln\.?|Drive|Dr\.?|Boulevard|Blvd\.?|Court|Ct\.?|Place|Pl\.?|Way|Terrace|Circle|Highway)\b(?:\s*,?\s*(?:Apt\.?|Apartment|Unit|Suite|Ste\.?|#)\s*[A-Za-z0-9-]+)?/g;
 
 function redactAddresses(
   text: string,
@@ -110,7 +143,8 @@ function redactAddresses(
   };
   return text
     .replace(CITY_ADDRESS_RE, replace)
-    .replace(STREET_ADDRESS_RE, replace);
+    .replace(STREET_ADDRESS_RE, replace)
+    .replace(ENGLISH_ADDRESS_RE, replace);
 }
 
 function escapeRegExp(value: string): string {

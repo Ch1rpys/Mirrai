@@ -2133,6 +2133,7 @@ export const en = {
       colMs: "Mean time",
       useThis: "Use this for the persona",
       failed: "This model did not answer.",
+      failedCasesNote: "{{failed}} of {{attempted}} cases did not answer: {{reason}}",
       none: "No model has been configured yet.",
     },
     historyEmpty: "No evaluation has been run yet.",

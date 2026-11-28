@@ -145,4 +145,59 @@ describe("the audition table", () => {
     // The unreachable model cannot be chosen for the persona.
     expect(screen.getAllByRole("button", { name: translate("zh", "fidelity.audition.useThis") })).toHaveLength(1);
   });
+
+  it("keeps a partially failed candidate's composite and says why the calls failed (B8.4)", async () => {
+    // Two failed of ten is under the threshold, so the candidate is
+    // ranked. The table replaced its composite with the fixed "did not
+    // answer" sentence and hid the score — the number was there and
+    // the provider's reason was already kept server-side.
+    const reason = "connect ECONNREFUSED 127.0.0.1:11434";
+    reportRows = [
+      {
+        id: "flaky",
+        providerName: "flaky",
+        model: "voice",
+        label: "flaky · voice",
+        composite: 0.42,
+        overlap: 0.5,
+        styleDistance: 0.3,
+        residueRate: 0.1,
+        avgChars: 10,
+        avgMs: 20,
+        failedCases: 2,
+        attemptedCases: 10,
+        failureReasons: [reason],
+      },
+      {
+        id: "ta",
+        providerName: "openai",
+        model: "voice",
+        label: "openai · voice",
+        composite: 0.9,
+      },
+    ];
+    const user = userEvent.setup();
+    render(<AuditionView personaId={7} />);
+    await user.click(screen.getByRole("button", { name: translate("zh", "fidelity.audition.run") }));
+
+    // The score is shown, not replaced.
+    await waitFor(() => {
+      expect(screen.getByText("0.420")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(
+        translate("zh", "fidelity.audition.failedCasesNote", {
+          failed: 2,
+          attempted: 10,
+          reason,
+        }),
+      ),
+    ).toBeInTheDocument();
+    // The old fixed sentence is gone; the row says what really happened.
+    expect(screen.queryByText(translate("zh", "fidelity.audition.failed"))).toBeNull();
+    // A ranked candidate can still be chosen for the persona.
+    expect(
+      screen.getAllByRole("button", { name: translate("zh", "fidelity.audition.useThis") }),
+    ).toHaveLength(2);
+  });
 });

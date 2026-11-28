@@ -18,6 +18,11 @@ export interface AuditionRow {
   /** How many cases the candidate could not answer (B8.4). */
   failedCases?: number;
   attemptedCases?: number;
+  /**
+   * The provider's own words for the calls a *ranked* candidate could
+   * not answer (B8.4). Unranked rows carry `error` instead.
+   */
+  failureReasons?: string[];
   error?: string;
 }
 
@@ -91,44 +96,70 @@ export default function AuditionView({ personaId }: { personaId: number }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.id} className="border-t border-border/60">
-                  <td className="py-1.5 pr-3 whitespace-nowrap">{row.label}</td>
-                  <td className="py-1.5 pr-3 tabular-nums">
-                    {/* A failed candidate says what the provider said.
-                        The fixed "did not answer" hid the reason the
-                        audition had already kept (B8.4). */}
-                    {row.error ? (
-                      <span className="text-xs text-muted-foreground">{row.error}</span>
-                    ) : (row.failedCases ?? 0) > 0 ? (
-                      <span className="text-xs text-muted-foreground">
-                        {t("fidelity.audition.failed")}
-                      </span>
-                    ) : (
-                      fmt(row.composite)
-                    )}
-                  </td>
-                  <td className="py-1.5 pr-3 tabular-nums">{fmt(row.overlap)}</td>
-                  <td className="py-1.5 pr-3 tabular-nums">{fmt(row.styleDistance ?? undefined)}</td>
-                  <td className="py-1.5 pr-3 tabular-nums">{fmt(row.residueRate)}</td>
-                  <td className="py-1.5 pr-3 tabular-nums">{fmt(row.avgChars, 1)}</td>
-                  <td className="py-1.5 pr-3 tabular-nums">{fmt(row.avgMs, 0)}</td>
-                  <td className="py-1.5 text-right">
-                    {row.error ? null : (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() =>
-                          update.mutate({ id: personaId, llmProvider: row.providerName })
-                        }
-                        disabled={update.isPending}
-                      >
-                        {t("fidelity.audition.useThis")}
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {rows.map((row) => {
+                /**
+                 * Why a ranked candidate missed a few cases (B8.4).
+                 *
+                 * The row keeps its composite — the run is still the
+                 * measurement — and this note says how many calls did
+                 * not answer and what the provider said.
+                 */
+                const failureReason = row.failureReasons?.find(
+                  (reason) => reason.trim().length > 0,
+                );
+                const failedCases = row.failedCases ?? 0;
+                const attemptedCases = row.attemptedCases ?? 0;
+                const failureNote =
+                  !row.error && failedCases > 0 && attemptedCases > 0 && failureReason
+                    ? t("fidelity.audition.failedCasesNote", {
+                        failed: failedCases,
+                        attempted: attemptedCases,
+                        reason: failureReason,
+                      })
+                    : null;
+                return (
+                  <tr key={row.id} className="border-t border-border/60">
+                    <td className="py-1.5 pr-3 whitespace-nowrap">{row.label}</td>
+                    <td className="py-1.5 pr-3 tabular-nums">
+                      {/* A failed candidate says what the provider said;
+                          a ranked candidate that missed a few cases shows
+                          its score plus the note, not a fixed sentence in
+                          place of the number (B8.4). */}
+                      {row.error ? (
+                        <span className="text-xs text-muted-foreground">{row.error}</span>
+                      ) : (
+                        <>
+                          <span>{fmt(row.composite)}</span>
+                          {failureNote ? (
+                            <span className="block text-[11px] font-normal text-muted-foreground">
+                              {failureNote}
+                            </span>
+                          ) : null}
+                        </>
+                      )}
+                    </td>
+                    <td className="py-1.5 pr-3 tabular-nums">{fmt(row.overlap)}</td>
+                    <td className="py-1.5 pr-3 tabular-nums">{fmt(row.styleDistance ?? undefined)}</td>
+                    <td className="py-1.5 pr-3 tabular-nums">{fmt(row.residueRate)}</td>
+                    <td className="py-1.5 pr-3 tabular-nums">{fmt(row.avgChars, 1)}</td>
+                    <td className="py-1.5 pr-3 tabular-nums">{fmt(row.avgMs, 0)}</td>
+                    <td className="py-1.5 text-right">
+                      {row.error ? null : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            update.mutate({ id: personaId, llmProvider: row.providerName })
+                          }
+                          disabled={update.isPending}
+                        >
+                          {t("fidelity.audition.useThis")}
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

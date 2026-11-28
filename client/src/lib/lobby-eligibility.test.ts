@@ -4,9 +4,9 @@ import { mayFeature, type LobbyPersona } from "./lobby-eligibility";
 /**
  * Who the lobby may put forward.
  *
- * Five conditions, each enough on its own to keep a persona off the
- * daily pick and the conversation starters. The card in the directory
- * still shows them.
+ * Each condition is enough on its own to keep a persona off the daily
+ * pick and the conversation starters. The card in the directory still
+ * shows them.
  */
 
 const featured: LobbyPersona = {
@@ -57,5 +57,23 @@ describe("mayFeature", () => {
 
   it("is false when only letters are allowed", () => {
     expect(mayFeature({ ...featured, settings: { taper: { stage: 3 } } })).toBe(false);
+  });
+
+  it("is false for a locked persona", () => {
+    // C8.4: the lobby shows it as a card with no name. Featuring it
+    // would put that name (and a chat prompt) in front of the user.
+    expect(mayFeature({ ...featured, settings: { locked: true } })).toBe(false);
+  });
+
+  it("is false for a locked persona even when everything else is ready", () => {
+    // `persona.list` sends the row's `locked` flag (and nulls the
+    // settings it belongs to), so the row flag is the one that is
+    // there when the card is closed.
+    expect(mayFeature({ ...featured, locked: true })).toBe(false);
+  });
+
+  it("is true for an unlocked ready persona", () => {
+    expect(mayFeature({ ...featured, settings: { locked: false } })).toBe(true);
+    expect(mayFeature({ ...featured, locked: false })).toBe(true);
   });
 });

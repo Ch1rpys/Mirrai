@@ -553,6 +553,96 @@ describe("the lobby", () => {
     expect(screen.getAllByText("暂停的").length).toBeGreaterThan(0);
   });
 
+  it("keeps a locked persona out of the recommendations but on the list (C8.4)", () => {
+    /**
+     * The list is allowed to show it — as a closed card. The
+     * recommendations are not: "接着聊", the quick row and the
+     * conversation starters all put a persona forward, and a locked one
+     * has nothing to put forward.
+     *
+     * The fixture also carries the row-level `locked` flag the server
+     * sends with the settings redacted, because that is the shape the
+     * lobby actually receives.
+     */
+    const justNow = new Date().toISOString();
+    personas = [
+      makePersona({
+        id: 1,
+        name: "锁上的",
+        locked: true,
+        settings: { locked: true },
+        lastUserMessageAt: justNow,
+        lastChatAt: justNow,
+      }),
+      makePersona({ id: 2, name: "可以的" }),
+    ];
+
+    render(<Lobby />);
+
+    const recommendation = screen.getByRole("heading", { name: "接着聊" }).closest("div.mb-8");
+    expect(recommendation?.textContent).not.toContain("锁上的");
+    expect(recommendation?.textContent).toContain("可以的");
+
+    const quickRow = screen.getByRole("heading", { name: "继续对话" }).closest("div.mb-8");
+    expect(quickRow?.textContent).toContain("可以的");
+    expect(quickRow?.textContent).not.toContain("锁上的");
+
+    const starters = screen.getByRole("heading", { name: "今日话题" }).closest("div.mb-8");
+    expect(starters?.textContent).toContain("可以的");
+    expect(starters?.textContent).not.toContain("锁上的");
+
+    // The card is still in the directory, closed.
+    expect(screen.getAllByText(translate("zh", "lobby.card.locked")).length).toBe(1);
+  });
+
+  it("uses the memorial wording for the create dialog's dates (C7.1)", async () => {
+    /**
+     * The edit page already says "认识的日子" / "离开的日子" for a
+     * memorial persona. The create dialog kept "在一起的日期" /
+     * "分开的日期" — the first thing a person making a memorial
+     * persona sees was the wrong wording.
+     *
+     * The two keys are the ones PersonaEdit already uses; no new copy.
+     */
+    const user = userEvent.setup();
+    personas = [makePersona()];
+    render(<Lobby />);
+
+    await user.click(screen.getByRole("button", { name: translate("zh", "lobby.directory.new") }));
+
+    // Default wording first.
+    expect(screen.getByText(translate("zh", "lobby.createDialog.togetherSince"))).toBeInTheDocument();
+    expect(screen.queryByText(translate("zh", "personaEdit.togetherFromLabelMemorial"))).toBeNull();
+
+    // Memorial on: the first date is when they met.
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: (name: string) => name.includes(translate("zh", "memorial.title")),
+      }),
+    );
+    expect(screen.getByText(translate("zh", "personaEdit.togetherFromLabelMemorial"))).toBeInTheDocument();
+    expect(screen.queryByText(translate("zh", "lobby.createDialog.togetherSince"))).toBeNull();
+
+    // The end date, when shown, is the day they left.
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: (name: string) => name.includes(translate("zh", "lobby.createDialog.separated")),
+      }),
+    );
+    expect(screen.getByText(translate("zh", "personaEdit.togetherToLabelMemorial"))).toBeInTheDocument();
+    expect(screen.queryByText(translate("zh", "lobby.createDialog.separatedOn"))).toBeNull();
+
+    // Memorial off: back to the ordinary wording.
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: (name: string) => name.includes(translate("zh", "memorial.title")),
+      }),
+    );
+    expect(screen.getByText(translate("zh", "lobby.createDialog.togetherSince"))).toBeInTheDocument();
+    expect(screen.queryByText(translate("zh", "personaEdit.togetherFromLabelMemorial"))).toBeNull();
+    expect(screen.getByText(translate("zh", "lobby.createDialog.separatedOn"))).toBeInTheDocument();
+  });
+
   it("picks up the persona the user spoke to most recently", () => {
     personas = [
       makePersona({
