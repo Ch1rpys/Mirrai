@@ -18,6 +18,7 @@
  */
 import { sql } from "drizzle-orm";
 import { normalizeUserEncryption, type EncryptionMigration } from "@shared/encryption";
+import { recordText } from "@shared/records";
 import { searchTokens as bigramTokens } from "@shared/search-tokens";
 import { blindIndexToken } from "../_core/content-crypto";
 import { dataKeyFor, forgetDataKey } from "../_core/data-keys";
@@ -111,17 +112,42 @@ export async function countMigrationWork(
 interface MigrationRow {
   id: number;
   value: unknown;
+  /**
+   * The record's other content, for the one column whose tokens are not
+   * its own text (B7.3): a voice note's `searchTokens` cover
+   * `meta.transcript`, which `recordText` prefers over `content`.
+   */
+  kind?: string | null;
+  meta?: unknown;
+}
+
+/**
+ * Whether this column's search tokens cover more than the column itself.
+ *
+ * `collected_messages.content` is the only one: a voice note's marker is
+ * stored in `content`, and what was actually said is in `meta.transcript`
+ * (B7.3). The write paths index `recordText(...)`, and the migration has
+ * to re-index the same text or a note transcribed before encryption was
+ * turned on would stop matching the words it contains.
+ */
+function tokensUseRecordText(work: ColumnWork): boolean {
+  return work.table === "collected_messages" && work.column === "content";
 }
 
 /** Reads the next rows of one column that need work. */
 async function nextRows(work: ColumnWork, userId: number, direction: "encrypt" | "decrypt", limit: number): Promise<MigrationRow[]> {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
+  const extraColumns = tokensUseRecordText(work) ? ', "kind", "meta"' : "";
   const result = await db.execute(sql.raw(
-    `SELECT "id", "${work.column}" AS value FROM "${work.table}" WHERE "userId" = ${userId} AND ${needsWorkPredicate(work, direction)} ORDER BY "id" LIMIT ${limit}`,
+    `SELECT "id", "${work.column}" AS value${extraColumns} FROM "${work.table}" WHERE "userId" = ${userId} AND ${needsWorkPredicate(work, direction)} ORDER BY "id" LIMIT ${limit}`,
   ));
   const rows = (result as unknown as { rows?: Array<Record<string, unknown>> }).rows ?? [];
-  return rows.map((row) => ({ id: Number(row.id), value: row.value }));
+  return rows.map((row) => ({
+    id: Number(row.id),
+    value: row.value,
+    ...(tokensUseRecordText(work) ? { kind: (row.kind as string | null) ?? null, meta: row.meta } : {}),
+  }));
 }
 
 /** Writes one transformed value back, and its search tokens when the column has them. */
@@ -166,16 +192,38 @@ function requireKey(userId: number): Buffer {
   return key;
 }
 
+/**
+ * The text a row's search tokens must cover.
+ *
+ * Normally the column's own value. For the one record-text column it is
+ * `recordText`, computed from the plaintext content and the *decrypted*
+ * meta — the meta column may or may not have been through this job yet
+ * when the content column is processed, and either form is readable
+ * (plaintext passes through the decryptor).
+ */
+function tokenSource(work: ColumnWork, userId: number, row: MigrationRow, plaintext: string): string {
+  if (!tokensUseRecordText(work)) return plaintext;
+  const meta = row.meta === undefined ? null : decryptRecordMetaForRead(userId, row.meta);
+  return recordText({
+    kind: row.kind ?? "text",
+    content: plaintext,
+    meta: meta && typeof meta === "object" && !Array.isArray(meta) ? (meta as Record<string, unknown>) : null,
+  });
+}
+
 /** Transforms one value in the given direction. */
-function transformValue(work: ColumnWork, userId: number, value: unknown, direction: "encrypt" | "decrypt"): {
+function transformValue(work: ColumnWork, userId: number, row: MigrationRow, direction: "encrypt" | "decrypt"): {
   value: unknown;
   plaintextForTokens: string | null;
 } {
+  const value = row.value;
   if (direction === "encrypt") {
     const encrypted = encryptValueFor(userId, work.kind, value, work.meta);
     return {
       value: encrypted,
-      plaintextForTokens: work.tokens ? String(value ?? "") : null,
+      plaintextForTokens: work.tokens
+        ? tokenSource(work, userId, row, String(value ?? ""))
+        : null,
     };
   }
   if (work.kind === "json") {
@@ -185,7 +233,12 @@ function transformValue(work: ColumnWork, userId: number, value: unknown, direct
     };
   }
   const plaintext = decryptTextForRead(userId, String(value));
-  return { value: plaintext, plaintextForTokens: work.tokens ? plaintext ?? "" : null };
+  return {
+    value: plaintext,
+    plaintextForTokens: work.tokens
+      ? tokenSource(work, userId, row, plaintext ?? "")
+      : null,
+  };
 }
 
 export interface MigrationStepResult {
@@ -217,7 +270,7 @@ export async function runMigrationStep(
       const rows = await nextRows(work, userId, direction, remaining);
       if (rows.length === 0) break;
       for (const row of rows) {
-        const transformed = transformValue(work, userId, row.value, direction);
+        const transformed = transformValue(work, userId, row, direction);
         await writeRow(work, userId, row.id, transformed.value, transformed.plaintextForTokens, direction);
         processed += 1;
         remaining -= 1;

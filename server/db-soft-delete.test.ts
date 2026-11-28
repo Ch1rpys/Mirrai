@@ -655,6 +655,56 @@ describe.skipIf(!DATABASE_URL)("pins on messages that are gone", () => {
     }
   });
 
+  it("counts the pin limit per conversation, not across the user's personas", async () => {
+    /**
+     * C8.11 regression: the trim after the undo counted every pin the
+     * user owned, so three pins in one persona silently deleted the pin
+     * that was coming back in another. The three-pin limit is the
+     * conversation's (C8.10), so only the restored message's own
+     * persona may count against it.
+     */
+    const userId = uniqueBase();
+    await createUser({ username: `pin-bin-per-persona-${userId}`, passwordHash: "x", name: "阿树" });
+    const personaA = await createPersona({ userId, name: "小满", analysisStatus: "ready" });
+    const personaB = await createPersona({ userId, name: "阿禾", analysisStatus: "ready" });
+    try {
+      // Persona A fills its three-pin limit.
+      for (let i = 0; i < 3; i++) {
+        const id = await createMessage({
+          personaId: personaA,
+          userId,
+          role: "user",
+          content: `甲${i}`,
+        });
+        await addMessageMark({ userId, personaId: personaA, messageId: id, kind: "pin", label: null });
+      }
+
+      // Persona B has a single pin; it is deleted and then put back
+      // while persona A is still full.
+      const pinned = await createMessage({
+        personaId: personaB,
+        userId,
+        role: "user",
+        content: "乙的一句",
+      });
+      await addMessageMark({ userId, personaId: personaB, messageId: pinned, kind: "pin", label: null });
+      const caller = appRouter.createCaller(ctxFor(userId));
+
+      await caller.chat.deleteMessage({ personaId: personaB, messageId: pinned });
+      expect((await caller.mark.list({ personaId: personaB, kind: "pin" })).marks).toEqual([]);
+
+      await caller.chat.restoreMessage({ personaId: personaB, messageId: pinned });
+
+      // The undo brings the pin back: persona A's pins were never this
+      // conversation's, so they cannot be the reason B's pin disappears.
+      const bPins = await caller.mark.list({ personaId: personaB, kind: "pin" });
+      expect(bPins.marks.map((row) => row.messageId)).toEqual([pinned]);
+      expect((await caller.mark.list({ personaId: personaA, kind: "pin" })).marks).toHaveLength(3);
+    } finally {
+      await deleteUserAccount(userId).catch(() => undefined);
+    }
+  });
+
   it("does not leave marks behind when a conversation is cleared", async () => {
     const userId = uniqueBase();
     await createUser({ username: `pin-clear-${userId}`, passwordHash: "x", name: "阿树" });

@@ -7031,16 +7031,22 @@ export async function restoreMessage(
       isNotNull(messages.deletedAt),
       ...(personaId === undefined ? [] : [eq(messages.personaId, personaId)]),
     ))
-    .returning({ id: messages.id });
+    .returning({ id: messages.id, personaId: messages.personaId });
   if (restored.length === 0) return false;
-  await trimPinsAfterRestore(messageId, userId).catch((error) => {
+  /**
+   * The trim is the restored message's own conversation's (C8.11): the
+   * three-pin limit is per persona, so only that persona's pins may
+   * count against it.
+   */
+  await trimPinsAfterRestore(messageId, userId, restored[0]!.personaId).catch((error) => {
     console.warn("[db] The restored message's pin could not be trimmed:", error);
   });
   return true;
 }
 
 /**
- * A restored message cannot take the pins past the limit (C8.11).
+ * A restored message cannot take its conversation's pins past the limit
+ * (C8.11).
  *
  * A pin on a message in the bin is kept so the undo can bring it back,
  * but it does not count against the three-in-front limit while it is
@@ -7048,17 +7054,31 @@ export async function restoreMessage(
  * message comes back, the restored pin is the oldest of the four and is
  * the one that does not come back with it. The message itself returns —
  * the undo is about the message.
+ *
+ * The limit is the conversation's (C8.10), not the account's: pins in
+ * the user's other personas are not in front of this message and must
+ * not evict its pin (C8.11 regression).
  */
-async function trimPinsAfterRestore(messageId: number, userId: number): Promise<void> {
+async function trimPinsAfterRestore(
+  messageId: number,
+  userId: number,
+  personaId: number,
+): Promise<void> {
   const db = await getDb();
   if (!db) return;
   const mine = await db
     .select({ id: messageMarks.id })
     .from(messageMarks)
+    .innerJoin(messages, and(
+      eq(messages.id, messageMarks.messageId),
+      eq(messages.personaId, personaId),
+      isNull(messages.deletedAt),
+    ))
     .where(and(
       eq(messageMarks.messageId, messageId),
       eq(messageMarks.userId, userId),
       eq(messageMarks.kind, "pin"),
+      eq(messages.userId, userId),
     ));
   if (mine.length === 0) return;
   const [others] = await db
@@ -7073,6 +7093,7 @@ async function trimPinsAfterRestore(messageId: number, userId: number): Promise<
       eq(messageMarks.kind, "pin"),
       ne(messageMarks.messageId, messageId),
       eq(messages.userId, userId),
+      eq(messages.personaId, personaId),
     ));
   const room = Math.max(0, MAX_MESSAGE_PINS - Number(others?.c ?? 0));
   if (mine.length <= room) return;
@@ -8919,8 +8940,17 @@ export async function recentRecordTexts(
   const db = await getDb();
   if (!db) return [];
   const spokenAt = spokenAtColumn();
+  /**
+   * The projection carries `userId` because the row decryptor fetches
+   * the owner's key by it (C8.7): without it an encrypted account's
+   * lines came back as `enc:v1:…` and the reranker scored ciphertext.
+   */
   const rows = await db
-    .select({ content: collectedMessages.content, kind: collectedMessages.kind })
+    .select({
+      userId: collectedMessages.userId,
+      content: collectedMessages.content,
+      kind: collectedMessages.kind,
+    })
     .from(collectedMessages)
     /*
      * The private register only: a public post is written for everyone,

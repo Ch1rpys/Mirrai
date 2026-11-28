@@ -39,6 +39,7 @@ import {
   getUserJournal,
   getScheduledItem,
   listRehearsals,
+  recentRecordTexts,
   searchMessages,
   searchRecordsLexical,
   setUserBackupSettings,
@@ -556,6 +557,125 @@ describe.skipIf(!process.env.DATABASE_URL)("the encrypted database", () => {
     expect(await isEncryptionLocked(userId)).toBe(true);
     await unlockInProcess(userId);
     expect(await isEncryptionLocked(userId)).toBe(false);
+  });
+
+  it("gives the reranker plaintext lines on an encrypted account (C8.7)", async () => {
+    /**
+     * `recentRecordTexts` is the reranker's corpus. It projected only
+     * `content` and `kind`, so the row decryptor had no owner to fetch
+     * a key for and handed back `enc:v1:…`; the reranker then scored
+     * ciphertext length instead of the last lines the person wrote.
+     */
+    const { userId, personaId } = await seedUser("rerank");
+    await markBackupDone(userId);
+    await enableEncryptionForUser(userId, PASSWORD);
+    await waitForMigration(userId);
+
+    // Written after enabling, through the ordinary encrypted write path.
+    const older = `${SENTINEL}较早的一句`;
+    const newer = `${SENTINEL}更新的一句`;
+    const userLine = `${SENTINEL}用户的话`;
+    const stickerLine = `${SENTINEL}贴纸的话`;
+    const publicLine = `${SENTINEL}公开的话`;
+    await createCollectedMessage({
+      userId,
+      personaId,
+      source: "chat",
+      role: "assistant",
+      content: older,
+      kind: "text",
+    });
+    await createCollectedMessage({
+      userId,
+      personaId,
+      source: "chat",
+      role: "assistant",
+      content: newer,
+      kind: "text",
+    });
+    // Not the reranker's material: it reads assistant text lines of the
+    // private register only.
+    await createCollectedMessage({
+      userId,
+      personaId,
+      source: "chat",
+      role: "user",
+      content: userLine,
+      kind: "text",
+    });
+    await createCollectedMessage({
+      userId,
+      personaId,
+      source: "chat",
+      role: "assistant",
+      content: stickerLine,
+      kind: "sticker",
+    });
+    await createCollectedMessage({
+      userId,
+      personaId,
+      source: "chat",
+      role: "assistant",
+      content: publicLine,
+      kind: "text",
+      meta: { register: "public" },
+    });
+
+    const lines = await recentRecordTexts(personaId, userId, 100);
+    // The seeded record was written before enabling and encrypted by the
+    // migration; the two new lines went through the encrypted write
+    // path. Both have to come back as the words, never as ciphertext.
+    expect(lines.filter((line) => line.startsWith("enc:v1:"))).toEqual([]);
+    expect(lines).toContain(`${SENTINEL}喜欢海`);
+    expect(lines).toContain(older);
+    expect(lines).toContain(newer);
+
+    // The filters the reader always had still hold.
+    expect(lines).not.toContain(userLine);
+    expect(lines).not.toContain(stickerLine);
+    expect(lines).not.toContain(publicLine);
+    // The window is still bounded, newest last.
+    expect(await recentRecordTexts(personaId, userId, 1)).toEqual([newer]);
+  });
+
+  it("keeps a voice note's transcript searchable after the encryption migration (B7.3)", async () => {
+    /**
+     * A voice note stored before encryption was turned on has its marker
+     * in `content` and the words in `meta.transcript`; the write paths
+     * index `recordText()` so the transcript is what is searchable. The
+     * migration recomputed the blind tokens from the column value alone,
+     * so a note transcribed before enabling stopped matching the words it
+     * contains the moment the job ran.
+     */
+    const { userId, personaId } = await seedUser("voice-migration");
+    const transcript = "刚下课 路上买了桂花拿铁";
+    const voice = await createCollectedMessage({
+      userId,
+      personaId,
+      source: "import",
+      role: "assistant",
+      content: "[voice:12]",
+      kind: "voice",
+      meta: { transcript },
+      sourceMessageId: `voice-${Date.now()}`,
+    });
+    expect(voice).toBeTypeOf("number");
+
+    // Before enabling, the plaintext tokens already cover the transcript.
+    const before = await searchRecordsLexical(personaId, userId, { q: "桂花" });
+    expect(before.map((row) => row.id)).toContain(voice);
+
+    await markBackupDone(userId);
+    await enableEncryptionForUser(userId, PASSWORD);
+    await waitForMigration(userId);
+
+    const after = await searchRecordsLexical(personaId, userId, { q: "桂花" });
+    expect(after.map((row) => row.id)).toContain(voice);
+    // And the normal reader still shows what was said, not ciphertext.
+    const rows = await getCollectedMessagesForPersona(personaId, userId);
+    const stored = rows.find((row) => row.id === voice);
+    expect(stored?.content).toBe("[voice:12]");
+    expect((stored?.meta as { transcript?: string } | null)?.transcript).toBe(transcript);
   });
 
   it("writes a backup whose encrypted rows stay ciphertext", async () => {
