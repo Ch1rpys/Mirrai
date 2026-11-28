@@ -207,9 +207,30 @@ export default function ImportWizard(props: {
 
   const busy = applyMutation.isPending || confirmMutation.isPending || cancelMutation.isPending;
 
+  /**
+   * The redaction switches, in the shape both calls take (C1.7).
+   *
+   * `confirm` and `resume` continue the same import: a confirm can stop
+   * at the chat picker, at a format, or at the role pause, and the
+   * resume re-parses the file and writes the report again (a resumed
+   * monologue writes rows). Sending the switches with both keeps the
+   * resumed write as redacted as the confirm that started it.
+   */
+  const redactionPayload = () => {
+    const hiding = hidePhones || hideIds || hideEmails || hideCards || hideNames.length > 0;
+    return hiding
+      ? {
+          phones: hidePhones,
+          ids: hideIds,
+          emails: hideEmails,
+          cards: hideCards,
+          names: hideNames,
+        }
+      : undefined;
+  };
+
   const confirmImport = () => {
     if (!formatId || !hasMe || !hasThem) return;
-    const hiding = hidePhones || hideIds || hideEmails || hideCards || hideNames.length > 0;
     void confirmMutation.mutateAsync({
       fileId: props.fileId,
       format: formatId as "generic-line",
@@ -217,15 +238,7 @@ export default function ImportWizard(props: {
       them: themNames,
       chatId: chatId || undefined,
       columnMap: showColumnMap ? columnPayload : undefined,
-      redaction: hiding
-        ? {
-            phones: hidePhones,
-            ids: hideIds,
-            emails: hideEmails,
-            cards: hideCards,
-            names: hideNames,
-          }
-        : undefined,
+      redaction: redactionPayload(),
       ...(groupImport ? { mode: "group" as const } : {}),
     });
   };
@@ -236,6 +249,7 @@ export default function ImportWizard(props: {
       fileId: props.fileId,
       format: formatId as "generic-line",
       columnMap: showColumnMap ? columnPayload : undefined,
+      redaction: redactionPayload(),
     });
   };
 
@@ -379,6 +393,7 @@ export default function ImportWizard(props: {
               fileId: props.fileId,
               format: formatId ? formatId as "generic-line" : undefined,
               chatId,
+              redaction: redactionPayload(),
             })}
           >
             {t("importWizard.continue")}
@@ -516,7 +531,10 @@ export default function ImportWizard(props: {
             size="sm"
             className="rounded-md"
             disabled={busy}
-            onClick={() => applyMutation.mutate({ fileId: props.fileId })}
+            onClick={() => applyMutation.mutate({
+              fileId: props.fileId,
+              redaction: redactionPayload(),
+            })}
           >
             {t("importWizard.retry")}
           </Button>

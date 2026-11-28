@@ -334,6 +334,61 @@ describe("the import wizard", () => {
     expect(screen.queryByText("打 13800138000")).toBeNull();
   });
 
+  it("sends the redaction switches when a paused import is resumed", async () => {
+    const user = userEvent.setup();
+    status = fileStatus("needs_roles", {
+      format: "generic-line",
+      speakers: [
+        { name: "小满", count: 1 },
+        { name: "阿树", count: 1 },
+      ],
+    });
+    preview = {
+      status: "ok",
+      total: 1,
+      records: [
+        { timestamp: "2022-03-01T12:00:00.000Z", speaker: "小满", content: "打 13800138000", kind: "text", lineNo: 1 },
+      ],
+      report: { format: "generic-line", roleCounts: { user: 1, assistant: 1 } },
+    };
+    const { rerender } = render(
+      <ImportWizard fileId={11} personaName="小满" timezone="Asia/Shanghai" />,
+    );
+
+    const them = screen.getByRole("group", { name: /小满/ });
+    const me = screen.getByRole("group", { name: /阿树/ });
+    await user.click(within(them).getByRole("radio", { name: translate("zh", "importWizard.role.them") }));
+    await user.click(within(me).getByRole("radio", { name: translate("zh", "importWizard.role.me") }));
+    await user.click(screen.getByRole("checkbox", { name: translate("zh", "importWizard.redactPhones") }));
+    await user.click(screen.getByRole("button", { name: translate("zh", "importWizard.continue") }));
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({
+      redaction: { phones: true, ids: false, emails: false, cards: false, names: [] },
+    }));
+
+    // The server answers that the file holds several conversations, so
+    // the same card now asks which one. The switches ticked above have
+    // to travel with the resume, or the report it re-parses and stores
+    // is written without them.
+    status = fileStatus("needs_chat", {
+      format: "generic-line",
+      chats: [
+        { id: "a.txt", title: "a.txt", count: 2 },
+        { id: "b.txt", title: "b.txt", count: 1 },
+      ],
+    });
+    rerender(<ImportWizard fileId={11} personaName="小满" timezone="Asia/Shanghai" />);
+
+    const choices = screen.getAllByRole("radio");
+    expect(choices).toHaveLength(2);
+    await user.click(choices[1]);
+    await user.click(screen.getByRole("button", { name: translate("zh", "importWizard.continue") }));
+    expect(apply).toHaveBeenCalledWith(expect.objectContaining({
+      fileId: 11,
+      chatId: "b.txt",
+      redaction: { phones: true, ids: false, emails: false, cards: false, names: [] },
+    }));
+  });
+
   it("says how many rows were added when the import is done", () => {
     status = fileStatus("done", {
       written: 12,

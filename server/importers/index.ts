@@ -152,10 +152,25 @@ function redactedReport(report: ParseReport, options: RedactionOptions): ParseRe
     };
   }
   if (next.chats) {
-    next.chats = next.chats.map((chat) => ({ ...chat, title: text(chat.title) }));
+    next.chats = next.chats.map((chat) => ({
+      ...chat,
+      id: text(chat.id),
+      title: text(chat.title),
+    }));
   }
   if (next.chatFiles) {
     next.chatFiles = next.chatFiles.map((entry) => ({ ...entry, path: text(entry.path) }));
+  }
+  /**
+   * The media files a zip unpacked (C1.7).
+   *
+   * The names come from the person's own phone, so they carry the same
+   * people and numbers as the messages: `相册/琪琪_13800138000.jpg` is
+   * how a phone names a photo. The records were written redacted, but
+   * this list was not, and `import.status` sends it back to the browser.
+   */
+  if (next.mediaFiles) {
+    next.mediaFiles = next.mediaFiles.map(text);
   }
   if (next.warnings) {
     next.warnings = next.warnings.map((warning) =>
@@ -259,6 +274,20 @@ async function sourceFromArchive(
   if (chats.length === 0) {
     return { status: "needs_format", report };
   }
+  /**
+   * What the picker calls each conversation (C1.7).
+   *
+   * The report is stored — and read back by `import.status` — so a zip
+   * path that carries a phone number cannot be the picker's id when the
+   * user asked for redaction. The list is rebuilt from the same archive
+   * in the same order, so the index is a stable name: `chat-1`,
+   * `chat-2`. Without redaction the id is the archive path, exactly as
+   * before.
+   */
+  const redacting = isRedactionActive(input.redaction);
+  const chatIdOf = (row: { path: string }, index: number): string =>
+    redacting ? `chat-${index + 1}` : row.path;
+
   if (chats.length > 1 && !input.chatId) {
     let timeZone: string | null = null;
     try {
@@ -267,7 +296,8 @@ async function sourceFromArchive(
       timeZone = null;
     }
     const listed: Array<{ id: string; title: string; count: number }> = [];
-    for (const row of chats) {
+    for (let index = 0; index < chats.length; index += 1) {
+      const row = chats[index]!;
       let count = 0;
       const importer = row.format ? importerById(row.format) : undefined;
       if (importer) {
@@ -275,7 +305,7 @@ async function sourceFromArchive(
         count = parsed.records.length;
       }
       listed.push({
-        id: row.path,
+        id: chatIdOf(row, index),
         title: path.posix.basename(row.path),
         count,
       });
@@ -284,9 +314,29 @@ async function sourceFromArchive(
     return { status: "needs_chat", report };
   }
 
-  const chosen = input.chatId
-    ? chats.find((row) => row.path === input.chatId)
-    : chats[0];
+  /**
+   * A resume names the conversation it picked.
+   *
+   * A redacted picker sent back `chat-N`; a caller that kept an archive
+   * path from before redaction, or a request that never redacted,
+   * still matches the path. `chat-N` cannot collide with a path: a chat
+   * file always has an extension.
+   */
+  let chosen: (typeof chats)[number] | undefined;
+  if (input.chatId) {
+    const byPath = chats.findIndex((row) => row.path === input.chatId);
+    if (byPath >= 0) {
+      chosen = chats[byPath];
+    } else {
+      const match = /^chat-(\d+)$/.exec(input.chatId);
+      const index = match ? Number(match[1]) - 1 : -1;
+      if (Number.isInteger(index) && index >= 0 && index < chats.length) {
+        chosen = chats[index];
+      }
+    }
+  } else {
+    chosen = chats[0];
+  }
   if (!chosen) {
     return { status: "failed", report, reason: copy(locale, "errors.importFailed") };
   }
@@ -308,10 +358,38 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
     return { status: "failed", written: 0 };
   }
 
+  const persona = await getPersonaById(file.personaId, input.userId);
+  const user = await getUserById(input.userId);
+  const keepNames = [
+    ...(input.me ?? []),
+    ...(input.them ?? []),
+    persona?.name,
+    user?.name,
+  ].filter((name): name is string => Boolean(name && name.trim()));
+  const redactionOptions: RedactionOptions = {
+    ...(input.redaction ?? {}),
+    keepNames,
+  };
+  /**
+   * The report is redacted in the same pass as the records (C1.7).
+   *
+   * Everything written from here on — the chat picker, the role
+   * confirmation, the running import and the finished one — carries only
+   * the replaced text. The rows and the report have to agree; a report
+   * that kept the original would be the same data in another column.
+   *
+   * The redaction options are built before the file is read, because a
+   * zip reports the paths it unpacked before any parsing happens: a zip
+   * that stops at `needs_chat` or `needs_format` writes the chat and
+   * media file names straight away, and those names are the person's own.
+   */
+  const safeReport = (report: ParseReport): ParseReport =>
+    isRedactionActive(input.redaction) ? redactedReport(report, redactionOptions) : report;
+
   const fail = async (reason: string, extra: ParseReport = {}): Promise<StartImportResult> => {
     await updatePersonaFile(file.id, input.userId, {
       parseStatus: "failed",
-      parseReport: reportOf({ ...extra, failedReason: reason, progress: 0 }),
+      parseReport: reportOf({ ...safeReport(extra), failedReason: reason, progress: 0 }),
     });
     return { status: "failed", written: 0 };
   };
@@ -333,7 +411,7 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
       }
       await updatePersonaFile(file.id, input.userId, {
         parseStatus: fromZip.status,
-        parseReport: reportOf(fromZip.report),
+        parseReport: reportOf(safeReport(fromZip.report)),
       });
       return { status: fromZip.status, written: 0 };
     }
@@ -354,12 +432,12 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
   if (!picked || picked === "ambiguous") {
     await updatePersonaFile(file.id, input.userId, {
       parseStatus: "needs_format",
-      parseReport: reportOf({
+      parseReport: reportOf(safeReport({
         format: detected[0]?.id,
         confidence: detected[0]?.confidence,
         progress: 0,
         rawTable: rawTableFrom(source.text),
-      }),
+      })),
     });
     return { status: "needs_format", written: 0 };
   }
@@ -368,7 +446,9 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
   if (!importer) {
     await updatePersonaFile(file.id, input.userId, {
       parseStatus: "needs_format",
-      parseReport: reportOf({ format: picked.id, confidence: picked.confidence, progress: 0 }),
+      parseReport: reportOf(
+        safeReport({ format: picked.id, confidence: picked.confidence, progress: 0 }),
+      ),
     });
     return { status: "needs_format", written: 0 };
   }
@@ -412,29 +492,7 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
     rawTable: importer.id === "column-map" ? rawTableFrom(source.text) : undefined,
   };
 
-  const persona = await getPersonaById(file.personaId, input.userId);
-  const user = await getUserById(input.userId);
-  const keepNames = [
-    ...(input.me ?? []),
-    ...(input.them ?? []),
-    persona?.name,
-    user?.name,
-  ].filter((name): name is string => Boolean(name && name.trim()));
-  const redactionOptions: RedactionOptions = {
-    ...(input.redaction ?? {}),
-    keepNames,
-  };
-  /**
-   * The report is redacted in the same pass as the records (C1.7).
-   *
-   * Everything written from here on — the chat picker, the role
-   * confirmation, the running import and the finished one — carries only
-   * the replaced text. The rows and the report have to agree; a report
-   * that kept the original would be the same data in another column.
-   */
-  const safeBaseReport = isRedactionActive(input.redaction)
-    ? redactedReport(baseReport, redactionOptions)
-    : baseReport;
+  const safeBaseReport = safeReport(baseReport);
 
   if (parsed.chats && parsed.chats.length > 1 && !input.chatId) {
     await updatePersonaFile(file.id, input.userId, {
@@ -472,9 +530,7 @@ export async function startImport(input: StartImportInput): Promise<StartImportR
       parseStatus: "needs_roles",
       parseReport: reportOf({
         ...safeBaseReport,
-        suggested: guessed
-          ? redactedReport({ suggested: guessed }, redactionOptions).suggested
-          : undefined,
+        suggested: guessed ? safeReport({ suggested: guessed }).suggested : undefined,
         progress: 0,
       }),
     });

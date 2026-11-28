@@ -181,6 +181,17 @@ export const importRouter = router({
       format: formatId.optional(),
       chatId: z.string().optional(),
       columnMap: columnMap.optional(),
+      /**
+       * The switches confirm was given (C1.7).
+       *
+       * A confirm can stop at needs_chat, needs_format, or needs_roles.
+       * Resuming re-parses the file and writes the stored report again
+       * — and a resumed monologue writes its rows — so the switches have
+       * to travel with the resume. They are optional: a first resume
+       * happens before the person has ticked anything, and a caller that
+       * omits them gets the unredacted report it got before.
+       */
+      redaction: redaction.optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const file = await getPersonaFileById(input.fileId, ctx.user.id);
@@ -195,6 +206,7 @@ export const importRouter = router({
         format: input.format,
         chatId: input.chatId,
         columnMap: input.columnMap,
+        redaction: input.redaction,
       });
     }),
 
